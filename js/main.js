@@ -3,15 +3,21 @@
 const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Safe initialization
+let supabaseClient;
+try {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} catch (e) {
+    console.error("Supabase fail:", e);
+}
 
 function app() {
     return {
         // State
         loading: false,
-        session: null, // Admin Auth Session
-        employeeSession: null, // Custom Employee Session object
-        user: null, // Unified user object
+        session: null,
+        employeeSession: null,
+        user: null,
         workspaceName: '',
         companyCode: '',
         registrationSuccess: false,
@@ -21,9 +27,9 @@ function app() {
 
         // Data
         employees: [],
-        tickets: [], // Todos os chamados (para atendente/admin)
-        techTickets: [], // Chamados filtrados (para técnico)
-        checklistTemplates: [], // Modelos de checklist
+        tickets: [],
+        techTickets: [],
+        checklistTemplates: [],
         notifications: [],
 
         // Forms
@@ -32,26 +38,32 @@ function app() {
         registerForm: { companyName: '', email: '', password: '' },
         employeeForm: { name: '', username: '', password: '', roles: [] },
 
-        // Ticket Form & Checklist
+        // Ticket Form
         ticketForm: {
-            client_name: '', os_number: '', model: '', serial: '',
-            defect: '', priority: 'Normal', contact: '',
-            deadline: '', device_condition: '',
-            checklist: [], // Array of objects { item: string, ok: boolean }
-            photos: [], // Files to upload
-            notes: '',
+            client_name: '',
+            os_number: '',
+            model: '',
+            serial: '',
+            defect: '',
+            priority: 'Normal',
+            contact: '',
+            deadline: '',
+            device_condition: '',
+            checklist: [],
+            photos: [],
+            notes: ''
         },
         newChecklistItem: '',
         selectedTemplateId: '',
         newTemplateName: '',
 
-        // Selected Ticket (para edição/visualização)
+        // Selected Ticket
         selectedTicket: null,
 
         // Modals
         modals: { newEmployee: false, ticket: false, viewTicket: false },
 
-        // Enum Constants
+        // Constants
         PRIORITIES: ['Baixa', 'Normal', 'Alta', 'Urgente'],
         STATUS_COLUMNS: [
             'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
@@ -59,7 +71,14 @@ function app() {
         ],
 
         async init() {
+            console.log("App initializing...");
             this.loading = true;
+
+            if (!supabaseClient) {
+                this.notify("Erro crítico: Supabase não carregou.", "error");
+                this.loading = false;
+                return;
+            }
 
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
@@ -68,19 +87,21 @@ function app() {
             } else {
                 const storedEmp = localStorage.getItem('techassist_employee');
                 if (storedEmp) {
-                    this.employeeSession = JSON.parse(storedEmp);
-                    this.user = this.employeeSession;
-                    if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
-                    if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
-                    this.fetchEmployees();
+                    try {
+                        this.employeeSession = JSON.parse(storedEmp);
+                        this.user = this.employeeSession;
+                        if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
+                        if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
+                        this.fetchEmployees();
+                    } catch (e) {
+                        localStorage.removeItem('techassist_employee');
+                    }
                 }
             }
 
-            // Load Tickets if logged in
             if (this.user) {
                 this.fetchTickets();
                 this.fetchTemplates();
-                // Realtime subscription
                 this.setupRealtime();
             }
 
@@ -97,19 +118,18 @@ function app() {
         },
 
         setupRealtime() {
-            if (!this.user?.workspace_id) return;
+            if (!this.user?.workspace_id || !supabaseClient) return;
 
             supabaseClient
                 .channel('tickets_channel')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
                 payload => {
-                   // Refresh data on any change
                    this.fetchTickets();
                 })
                 .subscribe();
         },
 
-        // --- AUTH (Existing code unchanged) ---
+        // --- AUTH ---
         async loginAdmin() {
             this.loading = true;
             const { error } = await supabaseClient.auth.signInWithPassword({
@@ -119,6 +139,7 @@ function app() {
             this.loading = false;
             if (error) this.notify(error.message, 'error');
         },
+
         async registerAdmin() {
             this.loading = true;
             const { data: authData, error: authError } = await supabaseClient.auth.signUp({
@@ -137,6 +158,7 @@ function app() {
             }
             this.loading = false;
         },
+
         async completeCompanySetup() {
              this.loading = true;
              if (!this.registerForm.companyName) {
@@ -159,6 +181,7 @@ function app() {
             }
             this.loading = false;
         },
+
         async loginEmployee() {
             this.loading = true;
             const { data, error } = await supabaseClient
@@ -186,6 +209,7 @@ function app() {
                  this.notify('Credenciais inválidas.', 'error');
             }
         },
+
         async logout() {
             this.loading = true;
             try { if (this.session) await supabaseClient.auth.signOut(); } catch (e) {}
@@ -197,6 +221,7 @@ function app() {
             this.loading = false;
             window.location.reload();
         },
+
         async loadAdminData() {
             if (!this.session) return;
             const user = this.session.user;
@@ -226,6 +251,7 @@ function app() {
                 this.setupRealtime();
             }
         },
+
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
             let result;
@@ -237,7 +263,7 @@ function app() {
             if (!result.error) this.employees = result.data;
         },
 
-        // --- TICKET & KANBAN LOGIC ---
+        // --- TICKET LOGIC ---
 
         async fetchTickets() {
             if (!this.user?.workspace_id) return;
@@ -254,15 +280,13 @@ function app() {
 
             this.tickets = data;
 
-            // Filter for Tech View
+            // Filter for Tech View (Removed Teste Final)
             this.techTickets = data.filter(t =>
                 ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
             ).sort((a, b) => {
-                // Sort by Priority (Custom Order)
                 const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                 const pDiff = pOrder[a.priority] - pOrder[b.priority];
                 if (pDiff !== 0) return pDiff;
-                // Then by Deadline
                 return new Date(a.deadline || 0) - new Date(b.deadline || 0);
             });
         },
@@ -275,24 +299,33 @@ function app() {
 
         openNewTicketModal() {
             this.ticketForm = {
-                client_name: '', os_number: '', model: '', serial: '',
-                defect: '', priority: 'Normal', contact: '',
-                deadline: '', device_condition: '',
-                checklist: [], photos: [], notes: ''
+                client_name: '',
+                os_number: '',
+                model: '',
+                serial: '',
+                defect: '',
+                priority: 'Normal',
+                contact: '',
+                deadline: '',
+                device_condition: '',
+                checklist: [],
+                photos: [],
+                notes: ''
             };
             this.modals.ticket = true;
         },
 
-        // Checklist Logic
         addChecklistItem() {
             if (this.newChecklistItem.trim()) {
                 this.ticketForm.checklist.push({ item: this.newChecklistItem, ok: false });
                 this.newChecklistItem = '';
             }
         },
+
         removeChecklistItem(index) {
             this.ticketForm.checklist.splice(index, 1);
         },
+
         async saveTemplate() {
             if (!this.newTemplateName) return this.notify("Nomeie o modelo", "error");
             if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
@@ -300,7 +333,7 @@ function app() {
             const { error } = await supabaseClient.from('checklist_templates').insert({
                 workspace_id: this.user.workspace_id,
                 name: this.newTemplateName,
-                items: this.ticketForm.checklist.map(i => i.item) // Save just the strings
+                items: this.ticketForm.checklist.map(i => i.item)
             });
 
             if (error) this.notify("Erro ao salvar", "error");
@@ -310,10 +343,10 @@ function app() {
                 this.fetchTemplates();
             }
         },
+
         loadTemplate() {
             const tmpl = this.checklistTemplates.find(t => t.id === this.selectedTemplateId);
             if (tmpl) {
-                // Merge or replace? Replace seems safer to avoid duplicates
                 this.ticketForm.checklist = tmpl.items.map(s => ({ item: s, ok: false }));
             }
         },
@@ -324,10 +357,6 @@ function app() {
              }
 
              this.loading = true;
-
-             // Upload logic would go here if buckets were working reliably without SQL setup
-             // For now we skip actual file upload and just store dummy logic if needed
-             // Or we just insert the record
 
              const ticketData = {
                  workspace_id: this.user.workspace_id,
@@ -360,18 +389,15 @@ function app() {
 
         viewTicketDetails(ticket) {
             this.selectedTicket = ticket;
-            // Ensure checklist exists as array
             if (!Array.isArray(this.selectedTicket.checklist_data)) {
                  this.selectedTicket.checklist_data = [];
             }
             this.modals.viewTicket = true;
         },
 
-        // State Transitions
         async updateStatus(ticket, newStatus) {
             this.loading = true;
 
-            // Log Event
             await supabaseClient.from('ticket_logs').insert({
                 ticket_id: ticket.id,
                 action: 'Alteração de Status',
@@ -379,11 +405,7 @@ function app() {
                 user_name: this.user.name
             });
 
-            // Update Ticket
             const updates = { status: newStatus };
-            if (newStatus === 'Finalizado' || newStatus === 'Retirada Cliente') {
-                 // Maybe set some timestamps?
-            }
 
             const { error } = await supabaseClient
                 .from('tickets')
@@ -396,13 +418,11 @@ function app() {
             else {
                 this.notify("Status atualizado");
                 this.fetchTickets();
-                // Close modal if open
                 this.modals.viewTicket = false;
             }
         },
 
         async saveTicketChanges() {
-            // Save notes, checklist, parts, etc from the View Modal
             if (!this.selectedTicket) return;
             this.loading = true;
 
@@ -432,7 +452,6 @@ function app() {
         },
 
         getCardColor(ticket) {
-            // Logic for delayed cards (Red)
             if (ticket.deadline && new Date(ticket.deadline) < new Date() && ticket.status !== 'Finalizado') {
                 return 'border-l-4 border-red-600 bg-red-50';
             }
@@ -443,11 +462,8 @@ function app() {
             this.employeeForm = { name: '', username: '', password: '', roles: [] };
             this.modals[name] = true;
         },
-        async createEmployee() { /* Unchanged */
-             /* Copied from previous logic to save tokens, but truncated here for brevity in overwrite.
-                I will restore the original Create Employee logic since I am overwriting the whole file.
-                Wait, I need to make sure I don't lose the Create Employee logic. */
 
+        async createEmployee() {
             if (!this.user?.workspace_id) return this.notify('Erro workspace', 'error');
             if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
             this.loading = true;
@@ -462,11 +478,13 @@ function app() {
             if (error) { console.error(error); this.notify('Erro: ' + error.message, 'error'); }
             else { this.notify('Criado!'); this.modals.newEmployee = false; this.fetchEmployees(); }
         },
+
         async deleteEmployee(id) {
             if (!confirm('Confirma?')) return;
             const { error } = await supabaseClient.from('employees').delete().eq('id', id);
             if (error) this.notify('Erro.', 'error'); else { this.notify('Excluído.'); this.fetchEmployees(); }
         },
+
         hasRole(role) {
             if (this.session && role === 'admin') return true;
             if (!this.user) return false;
@@ -474,6 +492,7 @@ function app() {
             if (roles.includes('admin')) return true;
             return roles.includes(role);
         },
+
         notify(message, type = 'success') {
             const id = Date.now();
             this.notifications.push({ id, message, type });
