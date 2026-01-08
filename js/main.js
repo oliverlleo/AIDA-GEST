@@ -151,16 +151,31 @@ function app() {
             }
         },
 
-        logout() {
-            if (this.session) {
-                supabaseClient.auth.signOut();
+        async logout() {
+            this.loading = true;
+            try {
+                if (this.session) {
+                    await supabaseClient.auth.signOut();
+                }
+            } catch (error) {
+                console.error("Logout error (network might be unreachable):", error);
+            } finally {
+                // Force cleanup local state regardless of server response
+                this.employeeSession = null;
+                this.user = null;
+                this.session = null;
+                this.workspaceName = '';
+                localStorage.removeItem('techassist_employee');
+
+                // Clear Supabase specific keys if any remain
+                // But generally reloading clears memory state, localStorage persists.
+                // Supabase client uses localStorage for session persistence, signOut usually clears it.
+                // We can manually clear supabase keys if needed, but let's trust reload.
+
+                this.view = 'dashboard';
+                this.loading = false;
+                window.location.reload();
             }
-            this.employeeSession = null;
-            this.user = null;
-            this.workspaceName = '';
-            localStorage.removeItem('techassist_employee');
-            this.view = 'dashboard';
-            window.location.reload();
         },
 
         // --- DATA LOADING ---
