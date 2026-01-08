@@ -84,6 +84,16 @@ function app() {
             'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
             'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
         ],
+        STATUS_LABELS: {
+            'Aberto': 'Aberto',
+            'Analise Tecnica': 'Análise Técnica',
+            'Aprovacao': 'Aprovação',
+            'Compra Peca': 'Compra de Peças',
+            'Andamento Reparo': 'Em Reparo',
+            'Teste Final': 'Testes Finais',
+            'Retirada Cliente': 'Retirada de Cliente',
+            'Finalizado': 'Finalizado'
+        },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
         // Bypasses supabase-js lock management to avoid AbortError on tab wake
@@ -865,6 +875,10 @@ function app() {
         },
 
         // --- UTILS ---
+        getStatusLabel(status) {
+            return this.STATUS_LABELS[status] || status;
+        },
+
         getPriorityColor(prio) {
             switch(prio) {
                 case 'Urgente': return 'bg-red-100 text-red-800 border-red-500';
