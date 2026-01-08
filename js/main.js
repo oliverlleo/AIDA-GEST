@@ -49,6 +49,7 @@ function app() {
             client_name: '', os_number: '', model: '', serial: '',
             defect: '', priority: 'Normal', contact: '',
             deadline: '', device_condition: '',
+            technician_id: '', // New field
             checklist: [], photos: [], notes: ''
         },
         newChecklistItem: '',
@@ -71,6 +72,7 @@ function app() {
         calendarView: 'week',
         currentCalendarDate: new Date(),
         showAllCalendarTickets: false,
+        selectedTechFilter: 'all', // 'all' or specific uuid
 
         // Time
         currentTime: new Date(),
@@ -285,6 +287,7 @@ function app() {
                     localStorage.setItem('techassist_employee', JSON.stringify(emp));
                     this.notify('Bem-vindo, ' + emp.name, 'success');
                     await this.fetchEmployees();
+                    this.initTechFilter(); // Initialize filter before fetching
                     await this.fetchTickets();
                     await this.fetchTemplates();
                     this.setupRealtime();
@@ -340,6 +343,7 @@ function app() {
                     this.workspaceName = profile.workspaces?.name;
                     this.companyCode = profile.workspaces?.company_code;
                     await this.fetchEmployees();
+                    this.initTechFilter(); // Admin defaults to 'all'
                     await this.fetchTickets();
                     await this.fetchTemplates();
                     this.setupRealtime();
@@ -417,7 +421,13 @@ function app() {
 
                 if (data) {
                     this.tickets = data;
-                    this.techTickets = data.filter(t =>
+                    // Apply Tech Filter to Minha Bancada
+                    let filteredTechTickets = data;
+                    if (this.selectedTechFilter !== 'all') {
+                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === this.selectedTechFilter);
+                    }
+
+                    this.techTickets = filteredTechTickets.filter(t =>
                         ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                     ).sort((a, b) => {
                         // Priority Requested (Top of list)
@@ -462,6 +472,7 @@ function app() {
                 client_name: '', os_number: '', model: '', serial: '',
                 defect: '', priority: 'Normal', contact: '',
                 deadline: '', device_condition: '',
+                technician_id: '',
                 checklist: [], photos: [], notes: ''
             };
             this.modals.ticket = true;
@@ -535,6 +546,7 @@ function app() {
                      contact_info: this.ticketForm.contact,
                      deadline: this.ticketForm.deadline || null,
                      device_condition: this.ticketForm.device_condition,
+                     technician_id: this.ticketForm.technician_id || null, // New Field
                      checklist_data: this.ticketForm.checklist,
                      status: 'Aberto',
                      created_by_name: this.user.name
@@ -851,6 +863,11 @@ function app() {
             // Filter tickets based on toggle
             let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
 
+            // Apply Technician Filter
+            if (this.selectedTechFilter !== 'all') {
+                source = source.filter(t => t.technician_id === this.selectedTechFilter);
+            }
+
             if (!this.showAllCalendarTickets) {
                 // Only assigned to me (conceptually - for now we use "created_by" or just all if we assume single shop,
                 // but user asked "atribuidos ao tecnico".
@@ -914,6 +931,25 @@ function app() {
         // --- UTILS ---
         getStatusLabel(status) {
             return this.STATUS_LABELS[status] || status;
+        },
+
+        getTechnicians() {
+            return this.employees.filter(e => e.roles && e.roles.includes('tecnico'));
+        },
+
+        initTechFilter() {
+            if (this.hasRole('admin')) {
+                this.selectedTechFilter = 'all';
+            } else if (this.user && this.user.roles.includes('tecnico')) {
+                // If technician, default to self (and maybe lock it in UI)
+                // Note: user.id might be the auth.user.id or the employee record id depending on how we set this.user.
+                // In loginEmployee, this.user = emp (employee record).
+                // In loginAdmin, this.user = { id: auth_id ... } but we might not have a linked employee record for admin unless they created one.
+                // Assuming employee login uses the employee ID as the reference for assignment.
+                this.selectedTechFilter = this.user.id;
+            } else {
+                this.selectedTechFilter = 'all';
+            }
         },
 
         getPriorityColor(prio) {
