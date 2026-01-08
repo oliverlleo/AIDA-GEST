@@ -127,6 +127,9 @@ function app() {
             document.addEventListener("visibilitychange", async () => {
                 if (document.visibilityState === 'visible') {
                     console.log("Tab visible, refreshing data...");
+                    // Force clear loading state in case it got stuck
+                    this.loading = false;
+
                     // Refresh Session
                     const { data: { session } } = await supabaseClient.auth.getSession();
                     if (session) {
@@ -421,22 +424,27 @@ function app() {
         // Generic Status Update
         async updateStatus(ticket, newStatus, additionalUpdates = {}) {
             this.loading = true;
-            await supabaseClient.from('ticket_logs').insert({
-                ticket_id: ticket.id,
-                action: 'Alteração de Status',
-                details: `De ${ticket.status} para ${newStatus}`,
-                user_name: this.user.name
-            });
+            try {
+                await supabaseClient.from('ticket_logs').insert({
+                    ticket_id: ticket.id,
+                    action: 'Alteração de Status',
+                    details: `De ${ticket.status} para ${newStatus}`,
+                    user_name: this.user.name
+                });
 
-            const updates = { status: newStatus, ...additionalUpdates };
-            const { error } = await supabaseClient.from('tickets').update(updates).eq('id', ticket.id);
+                const updates = { status: newStatus, ...additionalUpdates };
+                const { error } = await supabaseClient.from('tickets').update(updates).eq('id', ticket.id);
 
-            this.loading = false;
-            if (error) this.notify("Erro ao atualizar", "error");
-            else {
+                if (error) throw error;
+
                 this.notify("Status atualizado");
                 this.fetchTickets();
                 this.modals.viewTicket = false; // Close modal usually on big moves
+            } catch (error) {
+                console.error(error);
+                this.notify("Erro ao atualizar: " + (error.message || error), "error");
+            } finally {
+                this.loading = false;
             }
         },
 
