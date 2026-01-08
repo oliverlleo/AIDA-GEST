@@ -619,9 +619,29 @@ function app() {
             }, { action: 'Finalizou Análise', details: 'Enviado para Aprovação' });
         },
 
+        openWhatsApp(phone) {
+            if (!phone) return this.notify("Telefone não cadastrado.", "error");
+
+            // Remove non-digits
+            let number = phone.replace(/\D/g, '');
+
+            // Basic validation/formatting
+            if (number.length < 10) return this.notify("Número inválido para WhatsApp.", "error");
+
+            // Prepend 55 if likely missing (assuming BR numbers usually start with DDD)
+            // If it already starts with 55 and is long enough, leave it.
+            // But simple heuristic: if length is 10 or 11 (DDD+Number), add 55.
+            if (number.length <= 11) {
+                number = '55' + number;
+            }
+
+            window.open(`https://wa.me/${number}`, '_blank');
+        },
+
         async startBudget(ticket) {
             await this.logTicketAction(ticket.id, 'Iniciou Orçamento', 'Visualizou para criar orçamento');
             this.viewTicketDetails(ticket);
+            this.openWhatsApp(ticket.contact_info);
         },
 
         async sendBudget(ticket = this.selectedTicket) {
