@@ -290,6 +290,12 @@ function app() {
                     this.initTechFilter(); // Initialize filter before fetching
                     await this.fetchTickets();
                     await this.fetchTemplates();
+
+                    // Redirect Technician directly to Bench
+                    if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
+                        this.view = 'tech_orders';
+                    }
+
                     this.setupRealtime();
                 } else {
                      this.notify('Credenciais inválidas.', 'error');
@@ -421,10 +427,20 @@ function app() {
 
                 if (data) {
                     this.tickets = data;
+
                     // Apply Tech Filter to Minha Bancada
                     let filteredTechTickets = data;
-                    if (this.selectedTechFilter !== 'all') {
-                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === this.selectedTechFilter);
+                    let effectiveFilter = this.selectedTechFilter;
+
+                    // STRICT FILTERING FOR TECHNICIANS (Override UI state if needed)
+                    if (!this.hasRole('admin') && this.hasRole('tecnico')) {
+                        effectiveFilter = this.user.id;
+                        this.selectedTechFilter = this.user.id; // Sync UI
+                    }
+
+                    // Apply Filter
+                    if (effectiveFilter !== 'all' && effectiveFilter) {
+                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === effectiveFilter);
                     }
 
                     this.techTickets = filteredTechTickets.filter(t =>
@@ -863,9 +879,15 @@ function app() {
             // Filter tickets based on toggle
             let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
 
-            // Apply Technician Filter
-            if (this.selectedTechFilter !== 'all') {
-                source = source.filter(t => t.technician_id === this.selectedTechFilter);
+            // Determine Effective Filter
+            let effectiveFilter = this.selectedTechFilter;
+            if (!this.hasRole('admin') && this.hasRole('tecnico')) {
+                effectiveFilter = this.user.id;
+            }
+
+            // Apply Technician Filter (Strict)
+            if (effectiveFilter !== 'all' && effectiveFilter) {
+                source = source.filter(t => t.technician_id === effectiveFilter);
             }
 
             if (!this.showAllCalendarTickets) {
@@ -938,15 +960,15 @@ function app() {
         },
 
         initTechFilter() {
+            // Debugging
+            console.log("Initializing Tech Filter. User:", this.user);
+
             if (this.hasRole('admin')) {
                 this.selectedTechFilter = 'all';
-            } else if (this.user && this.user.roles.includes('tecnico')) {
-                // If technician, default to self (and maybe lock it in UI)
-                // Note: user.id might be the auth.user.id or the employee record id depending on how we set this.user.
-                // In loginEmployee, this.user = emp (employee record).
-                // In loginAdmin, this.user = { id: auth_id ... } but we might not have a linked employee record for admin unless they created one.
-                // Assuming employee login uses the employee ID as the reference for assignment.
+            } else if (this.hasRole('tecnico')) {
+                // If technician, default to self
                 this.selectedTechFilter = this.user.id;
+                console.log("Filter set to self:", this.selectedTechFilter);
             } else {
                 this.selectedTechFilter = 'all';
             }
