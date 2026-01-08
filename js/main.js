@@ -426,8 +426,8 @@ function app() {
             }).eq('id', ticket.id);
             this.loading = false;
             if (!error) {
-                ticket.budget_status = 'Enviado'; // Optimistic update
                 this.notify("Orçamento marcado como Enviado.");
+                this.fetchTickets();
             }
         },
         async approveRepair(ticket = this.selectedTicket) {
@@ -447,7 +447,7 @@ function app() {
                 parts_purchased_at: new Date().toISOString()
             }).eq('id', ticket.id);
             this.loading = false;
-            ticket.parts_status = 'Comprado';
+            this.fetchTickets();
         },
         async confirmReceived(ticket = this.selectedTicket) {
              await this.updateStatus(ticket, 'Andamento Reparo', {
@@ -463,7 +463,7 @@ function app() {
                 repair_start_at: new Date().toISOString()
             }).eq('id', ticket.id);
             this.loading = false;
-            ticket.repair_start_at = new Date().toISOString();
+            this.fetchTickets();
         },
 
         openOutcomeModal(mode, ticket = this.selectedTicket) {
@@ -491,7 +491,7 @@ function app() {
                 test_start_at: new Date().toISOString()
             }).eq('id', ticket.id);
             this.loading = false;
-            ticket.test_start_at = new Date().toISOString();
+            this.fetchTickets();
         },
 
         async concludeTest(success) {
@@ -523,7 +523,7 @@ function app() {
                 pickup_available_at: new Date().toISOString()
             }).eq('id', ticket.id);
             this.loading = false;
-            ticket.pickup_available = true;
+            this.fetchTickets();
         },
         async confirmPickup(ticket = this.selectedTicket) {
             await this.updateStatus(ticket, 'Finalizado');
