@@ -59,6 +59,9 @@ function app() {
         selectedTicket: null,
         modalSource: '', // 'kanban' or 'tech'
 
+        // Time
+        currentTime: new Date(),
+
         // Modals
         modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false },
 
@@ -114,6 +117,27 @@ function app() {
             });
 
             this.loading = false;
+
+            // Clock Interval
+            setInterval(() => {
+                this.currentTime = new Date();
+            }, 1000);
+
+            // Reconnection / Tab Focus Logic
+            document.addEventListener("visibilitychange", async () => {
+                if (document.visibilityState === 'visible') {
+                    console.log("Tab visible, refreshing data...");
+                    // Refresh Session
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (session) {
+                        this.session = session;
+                    }
+                    // Refresh Data
+                    if (this.user) {
+                        this.fetchTickets();
+                    }
+                }
+            });
         },
 
         setupRealtime() {
@@ -563,6 +587,20 @@ function app() {
             if (hours < 24) return `${hours}h`;
             const days = Math.floor(hours / 24);
             return `${days}d ${hours % 24}h`;
+        },
+
+        getDuration(startTime) {
+            if (!startTime) return '00:00:00';
+            const start = new Date(startTime).getTime();
+            const now = this.currentTime.getTime();
+            const diff = now - start;
+            if (diff < 0) return '00:00:00';
+
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+
+            return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         },
 
         openModal(name) {
