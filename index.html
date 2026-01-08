@@ -558,7 +558,10 @@
                         <div class="space-y-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
                              <template x-for="(item, idx) in ticketForm.checklist" :key="idx">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-sm font-medium" x-text="item.item"></span>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="checkbox" x-model="item.ok" class="text-brand-600 focus:ring-brand-500">
+                                        <span class="text-sm font-medium" :class="item.ok ? 'line-through text-gray-400' : 'text-gray-800'" x-text="item.item"></span>
+                                    </div>
                                     <button @click="removeChecklistItem(idx)" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button>
                                 </div>
                             </template>
