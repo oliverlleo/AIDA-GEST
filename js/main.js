@@ -280,10 +280,16 @@ function app() {
         // --- UTILS ---
 
         hasRole(role) {
+            // Se for o dono da conta (admin logado por email), tem acesso total
+            if (this.session && role === 'admin') return true;
+
             if (!this.user) return false;
-            // Admin role in profile overrides everything
-            if (this.user.roles.includes('admin')) return true;
-            return this.user.roles.includes(role);
+
+            // Verificação segura de roles
+            const roles = this.user.roles || [];
+            if (roles.includes('admin')) return true;
+
+            return roles.includes(role);
         },
 
         notify(message, type = 'success') {
