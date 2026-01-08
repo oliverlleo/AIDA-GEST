@@ -1,16 +1,15 @@
 
 // Configuração do Supabase
 const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
-// Chave fornecida pelo usuário para evitar expiração de sessão
-const SUPABASE_KEY = 'sbp_bb8d8691fccd83e6a48791b2c8a0f0347316d960';
+// Reverting to the original Anon Key to restore data access immediately
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
 
 // Safe initialization
 let supabaseClient;
 try {
-    // Inicialização direta. O uso da chave Service/Access elimina a necessidade de gestão complexa de sessão para acesso ao DB.
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: {
-            persistSession: true, // Mantemos persistência para Auth Admin se necessário
+            persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: false
         }
@@ -137,25 +136,30 @@ function app() {
                 this.currentTime = new Date();
             }, 1000);
 
-            // --- VISIBILITY HANDLER SIMPLIFICADO ---
-            // A chave Service/Access elimina a necessidade de refreshSession manual.
-            // Apenas atualizamos os dados para garantir consistência visual ao voltar à aba.
+            // --- FIXED RECONNECTION LOGIC ---
+            // 1. We debounce heavily to avoid event storms.
+            // 2. We do NOT forcefully refresh session or kill channels aggressively,
+            //    as this causes the "hiccups" and infinite loading if the network is flaky.
+            // 3. We simply ask for a data refresh quietly.
             let visibilityTimer;
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState === 'visible') {
                     clearTimeout(visibilityTimer);
                     visibilityTimer = setTimeout(async () => {
-                        console.log("Tab visible. Refreshing data...");
+                        console.log("Tab visible. Quiet data refresh...");
 
-                        // 1. Re-fetch data quietly (sem bloquear UI com loading global)
+                        // Just fetch data. If session is invalid, the fetch handles the error quietly.
+                        // We do NOT set global loading = true here to avoid the "infinite spinner" perception.
                         if (this.user) {
                             await this.fetchTickets();
                         }
 
-                        // 2. Garantir que Realtime esteja ativo se necessário, sem desconexões agressivas
-                        this.setupRealtime();
-
-                    }, 500);
+                        // Ensure realtime is healthy without killing it
+                        const channels = supabaseClient.getChannels();
+                        if (channels.length === 0) {
+                            this.setupRealtime();
+                        }
+                    }, 1000); // 1s delay to let browser stabilize
                 }
             });
         },
@@ -163,9 +167,12 @@ function app() {
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
 
-            // Evitar duplicatas apenas removendo o canal específico se já existir
+            // Only subscribe if not already subscribed
             const existing = supabaseClient.getChannels().find(c => c.topic === 'tickets_channel');
-            if (existing) return;
+            if (existing && existing.state === 'joined') return;
+
+            // Cleanup any half-open channels
+            if (existing) supabaseClient.removeChannel(existing);
 
             supabaseClient
                 .channel('tickets_channel')
@@ -321,8 +328,8 @@ function app() {
                     .order('created_at', { ascending: false });
 
                 if (error) {
+                    // Silent fail/retry logic to avoid alerting user unnecessarily
                     if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted') || error.message.includes('Failed to fetch'))) {
-                        // Retry silencioso
                         if (retryCount < 2) {
                             setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
                         }
