@@ -612,7 +612,7 @@
                         </template>
 
                         <!-- 2. Analise -> Aprovação -->
-                        <template x-if="selectedTicket.status === 'Analise Tecnica'">
+                        <template x-if="selectedTicket.status === 'Analise Tecnica' && modalSource === 'tech'">
                             <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
                                 <h4 class="font-bold text-blue-800 mb-2">Conclusão da Análise</h4>
                                 <div class="mb-3">
@@ -685,7 +685,7 @@
                         </template>
 
                         <!-- 5. Reparo Flow -->
-                        <template x-if="selectedTicket.status === 'Andamento Reparo'">
+                        <template x-if="selectedTicket.status === 'Andamento Reparo' && modalSource === 'tech'">
                             <div class="w-full">
                                 <div class="flex space-x-3 mb-2">
                                     <button @click="startRepair()"
