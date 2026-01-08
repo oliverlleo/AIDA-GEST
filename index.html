@@ -640,6 +640,9 @@
                                         <option :value="t.id" x-text="t.name"></option>
                                     </template>
                                 </select>
+                                <button x-show="selectedTemplateId" @click="deleteTemplate()" class="text-red-500 hover:text-red-700 p-1" title="Excluir Modelo">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
                             </div>
                         </div>
 

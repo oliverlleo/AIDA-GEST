@@ -495,6 +495,23 @@ function app() {
                 this.notify("Erro ao salvar: " + error.message, "error");
             }
         },
+
+        async deleteTemplate() {
+            if (!this.selectedTemplateId) return;
+            if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
+
+            try {
+                // REFACTORED: Native Fetch
+                await this.supabaseFetch(`checklist_templates?id=eq.${this.selectedTemplateId}`, 'DELETE');
+
+                this.notify("Modelo excluído.");
+                this.selectedTemplateId = '';
+                this.fetchTemplates();
+            } catch (e) {
+                this.notify("Erro ao excluir: " + e.message, "error");
+            }
+        },
+
         loadTemplate() {
             const tmpl = this.checklistTemplates.find(t => t.id === this.selectedTemplateId);
             if (tmpl) this.ticketForm.checklist = tmpl.items.map(s => ({ item: s, ok: false }));
