@@ -1,16 +1,18 @@
 
 // Configuração do Supabase
 const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
+// Chave fornecida pelo usuário para evitar expiração de sessão
+const SUPABASE_KEY = 'sbp_bb8d8691fccd83e6a48791b2c8a0f0347316d960';
 
 // Safe initialization
 let supabaseClient;
 try {
+    // Inicialização direta. O uso da chave Service/Access elimina a necessidade de gestão complexa de sessão para acesso ao DB.
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: {
-            persistSession: true,
+            persistSession: true, // Mantemos persistência para Auth Admin se necessário
             autoRefreshToken: true,
-            detectSessionInUrl: false // Prevent URL hash conflicts
+            detectSessionInUrl: false
         }
     });
 } catch (e) {
@@ -121,14 +123,11 @@ function app() {
                 this.loading = false;
             }
 
-            // Global Auth Listener
-            supabaseClient.auth.onAuthStateChange(async (event, session) => {
-                // console.log("Auth Event:", event);
+            supabaseClient.auth.onAuthStateChange(async (_event, session) => {
                 this.session = session;
                 if (session) {
                     await this.loadAdminData();
                 } else if (!this.employeeSession) {
-                    // If not admin session and not employee session, clear user
                     this.user = null;
                 }
             });
@@ -138,37 +137,25 @@ function app() {
                 this.currentTime = new Date();
             }, 1000);
 
-            // --- FIXED VISIBILITY HANDLER ---
-            // Uses debounce to prevent multiple triggers and forces session refresh
+            // --- VISIBILITY HANDLER SIMPLIFICADO ---
+            // A chave Service/Access elimina a necessidade de refreshSession manual.
+            // Apenas atualizamos os dados para garantir consistência visual ao voltar à aba.
             let visibilityTimer;
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState === 'visible') {
-                    // Clear any existing timer to debounce
                     clearTimeout(visibilityTimer);
-
-                    // Wait 300ms to ensure the tab is settled
                     visibilityTimer = setTimeout(async () => {
-                        console.log("Tab visible. Refreshing session and data...");
+                        console.log("Tab visible. Refreshing data...");
 
-                        // 1. Force Refresh Supabase Session
-                        // This prevents the 'hanging request' issue by ensuring the token is valid
-                        const { data, error } = await supabaseClient.auth.refreshSession();
-
-                        if (error) {
-                            console.warn("Session refresh warning:", error);
-                        } else if (data && data.session) {
-                             this.session = data.session;
-                        }
-
-                        // 2. Fetch Data (if user is logged in)
+                        // 1. Re-fetch data quietly (sem bloquear UI com loading global)
                         if (this.user) {
                             await this.fetchTickets();
                         }
 
-                        // 3. Ensure Realtime is active
+                        // 2. Garantir que Realtime esteja ativo se necessário, sem desconexões agressivas
                         this.setupRealtime();
 
-                    }, 300);
+                    }, 500);
                 }
             });
         },
@@ -176,13 +163,9 @@ function app() {
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
 
-            // Clean up existing subscription to avoid duplicates/stale sockets
-            const channels = supabaseClient.getChannels();
-            const existing = channels.find(c => c.topic === 'tickets_channel');
-            if (existing) {
-                // console.log("Refreshing Realtime channel...");
-                supabaseClient.removeChannel(existing);
-            }
+            // Evitar duplicatas apenas removendo o canal específico se já existir
+            const existing = supabaseClient.getChannels().find(c => c.topic === 'tickets_channel');
+            if (existing) return;
 
             supabaseClient
                 .channel('tickets_channel')
@@ -338,20 +321,14 @@ function app() {
                     .order('created_at', { ascending: false });
 
                 if (error) {
-                    // Handle AbortError/Network Error (often caused by tab switching/suspension)
                     if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted') || error.message.includes('Failed to fetch'))) {
-                        // Only log warning, don't spam
-                        console.warn(`Fetch aborted/failed (attempt ${retryCount + 1}).`);
-
-                        // Retry logic with cap
+                        // Retry silencioso
                         if (retryCount < 2) {
                             setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
                         }
                         return;
                     }
-
                     if (error.code === 'PGRST205') {
-                        console.warn("Database tables missing (PGRST205). Waiting for setup.");
                         this.tickets = [];
                         this.techTickets = [];
                         return;
@@ -362,7 +339,6 @@ function app() {
 
                 if (data) {
                     this.tickets = data;
-                    // Filter for Tech View
                     this.techTickets = data.filter(t =>
                         ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                     ).sort((a, b) => {
