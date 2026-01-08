@@ -6,7 +6,13 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 // Safe initialization
 let supabaseClient;
 try {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false // Prevent URL hash conflicts
+        }
+    });
 } catch (e) {
     console.error("Supabase fail:", e);
 }
@@ -82,63 +88,87 @@ function app() {
                 return;
             }
 
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                this.session = session;
-                await this.loadAdminData();
-            } else {
-                const storedEmp = localStorage.getItem('techassist_employee');
-                if (storedEmp) {
-                    try {
-                        this.employeeSession = JSON.parse(storedEmp);
-                        this.user = this.employeeSession;
-                        if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
-                        if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
-                        this.fetchEmployees();
-                    } catch (e) {
-                        localStorage.removeItem('techassist_employee');
+            try {
+                // Initial Session Check
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session) {
+                    this.session = session;
+                    await this.loadAdminData();
+                } else {
+                    // Try Employee Session from LocalStorage
+                    const storedEmp = localStorage.getItem('techassist_employee');
+                    if (storedEmp) {
+                        try {
+                            this.employeeSession = JSON.parse(storedEmp);
+                            this.user = this.employeeSession;
+                            if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
+                            if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
+                            await this.fetchEmployees();
+                        } catch (e) {
+                            localStorage.removeItem('techassist_employee');
+                        }
                     }
                 }
+
+                if (this.user) {
+                    await this.fetchTickets();
+                    await this.fetchTemplates();
+                    this.setupRealtime();
+                }
+            } catch (err) {
+                console.error("Init Error:", err);
+            } finally {
+                this.loading = false;
             }
 
-            if (this.user) {
-                this.fetchTickets();
-                this.fetchTemplates();
-                this.setupRealtime();
-            }
-
-            supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+            // Global Auth Listener
+            supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                // console.log("Auth Event:", event);
                 this.session = session;
                 if (session) {
                     await this.loadAdminData();
                 } else if (!this.employeeSession) {
+                    // If not admin session and not employee session, clear user
                     this.user = null;
                 }
             });
-
-            this.loading = false;
 
             // Clock Interval
             setInterval(() => {
                 this.currentTime = new Date();
             }, 1000);
 
-            // Reconnection / Tab Focus Logic
-            document.addEventListener("visibilitychange", async () => {
+            // --- FIXED VISIBILITY HANDLER ---
+            // Uses debounce to prevent multiple triggers and forces session refresh
+            let visibilityTimer;
+            document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState === 'visible') {
-                    console.log("Tab visible, refreshing data...");
-                    // Force clear loading state in case it got stuck
-                    this.loading = false;
+                    // Clear any existing timer to debounce
+                    clearTimeout(visibilityTimer);
 
-                    // Refresh Session
-                    const { data: { session } } = await supabaseClient.auth.getSession();
-                    if (session) {
-                        this.session = session;
-                    }
-                    // Refresh Data
-                    if (this.user) {
-                        this.fetchTickets();
-                    }
+                    // Wait 300ms to ensure the tab is settled
+                    visibilityTimer = setTimeout(async () => {
+                        console.log("Tab visible. Refreshing session and data...");
+
+                        // 1. Force Refresh Supabase Session
+                        // This prevents the 'hanging request' issue by ensuring the token is valid
+                        const { data, error } = await supabaseClient.auth.refreshSession();
+
+                        if (error) {
+                            console.warn("Session refresh warning:", error);
+                        } else if (data && data.session) {
+                             this.session = data.session;
+                        }
+
+                        // 2. Fetch Data (if user is logged in)
+                        if (this.user) {
+                            await this.fetchTickets();
+                        }
+
+                        // 3. Ensure Realtime is active
+                        this.setupRealtime();
+
+                    }, 300);
                 }
             });
         },
@@ -146,12 +176,19 @@ function app() {
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
 
+            // Clean up existing subscription to avoid duplicates/stale sockets
+            const channels = supabaseClient.getChannels();
+            const existing = channels.find(c => c.topic === 'tickets_channel');
+            if (existing) {
+                // console.log("Refreshing Realtime channel...");
+                supabaseClient.removeChannel(existing);
+            }
+
             supabaseClient
                 .channel('tickets_channel')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
                 payload => {
                    this.fetchTickets();
-                   // If viewing a ticket, refresh it too
                    if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
                        this.selectedTicket = { ...this.selectedTicket, ...payload.new };
                    }
@@ -162,78 +199,79 @@ function app() {
         // --- AUTH ---
         async loginAdmin() {
             this.loading = true;
-            const { error } = await supabaseClient.auth.signInWithPassword({
-                email: this.adminForm.email,
-                password: this.adminForm.password,
-            });
-            this.loading = false;
-            if (error) this.notify(error.message, 'error');
+            try {
+                const { error } = await supabaseClient.auth.signInWithPassword({
+                    email: this.adminForm.email,
+                    password: this.adminForm.password,
+                });
+                if (error) this.notify(error.message, 'error');
+            } finally {
+                this.loading = false;
+            }
         },
         async registerAdmin() {
             this.loading = true;
-            const { data: authData, error: authError } = await supabaseClient.auth.signUp({
-                email: this.registerForm.email,
-                password: this.registerForm.password,
-            });
-            if (authError) {
+            try {
+                const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+                    email: this.registerForm.email,
+                    password: this.registerForm.password,
+                });
+                if (authError) return this.notify(authError.message, 'error');
+                if (authData.user && !authData.session) return this.notify('Verifique seu e-mail.', 'success');
+            } finally {
                 this.loading = false;
-                return this.notify(authError.message, 'error');
             }
-            if (authData.user) {
-                if (!authData.session) {
-                    this.loading = false;
-                    return this.notify('Verifique seu e-mail.', 'success');
-                }
-            }
-            this.loading = false;
         },
         async completeCompanySetup() {
              this.loading = true;
-             if (!this.registerForm.companyName) {
+             try {
+                 if (!this.registerForm.companyName) return this.notify('Digite o nome da empresa.', 'error');
+                 const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
+                 const { data: wsId, error: wsError } = await supabaseClient
+                    .rpc('create_owner_workspace_and_profile', {
+                        p_name: this.registerForm.companyName,
+                        p_company_code: generatedCode
+                    });
+                if (wsError) {
+                    console.error(wsError);
+                    this.notify('Erro: ' + wsError.message, 'error');
+                } else {
+                    this.newCompanyCode = generatedCode;
+                    this.registrationSuccess = true;
+                    this.notify('Conta criada!', 'success');
+                }
+             } finally {
                  this.loading = false;
-                 return this.notify('Digite o nome da empresa.', 'error');
              }
-             const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
-             const { data: wsId, error: wsError } = await supabaseClient
-                .rpc('create_owner_workspace_and_profile', {
-                    p_name: this.registerForm.companyName,
-                    p_company_code: generatedCode
-                });
-            if (wsError) {
-                console.error(wsError);
-                this.notify('Erro: ' + wsError.message, 'error');
-            } else {
-                this.newCompanyCode = generatedCode;
-                this.registrationSuccess = true;
-                this.notify('Conta criada!', 'success');
-            }
-            this.loading = false;
         },
         async loginEmployee() {
             this.loading = true;
-            const { data, error } = await supabaseClient
-                .rpc('employee_login', {
-                    p_company_code: this.loginForm.company_code,
-                    p_username: this.loginForm.username,
-                    p_password: this.loginForm.password
-                });
-            this.loading = false;
-            if (error) {
-                this.notify('Falha no login.', 'error');
-            } else if (data && data.length > 0) {
-                const emp = data[0];
-                this.employeeSession = emp;
-                this.user = emp;
-                this.workspaceName = emp.workspace_name;
-                this.companyCode = emp.company_code;
-                localStorage.setItem('techassist_employee', JSON.stringify(emp));
-                this.notify('Bem-vindo, ' + emp.name, 'success');
-                this.fetchEmployees();
-                this.fetchTickets();
-                this.fetchTemplates();
-                this.setupRealtime();
-            } else {
-                 this.notify('Credenciais inválidas.', 'error');
+            try {
+                const { data, error } = await supabaseClient
+                    .rpc('employee_login', {
+                        p_company_code: this.loginForm.company_code,
+                        p_username: this.loginForm.username,
+                        p_password: this.loginForm.password
+                    });
+                if (error) {
+                    this.notify('Falha no login.', 'error');
+                } else if (data && data.length > 0) {
+                    const emp = data[0];
+                    this.employeeSession = emp;
+                    this.user = emp;
+                    this.workspaceName = emp.workspace_name;
+                    this.companyCode = emp.company_code;
+                    localStorage.setItem('techassist_employee', JSON.stringify(emp));
+                    this.notify('Bem-vindo, ' + emp.name, 'success');
+                    await this.fetchEmployees();
+                    await this.fetchTickets();
+                    await this.fetchTemplates();
+                    this.setupRealtime();
+                } else {
+                     this.notify('Credenciais inválidas.', 'error');
+                }
+            } finally {
+                this.loading = false;
             }
         },
         async logout() {
@@ -270,9 +308,9 @@ function app() {
                 this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
                 this.workspaceName = profile.workspaces?.name;
                 this.companyCode = profile.workspaces?.company_code;
-                this.fetchEmployees();
-                this.fetchTickets();
-                this.fetchTemplates();
+                await this.fetchEmployees();
+                await this.fetchTickets();
+                await this.fetchTemplates();
                 this.setupRealtime();
             }
         },
@@ -291,46 +329,52 @@ function app() {
 
         async fetchTickets(retryCount = 0) {
             if (!this.user?.workspace_id) return;
-            const { data, error } = await supabaseClient
-                .from('tickets')
-                .select('*')
-                .eq('workspace_id', this.user.workspace_id)
-                .order('created_at', { ascending: false });
 
-            if (error) {
-                // Handle AbortError (often caused by tab switching/suspension)
-                if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted'))) {
-                    console.warn(`Fetch aborted (attempt ${retryCount + 1}). Retrying in 500ms...`);
-                    if (retryCount < 3) {
-                        setTimeout(() => this.fetchTickets(retryCount + 1), 500);
+            try {
+                const { data, error } = await supabaseClient
+                    .from('tickets')
+                    .select('*')
+                    .eq('workspace_id', this.user.workspace_id)
+                    .order('created_at', { ascending: false });
+
+                if (error) {
+                    // Handle AbortError/Network Error (often caused by tab switching/suspension)
+                    if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted') || error.message.includes('Failed to fetch'))) {
+                        // Only log warning, don't spam
+                        console.warn(`Fetch aborted/failed (attempt ${retryCount + 1}).`);
+
+                        // Retry logic with cap
+                        if (retryCount < 2) {
+                            setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
+                        }
+                        return;
                     }
+
+                    if (error.code === 'PGRST205') {
+                        console.warn("Database tables missing (PGRST205). Waiting for setup.");
+                        this.tickets = [];
+                        this.techTickets = [];
+                        return;
+                    }
+                    console.error("Error fetching tickets:", error);
                     return;
                 }
 
-                if (error.code === 'PGRST205') {
-                    // Suppress "Missing Table" error to avoid crashing UI for user
-                    // They will see empty data instead of an error until DB is ready.
-                    console.warn("Database tables missing (PGRST205). Waiting for setup.");
-                    this.tickets = [];
-                    this.techTickets = [];
-                    return;
+                if (data) {
+                    this.tickets = data;
+                    // Filter for Tech View
+                    this.techTickets = data.filter(t =>
+                        ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
+                    ).sort((a, b) => {
+                        const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
+                        const pDiff = pOrder[a.priority] - pOrder[b.priority];
+                        if (pDiff !== 0) return pDiff;
+                        return new Date(a.deadline || 0) - new Date(b.deadline || 0);
+                    });
                 }
-                console.error("Error fetching tickets:", error);
-                return;
+            } catch (err) {
+                 console.warn("Fetch exception:", err);
             }
-
-            this.tickets = data;
-
-            // Filter for Tech View (Only Analysis and Repair)
-            this.techTickets = data.filter(t =>
-                ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
-            ).sort((a, b) => {
-                const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
-                const pDiff = pOrder[a.priority] - pOrder[b.priority];
-                if (pDiff !== 0) return pDiff;
-                // Then by Deadline
-                return new Date(a.deadline || 0) - new Date(b.deadline || 0);
-            });
         },
 
         async fetchTemplates() {
@@ -383,30 +427,37 @@ function app() {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
              this.loading = true;
-             const ticketData = {
-                 workspace_id: this.user.workspace_id,
-                 client_name: this.ticketForm.client_name,
-                 os_number: this.ticketForm.os_number,
-                 device_model: this.ticketForm.model,
-                 serial_number: this.ticketForm.serial,
-                 defect_reported: this.ticketForm.defect,
-                 priority: this.ticketForm.priority,
-                 contact_info: this.ticketForm.contact,
-                 deadline: this.ticketForm.deadline || null,
-                 device_condition: this.ticketForm.device_condition,
-                 checklist_data: this.ticketForm.checklist,
-                 status: 'Aberto',
-                 created_by_name: this.user.name
-             };
-             const { error } = await supabaseClient.from('tickets').insert(ticketData);
-             this.loading = false;
-             if (error) {
-                 console.error(error);
-                 this.notify("Erro ao criar chamado. Verifique SQL.", "error");
-             } else {
-                 this.notify("Chamado criado!");
-                 this.modals.ticket = false;
-                 this.fetchTickets();
+             try {
+                 const ticketData = {
+                     workspace_id: this.user.workspace_id,
+                     client_name: this.ticketForm.client_name,
+                     os_number: this.ticketForm.os_number,
+                     device_model: this.ticketForm.model,
+                     serial_number: this.ticketForm.serial,
+                     defect_reported: this.ticketForm.defect,
+                     priority: this.ticketForm.priority,
+                     contact_info: this.ticketForm.contact,
+                     deadline: this.ticketForm.deadline || null,
+                     device_condition: this.ticketForm.device_condition,
+                     checklist_data: this.ticketForm.checklist,
+                     status: 'Aberto',
+                     created_by_name: this.user.name
+                 };
+
+                 const { error } = await supabaseClient.from('tickets').insert(ticketData);
+
+                 if (error) {
+                     console.error(error);
+                     this.notify("Erro ao criar chamado.", "error");
+                 } else {
+                     this.notify("Chamado criado!");
+                     this.modals.ticket = false;
+                     await this.fetchTickets();
+                 }
+             } catch (err) {
+                 this.notify("Erro ao criar: " + err.message, "error");
+             } finally {
+                 this.loading = false;
              }
         },
 
@@ -421,10 +472,10 @@ function app() {
 
         // --- WORKFLOW ACTIONS ---
 
-        // Generic Status Update
         async updateStatus(ticket, newStatus, additionalUpdates = {}) {
             this.loading = true;
             try {
+                // Log action
                 await supabaseClient.from('ticket_logs').insert({
                     ticket_id: ticket.id,
                     action: 'Alteração de Status',
@@ -438,8 +489,8 @@ function app() {
                 if (error) throw error;
 
                 this.notify("Status atualizado");
-                this.fetchTickets();
-                this.modals.viewTicket = false; // Close modal usually on big moves
+                await this.fetchTickets();
+                this.modals.viewTicket = false;
             } catch (error) {
                 console.error(error);
                 this.notify("Erro ao atualizar: " + (error.message || error), "error");
@@ -448,37 +499,38 @@ function app() {
             }
         },
 
-        // 2. Finish Analysis
         async finishAnalysis() {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
-            // If needs parts -> log it, but standard flow goes to Approval first
             await this.updateStatus(this.selectedTicket, 'Aprovacao', {
                 parts_needed: this.analysisForm.partsList,
-                tech_notes: this.selectedTicket.tech_notes // Save notes too
+                tech_notes: this.selectedTicket.tech_notes
             });
         },
 
-        // 3. Approval Actions
         async sendBudget(ticket = this.selectedTicket) {
             this.loading = true;
-            const { error } = await supabaseClient.from('tickets').update({
-                budget_status: 'Enviado',
-                budget_sent_at: new Date().toISOString()
-            }).eq('id', ticket.id);
-            this.loading = false;
-            if (!error) {
-                // Force reactivity update
-                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                    this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
+            try {
+                const { error } = await supabaseClient.from('tickets').update({
+                    budget_status: 'Enviado',
+                    budget_sent_at: new Date().toISOString()
+                }).eq('id', ticket.id);
+
+                if (!error) {
+                    if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                        this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
+                    }
+                    this.notify("Orçamento marcado como Enviado.");
+                    await this.fetchTickets();
+                } else {
+                    this.notify("Erro: " + error.message, "error");
                 }
-                this.notify("Orçamento marcado como Enviado.");
-                this.fetchTickets();
+            } finally {
+                this.loading = false;
             }
         },
         async approveRepair(ticket = this.selectedTicket) {
-            // Check if needs parts
             const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
             await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' });
         },
@@ -486,15 +538,17 @@ function app() {
              await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false });
         },
 
-        // 4. Purchase Actions
         async markPurchased(ticket = this.selectedTicket) {
              this.loading = true;
-             await supabaseClient.from('tickets').update({
-                parts_status: 'Comprado',
-                parts_purchased_at: new Date().toISOString()
-            }).eq('id', ticket.id);
-            this.loading = false;
-            this.fetchTickets();
+             try {
+                 await supabaseClient.from('tickets').update({
+                    parts_status: 'Comprado',
+                    parts_purchased_at: new Date().toISOString()
+                }).eq('id', ticket.id);
+                await this.fetchTickets();
+             } finally {
+                this.loading = false;
+             }
         },
         async confirmReceived(ticket = this.selectedTicket) {
              await this.updateStatus(ticket, 'Andamento Reparo', {
@@ -503,23 +557,25 @@ function app() {
              });
         },
 
-        // 5. Repair Actions
         async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
-             const now = new Date().toISOString();
-             await supabaseClient.from('tickets').update({
-                repair_start_at: now
-            }).eq('id', ticket.id);
-            this.loading = false;
-            // Force reactivity
-            if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                this.selectedTicket = { ...this.selectedTicket, repair_start_at: now };
-            }
-            this.fetchTickets();
+             try {
+                 const now = new Date().toISOString();
+                 await supabaseClient.from('tickets').update({
+                    repair_start_at: now
+                }).eq('id', ticket.id);
+
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket = { ...this.selectedTicket, repair_start_at: now };
+                }
+                await this.fetchTickets();
+             } finally {
+                 this.loading = false;
+             }
         },
 
         openOutcomeModal(mode, ticket = this.selectedTicket) {
-            this.selectedTicket = ticket; // Set context
+            this.selectedTicket = ticket;
             this.outcomeMode = mode;
             this.showTestFailureForm = false;
             this.modals.outcome = true;
@@ -536,14 +592,16 @@ function app() {
             await this.updateStatus(ticket, nextStatus, updates);
         },
 
-        // 6. Test Actions
         async startTest(ticket = this.selectedTicket) {
              this.loading = true;
-             await supabaseClient.from('tickets').update({
-                test_start_at: new Date().toISOString()
-            }).eq('id', ticket.id);
-            this.loading = false;
-            this.fetchTickets();
+             try {
+                 await supabaseClient.from('tickets').update({
+                    test_start_at: new Date().toISOString()
+                }).eq('id', ticket.id);
+                await this.fetchTickets();
+             } finally {
+                this.loading = false;
+             }
         },
 
         async concludeTest(success) {
@@ -552,30 +610,31 @@ function app() {
                 this.modals.outcome = false;
                 await this.updateStatus(ticket, 'Retirada Cliente');
             } else {
-                // Failure -> Back to Analysis with new params
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
 
                 this.modals.outcome = false;
                 await this.updateStatus(ticket, 'Analise Tecnica', {
                     deadline: this.testFailureData.newDeadline,
                     priority: this.testFailureData.newPriority,
-                    repair_start_at: null, // Reset execution flags
+                    repair_start_at: null,
                     test_start_at: null,
-                    status: 'Analise Tecnica' // Explicit return
+                    status: 'Analise Tecnica'
                 });
                 this.notify("Retornado para bancada com urgência!");
             }
         },
 
-        // 7. Pickup Actions
         async markAvailable(ticket = this.selectedTicket) {
              this.loading = true;
-             await supabaseClient.from('tickets').update({
-                pickup_available: true,
-                pickup_available_at: new Date().toISOString()
-            }).eq('id', ticket.id);
-            this.loading = false;
-            this.fetchTickets();
+             try {
+                 await supabaseClient.from('tickets').update({
+                    pickup_available: true,
+                    pickup_available_at: new Date().toISOString()
+                }).eq('id', ticket.id);
+                await this.fetchTickets();
+             } finally {
+                this.loading = false;
+             }
         },
         async confirmPickup(ticket = this.selectedTicket) {
             await this.updateStatus(ticket, 'Finalizado');
@@ -629,16 +688,25 @@ function app() {
             if (!this.user?.workspace_id) return this.notify('Erro workspace', 'error');
             if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
             this.loading = true;
-            const { error } = await supabaseClient.rpc('create_employee', {
-                p_workspace_id: this.user.workspace_id,
-                p_name: this.employeeForm.name,
-                p_username: this.employeeForm.username,
-                p_password: this.employeeForm.password,
-                p_roles: this.employeeForm.roles
-            });
-            this.loading = false;
-            if (error) { console.error(error); this.notify('Erro: ' + error.message, 'error'); }
-            else { this.notify('Criado!'); this.modals.newEmployee = false; this.fetchEmployees(); }
+            try {
+                const { error } = await supabaseClient.rpc('create_employee', {
+                    p_workspace_id: this.user.workspace_id,
+                    p_name: this.employeeForm.name,
+                    p_username: this.employeeForm.username,
+                    p_password: this.employeeForm.password,
+                    p_roles: this.employeeForm.roles
+                });
+                if (error) {
+                    console.error(error);
+                    this.notify('Erro: ' + error.message, 'error');
+                } else {
+                    this.notify('Criado!');
+                    this.modals.newEmployee = false;
+                    await this.fetchEmployees();
+                }
+            } finally {
+                this.loading = false;
+            }
         },
 
         async deleteEmployee(id) {
