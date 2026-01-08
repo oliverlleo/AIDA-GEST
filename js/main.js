@@ -3,25 +3,33 @@
 const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
 
-// Renomeando para evitar conflito com variável global 'supabase' do CDN
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Safe initialization
+let supabaseClient;
+try {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} catch (e) {
+    console.error("Supabase fail:", e);
+}
 
 function app() {
     return {
         // State
         loading: false,
-        session: null, // Admin Auth Session
-        employeeSession: null, // Custom Employee Session object
-        user: null, // Unified user object
+        session: null,
+        employeeSession: null,
+        user: null,
         workspaceName: '',
-        companyCode: '', // New: Store company code
-        registrationSuccess: false, // New: Show welcome screen
-        newCompanyCode: '', // New: Store new code for display
-        view: 'dashboard', // dashboard, employees, service_orders, stock, setup_required
-        authMode: 'employee', // employee, admin_login, admin_register
+        companyCode: '',
+        registrationSuccess: false,
+        newCompanyCode: '',
+        view: 'dashboard',
+        authMode: 'employee',
 
         // Data
         employees: [],
+        tickets: [],
+        techTickets: [],
+        checklistTemplates: [],
         notifications: [],
 
         // Forms
@@ -30,37 +38,73 @@ function app() {
         registerForm: { companyName: '', email: '', password: '' },
         employeeForm: { name: '', username: '', password: '', roles: [] },
 
+        // Ticket Form
+        ticketForm: {
+            client_name: '',
+            os_number: '',
+            model: '',
+            serial: '',
+            defect: '',
+            priority: 'Normal',
+            contact: '',
+            deadline: '',
+            device_condition: '',
+            checklist: [],
+            photos: [],
+            notes: ''
+        },
+        newChecklistItem: '',
+        selectedTemplateId: '',
+        newTemplateName: '',
+
+        // Selected Ticket
+        selectedTicket: null,
+
         // Modals
-        modals: { newEmployee: false },
+        modals: { newEmployee: false, ticket: false, viewTicket: false },
+
+        // Constants
+        PRIORITIES: ['Baixa', 'Normal', 'Alta', 'Urgente'],
+        STATUS_COLUMNS: [
+            'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+            'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
+        ],
 
         async init() {
+            console.log("App initializing...");
             this.loading = true;
 
-            // Check for Admin Session
+            if (!supabaseClient) {
+                this.notify("Erro crítico: Supabase não carregou.", "error");
+                this.loading = false;
+                return;
+            }
+
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
                 this.session = session;
                 await this.loadAdminData();
             } else {
-                // Check for Employee Session (Stored in localStorage)
                 const storedEmp = localStorage.getItem('techassist_employee');
                 if (storedEmp) {
-                    this.employeeSession = JSON.parse(storedEmp);
-                    this.user = this.employeeSession;
-                    // Restore company info from session
-                    if (this.employeeSession.workspace_name) {
-                        this.workspaceName = this.employeeSession.workspace_name;
+                    try {
+                        this.employeeSession = JSON.parse(storedEmp);
+                        this.user = this.employeeSession;
+                        if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
+                        if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
+                        this.fetchEmployees();
+                    } catch (e) {
+                        localStorage.removeItem('techassist_employee');
                     }
-                    if (this.employeeSession.company_code) {
-                        this.companyCode = this.employeeSession.company_code;
-                    }
-
-                    // Also fetch employees if logged in as employee (to populate team view)
-                    this.fetchEmployees();
                 }
             }
 
-            // Listen for Auth Changes (Admin)
+            if (this.user) {
+                this.fetchTickets();
+                this.fetchTemplates();
+                this.setupRealtime();
+            }
+
             supabaseClient.auth.onAuthStateChange(async (_event, session) => {
                 this.session = session;
                 if (session) {
@@ -73,8 +117,19 @@ function app() {
             this.loading = false;
         },
 
-        // --- AUTHENTICATION ---
+        setupRealtime() {
+            if (!this.user?.workspace_id || !supabaseClient) return;
 
+            supabaseClient
+                .channel('tickets_channel')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
+                payload => {
+                   this.fetchTickets();
+                })
+                .subscribe();
+        },
+
+        // --- AUTH ---
         async loginAdmin() {
             this.loading = true;
             const { error } = await supabaseClient.auth.signInWithPassword({
@@ -87,61 +142,42 @@ function app() {
 
         async registerAdmin() {
             this.loading = true;
-
-            // NOTE: companyName removed from initial form, so we skip saving it.
-
-            // 1. Sign Up
             const { data: authData, error: authError } = await supabaseClient.auth.signUp({
                 email: this.registerForm.email,
                 password: this.registerForm.password,
             });
-
             if (authError) {
                 this.loading = false;
                 return this.notify(authError.message, 'error');
             }
-
-            // If user already exists, signUp returns user/session.
-            // Proceed to create workspace.
-
             if (authData.user) {
                 if (!authData.session) {
                     this.loading = false;
-                    return this.notify('Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de entrar.', 'success');
+                    return this.notify('Verifique seu e-mail.', 'success');
                 }
-
-                // We cannot create workspace yet because we don't have the name.
-                // The user will be redirected to dashboard -> "setup_required" -> completeCompanySetup
             }
             this.loading = false;
         },
 
         async completeCompanySetup() {
              this.loading = true;
-
-             // Check name
              if (!this.registerForm.companyName) {
                  this.loading = false;
-                 return this.notify('Por favor, digite o nome da empresa.', 'error');
+                 return this.notify('Digite o nome da empresa.', 'error');
              }
-
              const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
-
-             // Call the new ATOMIC RPC to create workspace AND profile
              const { data: wsId, error: wsError } = await supabaseClient
                 .rpc('create_owner_workspace_and_profile', {
                     p_name: this.registerForm.companyName,
                     p_company_code: generatedCode
                 });
-
             if (wsError) {
                 console.error(wsError);
-                this.notify('Erro ao criar empresa: ' + wsError.message, 'error');
+                this.notify('Erro: ' + wsError.message, 'error');
             } else {
                 this.newCompanyCode = generatedCode;
                 this.registrationSuccess = true;
-                this.notify('Conta criada com sucesso!', 'success');
-                // Reload after success will load profile correctly
+                this.notify('Conta criada!', 'success');
             }
             this.loading = false;
         },
@@ -154,24 +190,21 @@ function app() {
                     p_username: this.loginForm.username,
                     p_password: this.loginForm.password
                 });
-
             this.loading = false;
-
             if (error) {
-                console.error(error);
-                this.notify('Falha no login. Verifique as credenciais.', 'error');
+                this.notify('Falha no login.', 'error');
             } else if (data && data.length > 0) {
-                const emp = data[0]; // RPC returns an array
+                const emp = data[0];
                 this.employeeSession = emp;
                 this.user = emp;
-
-                // Set UI state immediately
                 this.workspaceName = emp.workspace_name;
                 this.companyCode = emp.company_code;
-
                 localStorage.setItem('techassist_employee', JSON.stringify(emp));
                 this.notify('Bem-vindo, ' + emp.name, 'success');
-                this.fetchEmployees(); // Load colleagues
+                this.fetchEmployees();
+                this.fetchTickets();
+                this.fetchTemplates();
+                this.setupRealtime();
             } else {
                  this.notify('Credenciais inválidas.', 'error');
             }
@@ -179,132 +212,251 @@ function app() {
 
         async logout() {
             this.loading = true;
-            try {
-                if (this.session) {
-                    await supabaseClient.auth.signOut();
-                }
-            } catch (error) {
-                console.error("Logout error (network might be unreachable):", error);
-            } finally {
-                // Force cleanup local state regardless of server response
-                this.employeeSession = null;
-                this.user = null;
-                this.session = null;
-                this.workspaceName = '';
-                this.companyCode = '';
-                localStorage.removeItem('techassist_employee');
-
-                this.view = 'dashboard';
-                this.loading = false;
-                window.location.reload();
-            }
+            try { if (this.session) await supabaseClient.auth.signOut(); } catch (e) {}
+            this.employeeSession = null;
+            this.user = null;
+            this.session = null;
+            localStorage.removeItem('techassist_employee');
+            this.view = 'dashboard';
+            this.loading = false;
+            window.location.reload();
         },
-
-        // --- DATA LOADING ---
 
         async loadAdminData() {
             if (!this.session) return;
             const user = this.session.user;
-
-            // Fetch Profile & Workspace
             let { data: profile, error } = await supabaseClient
                 .from('profiles')
                 .select('*, workspaces(name, company_code)')
                 .eq('id', user.id)
                 .single();
-
-            // CRITICAL RECOVERY: If profile missing...
             if (error && error.code === 'PGRST116') {
-                console.log("Profile missing. Checking workspace or zombie state...");
-
-                // Try finding ANY workspace owned by user
                 const { data: wsData } = await supabaseClient
-                    .from('workspaces')
-                    .select('id, name, company_code')
-                    .eq('owner_id', user.id)
-                    .single();
-
+                    .from('workspaces').select('id, name, company_code').eq('owner_id', user.id).single();
                 if (wsData) {
-                    // Workspace exists, create missing profile
-                    await supabaseClient.from('profiles').insert([{
-                        id: user.id,
-                        workspace_id: wsData.id,
-                        role: 'admin'
-                    }]);
-
-                    // Retry fetching profile
-                     const retry = await supabaseClient
-                        .from('profiles')
-                        .select('*, workspaces(name, company_code)')
-                        .eq('id', user.id)
-                        .single();
-
-                     profile = retry.data;
-                     error = retry.error;
+                    await supabaseClient.from('profiles').insert([{ id: user.id, workspace_id: wsData.id, role: 'admin' }]);
+                    profile = (await supabaseClient.from('profiles').select('*, workspaces(name, company_code)').eq('id', user.id).single()).data;
                 } else {
-                    // FATAL: Auth exists, but NO Workspace and NO Profile.
-                    // Redirect to "Setup Required" view to ASK FOR COMPANY NAME.
-                    console.error("ZOMBIE ACCOUNT DETECTED: No workspace, no profile.");
                     this.view = 'setup_required';
                     return;
                 }
             }
-
-            if (error) {
-                console.error("Error loading admin profile:", error);
-            }
-
             if (profile) {
-                this.user = {
-                    id: user.id,
-                    email: user.email,
-                    name: 'Administrador',
-                    roles: ['admin'],
-                    workspace_id: profile.workspace_id
-                };
+                this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
                 this.workspaceName = profile.workspaces?.name;
-                this.companyCode = profile.workspaces?.company_code; // Store for display
-
-                // Load Employees
+                this.companyCode = profile.workspaces?.company_code;
                 this.fetchEmployees();
+                this.fetchTickets();
+                this.fetchTemplates();
+                this.setupRealtime();
             }
         },
 
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
-
             let result;
-
             if (this.session) {
-                // Admin: Standard Select (RLS works because auth.uid() is owner)
-                result = await supabaseClient
-                    .from('employees')
-                    .select('*')
-                    .eq('workspace_id', this.user.workspace_id)
-                    .order('created_at', { ascending: false });
+                result = await supabaseClient.from('employees').select('*').eq('workspace_id', this.user.workspace_id).order('created_at', { ascending: false });
             } else {
-                // Employee: Use Secure RPC (bypasses RLS) because they are not "auth users"
-                result = await supabaseClient
-                    .rpc('get_employees_for_workspace', {
-                        p_workspace_id: this.user.workspace_id
-                    });
+                result = await supabaseClient.rpc('get_employees_for_workspace', { p_workspace_id: this.user.workspace_id });
+            }
+            if (!result.error) this.employees = result.data;
+        },
+
+        // --- TICKET LOGIC ---
+
+        async fetchTickets() {
+            if (!this.user?.workspace_id) return;
+            const { data, error } = await supabaseClient
+                .from('tickets')
+                .select('*')
+                .eq('workspace_id', this.user.workspace_id)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error fetching tickets:", error);
+                return;
             }
 
-            const { data, error } = result;
+            this.tickets = data;
 
-            if (!error) {
-                this.employees = data;
-            } else {
-                console.error("Error fetching employees:", error);
+            // Filter for Tech View (Removed Teste Final)
+            this.techTickets = data.filter(t =>
+                ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
+            ).sort((a, b) => {
+                const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
+                const pDiff = pOrder[a.priority] - pOrder[b.priority];
+                if (pDiff !== 0) return pDiff;
+                return new Date(a.deadline || 0) - new Date(b.deadline || 0);
+            });
+        },
+
+        async fetchTemplates() {
+             if (!this.user?.workspace_id) return;
+             const { data } = await supabaseClient.from('checklist_templates').select('*');
+             if (data) this.checklistTemplates = data;
+        },
+
+        openNewTicketModal() {
+            this.ticketForm = {
+                client_name: '',
+                os_number: '',
+                model: '',
+                serial: '',
+                defect: '',
+                priority: 'Normal',
+                contact: '',
+                deadline: '',
+                device_condition: '',
+                checklist: [],
+                photos: [],
+                notes: ''
+            };
+            this.modals.ticket = true;
+        },
+
+        addChecklistItem() {
+            if (this.newChecklistItem.trim()) {
+                this.ticketForm.checklist.push({ item: this.newChecklistItem, ok: false });
+                this.newChecklistItem = '';
             }
         },
 
-        async getWorkspaceName(id) {
-            // Deprecated: Name is loaded via profile join or login RPC
-            return this.workspaceName || 'Área de Trabalho';
+        removeChecklistItem(index) {
+            this.ticketForm.checklist.splice(index, 1);
         },
 
-        // --- ACTIONS ---
+        async saveTemplate() {
+            if (!this.newTemplateName) return this.notify("Nomeie o modelo", "error");
+            if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
+
+            const { error } = await supabaseClient.from('checklist_templates').insert({
+                workspace_id: this.user.workspace_id,
+                name: this.newTemplateName,
+                items: this.ticketForm.checklist.map(i => i.item)
+            });
+
+            if (error) this.notify("Erro ao salvar", "error");
+            else {
+                this.notify("Modelo salvo!");
+                this.newTemplateName = '';
+                this.fetchTemplates();
+            }
+        },
+
+        loadTemplate() {
+            const tmpl = this.checklistTemplates.find(t => t.id === this.selectedTemplateId);
+            if (tmpl) {
+                this.ticketForm.checklist = tmpl.items.map(s => ({ item: s, ok: false }));
+            }
+        },
+
+        async createTicket() {
+             if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model) {
+                 return this.notify("Preencha os campos obrigatórios (*)", "error");
+             }
+
+             this.loading = true;
+
+             const ticketData = {
+                 workspace_id: this.user.workspace_id,
+                 client_name: this.ticketForm.client_name,
+                 os_number: this.ticketForm.os_number,
+                 device_model: this.ticketForm.model,
+                 serial_number: this.ticketForm.serial,
+                 defect_reported: this.ticketForm.defect,
+                 priority: this.ticketForm.priority,
+                 contact_info: this.ticketForm.contact,
+                 deadline: this.ticketForm.deadline || null,
+                 device_condition: this.ticketForm.device_condition,
+                 checklist_data: this.ticketForm.checklist,
+                 status: 'Aberto',
+                 created_by_name: this.user.name
+             };
+
+             const { error } = await supabaseClient.from('tickets').insert(ticketData);
+
+             this.loading = false;
+             if (error) {
+                 console.error(error);
+                 this.notify("Erro ao criar chamado. Verifique se o SQL foi executado.", "error");
+             } else {
+                 this.notify("Chamado criado com sucesso!");
+                 this.modals.ticket = false;
+                 this.fetchTickets();
+             }
+        },
+
+        viewTicketDetails(ticket) {
+            this.selectedTicket = ticket;
+            if (!Array.isArray(this.selectedTicket.checklist_data)) {
+                 this.selectedTicket.checklist_data = [];
+            }
+            this.modals.viewTicket = true;
+        },
+
+        async updateStatus(ticket, newStatus) {
+            this.loading = true;
+
+            await supabaseClient.from('ticket_logs').insert({
+                ticket_id: ticket.id,
+                action: 'Alteração de Status',
+                details: `De ${ticket.status} para ${newStatus}`,
+                user_name: this.user.name
+            });
+
+            const updates = { status: newStatus };
+
+            const { error } = await supabaseClient
+                .from('tickets')
+                .update(updates)
+                .eq('id', ticket.id);
+
+            this.loading = false;
+
+            if (error) this.notify("Erro ao mover card", "error");
+            else {
+                this.notify("Status atualizado");
+                this.fetchTickets();
+                this.modals.viewTicket = false;
+            }
+        },
+
+        async saveTicketChanges() {
+            if (!this.selectedTicket) return;
+            this.loading = true;
+
+            const { error } = await supabaseClient
+                .from('tickets')
+                .update({
+                    tech_notes: this.selectedTicket.tech_notes,
+                    parts_needed: this.selectedTicket.parts_needed,
+                    checklist_data: this.selectedTicket.checklist_data,
+                    budget_value: this.selectedTicket.budget_value
+                })
+                .eq('id', this.selectedTicket.id);
+
+            this.loading = false;
+            if (error) this.notify("Erro ao salvar", "error");
+            else this.notify("Alterações salvas");
+        },
+
+        // --- UTILS ---
+        getPriorityColor(prio) {
+            switch(prio) {
+                case 'Urgente': return 'bg-red-100 text-red-800 border-red-500';
+                case 'Alta': return 'bg-orange-100 text-orange-800 border-orange-500';
+                case 'Normal': return 'bg-blue-100 text-blue-800 border-blue-500';
+                default: return 'bg-gray-100 text-gray-800 border-gray-300';
+            }
+        },
+
+        getCardColor(ticket) {
+            if (ticket.deadline && new Date(ticket.deadline) < new Date() && ticket.status !== 'Finalizado') {
+                return 'border-l-4 border-red-600 bg-red-50';
+            }
+            return 'bg-white';
+        },
 
         openModal(name) {
             this.employeeForm = { name: '', username: '', password: '', roles: [] };
@@ -312,18 +464,9 @@ function app() {
         },
 
         async createEmployee() {
-            // Debug check for workspace ID
-            if (!this.user?.workspace_id) {
-                console.error("Workspace ID missing in user object:", this.user);
-                return this.notify('Erro: Identificador da empresa não carregado. Recarregue a página.', 'error');
-            }
-
-            if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) {
-                return this.notify('Preencha todos os campos', 'error');
-            }
-
+            if (!this.user?.workspace_id) return this.notify('Erro workspace', 'error');
+            if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
             this.loading = true;
-
             const { error } = await supabaseClient.rpc('create_employee', {
                 p_workspace_id: this.user.workspace_id,
                 p_name: this.employeeForm.name,
@@ -331,56 +474,29 @@ function app() {
                 p_password: this.employeeForm.password,
                 p_roles: this.employeeForm.roles
             });
-
             this.loading = false;
-
-            if (error) {
-                console.error(error);
-                this.notify('Erro ao criar funcionário: ' + error.message, 'error');
-            } else {
-                this.notify('Funcionário criado!', 'success');
-                this.modals.newEmployee = false;
-                this.fetchEmployees();
-            }
+            if (error) { console.error(error); this.notify('Erro: ' + error.message, 'error'); }
+            else { this.notify('Criado!'); this.modals.newEmployee = false; this.fetchEmployees(); }
         },
 
         async deleteEmployee(id) {
-            if (!confirm('Tem certeza?')) return;
-
-            const { error } = await supabaseClient
-                .from('employees')
-                .delete()
-                .eq('id', id);
-
-            if (error) {
-                this.notify('Erro ao excluir.', 'error');
-            } else {
-                this.notify('Funcionário removido.', 'success');
-                this.fetchEmployees();
-            }
+            if (!confirm('Confirma?')) return;
+            const { error } = await supabaseClient.from('employees').delete().eq('id', id);
+            if (error) this.notify('Erro.', 'error'); else { this.notify('Excluído.'); this.fetchEmployees(); }
         },
 
-        // --- UTILS ---
-
         hasRole(role) {
-            // Se for o dono da conta (admin logado por email), tem acesso total
             if (this.session && role === 'admin') return true;
-
             if (!this.user) return false;
-
-            // Verificação segura de roles
             const roles = this.user.roles || [];
             if (roles.includes('admin')) return true;
-
             return roles.includes(role);
         },
 
         notify(message, type = 'success') {
             const id = Date.now();
             this.notifications.push({ id, message, type });
-            setTimeout(() => {
-                this.notifications = this.notifications.filter(n => n.id !== id);
-            }, 3000);
+            setTimeout(() => { this.notifications = this.notifications.filter(n => n.id !== id); }, 3000);
         }
     }
 }
