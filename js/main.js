@@ -14,7 +14,8 @@ try {
 function app() {
     return {
         // State
-        loading: false,
+        loading: false, // Blocking full-screen loader (Init/Login only)
+        isBusy: false, // Non-blocking top-bar loader (Actions)
         session: null,
         employeeSession: null,
         user: null,
@@ -129,6 +130,7 @@ function app() {
                     console.log("Tab visible, refreshing data...");
                     // Force clear loading state in case it got stuck
                     this.loading = false;
+                    this.isBusy = false; // Also clear busy state
 
                     // Refresh Session
                     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -382,31 +384,35 @@ function app() {
              if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model) {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
-             this.loading = true;
-             const ticketData = {
-                 workspace_id: this.user.workspace_id,
-                 client_name: this.ticketForm.client_name,
-                 os_number: this.ticketForm.os_number,
-                 device_model: this.ticketForm.model,
-                 serial_number: this.ticketForm.serial,
-                 defect_reported: this.ticketForm.defect,
-                 priority: this.ticketForm.priority,
-                 contact_info: this.ticketForm.contact,
-                 deadline: this.ticketForm.deadline || null,
-                 device_condition: this.ticketForm.device_condition,
-                 checklist_data: this.ticketForm.checklist,
-                 status: 'Aberto',
-                 created_by_name: this.user.name
-             };
-             const { error } = await supabaseClient.from('tickets').insert(ticketData);
-             this.loading = false;
-             if (error) {
-                 console.error(error);
-                 this.notify("Erro ao criar chamado. Verifique SQL.", "error");
-             } else {
+             this.isBusy = true; // Non-blocking
+             try {
+                 const ticketData = {
+                     workspace_id: this.user.workspace_id,
+                     client_name: this.ticketForm.client_name,
+                     os_number: this.ticketForm.os_number,
+                     device_model: this.ticketForm.model,
+                     serial_number: this.ticketForm.serial,
+                     defect_reported: this.ticketForm.defect,
+                     priority: this.ticketForm.priority,
+                     contact_info: this.ticketForm.contact,
+                     deadline: this.ticketForm.deadline || null,
+                     device_condition: this.ticketForm.device_condition,
+                     checklist_data: this.ticketForm.checklist,
+                     status: 'Aberto',
+                     created_by_name: this.user.name
+                 };
+                 const { error } = await supabaseClient.from('tickets').insert(ticketData);
+
+                 if (error) throw error;
+
                  this.notify("Chamado criado!");
                  this.modals.ticket = false;
                  this.fetchTickets();
+             } catch (error) {
+                 console.error(error);
+                 this.notify("Erro ao criar chamado: " + (error.message || error), "error");
+             } finally {
+                 this.isBusy = false;
              }
         },
 
@@ -423,7 +429,7 @@ function app() {
 
         // Generic Status Update
         async updateStatus(ticket, newStatus, additionalUpdates = {}) {
-            this.loading = true;
+            this.isBusy = true; // Non-blocking
             try {
                 await supabaseClient.from('ticket_logs').insert({
                     ticket_id: ticket.id,
@@ -444,7 +450,7 @@ function app() {
                 console.error(error);
                 this.notify("Erro ao atualizar: " + (error.message || error), "error");
             } finally {
-                this.loading = false;
+                this.isBusy = false;
             }
         },
 
@@ -462,12 +468,12 @@ function app() {
 
         // 3. Approval Actions
         async sendBudget(ticket = this.selectedTicket) {
-            this.loading = true;
+            this.isBusy = true;
             const { error } = await supabaseClient.from('tickets').update({
                 budget_status: 'Enviado',
                 budget_sent_at: new Date().toISOString()
             }).eq('id', ticket.id);
-            this.loading = false;
+            this.isBusy = false;
             if (!error) {
                 // Force reactivity update
                 if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
@@ -488,12 +494,12 @@ function app() {
 
         // 4. Purchase Actions
         async markPurchased(ticket = this.selectedTicket) {
-             this.loading = true;
+             this.isBusy = true;
              await supabaseClient.from('tickets').update({
                 parts_status: 'Comprado',
                 parts_purchased_at: new Date().toISOString()
             }).eq('id', ticket.id);
-            this.loading = false;
+            this.isBusy = false;
             this.fetchTickets();
         },
         async confirmReceived(ticket = this.selectedTicket) {
@@ -505,12 +511,12 @@ function app() {
 
         // 5. Repair Actions
         async startRepair(ticket = this.selectedTicket) {
-             this.loading = true;
+             this.isBusy = true;
              const now = new Date().toISOString();
              await supabaseClient.from('tickets').update({
                 repair_start_at: now
             }).eq('id', ticket.id);
-            this.loading = false;
+            this.isBusy = false;
             // Force reactivity
             if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
                 this.selectedTicket = { ...this.selectedTicket, repair_start_at: now };
@@ -538,11 +544,11 @@ function app() {
 
         // 6. Test Actions
         async startTest(ticket = this.selectedTicket) {
-             this.loading = true;
+             this.isBusy = true;
              await supabaseClient.from('tickets').update({
                 test_start_at: new Date().toISOString()
             }).eq('id', ticket.id);
-            this.loading = false;
+            this.isBusy = false;
             this.fetchTickets();
         },
 
@@ -569,12 +575,12 @@ function app() {
 
         // 7. Pickup Actions
         async markAvailable(ticket = this.selectedTicket) {
-             this.loading = true;
+             this.isBusy = true;
              await supabaseClient.from('tickets').update({
                 pickup_available: true,
                 pickup_available_at: new Date().toISOString()
             }).eq('id', ticket.id);
-            this.loading = false;
+            this.isBusy = false;
             this.fetchTickets();
         },
         async confirmPickup(ticket = this.selectedTicket) {
