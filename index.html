@@ -339,9 +339,27 @@
 
                 <!-- VIEW: TECH BENCH (Bancada) -->
                 <div x-show="view === 'tech_orders'" class="flex-grow p-6 overflow-y-auto flex flex-col" x-cloak>
-                    <!-- Header with Title -->
+                    <!-- Header with Title & Filter -->
                     <div class="flex justify-between items-center mb-6">
                          <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-wrench mr-2 text-brand-500"></i> Minha Bancada</h2>
+
+                         <!-- Tech Filter (Admin: Dropdown, Tech: Fixed) -->
+                         <div x-show="hasRole('admin') || user.roles.includes('tecnico')">
+                             <div class="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                                 <i class="fa-solid fa-filter text-gray-400 text-xs"></i>
+                                 <template x-if="hasRole('admin')">
+                                     <select x-model="selectedTechFilter" @change="fetchTickets()" class="text-sm font-bold text-gray-700 bg-transparent border-none focus:ring-0 cursor-pointer">
+                                         <option value="all">Todos os Técnicos</option>
+                                         <template x-for="tech in getTechnicians()" :key="tech.id">
+                                             <option :value="tech.id" x-text="tech.name"></option>
+                                         </template>
+                                     </select>
+                                 </template>
+                                 <template x-if="!hasRole('admin') && user.roles.includes('tecnico')">
+                                     <span class="text-sm font-bold text-gray-700" x-text="user.name"></span>
+                                 </template>
+                             </div>
+                         </div>
                     </div>
 
                     <!-- Weekly Calendar Bar -->
@@ -622,6 +640,15 @@
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho</label>
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Técnico Responsável</label>
+                            <select x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                                <option value="">-- Selecione --</option>
+                                <template x-for="tech in getTechnicians()" :key="tech.id">
+                                    <option :value="tech.id" x-text="tech.name"></option>
+                                </template>
+                            </select>
                         </div>
                          <div class="col-span-2">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado *</label>
