@@ -1,22 +1,34 @@
 
 // Configuração do Supabase
 const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
-// Reverting to the original Anon Key to restore data access immediately
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
 
-// Safe initialization
+// Variável Global do Client
 let supabaseClient;
-try {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: false
-        }
-    });
-} catch (e) {
-    console.error("Supabase fail:", e);
+
+// Função Factory para criar o Client (Permite recriação forçada)
+function initSupabaseClient() {
+    try {
+        return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: false
+            },
+            realtime: {
+                params: {
+                    eventsPerSecond: 10,
+                },
+            },
+        });
+    } catch (e) {
+        console.error("Supabase init fail:", e);
+        return null;
+    }
 }
+
+// Inicialização inicial
+supabaseClient = initSupabaseClient();
 
 function app() {
     return {
@@ -122,6 +134,61 @@ function app() {
                 this.loading = false;
             }
 
+            // Auth State Listener (Global)
+            this.setupAuthListener();
+
+            // Clock Interval
+            setInterval(() => {
+                this.currentTime = new Date();
+            }, 1000);
+
+            // --- STRATEGY: HARD RESET ON WAKE UP ---
+            // Detecta quando a aba volta a ser visível, mata o cliente velho e cria um novo.
+            // Isso simula o comportamento de "Refresh" da página, garantindo conexão limpa.
+            let visibilityTimer;
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === 'visible') {
+                    clearTimeout(visibilityTimer);
+                    // Espera um momento para o navegador "acordar" a pilha de rede
+                    visibilityTimer = setTimeout(async () => {
+                        console.log("Tab visible. Performing Hard Client Reset...");
+
+                        // 1. Desconecta tudo do cliente velho (evita leaks)
+                        if (supabaseClient) {
+                            await supabaseClient.removeAllChannels();
+                        }
+
+                        // 2. RECIA o cliente do zero (Nova conexão limpa)
+                        supabaseClient = initSupabaseClient();
+
+                        // 3. Re-ata o listener de Auth no novo cliente
+                        this.setupAuthListener();
+
+                        // 4. Restaura Sessão e Dados
+                        // O novo cliente lerá o localStorage automaticamente (persistSession)
+                        const { data: { session } } = await supabaseClient.auth.getSession();
+                        if (session) {
+                            this.session = session;
+                        }
+
+                        // 5. Busca dados e reconecta Realtime
+                        if (this.user) {
+                            await this.fetchTickets();
+                            this.setupRealtime();
+                        }
+
+                    }, 500);
+                } else {
+                    // Se ocultou a aba, já podemos matar os canais para economizar e evitar erros ao voltar
+                     if (supabaseClient) {
+                         supabaseClient.removeAllChannels();
+                     }
+                }
+            });
+        },
+
+        setupAuthListener() {
+            if (!supabaseClient) return;
             supabaseClient.auth.onAuthStateChange(async (_event, session) => {
                 this.session = session;
                 if (session) {
@@ -130,49 +197,13 @@ function app() {
                     this.user = null;
                 }
             });
-
-            // Clock Interval
-            setInterval(() => {
-                this.currentTime = new Date();
-            }, 1000);
-
-            // --- FIXED RECONNECTION LOGIC ---
-            // 1. We debounce heavily to avoid event storms.
-            // 2. We do NOT forcefully refresh session or kill channels aggressively,
-            //    as this causes the "hiccups" and infinite loading if the network is flaky.
-            // 3. We simply ask for a data refresh quietly.
-            let visibilityTimer;
-            document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === 'visible') {
-                    clearTimeout(visibilityTimer);
-                    visibilityTimer = setTimeout(async () => {
-                        console.log("Tab visible. Quiet data refresh...");
-
-                        // Just fetch data. If session is invalid, the fetch handles the error quietly.
-                        // We do NOT set global loading = true here to avoid the "infinite spinner" perception.
-                        if (this.user) {
-                            await this.fetchTickets();
-                        }
-
-                        // Ensure realtime is healthy without killing it
-                        const channels = supabaseClient.getChannels();
-                        if (channels.length === 0) {
-                            this.setupRealtime();
-                        }
-                    }, 1000); // 1s delay to let browser stabilize
-                }
-            });
         },
 
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
 
-            // Only subscribe if not already subscribed
-            const existing = supabaseClient.getChannels().find(c => c.topic === 'tickets_channel');
-            if (existing && existing.state === 'joined') return;
-
-            // Cleanup any half-open channels
-            if (existing) supabaseClient.removeChannel(existing);
+            // Remove canais antigos caso existam (prevenção extra)
+            supabaseClient.getChannels().forEach(c => supabaseClient.removeChannel(c));
 
             supabaseClient
                 .channel('tickets_channel')
@@ -328,7 +359,6 @@ function app() {
                     .order('created_at', { ascending: false });
 
                 if (error) {
-                    // Silent fail/retry logic to avoid alerting user unnecessarily
                     if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted') || error.message.includes('Failed to fetch'))) {
                         if (retryCount < 2) {
                             setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
