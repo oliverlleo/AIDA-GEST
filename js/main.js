@@ -161,10 +161,17 @@ function app() {
                     if (storedEmp) {
                         try {
                             this.employeeSession = JSON.parse(storedEmp);
+
+                            // Normalize ID if loaded from old storage format
+                            if (this.employeeSession.employee_id && !this.employeeSession.id) {
+                                this.employeeSession.id = this.employeeSession.employee_id;
+                            }
+
                             this.user = this.employeeSession;
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
                             await this.fetchEmployees();
+                            this.initTechFilter(); // Initialize filter on restore
                         } catch (e) {
                             localStorage.removeItem('techassist_employee');
                         }
@@ -172,6 +179,7 @@ function app() {
                 }
 
                 if (this.user) {
+                    this.initTechFilter(); // Ensure filter is set for Admin session restore too
                     await this.fetchTickets();
                     await this.fetchTemplates();
                     this.setupRealtime();
@@ -280,10 +288,17 @@ function app() {
 
                 if (data && data.length > 0) {
                     const emp = data[0];
+
+                    // Normalize ID (RPC returns employee_id)
+                    if (emp.employee_id && !emp.id) {
+                        emp.id = emp.employee_id;
+                    }
+
                     this.employeeSession = emp;
                     this.user = emp;
-                    this.workspaceName = emp.workspace_name;
-                    this.companyCode = emp.company_code;
+                    this.workspaceName = emp.workspace_name; // Note: RPC might not return workspace_name directly, check this too
+                    this.companyCode = this.loginForm.company_code; // Save from form input as RPC takes it but returns ID
+
                     localStorage.setItem('techassist_employee', JSON.stringify(emp));
                     this.notify('Bem-vindo, ' + emp.name, 'success');
                     await this.fetchEmployees();
@@ -432,15 +447,23 @@ function app() {
                     let filteredTechTickets = data;
                     let effectiveFilter = this.selectedTechFilter;
 
-                    // STRICT FILTERING FOR TECHNICIANS (Override UI state if needed)
-                    if (!this.hasRole('admin') && this.hasRole('tecnico')) {
+                    const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
+
+                    // SAFETY: If pure technician, FORCE filter to self regardless of state
+                    if (isTechOnly && this.user) {
                         effectiveFilter = this.user.id;
-                        this.selectedTechFilter = this.user.id; // Sync UI
+                        this.selectedTechFilter = this.user.id;
                     }
 
                     // Apply Filter
-                    if (effectiveFilter !== 'all' && effectiveFilter) {
-                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === effectiveFilter);
+                    if (effectiveFilter && effectiveFilter !== 'all') {
+                        // Use loose equality (==) to handle potential UUID type mismatches
+                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter);
+                    } else if (isTechOnly) {
+                         // FAIL CLOSED: If user is Tech Only and filter is missing/invalid, SHOW NOTHING.
+                         // Do NOT allow falling through to the full list.
+                         console.warn("Tech View Security: Filter missing, hiding all tickets.");
+                         filteredTechTickets = [];
                     }
 
                     this.techTickets = filteredTechTickets.filter(t =>
@@ -963,12 +986,11 @@ function app() {
             // Debugging
             console.log("Initializing Tech Filter. User:", this.user);
 
-            if (this.hasRole('admin')) {
-                this.selectedTechFilter = 'all';
-            } else if (this.hasRole('tecnico')) {
-                // If technician, default to self
+            // Prioritize setting filter to self if user is a technician (even if admin)
+            // This ensures they see their own bench first.
+            if (this.hasRole('tecnico') && this.user && this.user.id) {
                 this.selectedTechFilter = this.user.id;
-                console.log("Filter set to self:", this.selectedTechFilter);
+                console.log("Filter set to self (Tech):", this.selectedTechFilter);
             } else {
                 this.selectedTechFilter = 'all';
             }
