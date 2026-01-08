@@ -244,6 +244,106 @@
                                                         <span x-text="(ticket.created_by_name || 'U').charAt(0)"></span>
                                                     </div>
                                                 </div>
+
+                                                <!-- Quick Actions Footer -->
+                                                <div class="mt-3 pt-3 border-t border-gray-100 grid gap-2" @click.stop>
+
+                                                    <!-- Aberto -->
+                                                    <template x-if="ticket.status === 'Aberto'">
+                                                        <button @click="updateStatus(ticket, 'Analise Tecnica')" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
+                                                            Iniciar Análise
+                                                        </button>
+                                                    </template>
+
+                                                    <!-- Analise (Visualizar) -->
+                                                    <template x-if="ticket.status === 'Analise Tecnica'">
+                                                        <button @click="viewTicketDetails(ticket)" class="w-full bg-gray-100 text-gray-600 text-xs font-bold py-2 rounded hover:bg-gray-200">
+                                                            Abrir Análise
+                                                        </button>
+                                                    </template>
+
+                                                    <!-- Aprovação -->
+                                                    <template x-if="ticket.status === 'Aprovacao'">
+                                                        <div>
+                                                            <template x-if="ticket.budget_status !== 'Enviado'">
+                                                                <button @click="viewTicketDetails(ticket)" class="w-full bg-yellow-50 text-yellow-600 text-xs font-bold py-2 rounded hover:bg-yellow-100">
+                                                                    Orçamento
+                                                                </button>
+                                                            </template>
+                                                            <template x-if="ticket.budget_status === 'Enviado'">
+                                                                <div class="flex space-x-2">
+                                                                    <button @click="approveRepair(ticket)" class="flex-1 bg-green-50 text-green-600 text-xs font-bold py-2 rounded hover:bg-green-100">Aprovar</button>
+                                                                    <button @click="denyRepair(ticket)" class="flex-1 bg-red-50 text-red-600 text-xs font-bold py-2 rounded hover:bg-red-100">Negar</button>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+
+                                                    <!-- Compra -->
+                                                    <template x-if="ticket.status === 'Compra Peca'">
+                                                        <div>
+                                                            <template x-if="ticket.parts_status !== 'Comprado'">
+                                                                <button @click="markPurchased(ticket)" class="w-full bg-purple-50 text-purple-600 text-xs font-bold py-2 rounded hover:bg-purple-100">
+                                                                    Confirmar Compra
+                                                                </button>
+                                                            </template>
+                                                            <template x-if="ticket.parts_status === 'Comprado'">
+                                                                <button @click="confirmReceived(ticket)" class="w-full bg-teal-50 text-teal-600 text-xs font-bold py-2 rounded hover:bg-teal-100">
+                                                                    Recebido
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+
+                                                    <!-- Reparo -->
+                                                    <template x-if="ticket.status === 'Andamento Reparo'">
+                                                        <div>
+                                                            <template x-if="!ticket.repair_start_at">
+                                                                <button @click="startRepair(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
+                                                                    Iniciar Reparo
+                                                                </button>
+                                                            </template>
+                                                            <template x-if="ticket.repair_start_at">
+                                                                <button @click="openOutcomeModal('repair', ticket)" class="w-full bg-orange-50 text-orange-600 text-xs font-bold py-2 rounded hover:bg-orange-100">
+                                                                    Finalizar
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+
+                                                    <!-- Teste -->
+                                                    <template x-if="ticket.status === 'Teste Final'">
+                                                        <div>
+                                                            <template x-if="!ticket.test_start_at">
+                                                                <button @click="startTest(ticket)" class="w-full bg-indigo-50 text-indigo-600 text-xs font-bold py-2 rounded hover:bg-indigo-100">
+                                                                    Iniciar Teste
+                                                                </button>
+                                                            </template>
+                                                            <template x-if="ticket.test_start_at">
+                                                                <button @click="openOutcomeModal('test', ticket)" class="w-full bg-green-50 text-green-600 text-xs font-bold py-2 rounded hover:bg-green-100">
+                                                                    Concluir
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+
+                                                    <!-- Retirada -->
+                                                    <template x-if="ticket.status === 'Retirada Cliente'">
+                                                        <div>
+                                                            <template x-if="!ticket.pickup_available">
+                                                                <button @click="markAvailable(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
+                                                                    Disponibilizar
+                                                                </button>
+                                                            </template>
+                                                            <template x-if="ticket.pickup_available">
+                                                                <button @click="confirmPickup(ticket)" class="w-full bg-gray-800 text-white text-xs font-bold py-2 rounded hover:bg-black">
+                                                                    Entregar (Finalizar)
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+
+                                                </div>
                                             </div>
                                         </template>
                                     </div>

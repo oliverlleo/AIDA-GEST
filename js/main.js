@@ -418,90 +418,93 @@ function app() {
         },
 
         // 3. Approval Actions
-        async sendBudget() {
+        async sendBudget(ticket = this.selectedTicket) {
             this.loading = true;
             const { error } = await supabaseClient.from('tickets').update({
                 budget_status: 'Enviado',
                 budget_sent_at: new Date().toISOString()
-            }).eq('id', this.selectedTicket.id);
+            }).eq('id', ticket.id);
             this.loading = false;
             if (!error) {
-                this.selectedTicket.budget_status = 'Enviado'; // Optimistic update
+                ticket.budget_status = 'Enviado'; // Optimistic update
                 this.notify("Orçamento marcado como Enviado.");
             }
         },
-        async approveRepair() {
+        async approveRepair(ticket = this.selectedTicket) {
             // Check if needs parts
-            const nextStatus = this.selectedTicket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
-            await this.updateStatus(this.selectedTicket, nextStatus, { budget_status: 'Aprovado' });
+            const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
+            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' });
         },
-        async denyRepair() {
-             await this.updateStatus(this.selectedTicket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false });
+        async denyRepair(ticket = this.selectedTicket) {
+             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false });
         },
 
         // 4. Purchase Actions
-        async markPurchased() {
+        async markPurchased(ticket = this.selectedTicket) {
              this.loading = true;
              await supabaseClient.from('tickets').update({
                 parts_status: 'Comprado',
                 parts_purchased_at: new Date().toISOString()
-            }).eq('id', this.selectedTicket.id);
+            }).eq('id', ticket.id);
             this.loading = false;
-            this.selectedTicket.parts_status = 'Comprado';
+            ticket.parts_status = 'Comprado';
         },
-        async confirmReceived() {
-             await this.updateStatus(this.selectedTicket, 'Andamento Reparo', {
+        async confirmReceived(ticket = this.selectedTicket) {
+             await this.updateStatus(ticket, 'Andamento Reparo', {
                  parts_status: 'Recebido',
                  parts_received_at: new Date().toISOString()
              });
         },
 
         // 5. Repair Actions
-        async startRepair() {
+        async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
              await supabaseClient.from('tickets').update({
                 repair_start_at: new Date().toISOString()
-            }).eq('id', this.selectedTicket.id);
+            }).eq('id', ticket.id);
             this.loading = false;
-            this.selectedTicket.repair_start_at = new Date().toISOString();
+            ticket.repair_start_at = new Date().toISOString();
         },
 
-        openOutcomeModal(mode) {
+        openOutcomeModal(mode, ticket = this.selectedTicket) {
+            this.selectedTicket = ticket; // Set context
             this.outcomeMode = mode;
             this.showTestFailureForm = false;
             this.modals.outcome = true;
         },
 
         async finishRepair(success) {
+            const ticket = this.selectedTicket;
             const nextStatus = success ? 'Teste Final' : 'Retirada Cliente';
             const updates = {
                 repair_successful: success,
                 repair_end_at: new Date().toISOString()
             };
             this.modals.outcome = false;
-            await this.updateStatus(this.selectedTicket, nextStatus, updates);
+            await this.updateStatus(ticket, nextStatus, updates);
         },
 
         // 6. Test Actions
-        async startTest() {
+        async startTest(ticket = this.selectedTicket) {
              this.loading = true;
              await supabaseClient.from('tickets').update({
                 test_start_at: new Date().toISOString()
-            }).eq('id', this.selectedTicket.id);
+            }).eq('id', ticket.id);
             this.loading = false;
-            this.selectedTicket.test_start_at = new Date().toISOString();
+            ticket.test_start_at = new Date().toISOString();
         },
 
         async concludeTest(success) {
+            const ticket = this.selectedTicket;
             if (success) {
                 this.modals.outcome = false;
-                await this.updateStatus(this.selectedTicket, 'Retirada Cliente');
+                await this.updateStatus(ticket, 'Retirada Cliente');
             } else {
                 // Failure -> Back to Analysis with new params
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
 
                 this.modals.outcome = false;
-                await this.updateStatus(this.selectedTicket, 'Analise Tecnica', {
+                await this.updateStatus(ticket, 'Analise Tecnica', {
                     deadline: this.testFailureData.newDeadline,
                     priority: this.testFailureData.newPriority,
                     repair_start_at: null, // Reset execution flags
@@ -513,17 +516,17 @@ function app() {
         },
 
         // 7. Pickup Actions
-        async markAvailable() {
+        async markAvailable(ticket = this.selectedTicket) {
              this.loading = true;
              await supabaseClient.from('tickets').update({
                 pickup_available: true,
                 pickup_available_at: new Date().toISOString()
-            }).eq('id', this.selectedTicket.id);
+            }).eq('id', ticket.id);
             this.loading = false;
-            this.selectedTicket.pickup_available = true;
+            ticket.pickup_available = true;
         },
-        async confirmPickup() {
-            await this.updateStatus(this.selectedTicket, 'Finalizado');
+        async confirmPickup(ticket = this.selectedTicket) {
+            await this.updateStatus(ticket, 'Finalizado');
         },
 
         // --- UTILS ---
