@@ -63,13 +63,15 @@ function app() {
 
         // Selected Ticket
         selectedTicket: null,
+        ticketLogs: [],
+        logViewMode: 'timeline', // 'timeline' or 'detailed'
         modalSource: '', // 'kanban' or 'tech'
 
         // Time
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false },
+        modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false },
 
         // Constants
         PRIORITIES: ['Baixa', 'Normal', 'Alta', 'Urgente'],
@@ -350,6 +352,43 @@ function app() {
             }
         },
 
+        // --- LOGGING ---
+        async logTicketAction(ticketId, action, details = null) {
+            try {
+                await this.supabaseFetch('ticket_logs', 'POST', {
+                    ticket_id: ticketId,
+                    action: action,
+                    details: details,
+                    user_name: this.user.name
+                });
+            } catch (e) {
+                console.error("Log failed:", e);
+            }
+        },
+
+        async fetchTicketLogs(ticketId) {
+            // Only admins can see logs
+            if (!this.hasRole('admin')) return [];
+            try {
+                const logs = await this.supabaseFetch(`ticket_logs?ticket_id=eq.${ticketId}&order=created_at.desc`);
+                return logs || [];
+            } catch (e) {
+                console.error("Fetch logs failed:", e);
+                return [];
+            }
+        },
+
+        async openLogs(ticket) {
+            this.loading = true;
+            try {
+                this.ticketLogs = await this.fetchTicketLogs(ticket.id);
+                this.logViewMode = 'timeline'; // Reset to default view
+                this.modals.logs = true;
+            } finally {
+                this.loading = false;
+            }
+        },
+
         // --- TICKET LOGIC ---
 
         async fetchTickets(retryCount = 0) {
@@ -504,16 +543,15 @@ function app() {
 
         // --- WORKFLOW ACTIONS ---
 
-        async updateStatus(ticket, newStatus, additionalUpdates = {}) {
+        async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
             this.loading = true;
             try {
-                // REFACTORED: Native Fetch - Log
-                await this.supabaseFetch('ticket_logs', 'POST', {
-                    ticket_id: ticket.id,
-                    action: 'Alteração de Status',
-                    details: `De ${ticket.status} para ${newStatus}`,
-                    user_name: this.user.name
-                });
+                // Default generic log if specific action not provided
+                if (actionLog) {
+                     await this.logTicketAction(ticket.id, actionLog.action, actionLog.details);
+                } else {
+                     await this.logTicketAction(ticket.id, 'Alteração de Status', `De ${ticket.status} para ${newStatus}`);
+                }
 
                 const updates = { status: newStatus, ...additionalUpdates };
 
@@ -535,15 +573,24 @@ function app() {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
+            // Log Action: Finalizou Análise
             await this.updateStatus(this.selectedTicket, 'Aprovacao', {
                 parts_needed: this.analysisForm.partsList,
                 tech_notes: this.selectedTicket.tech_notes
-            });
+            }, { action: 'Finalizou Análise', details: 'Enviado para Aprovação' });
+        },
+
+        async startBudget(ticket) {
+            await this.logTicketAction(ticket.id, 'Iniciou Orçamento', 'Visualizou para criar orçamento');
+            this.viewTicketDetails(ticket);
         },
 
         async sendBudget(ticket = this.selectedTicket) {
             this.loading = true;
             try {
+                // Log Action
+                await this.logTicketAction(ticket.id, 'Enviou Orçamento', 'Orçamento marcado como enviado ao cliente');
+
                 // REFACTORED: Native Fetch
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     budget_status: 'Enviado',
@@ -563,15 +610,18 @@ function app() {
         },
         async approveRepair(ticket = this.selectedTicket) {
             const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
-            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' });
+            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: 'Orçamento aprovado pelo cliente' });
         },
         async denyRepair(ticket = this.selectedTicket) {
-             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false });
+             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: 'Orçamento negado pelo cliente' });
         },
 
         async markPurchased(ticket = this.selectedTicket) {
              this.loading = true;
              try {
+                 // Log Action
+                 await this.logTicketAction(ticket.id, 'Confirmou Compra', 'Peças marcadas como compradas');
+
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     parts_status: 'Comprado',
@@ -588,12 +638,15 @@ function app() {
              await this.updateStatus(ticket, 'Andamento Reparo', {
                  parts_status: 'Recebido',
                  parts_received_at: new Date().toISOString()
-             });
+             }, { action: 'Recebeu Peças', details: 'Peças recebidas, iniciando reparo' });
         },
 
         async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
              try {
+                 // Log Action
+                 await this.logTicketAction(ticket.id, 'Iniciou Reparo', 'Técnico iniciou a execução do reparo');
+
                  const now = new Date().toISOString();
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
@@ -625,13 +678,23 @@ function app() {
                 repair_successful: success,
                 repair_end_at: new Date().toISOString()
             };
+
+            // Calculate Duration
+            const duration = this.getDuration(ticket.repair_start_at);
+
             this.modals.outcome = false;
-            await this.updateStatus(ticket, nextStatus, updates);
+            await this.updateStatus(ticket, nextStatus, updates, {
+                action: 'Finalizou Reparo',
+                details: `Resultado: ${success ? 'Sucesso' : 'Falha'}. Tempo de Reparo: ${duration}`
+            });
         },
 
         async startTest(ticket = this.selectedTicket) {
              this.loading = true;
              try {
+                 // Log Action
+                 await this.logTicketAction(ticket.id, 'Iniciou Testes', 'Técnico iniciou bateria de testes');
+
                  const now = new Date().toISOString();
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
@@ -654,7 +717,7 @@ function app() {
             const ticket = this.selectedTicket;
             if (success) {
                 this.modals.outcome = false;
-                await this.updateStatus(ticket, 'Retirada Cliente');
+                await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: 'Aparelho aprovado nos testes' });
             } else {
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
 
@@ -665,7 +728,7 @@ function app() {
                     repair_start_at: null,
                     test_start_at: null,
                     status: 'Analise Tecnica'
-                });
+                }, { action: 'Reprovou Testes', details: 'Retornado para bancada. Motivo: Falha nos testes' });
                 this.notify("Retornado para bancada com urgência!");
             }
         },
@@ -673,6 +736,9 @@ function app() {
         async markAvailable(ticket = this.selectedTicket) {
              this.loading = true;
              try {
+                 // Log Action
+                 await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', 'Cliente notificado para retirada');
+
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     pickup_available: true,
@@ -686,7 +752,7 @@ function app() {
              }
         },
         async confirmPickup(ticket = this.selectedTicket) {
-            await this.updateStatus(ticket, 'Finalizado');
+            await this.updateStatus(ticket, 'Finalizado', {}, { action: 'Finalizou Entrega', details: 'Entregue ao cliente' });
         },
 
         // --- UTILS ---
