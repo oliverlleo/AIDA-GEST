@@ -1,26 +1,4 @@
 
-async function installDatabase() {
-    const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
-
-    // We try to call a standard RPC if available, or just inform the user
-    // Since we can't run raw SQL from client without a specific RPC.
-
-    console.log("Tentando verificar banco de dados...");
-
-    // Check if tickets table exists
-    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    const { error } = await client.from('tickets').select('id').limit(1);
-
-    if (error && error.code === 'PGRST205') {
-        // Table missing
-        const modalHtml = `
-            <div id="install-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;color:white;font-family:sans-serif;">
-                <div style="background:#1a1a1a;padding:40px;border-radius:12px;max-width:600px;text-align:center;border:2px solid #FF6B00;">
-                    <h1 style="color:#FF6B00;margin-bottom:20px;">Instalação Necessária</h1>
-                    <p style="margin-bottom:20px;line-height:1.5;">O sistema detectou que o banco de dados ainda não foi configurado corretamente.</p>
-                    <p style="margin-bottom:20px;font-size:14px;color:#aaa;">Copie o código abaixo e execute no SQL Editor do Supabase:</p>
-                    <textarea readonly style="width:100%;height:150px;background:#333;color:#eee;border:none;padding:10px;margin-bottom:20px;border-radius:4px;font-family:monospace;">
 -- EXECUTE NO SUPABASE SQL EDITOR --
 
 CREATE TABLE IF NOT EXISTS public.tickets (
@@ -116,18 +94,3 @@ GRANT ALL ON TABLE public.tickets TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.ticket_logs TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.checklist_templates TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
-                    </textarea>
-                    <button onclick="document.getElementById('install-modal').remove()" style="background:#333;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer;">Fechar</button>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
-}
-
-// Run on load
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', installDatabase);
-} else {
-    installDatabase();
-}

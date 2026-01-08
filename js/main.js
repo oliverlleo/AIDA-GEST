@@ -270,6 +270,14 @@ function app() {
                 .order('created_at', { ascending: false });
 
             if (error) {
+                if (error.code === 'PGRST205') {
+                    // Suppress "Missing Table" error to avoid crashing UI for user
+                    // They will see empty data instead of an error until DB is ready.
+                    console.warn("Database tables missing (PGRST205). Waiting for setup.");
+                    this.tickets = [];
+                    this.techTickets = [];
+                    return;
+                }
                 console.error("Error fetching tickets:", error);
                 return;
             }
