@@ -80,6 +80,12 @@ function app() {
 
         async registerAdmin() {
             this.loading = true;
+
+            // Save company name locally in case we lose context (e.g. email confirmation)
+            if (this.registerForm.companyName) {
+                localStorage.setItem('pending_company_name', this.registerForm.companyName);
+            }
+
             // 1. Sign Up
             const { data: authData, error: authError } = await supabaseClient.auth.signUp({
                 email: this.registerForm.email,
@@ -107,12 +113,18 @@ function app() {
 
         async completeCompanySetup() {
              this.loading = true;
+
+             // Retrieve name from storage if form is empty (e.g. after reload)
+             if (!this.registerForm.companyName) {
+                 this.registerForm.companyName = localStorage.getItem('pending_company_name') || 'Minha Assistência';
+             }
+
              const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
 
              // Call the new ATOMIC RPC to create workspace AND profile
              const { data: wsId, error: wsError } = await supabaseClient
                 .rpc('create_owner_workspace_and_profile', {
-                    p_name: this.registerForm.companyName || 'Minha Assistência', // Fallback if name lost
+                    p_name: this.registerForm.companyName,
                     p_company_code: generatedCode
                 });
 
@@ -122,6 +134,7 @@ function app() {
             } else {
                 this.newCompanyCode = generatedCode;
                 this.registrationSuccess = true;
+                localStorage.removeItem('pending_company_name'); // Cleanup
                 this.notify('Conta criada com sucesso!', 'success');
             }
             this.loading = false;
@@ -169,11 +182,6 @@ function app() {
                 this.session = null;
                 this.workspaceName = '';
                 localStorage.removeItem('techassist_employee');
-
-                // Clear Supabase specific keys if any remain
-                // But generally reloading clears memory state, localStorage persists.
-                // Supabase client uses localStorage for session persistence, signOut usually clears it.
-                // We can manually clear supabase keys if needed, but let's trust reload.
 
                 this.view = 'dashboard';
                 this.loading = false;
@@ -226,6 +234,13 @@ function app() {
                     // FATAL: Auth exists, but NO Workspace and NO Profile.
                     // Redirect to "Setup Required" view.
                     console.error("ZOMBIE ACCOUNT DETECTED: No workspace, no profile.");
+
+                    // Try to recover company name from local storage to allow auto-fill
+                    const pendingName = localStorage.getItem('pending_company_name');
+                    if (pendingName) {
+                        this.registerForm.companyName = pendingName;
+                    }
+
                     this.view = 'setup_required';
                     return;
                 }
@@ -281,13 +296,6 @@ function app() {
         },
 
         async getWorkspaceName(id) {
-            // Public read allowed? No.
-            // But if employee login succeeded, we know the workspace ID.
-            // We can't query workspace table directly if RLS blocks it for non-owners.
-            // However, the RPC could return workspace name too.
-            // For now, let's just try or skip.
-            // Or better: update RPC to return workspace name.
-            // As a fallback, we just don't show it or show ID.
             return 'Área de Trabalho';
         },
 
