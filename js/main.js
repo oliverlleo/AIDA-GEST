@@ -3,32 +3,19 @@
 const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
 
-// Variável Global do Client
+// Safe initialization
 let supabaseClient;
-
-// Função Factory para criar o Client (Permite recriação forçada)
-function initSupabaseClient() {
-    try {
-        return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-            auth: {
-                persistSession: true,
-                autoRefreshToken: true,
-                detectSessionInUrl: false
-            },
-            realtime: {
-                params: {
-                    eventsPerSecond: 10,
-                },
-            },
-        });
-    } catch (e) {
-        console.error("Supabase init fail:", e);
-        return null;
-    }
+try {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false
+        }
+    });
+} catch (e) {
+    console.error("Supabase fail:", e);
 }
-
-// Inicialização inicial
-supabaseClient = initSupabaseClient();
 
 function app() {
     return {
@@ -134,61 +121,6 @@ function app() {
                 this.loading = false;
             }
 
-            // Auth State Listener (Global)
-            this.setupAuthListener();
-
-            // Clock Interval
-            setInterval(() => {
-                this.currentTime = new Date();
-            }, 1000);
-
-            // --- STRATEGY: HARD RESET ON WAKE UP ---
-            // Detecta quando a aba volta a ser visível, mata o cliente velho e cria um novo.
-            // Isso simula o comportamento de "Refresh" da página, garantindo conexão limpa.
-            let visibilityTimer;
-            document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === 'visible') {
-                    clearTimeout(visibilityTimer);
-                    // Espera um momento para o navegador "acordar" a pilha de rede
-                    visibilityTimer = setTimeout(async () => {
-                        console.log("Tab visible. Performing Hard Client Reset...");
-
-                        // 1. Desconecta tudo do cliente velho (evita leaks)
-                        if (supabaseClient) {
-                            await supabaseClient.removeAllChannels();
-                        }
-
-                        // 2. RECIA o cliente do zero (Nova conexão limpa)
-                        supabaseClient = initSupabaseClient();
-
-                        // 3. Re-ata o listener de Auth no novo cliente
-                        this.setupAuthListener();
-
-                        // 4. Restaura Sessão e Dados
-                        // O novo cliente lerá o localStorage automaticamente (persistSession)
-                        const { data: { session } } = await supabaseClient.auth.getSession();
-                        if (session) {
-                            this.session = session;
-                        }
-
-                        // 5. Busca dados e reconecta Realtime
-                        if (this.user) {
-                            await this.fetchTickets();
-                            this.setupRealtime();
-                        }
-
-                    }, 500);
-                } else {
-                    // Se ocultou a aba, já podemos matar os canais para economizar e evitar erros ao voltar
-                     if (supabaseClient) {
-                         supabaseClient.removeAllChannels();
-                     }
-                }
-            });
-        },
-
-        setupAuthListener() {
-            if (!supabaseClient) return;
             supabaseClient.auth.onAuthStateChange(async (_event, session) => {
                 this.session = session;
                 if (session) {
@@ -197,13 +129,50 @@ function app() {
                     this.user = null;
                 }
             });
+
+            setInterval(() => {
+                this.currentTime = new Date();
+            }, 1000);
+
+            // Clean visibility handler - just data refresh
+            let visibilityTimer;
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === 'visible') {
+                    clearTimeout(visibilityTimer);
+                    visibilityTimer = setTimeout(async () => {
+                        console.log("Tab visible. Refreshing...");
+                        if (this.user) {
+                            await this.fetchTickets();
+                        }
+                    }, 500);
+                }
+            });
+        },
+
+        // --- CORE FIX: Ensure Valid Session Before Action ---
+        async ensureConnection() {
+            // For employee login (custom RPC), we rely on the static key, but for Admin, we need the session.
+            // Even for RPC, refreshing the auth state helps the internal client headers.
+            try {
+                const { data, error } = await supabaseClient.auth.getSession();
+                if (data?.session) {
+                    this.session = data.session;
+                } else {
+                    // If Session is missing but we have an employee logged in locally,
+                    // we might need to re-establish the anonymous auth state if Supabase lost it.
+                    // But usually, Anon key is enough for RPC if RLS allows.
+                }
+            } catch (e) {
+                console.warn("Connection check warning:", e);
+            }
         },
 
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
 
-            // Remove canais antigos caso existam (prevenção extra)
-            supabaseClient.getChannels().forEach(c => supabaseClient.removeChannel(c));
+            const existing = supabaseClient.getChannels().find(c => c.topic === 'tickets_channel');
+            if (existing && existing.state === 'joined') return;
+            if (existing) supabaseClient.removeChannel(existing);
 
             supabaseClient
                 .channel('tickets_channel')
@@ -440,6 +409,7 @@ function app() {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
              this.loading = true;
+             await this.ensureConnection(); // Ensure Auth
              try {
                  const ticketData = {
                      workspace_id: this.user.workspace_id,
@@ -487,6 +457,7 @@ function app() {
 
         async updateStatus(ticket, newStatus, additionalUpdates = {}) {
             this.loading = true;
+            await this.ensureConnection(); // Ensure Auth immediately before request
             try {
                 // Log action
                 await supabaseClient.from('ticket_logs').insert({
@@ -524,6 +495,7 @@ function app() {
 
         async sendBudget(ticket = this.selectedTicket) {
             this.loading = true;
+            await this.ensureConnection();
             try {
                 const { error } = await supabaseClient.from('tickets').update({
                     budget_status: 'Enviado',
@@ -553,6 +525,7 @@ function app() {
 
         async markPurchased(ticket = this.selectedTicket) {
              this.loading = true;
+             await this.ensureConnection();
              try {
                  await supabaseClient.from('tickets').update({
                     parts_status: 'Comprado',
@@ -572,6 +545,7 @@ function app() {
 
         async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
+             await this.ensureConnection();
              try {
                  const now = new Date().toISOString();
                  await supabaseClient.from('tickets').update({
@@ -607,6 +581,7 @@ function app() {
 
         async startTest(ticket = this.selectedTicket) {
              this.loading = true;
+             await this.ensureConnection();
              try {
                  await supabaseClient.from('tickets').update({
                     test_start_at: new Date().toISOString()
@@ -639,6 +614,7 @@ function app() {
 
         async markAvailable(ticket = this.selectedTicket) {
              this.loading = true;
+             await this.ensureConnection();
              try {
                  await supabaseClient.from('tickets').update({
                     pickup_available: true,
