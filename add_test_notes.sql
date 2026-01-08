@@ -1,0 +1,2 @@
+
+ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS test_notes JSONB DEFAULT '[]'::JSONB;
