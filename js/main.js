@@ -165,6 +165,7 @@ function app() {
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
                             await this.fetchEmployees();
+                            this.initTechFilter(); // Initialize filter on restore
                         } catch (e) {
                             localStorage.removeItem('techassist_employee');
                         }
@@ -172,6 +173,7 @@ function app() {
                 }
 
                 if (this.user) {
+                    this.initTechFilter(); // Ensure filter is set for Admin session restore too
                     await this.fetchTickets();
                     await this.fetchTemplates();
                     this.setupRealtime();
