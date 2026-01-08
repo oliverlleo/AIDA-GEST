@@ -87,8 +87,8 @@ function app() {
             }
 
             // 2. Create Workspace & Profile
-            // Generates random 6-char company code (Letters + Numbers)
-            const generatedCode = 'TECH-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+            // Generates random 4-digit company code (1000-9999) as requested
+            const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
 
             if (authData.user) {
                 const userId = authData.user.id;
