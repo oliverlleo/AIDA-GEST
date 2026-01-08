@@ -423,7 +423,13 @@ function app() {
                     this.tickets = data;
                     // Apply Tech Filter to Minha Bancada
                     let filteredTechTickets = data;
-                    if (this.selectedTechFilter !== 'all') {
+
+                    // Ensure filter is initialized if somehow missed (e.g. on reload)
+                    if (!this.selectedTechFilter && this.user) {
+                        this.initTechFilter();
+                    }
+
+                    if (this.selectedTechFilter !== 'all' && this.selectedTechFilter) {
                         filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === this.selectedTechFilter);
                     }
 
@@ -938,15 +944,15 @@ function app() {
         },
 
         initTechFilter() {
+            // Debugging
+            console.log("Initializing Tech Filter. User:", this.user);
+
             if (this.hasRole('admin')) {
                 this.selectedTechFilter = 'all';
-            } else if (this.user && this.user.roles.includes('tecnico')) {
-                // If technician, default to self (and maybe lock it in UI)
-                // Note: user.id might be the auth.user.id or the employee record id depending on how we set this.user.
-                // In loginEmployee, this.user = emp (employee record).
-                // In loginAdmin, this.user = { id: auth_id ... } but we might not have a linked employee record for admin unless they created one.
-                // Assuming employee login uses the employee ID as the reference for assignment.
+            } else if (this.hasRole('tecnico')) {
+                // If technician, default to self
                 this.selectedTechFilter = this.user.id;
+                console.log("Filter set to self:", this.selectedTechFilter);
             } else {
                 this.selectedTechFilter = 'all';
             }
