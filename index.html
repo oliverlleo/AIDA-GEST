@@ -1159,6 +1159,64 @@
         </div>
     </div>
 
+    <!-- 6. NEW EMPLOYEE MODAL -->
+    <div x-show="modals.newEmployee" class="fixed inset-0 z-[60] overflow-y-auto" x-cloak>
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.newEmployee = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <!-- Header -->
+                <div class="bg-black px-6 py-4 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-white">Novo Funcionário</h3>
+                    <button @click="modals.newEmployee = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+                </div>
+
+                <!-- Body -->
+                <div class="p-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Nome Completo</label>
+                            <input type="text" x-model="employeeForm.name" class="w-full border rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Usuário (Login)</label>
+                            <input type="text" x-model="employeeForm.username" class="w-full border rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all">
+                        </div>
+                         <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Senha</label>
+                            <input type="password" x-model="employeeForm.password" class="w-full border rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all">
+                        </div>
+
+                        <div>
+                             <label class="block text-xs font-bold text-gray-500 mb-2">Funções de Acesso</label>
+                             <div class="space-y-2">
+                                 <label class="flex items-center space-x-2 bg-gray-50 p-2 rounded border border-gray-100 cursor-pointer hover:bg-gray-100">
+                                     <input type="checkbox" value="admin" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 rounded">
+                                     <span class="text-sm font-medium">Administrador (Acesso Total)</span>
+                                 </label>
+                                 <label class="flex items-center space-x-2 bg-gray-50 p-2 rounded border border-gray-100 cursor-pointer hover:bg-gray-100">
+                                     <input type="checkbox" value="tecnico" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 rounded">
+                                     <span class="text-sm font-medium">Técnico (Bancada)</span>
+                                 </label>
+                                 <label class="flex items-center space-x-2 bg-gray-50 p-2 rounded border border-gray-100 cursor-pointer hover:bg-gray-100">
+                                     <input type="checkbox" value="atendente" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 rounded">
+                                     <span class="text-sm font-medium">Atendente (Recepção)</span>
+                                 </label>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="bg-gray-50 px-6 py-4 flex justify-end space-x-3">
+                    <button @click="modals.newEmployee = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors">Cancelar</button>
+                    <button @click="createEmployee()" class="px-6 py-2 bg-black text-white font-bold rounded-lg hover:bg-gray-800 shadow-lg transition-colors">Criar Acesso</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JS MAIN -->
     <script src="js/main.js?v=3"></script>
 </body>
