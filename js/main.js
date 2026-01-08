@@ -986,9 +986,9 @@ function app() {
             // Debugging
             console.log("Initializing Tech Filter. User:", this.user);
 
-            // Prioritize setting filter to self if user is a technician (even if admin)
-            // This ensures they see their own bench first.
-            if (this.hasRole('tecnico') && this.user && this.user.id) {
+            if (this.hasRole('admin')) {
+                this.selectedTechFilter = 'all';
+            } else if (this.hasRole('tecnico') && this.user && this.user.id) {
                 this.selectedTechFilter = this.user.id;
                 console.log("Filter set to self (Tech):", this.selectedTechFilter);
             } else {
