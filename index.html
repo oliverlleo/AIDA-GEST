@@ -110,19 +110,25 @@
                     <div class="mb-6 md:px-4">
                         <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 hidden md:block">Principal</p>
 
-                        <a href="#" @click.prevent="view = 'dashboard'"
-                           :class="view === 'dashboard' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
-                           class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
-                            <i class="fa-solid fa-house w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'dashboard' ? 'text-brand-500' : 'text-gray-400'"></i>
-                            <span class="ml-3 font-medium text-sm hidden md:block">Início</span>
-                        </a>
+                        <!-- Dashboard (Admin/Atendente only) -->
+                        <template x-if="hasRole('admin') || hasRole('atendente')">
+                            <a href="#" @click.prevent="view = 'dashboard'"
+                               :class="view === 'dashboard' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-house w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'dashboard' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Início</span>
+                            </a>
+                        </template>
 
-                        <a href="#" @click.prevent="view = 'kanban'"
-                           :class="view === 'kanban' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
-                           class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
-                            <i class="fa-solid fa-table-columns w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'kanban' ? 'text-brand-500' : 'text-gray-400'"></i>
-                            <span class="ml-3 font-medium text-sm hidden md:block">Chamados</span>
-                        </a>
+                        <!-- Kanban (Admin/Atendente only) -->
+                        <template x-if="hasRole('admin') || hasRole('atendente')">
+                            <a href="#" @click.prevent="view = 'kanban'"
+                               :class="view === 'kanban' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-table-columns w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'kanban' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Chamados</span>
+                            </a>
+                        </template>
                     </div>
 
                     <!-- Tech Section -->

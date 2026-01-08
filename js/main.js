@@ -290,6 +290,12 @@ function app() {
                     this.initTechFilter(); // Initialize filter before fetching
                     await this.fetchTickets();
                     await this.fetchTemplates();
+
+                    // Redirect Technician directly to Bench
+                    if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
+                        this.view = 'tech_orders';
+                    }
+
                     this.setupRealtime();
                 } else {
                      this.notify('Credenciais inválidas.', 'error');
@@ -869,8 +875,8 @@ function app() {
             // Filter tickets based on toggle
             let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
 
-            // Apply Technician Filter
-            if (this.selectedTechFilter !== 'all') {
+            // Apply Technician Filter (Strict)
+            if (this.selectedTechFilter !== 'all' && this.selectedTechFilter) {
                 source = source.filter(t => t.technician_id === this.selectedTechFilter);
             }
 
