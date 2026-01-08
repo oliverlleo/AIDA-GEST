@@ -139,7 +139,6 @@ function app() {
                 if (document.visibilityState === 'visible') {
                     clearTimeout(visibilityTimer);
                     visibilityTimer = setTimeout(async () => {
-                        // console.log("Tab visible. Refreshing...");
                         if (this.user) {
                             await this.fetchTickets();
                         }
@@ -150,14 +149,9 @@ function app() {
 
         // --- CORE FIX: Non-Blocking Connection Check ---
         async ensureConnection() {
-            // We race the session refresh against a timeout.
-            // If the lock is stuck (infinite hang), the timeout wins,
-            // we skip the refresh and try to use the existing cached token.
-            // This guarantees the UI never freezes.
             try {
                 const refreshPromise = supabaseClient.auth.getSession();
                 const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 2000));
-
                 const result = await Promise.race([refreshPromise, timeoutPromise]);
 
                 if (result === 'timeout') {
@@ -167,6 +161,20 @@ function app() {
                 }
             } catch (e) {
                 console.warn("Connection check skipped:", e);
+            }
+        },
+
+        // --- CORE FIX: DB Timeout Wrapper ---
+        // Forces any database call to fail after 5s if hung, clearing the UI
+        async withTimeout(promise) {
+            let timeoutId;
+            const timeoutPromise = new Promise((_, reject) => {
+                timeoutId = setTimeout(() => reject(new Error('Request timed out')), 5000);
+            });
+            try {
+                return await Promise.race([promise, timeoutPromise]);
+            } finally {
+                clearTimeout(timeoutId);
             }
         },
 
@@ -193,11 +201,13 @@ function app() {
         async loginAdmin() {
             this.loading = true;
             try {
-                const { error } = await supabaseClient.auth.signInWithPassword({
+                const { error } = await this.withTimeout(supabaseClient.auth.signInWithPassword({
                     email: this.adminForm.email,
                     password: this.adminForm.password,
-                });
+                }));
                 if (error) this.notify(error.message, 'error');
+            } catch(e) {
+                this.notify("Login timeout/error: " + e.message, "error");
             } finally {
                 this.loading = false;
             }
@@ -205,12 +215,14 @@ function app() {
         async registerAdmin() {
             this.loading = true;
             try {
-                const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+                const { data: authData, error: authError } = await this.withTimeout(supabaseClient.auth.signUp({
                     email: this.registerForm.email,
                     password: this.registerForm.password,
-                });
+                }));
                 if (authError) return this.notify(authError.message, 'error');
                 if (authData.user && !authData.session) return this.notify('Verifique seu e-mail.', 'success');
+            } catch(e) {
+                 this.notify("Register timeout: " + e.message, "error");
             } finally {
                 this.loading = false;
             }
@@ -220,11 +232,11 @@ function app() {
              try {
                  if (!this.registerForm.companyName) return this.notify('Digite o nome da empresa.', 'error');
                  const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
-                 const { data: wsId, error: wsError } = await supabaseClient
+                 const { data: wsId, error: wsError } = await this.withTimeout(supabaseClient
                     .rpc('create_owner_workspace_and_profile', {
                         p_name: this.registerForm.companyName,
                         p_company_code: generatedCode
-                    });
+                    }));
                 if (wsError) {
                     console.error(wsError);
                     this.notify('Erro: ' + wsError.message, 'error');
@@ -233,6 +245,8 @@ function app() {
                     this.registrationSuccess = true;
                     this.notify('Conta criada!', 'success');
                 }
+             } catch(e) {
+                 this.notify("Setup timeout: " + e.message, "error");
              } finally {
                  this.loading = false;
              }
@@ -240,12 +254,12 @@ function app() {
         async loginEmployee() {
             this.loading = true;
             try {
-                const { data, error } = await supabaseClient
+                const { data, error } = await this.withTimeout(supabaseClient
                     .rpc('employee_login', {
                         p_company_code: this.loginForm.company_code,
                         p_username: this.loginForm.username,
                         p_password: this.loginForm.password
-                    });
+                    }));
                 if (error) {
                     this.notify('Falha no login.', 'error');
                 } else if (data && data.length > 0) {
@@ -263,13 +277,15 @@ function app() {
                 } else {
                      this.notify('Credenciais inválidas.', 'error');
                 }
+            } catch(e) {
+                 this.notify("Login timeout: " + e.message, "error");
             } finally {
                 this.loading = false;
             }
         },
         async logout() {
             this.loading = true;
-            try { if (this.session) await supabaseClient.auth.signOut(); } catch (e) {}
+            try { if (this.session) await this.withTimeout(supabaseClient.auth.signOut()); } catch (e) {}
             this.employeeSession = null;
             this.user = null;
             this.session = null;
@@ -324,11 +340,12 @@ function app() {
             if (!this.user?.workspace_id) return;
 
             try {
-                const { data, error } = await supabaseClient
+                // Using withTimeout here too for safety
+                const { data, error } = await this.withTimeout(supabaseClient
                     .from('tickets')
                     .select('*')
                     .eq('workspace_id', this.user.workspace_id)
-                    .order('created_at', { ascending: false });
+                    .order('created_at', { ascending: false }));
 
                 if (error) {
                     if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted') || error.message.includes('Failed to fetch'))) {
@@ -358,7 +375,7 @@ function app() {
                     });
                 }
             } catch (err) {
-                 console.warn("Fetch exception:", err);
+                 console.warn("Fetch exception/timeout:", err);
             }
         },
 
@@ -390,11 +407,11 @@ function app() {
         async saveTemplate() {
             if (!this.newTemplateName) return this.notify("Nomeie o modelo", "error");
             if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
-            const { error } = await supabaseClient.from('checklist_templates').insert({
+            const { error } = await this.withTimeout(supabaseClient.from('checklist_templates').insert({
                 workspace_id: this.user.workspace_id,
                 name: this.newTemplateName,
                 items: this.ticketForm.checklist.map(i => i.item)
-            });
+            }));
             if (error) this.notify("Erro ao salvar", "error");
             else {
                 this.notify("Modelo salvo!");
@@ -412,7 +429,7 @@ function app() {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
              this.loading = true;
-             await this.ensureConnection(); // Ensure Auth
+             await this.ensureConnection();
              try {
                  const ticketData = {
                      workspace_id: this.user.workspace_id,
@@ -430,7 +447,7 @@ function app() {
                      created_by_name: this.user.name
                  };
 
-                 const { error } = await supabaseClient.from('tickets').insert(ticketData);
+                 const { error } = await this.withTimeout(supabaseClient.from('tickets').insert(ticketData));
 
                  if (error) {
                      console.error(error);
@@ -441,7 +458,7 @@ function app() {
                      await this.fetchTickets();
                  }
              } catch (err) {
-                 this.notify("Erro ao criar: " + err.message, "error");
+                 this.notify("Erro/Timeout ao criar: " + err.message, "error");
              } finally {
                  this.loading = false;
              }
@@ -460,18 +477,18 @@ function app() {
 
         async updateStatus(ticket, newStatus, additionalUpdates = {}) {
             this.loading = true;
-            await this.ensureConnection(); // Ensure Auth immediately before request
+            await this.ensureConnection();
             try {
                 // Log action
-                await supabaseClient.from('ticket_logs').insert({
+                await this.withTimeout(supabaseClient.from('ticket_logs').insert({
                     ticket_id: ticket.id,
                     action: 'Alteração de Status',
                     details: `De ${ticket.status} para ${newStatus}`,
                     user_name: this.user.name
-                });
+                }));
 
                 const updates = { status: newStatus, ...additionalUpdates };
-                const { error } = await supabaseClient.from('tickets').update(updates).eq('id', ticket.id);
+                const { error } = await this.withTimeout(supabaseClient.from('tickets').update(updates).eq('id', ticket.id));
 
                 if (error) throw error;
 
@@ -500,10 +517,10 @@ function app() {
             this.loading = true;
             await this.ensureConnection();
             try {
-                const { error } = await supabaseClient.from('tickets').update({
+                const { error } = await this.withTimeout(supabaseClient.from('tickets').update({
                     budget_status: 'Enviado',
                     budget_sent_at: new Date().toISOString()
-                }).eq('id', ticket.id);
+                }).eq('id', ticket.id));
 
                 if (!error) {
                     if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
@@ -514,6 +531,8 @@ function app() {
                 } else {
                     this.notify("Erro: " + error.message, "error");
                 }
+            } catch(e) {
+                this.notify("Erro/Timeout: " + e.message, "error");
             } finally {
                 this.loading = false;
             }
@@ -530,11 +549,13 @@ function app() {
              this.loading = true;
              await this.ensureConnection();
              try {
-                 await supabaseClient.from('tickets').update({
+                 await this.withTimeout(supabaseClient.from('tickets').update({
                     parts_status: 'Comprado',
                     parts_purchased_at: new Date().toISOString()
-                }).eq('id', ticket.id);
+                }).eq('id', ticket.id));
                 await this.fetchTickets();
+             } catch(e) {
+                this.notify("Timeout: " + e.message, "error");
              } finally {
                 this.loading = false;
              }
@@ -551,14 +572,16 @@ function app() {
              await this.ensureConnection();
              try {
                  const now = new Date().toISOString();
-                 await supabaseClient.from('tickets').update({
+                 await this.withTimeout(supabaseClient.from('tickets').update({
                     repair_start_at: now
-                }).eq('id', ticket.id);
+                }).eq('id', ticket.id));
 
                 if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
                     this.selectedTicket = { ...this.selectedTicket, repair_start_at: now };
                 }
                 await this.fetchTickets();
+             } catch(e) {
+                this.notify("Timeout: " + e.message, "error");
              } finally {
                  this.loading = false;
              }
@@ -586,10 +609,12 @@ function app() {
              this.loading = true;
              await this.ensureConnection();
              try {
-                 await supabaseClient.from('tickets').update({
+                 await this.withTimeout(supabaseClient.from('tickets').update({
                     test_start_at: new Date().toISOString()
-                }).eq('id', ticket.id);
+                }).eq('id', ticket.id));
                 await this.fetchTickets();
+             } catch(e) {
+                 this.notify("Timeout: " + e.message, "error");
              } finally {
                 this.loading = false;
              }
@@ -619,11 +644,13 @@ function app() {
              this.loading = true;
              await this.ensureConnection();
              try {
-                 await supabaseClient.from('tickets').update({
+                 await this.withTimeout(supabaseClient.from('tickets').update({
                     pickup_available: true,
                     pickup_available_at: new Date().toISOString()
-                }).eq('id', ticket.id);
+                }).eq('id', ticket.id));
                 await this.fetchTickets();
+             } catch(e) {
+                 this.notify("Timeout: " + e.message, "error");
              } finally {
                 this.loading = false;
              }
@@ -681,13 +708,13 @@ function app() {
             if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
             this.loading = true;
             try {
-                const { error } = await supabaseClient.rpc('create_employee', {
+                const { error } = await this.withTimeout(supabaseClient.rpc('create_employee', {
                     p_workspace_id: this.user.workspace_id,
                     p_name: this.employeeForm.name,
                     p_username: this.employeeForm.username,
                     p_password: this.employeeForm.password,
                     p_roles: this.employeeForm.roles
-                });
+                }));
                 if (error) {
                     console.error(error);
                     this.notify('Erro: ' + error.message, 'error');
@@ -696,6 +723,8 @@ function app() {
                     this.modals.newEmployee = false;
                     await this.fetchEmployees();
                 }
+            } catch(e) {
+                 this.notify("Timeout: " + e.message, "error");
             } finally {
                 this.loading = false;
             }
