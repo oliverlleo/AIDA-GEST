@@ -48,6 +48,8 @@ function app() {
                     this.employeeSession = JSON.parse(storedEmp);
                     this.user = this.employeeSession;
                     this.workspaceName = await this.getWorkspaceName(this.employeeSession.workspace_id);
+                    // Also fetch employees if logged in as employee (to populate team view)
+                    this.fetchEmployees();
                 }
             }
 
@@ -146,6 +148,7 @@ function app() {
                 localStorage.setItem('techassist_employee', JSON.stringify(emp));
                 this.workspaceName = await this.getWorkspaceName(emp.workspace_id);
                 this.notify('Bem-vindo, ' + emp.name, 'success');
+                this.fetchEmployees(); // Load colleagues
             } else {
                  this.notify('Credenciais inválidas.', 'error');
             }
@@ -251,14 +254,29 @@ function app() {
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
 
-            const { data, error } = await supabaseClient
-                .from('employees')
-                .select('*')
-                .eq('workspace_id', this.user.workspace_id)
-                .order('created_at', { ascending: false });
+            let result;
+
+            if (this.session) {
+                // Admin: Standard Select (RLS works because auth.uid() is owner)
+                result = await supabaseClient
+                    .from('employees')
+                    .select('*')
+                    .eq('workspace_id', this.user.workspace_id)
+                    .order('created_at', { ascending: false });
+            } else {
+                // Employee: Use Secure RPC (bypasses RLS) because they are not "auth users"
+                result = await supabaseClient
+                    .rpc('get_employees_for_workspace', {
+                        p_workspace_id: this.user.workspace_id
+                    });
+            }
+
+            const { data, error } = result;
 
             if (!error) {
                 this.employees = data;
+            } else {
+                console.error("Error fetching employees:", error);
             }
         },
 
