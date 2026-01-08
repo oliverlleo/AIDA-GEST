@@ -434,21 +434,23 @@ function app() {
                     let filteredTechTickets = data;
                     let effectiveFilter = this.selectedTechFilter;
 
+                    const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
+
                     // SAFETY: If pure technician, FORCE filter to self regardless of state
-                    if (!this.hasRole('admin') && this.hasRole('tecnico') && this.user) {
+                    if (isTechOnly && this.user) {
                         effectiveFilter = this.user.id;
                         this.selectedTechFilter = this.user.id;
                     }
 
                     // Apply Filter
                     if (effectiveFilter && effectiveFilter !== 'all') {
-                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === effectiveFilter);
-                    } else if (!this.hasRole('admin') && this.hasRole('tecnico')) {
-                         // Fallback: If filter failed to set but user is tech, show nothing or re-force self
-                         // This catches the case where effectiveFilter might be empty string
-                         if (this.user) {
-                             filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === this.user.id);
-                         }
+                        // Use loose equality (==) to handle potential UUID type mismatches
+                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter);
+                    } else if (isTechOnly) {
+                         // FAIL CLOSED: If user is Tech Only and filter is missing/invalid, SHOW NOTHING.
+                         // Do NOT allow falling through to the full list.
+                         console.warn("Tech View Security: Filter missing, hiding all tickets.");
+                         filteredTechTickets = [];
                     }
 
                     this.techTickets = filteredTechTickets.filter(t =>
