@@ -57,6 +57,7 @@ function app() {
 
         // Selected Ticket
         selectedTicket: null,
+        modalSource: '', // 'kanban' or 'tech'
 
         // Modals
         modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false },
@@ -373,8 +374,9 @@ function app() {
              }
         },
 
-        viewTicketDetails(ticket) {
+        viewTicketDetails(ticket, source = 'kanban') {
             this.selectedTicket = ticket;
+            this.modalSource = source;
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
             // Reset UI states
             this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
@@ -426,6 +428,10 @@ function app() {
             }).eq('id', ticket.id);
             this.loading = false;
             if (!error) {
+                // Force reactivity update
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
+                }
                 this.notify("Orçamento marcado como Enviado.");
                 this.fetchTickets();
             }
@@ -459,10 +465,15 @@ function app() {
         // 5. Repair Actions
         async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
+             const now = new Date().toISOString();
              await supabaseClient.from('tickets').update({
-                repair_start_at: new Date().toISOString()
+                repair_start_at: now
             }).eq('id', ticket.id);
             this.loading = false;
+            // Force reactivity
+            if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                this.selectedTicket = { ...this.selectedTicket, repair_start_at: now };
+            }
             this.fetchTickets();
         },
 
