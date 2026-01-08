@@ -296,50 +296,58 @@ function app() {
         async loadAdminData() {
             if (!this.session) return;
             const user = this.session.user;
-            let { data: profile, error } = await supabaseClient
-                .from('profiles')
-                .select('*, workspaces(name, company_code)')
-                .eq('id', user.id)
-                .single();
-            if (error && error.code === 'PGRST116') {
-                const { data: wsData } = await supabaseClient
-                    .from('workspaces').select('id, name, company_code').eq('owner_id', user.id).single();
-                if (wsData) {
-                    // REFACTORED: Native Fetch
-                    await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: wsData.id, role: 'admin' });
-                    profile = (await supabaseClient.from('profiles').select('*, workspaces(name, company_code)').eq('id', user.id).single()).data;
-                } else {
-                    this.view = 'setup_required';
-                    return;
+
+            // REFACTORED: Native Fetch
+            try {
+                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code)&id=eq.${user.id}`);
+                let profile = profileData && profileData.length > 0 ? profileData[0] : null;
+
+                // Handle missing profile case (equivalent to PGRST116)
+                if (!profile) {
+                    const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code&owner_id=eq.${user.id}`);
+                    const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
+
+                    if (workspace) {
+                        await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
+                        // Re-fetch
+                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code)&id=eq.${user.id}`);
+                        profile = newProfileData[0];
+                    } else {
+                        this.view = 'setup_required';
+                        return;
+                    }
                 }
-            }
-            if (profile) {
-                this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
-                this.workspaceName = profile.workspaces?.name;
-                this.companyCode = profile.workspaces?.company_code;
-                await this.fetchEmployees();
-                await this.fetchTickets();
-                await this.fetchTemplates();
-                this.setupRealtime();
+
+                if (profile) {
+                    this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
+                    this.workspaceName = profile.workspaces?.name;
+                    this.companyCode = profile.workspaces?.company_code;
+                    await this.fetchEmployees();
+                    await this.fetchTickets();
+                    await this.fetchTemplates();
+                    this.setupRealtime();
+                }
+            } catch (err) {
+                console.error("Load Admin Error:", err);
             }
         },
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
-            let result = { data: null, error: null };
-            // Keeping read operations on Supabase Client as requested, unless it's an RPC that often fails.
-            // RPCs are generally safer via fetch to avoid locks too.
-            if (this.session) {
-                result = await supabaseClient.from('employees').select('*').eq('workspace_id', this.user.workspace_id).order('created_at', { ascending: false });
-            } else {
-                // Converting this RPC to fetch for consistency with other employee RPCs
-                try {
-                     const data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
-                     result.data = data;
-                } catch (e) {
-                     result.error = e;
+
+            // REFACTORED: Native Fetch for ALL employee fetches
+            try {
+                let data;
+                if (this.session) {
+                     // Table Select
+                     data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&order=created_at.desc`);
+                } else {
+                     // RPC Call
+                     data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
                 }
+                if (data) this.employees = data;
+            } catch (e) {
+                 console.error("Fetch Employees Error:", e);
             }
-            if (!result.error) this.employees = result.data;
         },
 
         // --- TICKET LOGIC ---
@@ -348,28 +356,10 @@ function app() {
             if (!this.user?.workspace_id) return;
 
             try {
-                // Read-only can stay with library
-                const { data, error } = await supabaseClient
-                    .from('tickets')
-                    .select('*')
-                    .eq('workspace_id', this.user.workspace_id)
-                    .order('created_at', { ascending: false });
-
-                if (error) {
-                    if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted') || error.message.includes('Failed to fetch'))) {
-                        if (retryCount < 2) {
-                            setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
-                        }
-                        return;
-                    }
-                    if (error.code === 'PGRST205') {
-                        this.tickets = [];
-                        this.techTickets = [];
-                        return;
-                    }
-                    console.error("Error fetching tickets:", error);
-                    return;
-                }
+                // REFACTORED: Native Fetch
+                const data = await this.supabaseFetch(
+                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&order=created_at.desc`
+                );
 
                 if (data) {
                     this.tickets = data;
@@ -384,13 +374,26 @@ function app() {
                 }
             } catch (err) {
                  console.warn("Fetch exception:", err);
+                 // Retry logic for abort/fetch errors
+                 if (retryCount < 2) {
+                     setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
+                 } else {
+                     // On final failure, empty lists to avoid stale state if desired, or keep old data.
+                     // Choosing to keep old data to be less disruptive, but could clear.
+                     console.error("Final ticket fetch failure");
+                 }
             }
         },
 
         async fetchTemplates() {
              if (!this.user?.workspace_id) return;
-             const { data } = await supabaseClient.from('checklist_templates').select('*');
-             if (data) this.checklistTemplates = data;
+             try {
+                 // REFACTORED: Native Fetch
+                 const data = await this.supabaseFetch('checklist_templates?select=*');
+                 if (data) this.checklistTemplates = data;
+             } catch (e) {
+                 console.error("Fetch Templates Error:", e);
+             }
         },
 
         openNewTicketModal() {
@@ -629,10 +632,16 @@ function app() {
         async startTest(ticket = this.selectedTicket) {
              this.loading = true;
              try {
+                 const now = new Date().toISOString();
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                    test_start_at: new Date().toISOString()
+                    test_start_at: now
                 });
+
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket = { ...this.selectedTicket, test_start_at: now };
+                }
+
                 await this.fetchTickets();
              } catch(e) {
                  this.notify("Erro: " + e.message, "error");
