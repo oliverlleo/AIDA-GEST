@@ -30,7 +30,19 @@ CREATE TABLE IF NOT EXISTS public.tickets (
     parts_status TEXT DEFAULT 'N/A', -- N/A, Solicitado, Comprado, Recebido
     budget_value DECIMAL(10,2), -- Valor do Orçamento
     budget_status TEXT DEFAULT 'Pendente', -- Pendente, Enviado, Aprovado, Negado
+    budget_sent_at TIMESTAMP WITH TIME ZONE,
+
     repair_successful BOOLEAN, -- Se o reparo deu certo ou não
+    repair_start_at TIMESTAMP WITH TIME ZONE,
+    repair_end_at TIMESTAMP WITH TIME ZONE,
+
+    test_start_at TIMESTAMP WITH TIME ZONE,
+
+    parts_purchased_at TIMESTAMP WITH TIME ZONE,
+    parts_received_at TIMESTAMP WITH TIME ZONE,
+
+    pickup_available BOOLEAN DEFAULT FALSE,
+    pickup_available_at TIMESTAMP WITH TIME ZONE,
 
     -- Auditoria
     created_by UUID, -- Pode ser ID de employee ou auth.id
