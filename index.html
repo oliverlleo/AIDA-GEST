@@ -147,18 +147,18 @@
                     </div>
                 </div>
 
-                <!-- SETUP REQUIRED SCREEN (Zombie Account Recovery) -->
-                <div x-show="view === 'setup_required'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-xl shadow-lg border-t-4 border-red-500" x-cloak>
-                    <h2 class="text-2xl font-bold mb-4 text-center">Finalizar Cadastro</h2>
-                    <p class="text-gray-600 mb-6 text-center">Detectamos que sua conta foi criada mas a empresa não foi configurada corretamente. Por favor, confirme o nome da empresa.</p>
+                <!-- SETUP REQUIRED SCREEN (Create Company) -->
+                <div x-show="view === 'setup_required'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-xl shadow-lg border-t-4 border-brand-500" x-cloak>
+                    <h2 class="text-2xl font-bold mb-4 text-center">Bem-vindo ao TechAssist!</h2>
+                    <p class="text-gray-600 mb-6 text-center">Para começar, cadastre o nome da sua empresa.</p>
 
                     <form @submit.prevent="completeCompanySetup">
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700">Nome da Empresa</label>
-                            <input type="text" x-model="registerForm.companyName" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border" required>
+                            <input type="text" x-model="registerForm.companyName" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border" placeholder="Ex: Minha Assistência Técnica" required>
                         </div>
-                        <button type="submit" class="w-full bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition-colors shadow-lg">
-                            Criar Empresa e Corrigir Conta
+                        <button type="submit" class="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors shadow-lg">
+                            Criar Empresa
                         </button>
                     </form>
                 </div>
@@ -179,7 +179,7 @@
                             <div class="space-y-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Código da Empresa</label>
-                                    <input type="text" x-model="loginForm.company_code" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-500 focus:ring-brand-500 p-2 border" placeholder="Ex: TECH123" required>
+                                    <input type="text" x-model="loginForm.company_code" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-500 focus:ring-brand-500 p-2 border" placeholder="Ex: 1234" required>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">Usuário</label>
@@ -224,10 +224,7 @@
                         <h2 class="text-2xl font-bold mb-6 text-center">Nova Empresa</h2>
                         <form @submit.prevent="registerAdmin">
                             <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Código da Empresa</label>
-                                    <p class="text-xs text-gray-500 mt-1 mb-2">Será gerado automaticamente um código único para seus funcionários.</p>
-                                </div>
+                                <!-- Company Name Removed -->
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700">E-mail (Admin)</label>
                                     <input type="email" x-model="registerForm.email" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black p-2 border" required>
