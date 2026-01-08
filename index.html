@@ -255,13 +255,6 @@
                                                         </button>
                                                     </template>
 
-                                                    <!-- Analise (Visualizar) -->
-                                                    <template x-if="ticket.status === 'Analise Tecnica'">
-                                                        <button @click="viewTicketDetails(ticket)" class="w-full bg-gray-100 text-gray-600 text-xs font-bold py-2 rounded hover:bg-gray-200">
-                                                            Abrir Análise
-                                                        </button>
-                                                    </template>
-
                                                     <!-- Aprovação -->
                                                     <template x-if="ticket.status === 'Aprovacao'">
                                                         <div>
@@ -290,38 +283,6 @@
                                                             <template x-if="ticket.parts_status === 'Comprado'">
                                                                 <button @click="confirmReceived(ticket)" class="w-full bg-teal-50 text-teal-600 text-xs font-bold py-2 rounded hover:bg-teal-100">
                                                                     Recebido
-                                                                </button>
-                                                            </template>
-                                                        </div>
-                                                    </template>
-
-                                                    <!-- Reparo -->
-                                                    <template x-if="ticket.status === 'Andamento Reparo'">
-                                                        <div>
-                                                            <template x-if="!ticket.repair_start_at">
-                                                                <button @click="startRepair(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
-                                                                    Iniciar Reparo
-                                                                </button>
-                                                            </template>
-                                                            <template x-if="ticket.repair_start_at">
-                                                                <button @click="openOutcomeModal('repair', ticket)" class="w-full bg-orange-50 text-orange-600 text-xs font-bold py-2 rounded hover:bg-orange-100">
-                                                                    Finalizar
-                                                                </button>
-                                                            </template>
-                                                        </div>
-                                                    </template>
-
-                                                    <!-- Teste -->
-                                                    <template x-if="ticket.status === 'Teste Final'">
-                                                        <div>
-                                                            <template x-if="!ticket.test_start_at">
-                                                                <button @click="startTest(ticket)" class="w-full bg-indigo-50 text-indigo-600 text-xs font-bold py-2 rounded hover:bg-indigo-100">
-                                                                    Iniciar Teste
-                                                                </button>
-                                                            </template>
-                                                            <template x-if="ticket.test_start_at">
-                                                                <button @click="openOutcomeModal('test', ticket)" class="w-full bg-green-50 text-green-600 text-xs font-bold py-2 rounded hover:bg-green-100">
-                                                                    Concluir
                                                                 </button>
                                                             </template>
                                                         </div>
@@ -380,6 +341,14 @@
                                         <p class="text-red-600 font-bold text-xs mt-1">
                                             <i class="fa-solid fa-triangle-exclamation mr-1"></i>
                                             Atrasado: <span x-text="getOverdueTime(ticket.deadline)"></span>
+                                        </p>
+                                    </template>
+
+                                    <!-- Cronômetro (Visível se em Reparo) -->
+                                    <template x-if="ticket.status === 'Andamento Reparo' && ticket.repair_start_at">
+                                        <p class="text-blue-600 font-bold text-xs mt-1">
+                                            <i class="fa-solid fa-stopwatch mr-1"></i>
+                                            Tempo: <span x-text="getDuration(ticket.repair_start_at)"></span>
                                         </p>
                                     </template>
                                 </div>
@@ -717,18 +686,24 @@
 
                         <!-- 5. Reparo Flow -->
                         <template x-if="selectedTicket.status === 'Andamento Reparo'">
-                            <div class="flex space-x-3">
-                                <button @click="startRepair()"
-                                        x-show="!selectedTicket.repair_start_at"
-                                        class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 text-sm shadow">
-                                    <i class="fa-solid fa-screwdriver-wrench mr-2"></i> Iniciar Execução
-                                </button>
+                            <div class="w-full">
+                                <div class="flex space-x-3 mb-2">
+                                    <button @click="startRepair()"
+                                            x-show="!selectedTicket.repair_start_at"
+                                            class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 text-sm shadow flex-grow">
+                                        <i class="fa-solid fa-screwdriver-wrench mr-2"></i> Iniciar Execução
+                                    </button>
 
-                                <button @click="openOutcomeModal('repair')"
-                                        x-show="selectedTicket.repair_start_at"
-                                        class="bg-orange-500 text-white px-4 py-2 rounded font-bold hover:bg-orange-600 text-sm shadow animate-pulse">
-                                    <i class="fa-solid fa-flag-checkered mr-2"></i> Finalizar Reparo
-                                </button>
+                                    <button @click="openOutcomeModal('repair')"
+                                            x-show="selectedTicket.repair_start_at"
+                                            class="bg-orange-500 text-white px-4 py-2 rounded font-bold hover:bg-orange-600 text-sm shadow flex-grow">
+                                        <i class="fa-solid fa-flag-checkered mr-2"></i> Finalizar Reparo
+                                    </button>
+                                </div>
+                                <div x-show="selectedTicket.repair_start_at" class="text-center bg-gray-100 rounded p-1">
+                                    <span class="text-xs text-gray-500 font-bold uppercase">Tempo Decorrido</span>
+                                    <div class="text-xl font-mono font-bold text-gray-800" x-text="getDuration(selectedTicket.repair_start_at)"></div>
+                                </div>
                             </div>
                         </template>
 
