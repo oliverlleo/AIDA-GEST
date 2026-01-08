@@ -78,6 +78,48 @@ function app() {
             'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
         ],
 
+        // --- HELPER: NATIVE FETCH (Stateless) ---
+        // Bypasses supabase-js lock management to avoid AbortError on tab wake
+        async supabaseFetch(endpoint, method = 'GET', body = null) {
+            const isRpc = endpoint.startsWith('rpc/');
+            const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+
+            // Determine Auth Token
+            // If Admin (session exists), use Access Token.
+            // If Employee (no session, just local state), use Anon Key (RLS allows specific access).
+            // If Login/Public, use Anon Key.
+            let token = SUPABASE_KEY;
+            if (this.session && this.session.access_token) {
+                token = this.session.access_token;
+            }
+
+            const headers = {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                // Preferences for minimal response or representation
+                'Prefer': method === 'GET' ? undefined : 'return=representation'
+            };
+
+            const options = {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : undefined
+            };
+
+            const response = await fetch(url, options);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+            }
+
+            // For void responses (204)
+            if (response.status === 204) return null;
+
+            return await response.json();
+        },
+
         async init() {
             console.log("App initializing...");
             this.loading = true;
@@ -134,40 +176,8 @@ function app() {
                 this.currentTime = new Date();
             }, 1000);
 
-            let visibilityTimer;
-            document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === 'visible') {
-                    clearTimeout(visibilityTimer);
-                    visibilityTimer = setTimeout(async () => {
-                        // console.log("Tab visible. Refreshing...");
-                        if (this.user) {
-                            await this.fetchTickets();
-                        }
-                    }, 500);
-                }
-            });
-        },
-
-        // --- CORE FIX: Non-Blocking Connection Check ---
-        async ensureConnection() {
-            // We race the session refresh against a timeout.
-            // If the lock is stuck (infinite hang), the timeout wins,
-            // we skip the refresh and try to use the existing cached token.
-            // This guarantees the UI never freezes.
-            try {
-                const refreshPromise = supabaseClient.auth.getSession();
-                const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 2000));
-
-                const result = await Promise.race([refreshPromise, timeoutPromise]);
-
-                if (result === 'timeout') {
-                    console.warn("Session refresh timed out (lock stuck). Proceeding with cached token.");
-                } else if (result?.data?.session) {
-                    this.session = result.data.session;
-                }
-            } catch (e) {
-                console.warn("Connection check skipped:", e);
-            }
+            // Removed visibilitychange listener to prevent lock conflicts.
+            // Data is kept fresh via Realtime subscriptions.
         },
 
         setupRealtime() {
@@ -215,40 +225,41 @@ function app() {
                 this.loading = false;
             }
         },
+
         async completeCompanySetup() {
              this.loading = true;
              try {
                  if (!this.registerForm.companyName) return this.notify('Digite o nome da empresa.', 'error');
                  const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
-                 const { data: wsId, error: wsError } = await supabaseClient
-                    .rpc('create_owner_workspace_and_profile', {
+
+                 // REFACTORED: Use Native Fetch for RPC
+                 const wsId = await this.supabaseFetch('rpc/create_owner_workspace_and_profile', 'POST', {
                         p_name: this.registerForm.companyName,
                         p_company_code: generatedCode
-                    });
-                if (wsError) {
-                    console.error(wsError);
-                    this.notify('Erro: ' + wsError.message, 'error');
-                } else {
-                    this.newCompanyCode = generatedCode;
-                    this.registrationSuccess = true;
-                    this.notify('Conta criada!', 'success');
-                }
+                 });
+
+                this.newCompanyCode = generatedCode;
+                this.registrationSuccess = true;
+                this.notify('Conta criada!', 'success');
+             } catch (err) {
+                 console.error(err);
+                 this.notify('Erro: ' + err.message, 'error');
              } finally {
                  this.loading = false;
              }
         },
+
         async loginEmployee() {
             this.loading = true;
             try {
-                const { data, error } = await supabaseClient
-                    .rpc('employee_login', {
+                // REFACTORED: Use Native Fetch for RPC
+                const data = await this.supabaseFetch('rpc/employee_login', 'POST', {
                         p_company_code: this.loginForm.company_code,
                         p_username: this.loginForm.username,
                         p_password: this.loginForm.password
-                    });
-                if (error) {
-                    this.notify('Falha no login.', 'error');
-                } else if (data && data.length > 0) {
+                });
+
+                if (data && data.length > 0) {
                     const emp = data[0];
                     this.employeeSession = emp;
                     this.user = emp;
@@ -263,10 +274,14 @@ function app() {
                 } else {
                      this.notify('Credenciais inválidas.', 'error');
                 }
+            } catch(err) {
+                 console.error(err);
+                 this.notify('Falha no login: ' + err.message, 'error');
             } finally {
                 this.loading = false;
             }
         },
+
         async logout() {
             this.loading = true;
             try { if (this.session) await supabaseClient.auth.signOut(); } catch (e) {}
@@ -290,7 +305,8 @@ function app() {
                 const { data: wsData } = await supabaseClient
                     .from('workspaces').select('id, name, company_code').eq('owner_id', user.id).single();
                 if (wsData) {
-                    await supabaseClient.from('profiles').insert([{ id: user.id, workspace_id: wsData.id, role: 'admin' }]);
+                    // REFACTORED: Native Fetch
+                    await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: wsData.id, role: 'admin' });
                     profile = (await supabaseClient.from('profiles').select('*, workspaces(name, company_code)').eq('id', user.id).single()).data;
                 } else {
                     this.view = 'setup_required';
@@ -309,11 +325,19 @@ function app() {
         },
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
-            let result;
+            let result = { data: null, error: null };
+            // Keeping read operations on Supabase Client as requested, unless it's an RPC that often fails.
+            // RPCs are generally safer via fetch to avoid locks too.
             if (this.session) {
                 result = await supabaseClient.from('employees').select('*').eq('workspace_id', this.user.workspace_id).order('created_at', { ascending: false });
             } else {
-                result = await supabaseClient.rpc('get_employees_for_workspace', { p_workspace_id: this.user.workspace_id });
+                // Converting this RPC to fetch for consistency with other employee RPCs
+                try {
+                     const data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
+                     result.data = data;
+                } catch (e) {
+                     result.error = e;
+                }
             }
             if (!result.error) this.employees = result.data;
         },
@@ -324,6 +348,7 @@ function app() {
             if (!this.user?.workspace_id) return;
 
             try {
+                // Read-only can stay with library
                 const { data, error } = await supabaseClient
                     .from('tickets')
                     .select('*')
@@ -390,16 +415,20 @@ function app() {
         async saveTemplate() {
             if (!this.newTemplateName) return this.notify("Nomeie o modelo", "error");
             if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
-            const { error } = await supabaseClient.from('checklist_templates').insert({
-                workspace_id: this.user.workspace_id,
-                name: this.newTemplateName,
-                items: this.ticketForm.checklist.map(i => i.item)
-            });
-            if (error) this.notify("Erro ao salvar", "error");
-            else {
+
+            try {
+                // REFACTORED: Native Fetch
+                await this.supabaseFetch('checklist_templates', 'POST', {
+                    workspace_id: this.user.workspace_id,
+                    name: this.newTemplateName,
+                    items: this.ticketForm.checklist.map(i => i.item)
+                });
+
                 this.notify("Modelo salvo!");
                 this.newTemplateName = '';
                 this.fetchTemplates();
+            } catch (error) {
+                this.notify("Erro ao salvar: " + error.message, "error");
             }
         },
         loadTemplate() {
@@ -412,7 +441,7 @@ function app() {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
              this.loading = true;
-             await this.ensureConnection(); // Ensure Auth
+
              try {
                  const ticketData = {
                      workspace_id: this.user.workspace_id,
@@ -430,16 +459,12 @@ function app() {
                      created_by_name: this.user.name
                  };
 
-                 const { error } = await supabaseClient.from('tickets').insert(ticketData);
+                 // REFACTORED: Native Fetch
+                 await this.supabaseFetch('tickets', 'POST', ticketData);
 
-                 if (error) {
-                     console.error(error);
-                     this.notify("Erro ao criar chamado.", "error");
-                 } else {
-                     this.notify("Chamado criado!");
-                     this.modals.ticket = false;
-                     await this.fetchTickets();
-                 }
+                 this.notify("Chamado criado!");
+                 this.modals.ticket = false;
+                 await this.fetchTickets();
              } catch (err) {
                  this.notify("Erro ao criar: " + err.message, "error");
              } finally {
@@ -456,14 +481,31 @@ function app() {
             this.modals.viewTicket = true;
         },
 
+        // REFACTORED: Native Fetch Implementation
+        async saveTicketChanges() {
+             if (!this.selectedTicket) return;
+             this.loading = true;
+             try {
+                 await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', {
+                     tech_notes: this.selectedTicket.tech_notes,
+                     parts_needed: this.selectedTicket.parts_needed
+                 });
+                 this.notify("Anotações salvas!");
+                 await this.fetchTickets();
+             } catch (e) {
+                 this.notify("Erro ao salvar: " + e.message, "error");
+             } finally {
+                 this.loading = false;
+             }
+        },
+
         // --- WORKFLOW ACTIONS ---
 
         async updateStatus(ticket, newStatus, additionalUpdates = {}) {
             this.loading = true;
-            await this.ensureConnection(); // Ensure Auth immediately before request
             try {
-                // Log action
-                await supabaseClient.from('ticket_logs').insert({
+                // REFACTORED: Native Fetch - Log
+                await this.supabaseFetch('ticket_logs', 'POST', {
                     ticket_id: ticket.id,
                     action: 'Alteração de Status',
                     details: `De ${ticket.status} para ${newStatus}`,
@@ -471,9 +513,9 @@ function app() {
                 });
 
                 const updates = { status: newStatus, ...additionalUpdates };
-                const { error } = await supabaseClient.from('tickets').update(updates).eq('id', ticket.id);
 
-                if (error) throw error;
+                // REFACTORED: Native Fetch - Update Ticket
+                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
 
                 this.notify("Status atualizado");
                 await this.fetchTickets();
@@ -498,22 +540,20 @@ function app() {
 
         async sendBudget(ticket = this.selectedTicket) {
             this.loading = true;
-            await this.ensureConnection();
             try {
-                const { error } = await supabaseClient.from('tickets').update({
+                // REFACTORED: Native Fetch
+                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     budget_status: 'Enviado',
                     budget_sent_at: new Date().toISOString()
-                }).eq('id', ticket.id);
+                });
 
-                if (!error) {
-                    if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                        this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
-                    }
-                    this.notify("Orçamento marcado como Enviado.");
-                    await this.fetchTickets();
-                } else {
-                    this.notify("Erro: " + error.message, "error");
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
                 }
+                this.notify("Orçamento marcado como Enviado.");
+                await this.fetchTickets();
+            } catch(e) {
+                 this.notify("Erro: " + e.message, "error");
             } finally {
                 this.loading = false;
             }
@@ -528,13 +568,15 @@ function app() {
 
         async markPurchased(ticket = this.selectedTicket) {
              this.loading = true;
-             await this.ensureConnection();
              try {
-                 await supabaseClient.from('tickets').update({
+                 // REFACTORED: Native Fetch
+                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     parts_status: 'Comprado',
                     parts_purchased_at: new Date().toISOString()
-                }).eq('id', ticket.id);
+                });
                 await this.fetchTickets();
+             } catch(e) {
+                 this.notify("Erro: " + e.message, "error");
              } finally {
                 this.loading = false;
              }
@@ -548,17 +590,19 @@ function app() {
 
         async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
-             await this.ensureConnection();
              try {
                  const now = new Date().toISOString();
-                 await supabaseClient.from('tickets').update({
+                 // REFACTORED: Native Fetch
+                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     repair_start_at: now
-                }).eq('id', ticket.id);
+                });
 
                 if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
                     this.selectedTicket = { ...this.selectedTicket, repair_start_at: now };
                 }
                 await this.fetchTickets();
+             } catch(e) {
+                 this.notify("Erro: " + e.message, "error");
              } finally {
                  this.loading = false;
              }
@@ -584,12 +628,14 @@ function app() {
 
         async startTest(ticket = this.selectedTicket) {
              this.loading = true;
-             await this.ensureConnection();
              try {
-                 await supabaseClient.from('tickets').update({
+                 // REFACTORED: Native Fetch
+                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     test_start_at: new Date().toISOString()
-                }).eq('id', ticket.id);
+                });
                 await this.fetchTickets();
+             } catch(e) {
+                 this.notify("Erro: " + e.message, "error");
              } finally {
                 this.loading = false;
              }
@@ -617,13 +663,15 @@ function app() {
 
         async markAvailable(ticket = this.selectedTicket) {
              this.loading = true;
-             await this.ensureConnection();
              try {
-                 await supabaseClient.from('tickets').update({
+                 // REFACTORED: Native Fetch
+                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     pickup_available: true,
                     pickup_available_at: new Date().toISOString()
-                }).eq('id', ticket.id);
+                });
                 await this.fetchTickets();
+             } catch(e) {
+                 this.notify("Erro: " + e.message, "error");
              } finally {
                 this.loading = false;
              }
@@ -681,21 +729,21 @@ function app() {
             if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
             this.loading = true;
             try {
-                const { error } = await supabaseClient.rpc('create_employee', {
+                // REFACTORED: Native Fetch for RPC
+                await this.supabaseFetch('rpc/create_employee', 'POST', {
                     p_workspace_id: this.user.workspace_id,
                     p_name: this.employeeForm.name,
                     p_username: this.employeeForm.username,
                     p_password: this.employeeForm.password,
                     p_roles: this.employeeForm.roles
                 });
-                if (error) {
-                    console.error(error);
-                    this.notify('Erro: ' + error.message, 'error');
-                } else {
-                    this.notify('Criado!');
-                    this.modals.newEmployee = false;
-                    await this.fetchEmployees();
-                }
+
+                this.notify('Criado!');
+                this.modals.newEmployee = false;
+                await this.fetchEmployees();
+            } catch(e) {
+                console.error(e);
+                this.notify('Erro: ' + e.message, 'error');
             } finally {
                 this.loading = false;
             }
@@ -703,8 +751,14 @@ function app() {
 
         async deleteEmployee(id) {
             if (!confirm('Confirma?')) return;
-            const { error } = await supabaseClient.from('employees').delete().eq('id', id);
-            if (error) this.notify('Erro.', 'error'); else { this.notify('Excluído.'); this.fetchEmployees(); }
+            try {
+                // REFACTORED: Native Fetch
+                await this.supabaseFetch(`employees?id=eq.${id}`, 'DELETE');
+                this.notify('Excluído.');
+                this.fetchEmployees();
+            } catch(e) {
+                this.notify('Erro ao excluir', 'error');
+            }
         },
 
         hasRole(role) {
