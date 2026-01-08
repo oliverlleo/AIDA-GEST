@@ -286,7 +286,7 @@ function app() {
 
         // --- TICKET LOGIC ---
 
-        async fetchTickets() {
+        async fetchTickets(retryCount = 0) {
             if (!this.user?.workspace_id) return;
             const { data, error } = await supabaseClient
                 .from('tickets')
@@ -295,6 +295,15 @@ function app() {
                 .order('created_at', { ascending: false });
 
             if (error) {
+                // Handle AbortError (often caused by tab switching/suspension)
+                if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted'))) {
+                    console.warn(`Fetch aborted (attempt ${retryCount + 1}). Retrying in 500ms...`);
+                    if (retryCount < 3) {
+                        setTimeout(() => this.fetchTickets(retryCount + 1), 500);
+                    }
+                    return;
+                }
+
                 if (error.code === 'PGRST205') {
                     // Suppress "Missing Table" error to avoid crashing UI for user
                     // They will see empty data instead of an error until DB is ready.
