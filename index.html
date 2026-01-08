@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechAssist - Sistema de Gestão</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#FF6B00', // Laranja
+                            600: '#E65100',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+        .fade-enter, .fade-leave-to { opacity: 0; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans antialiased" x-data="app()">
+
+    <!-- Loading Overlay -->
+    <div x-show="loading" class="fixed inset-0 bg-white z-50 flex items-center justify-center bg-opacity-90" x-transition.opacity>
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-brand-500"></div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="fixed top-4 right-4 z-50 space-y-2">
+        <template x-for="notif in notifications" :key="notif.id">
+            <div class="bg-white border-l-4 p-4 shadow-lg rounded flex items-center justify-between min-w-[300px]"
+                 :class="notif.type === 'error' ? 'border-red-500' : 'border-green-500'"
+                 x-transition.duration.500ms>
+                <div class="flex items-center">
+                    <i :class="notif.type === 'error' ? 'fa-circle-exclamation text-red-500' : 'fa-check-circle text-green-500'" class="fa-solid mr-3 text-xl"></i>
+                    <span x-text="notif.message" class="font-medium"></span>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div class="min-h-screen flex flex-col">
+
+        <!-- Navigation (Visible if logged in) -->
+        <nav x-show="session || employeeSession" class="bg-black text-white px-6 py-3 flex justify-between items-center shadow-md" x-cloak>
+            <div class="flex items-center space-x-4">
+                <span class="text-2xl font-bold text-brand-500 tracking-tighter">TechAssist</span>
+                <span x-show="workspaceName" class="text-gray-400 text-sm border-l border-gray-700 pl-4" x-text="workspaceName"></span>
+            </div>
+            <div class="flex items-center space-x-6">
+                <div class="flex items-center space-x-2 text-sm">
+                    <div class="bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center text-brand-500 font-bold">
+                        <span x-text="(user?.email || user?.name || 'U').charAt(0).toUpperCase()"></span>
+                    </div>
+                    <span x-text="user?.email || user?.name"></span>
+                </div>
+                <button @click="logout()" class="hover:text-brand-500 transition-colors">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sair
+                </button>
+            </div>
+        </nav>
+
+        <!-- CONTENT AREA -->
+        <main class="flex-grow flex relative">
+
+            <!-- Sidebar (If Logged In) -->
+            <aside x-show="session || employeeSession" class="w-64 bg-white border-r border-gray-200 hidden md:block" x-cloak>
+                <div class="p-4 space-y-1">
+                    <p class="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Menu</p>
+
+                    <a href="#" @click.prevent="view = 'dashboard'"
+                       :class="view === 'dashboard' ? 'bg-brand-50 text-brand-600 border-r-4 border-brand-500' : 'text-gray-600 hover:bg-gray-50'"
+                       class="flex items-center px-4 py-3 text-sm font-medium transition-colors">
+                        <i class="fa-solid fa-chart-pie w-6"></i> Dashboard
+                    </a>
+
+                    <!-- Admin Only -->
+                    <template x-if="hasRole('admin')">
+                        <a href="#" @click.prevent="view = 'employees'"
+                           :class="view === 'employees' ? 'bg-brand-50 text-brand-600 border-r-4 border-brand-500' : 'text-gray-600 hover:bg-gray-50'"
+                           class="flex items-center px-4 py-3 text-sm font-medium transition-colors">
+                            <i class="fa-solid fa-users w-6"></i> Funcionários
+                        </a>
+                    </template>
+
+                    <!-- Tech Only -->
+                    <template x-if="hasRole('admin') || hasRole('tecnico')">
+                        <a href="#" @click.prevent="view = 'service_orders'"
+                           :class="view === 'service_orders' ? 'bg-brand-50 text-brand-600 border-r-4 border-brand-500' : 'text-gray-600 hover:bg-gray-50'"
+                           class="flex items-center px-4 py-3 text-sm font-medium transition-colors">
+                            <i class="fa-solid fa-wrench w-6"></i> Ordens de Serviço
+                        </a>
+                    </template>
+
+                    <!-- Stock Only -->
+                    <template x-if="hasRole('admin') || hasRole('estoquista')">
+                        <a href="#" @click.prevent="view = 'stock'"
+                           :class="view === 'stock' ? 'bg-brand-50 text-brand-600 border-r-4 border-brand-500' : 'text-gray-600 hover:bg-gray-50'"
+                           class="flex items-center px-4 py-3 text-sm font-medium transition-colors">
+                            <i class="fa-solid fa-boxes-stacked w-6"></i> Estoque
+                        </a>
+                    </template>
+
+                </div>
+            </aside>
+
+            <!-- Page Views -->
+            <div class="flex-grow bg-gray-50 p-6 overflow-y-auto h-[calc(100vh-64px)]">
+
+                <!-- LOGIN / REGISTER SCREENS -->
+                <div x-show="!session && !employeeSession" class="max-w-md mx-auto mt-10" x-cloak>
+
+                    <!-- Tabs -->
+                    <div class="flex mb-6 bg-white rounded-lg shadow p-1">
+                        <button @click="authMode = 'employee'" :class="authMode === 'employee' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100'" class="flex-1 py-2 rounded-md text-sm font-medium transition-all">Funcionário</button>
+                        <button @click="authMode = 'admin_login'" :class="authMode.includes('admin') ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100'" class="flex-1 py-2 rounded-md text-sm font-medium transition-all">Administrador</button>
+                    </div>
+
+                    <!-- Employee Login Form -->
+                    <div x-show="authMode === 'employee'" class="bg-white p-8 rounded-xl shadow-lg border-t-4 border-brand-500">
+                        <h2 class="text-2xl font-bold mb-6 text-center">Acesso Funcionário</h2>
+                        <form @submit.prevent="loginEmployee">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Código da Empresa</label>
+                                    <input type="text" x-model="loginForm.company_code" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-500 focus:ring-brand-500 p-2 border" placeholder="Ex: TECH123" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Usuário</label>
+                                    <input type="text" x-model="loginForm.username" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-500 focus:ring-brand-500 p-2 border" placeholder="seu.usuario" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Senha</label>
+                                    <input type="password" x-model="loginForm.password" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-500 focus:ring-brand-500 p-2 border" placeholder="••••••••" required>
+                                </div>
+                                <button type="submit" class="w-full bg-brand-500 text-white py-2 rounded-md hover:bg-brand-600 font-bold transition-colors shadow-lg shadow-orange-500/30">
+                                    Entrar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Admin Login Form -->
+                    <div x-show="authMode === 'admin_login'" class="bg-white p-8 rounded-xl shadow-lg border-t-4 border-gray-800">
+                        <h2 class="text-2xl font-bold mb-6 text-center">Acesso Administrador</h2>
+                        <form @submit.prevent="loginAdmin">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">E-mail</label>
+                                    <input type="email" x-model="adminForm.email" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black p-2 border" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Senha</label>
+                                    <input type="password" x-model="adminForm.password" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black p-2 border" required>
+                                </div>
+                                <button type="submit" class="w-full bg-black text-white py-2 rounded-md hover:bg-gray-800 font-bold transition-colors">
+                                    Entrar
+                                </button>
+                            </div>
+                        </form>
+                        <p class="mt-4 text-center text-sm text-gray-600">
+                            Não tem uma conta? <a href="#" @click.prevent="authMode = 'admin_register'" class="text-brand-600 hover:underline">Criar Empresa</a>
+                        </p>
+                    </div>
+
+                    <!-- Admin Register Form -->
+                    <div x-show="authMode === 'admin_register'" class="bg-white p-8 rounded-xl shadow-lg border-t-4 border-gray-800">
+                        <h2 class="text-2xl font-bold mb-6 text-center">Nova Empresa</h2>
+                        <form @submit.prevent="registerAdmin">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Nome da Empresa</label>
+                                    <input type="text" x-model="registerForm.companyName" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black p-2 border" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Código da Empresa (Único)</label>
+                                    <input type="text" x-model="registerForm.companyCode" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black p-2 border" placeholder="Ex: TECHFIX" required>
+                                    <p class="text-xs text-gray-500 mt-1">Seus funcionários usarão este código para entrar.</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">E-mail (Admin)</label>
+                                    <input type="email" x-model="registerForm.email" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black p-2 border" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Senha</label>
+                                    <input type="password" x-model="registerForm.password" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black p-2 border" required>
+                                </div>
+                                <button type="submit" class="w-full bg-black text-white py-2 rounded-md hover:bg-gray-800 font-bold transition-colors">
+                                    Cadastrar
+                                </button>
+                            </div>
+                        </form>
+                        <p class="mt-4 text-center text-sm text-gray-600">
+                            Já tem conta? <a href="#" @click.prevent="authMode = 'admin_login'" class="text-brand-600 hover:underline">Fazer Login</a>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- DASHBOARD VIEW -->
+                <div x-show="(session || employeeSession) && view === 'dashboard'" class="max-w-7xl mx-auto" x-cloak>
+                    <h1 class="text-2xl font-bold text-gray-800 mb-6">Dashboard</h1>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-blue-100 text-blue-500 mr-4">
+                                    <i class="fa-solid fa-clipboard-list text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-gray-500 text-sm">Ordens Abertas</p>
+                                    <p class="text-2xl font-bold">0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-green-100 text-green-500 mr-4">
+                                    <i class="fa-solid fa-check text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-gray-500 text-sm">Concluídas Hoje</p>
+                                    <p class="text-2xl font-bold">0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-brand-500">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-orange-100 text-brand-500 mr-4">
+                                    <i class="fa-solid fa-users text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-gray-500 text-sm">Equipe Ativa</p>
+                                    <p class="text-2xl font-bold" x-text="employees.length">0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h3 class="font-bold text-lg mb-4">Bem-vindo ao TechAssist</h3>
+                        <p class="text-gray-600">Selecione uma opção no menu lateral para começar.</p>
+                        <div class="mt-4 flex space-x-2">
+                            <span class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded" x-text="'Perfil: ' + (employeeSession ? user.roles.join(', ') : 'Administrador')"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EMPLOYEES VIEW (Admin Only) -->
+                <div x-show="(session || employeeSession) && view === 'employees'" class="max-w-7xl mx-auto" x-cloak>
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-2xl font-bold text-gray-800">Gerenciar Funcionários</h1>
+                        <button @click="openModal('newEmployee')" class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors">
+                            <i class="fa-solid fa-plus mr-2"></i> Novo Funcionário
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuário</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Permissões</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <template x-for="emp in employees" :key="emp.id">
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="flex items-center">
+                                                <div class="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold mr-3">
+                                                    <span x-text="emp.name.charAt(0)"></span>
+                                                </div>
+                                                <div class="text-sm font-medium text-gray-900" x-text="emp.name"></div>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="emp.username"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="flex space-x-1">
+                                                <template x-for="role in emp.roles">
+                                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800" x-text="role"></span>
+                                                </template>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button class="text-red-600 hover:text-red-900" @click="deleteEmployee(emp.id)">Excluir</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="employees.length === 0">
+                                    <td colspan="4" class="px-6 py-10 text-center text-gray-500">
+                                        Nenhum funcionário cadastrado.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- PLACEHOLDER VIEWS -->
+                <div x-show="view === 'service_orders'" class="max-w-7xl mx-auto text-center py-20" x-cloak>
+                    <i class="fa-solid fa-wrench text-6xl text-gray-300 mb-4"></i>
+                    <h2 class="text-xl font-bold text-gray-600">Módulo de Ordens de Serviço</h2>
+                    <p class="text-gray-500">Em desenvolvimento...</p>
+                </div>
+
+                <div x-show="view === 'stock'" class="max-w-7xl mx-auto text-center py-20" x-cloak>
+                    <i class="fa-solid fa-boxes-stacked text-6xl text-gray-300 mb-4"></i>
+                    <h2 class="text-xl font-bold text-gray-600">Módulo de Estoque</h2>
+                    <p class="text-gray-500">Em desenvolvimento...</p>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODALS -->
+    <!-- New Employee Modal -->
+    <div x-show="modals.newEmployee" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" x-cloak>
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="modals.newEmployee" x-transition.opacity class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="modals.newEmployee = false"></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div x-show="modals.newEmployee" x-transition.scale class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">Novo Funcionário</h3>
+                            <div class="mt-4 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Nome Completo</label>
+                                    <input type="text" x-model="employeeForm.name" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Nome de Usuário</label>
+                                    <input type="text" x-model="employeeForm.username" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Senha</label>
+                                    <input type="password" x-model="employeeForm.password" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Permissões</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <label class="inline-flex items-center">
+                                            <input type="checkbox" value="tecnico" x-model="employeeForm.roles" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                                            <span class="ml-2 text-sm text-gray-600">Técnico</span>
+                                        </label>
+                                        <label class="inline-flex items-center">
+                                            <input type="checkbox" value="atendente" x-model="employeeForm.roles" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                                            <span class="ml-2 text-sm text-gray-600">Atendente</span>
+                                        </label>
+                                        <label class="inline-flex items-center">
+                                            <input type="checkbox" value="estoquista" x-model="employeeForm.roles" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                                            <span class="ml-2 text-sm text-gray-600">Estoquista</span>
+                                        </label>
+                                        <label class="inline-flex items-center">
+                                            <input type="checkbox" value="admin" x-model="employeeForm.roles" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500">
+                                            <span class="ml-2 text-sm text-gray-600">Admin</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" @click="createEmployee" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-600 text-base font-medium text-white hover:bg-brand-700 sm:ml-3 sm:w-auto sm:text-sm">
+                        Salvar
+                    </button>
+                    <button type="button" @click="modals.newEmployee = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JS -->
+    <script src="js/main.js"></script>
+</body>
+</html>
