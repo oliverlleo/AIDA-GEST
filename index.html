@@ -331,53 +331,131 @@
                 </div>
 
                 <!-- VIEW: TECH BENCH (Bancada) -->
-                <div x-show="view === 'tech_orders'" class="flex-grow p-6 overflow-y-auto" x-cloak>
-                    <h2 class="text-2xl font-bold mb-6 text-gray-800"><i class="fa-solid fa-wrench mr-2 text-brand-500"></i> Minha Bancada</h2>
+                <div x-show="view === 'tech_orders'" class="flex-grow p-6 overflow-y-auto flex flex-col" x-cloak>
+                    <!-- Header with Title -->
+                    <div class="flex justify-between items-center mb-6">
+                         <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-wrench mr-2 text-brand-500"></i> Minha Bancada</h2>
+                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <template x-for="ticket in techTickets" :key="ticket.id">
-                            <div class="bg-white rounded-xl shadow border-t-4 p-6 relative"
-                                 :class="ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')">
-
-                                <!-- Urgency Flag -->
-                                <div x-show="ticket.priority === 'Urgente'" class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">URGENTE</div>
-
-                                <div class="flex justify-between items-center mb-4">
-                                    <span class="font-mono text-gray-500 text-sm" x-text="'OS #' + ticket.os_number"></span>
-                                    <span class="text-xs font-bold px-2 py-1 rounded bg-gray-100" x-text="ticket.status"></span>
-                                </div>
-
-                                <h3 class="text-xl font-bold text-gray-900 mb-1" x-text="ticket.device_model"></h3>
-                                <p class="text-gray-500 text-sm mb-4" x-text="ticket.defect_reported"></p>
-
-                                <div class="bg-gray-50 rounded p-3 mb-4 text-sm border border-gray-100">
-                                    <p><strong class="text-gray-700">Cliente:</strong> <span x-text="ticket.client_name"></span></p>
-                                    <p><strong class="text-gray-700">Prazo:</strong> <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString() : 'Não definido'" :class="new Date(ticket.deadline) < new Date() ? 'text-red-600 font-bold' : ''"></span></p>
-                                    <template x-if="ticket.deadline && new Date(ticket.deadline) < new Date()">
-                                        <p class="text-red-600 font-bold text-xs mt-1">
-                                            <i class="fa-solid fa-triangle-exclamation mr-1"></i>
-                                            Atrasado: <span x-text="getOverdueTime(ticket.deadline)"></span>
-                                        </p>
-                                    </template>
-
-                                    <!-- Cronômetro (Visível se em Reparo) -->
-                                    <template x-if="ticket.status === 'Andamento Reparo' && ticket.repair_start_at">
-                                        <p class="text-blue-600 font-bold text-xs mt-1">
-                                            <i class="fa-solid fa-stopwatch mr-1"></i>
-                                            Tempo: <span x-text="getDuration(ticket.repair_start_at)"></span>
-                                        </p>
-                                    </template>
-                                </div>
-
-                                <button @click="viewTicketDetails(ticket, 'tech')" class="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors flex justify-center items-center">
-                                    <i class="fa-solid fa-up-right-from-square mr-2"></i> Abrir Painel
-                                </button>
+                    <!-- Weekly Calendar Bar -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="flex items-center space-x-3">
+                                <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Agenda Semanal</h3>
+                                <label class="flex items-center cursor-pointer">
+                                    <div class="relative">
+                                        <input type="checkbox" class="sr-only" x-model="showAllCalendarTickets">
+                                        <div class="w-10 h-5 bg-gray-200 rounded-full shadow-inner"></div>
+                                        <div class="dot absolute w-5 h-5 bg-white rounded-full shadow -left-1 -top-0 transition transform" :class="showAllCalendarTickets ? 'translate-x-full bg-brand-500' : ''"></div>
+                                    </div>
+                                    <div class="ml-3 text-xs font-bold text-gray-500">Ver Previsão Completa</div>
+                                </label>
                             </div>
-                        </template>
-                        <div x-show="techTickets.length === 0" class="col-span-full text-center py-20 text-gray-400">
-                            <i class="fa-solid fa-check-double text-6xl mb-4 text-gray-200"></i>
-                            <p>Tudo limpo! Nenhuma ordem de serviço pendente na sua bancada.</p>
+                            <button @click="modals.calendar = true" class="text-brand-500 hover:text-brand-600 text-xs font-bold uppercase flex items-center">
+                                Expandir Mês <i class="fa-solid fa-expand ml-1"></i>
+                            </button>
                         </div>
+
+                        <!-- Days Grid -->
+                        <div class="grid grid-cols-7 gap-2">
+                             <template x-for="day in getWeekDays()" :key="day">
+                                 <div class="border rounded-lg p-2 min-h-[80px] relative transition-colors"
+                                      :class="isSameDay(day, new Date()) ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100'">
+                                     <div class="text-center mb-1">
+                                         <span class="block text-[10px] font-bold uppercase text-gray-400" x-text="day.toLocaleDateString('pt-BR', {weekday: 'short'})"></span>
+                                         <span class="block text-sm font-bold text-gray-800" x-text="day.getDate()"></span>
+                                     </div>
+                                     <!-- Events -->
+                                     <div class="space-y-1">
+                                         <template x-for="t in getCalendarTickets().filter(x => isSameDay(x.deadline, day))" :key="t.id">
+                                             <div class="bg-white border border-gray-200 rounded px-1 py-0.5 text-[9px] shadow-sm truncate cursor-help group relative" :title="t.defect_reported">
+                                                 <span class="font-bold" x-text="'OS ' + t.os_number"></span>
+                                                 <span class="text-gray-500" x-text="t.device_model"></span>
+                                                 <!-- Tooltip -->
+                                                 <div class="hidden group-hover:block absolute z-50 bottom-full left-0 w-48 bg-black text-white p-2 rounded text-xs mb-1 shadow-lg">
+                                                     <p x-text="t.defect_reported"></p>
+                                                 </div>
+                                             </div>
+                                         </template>
+                                     </div>
+                                 </div>
+                             </template>
+                        </div>
+                    </div>
+
+                    <!-- Split Columns -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow overflow-hidden">
+
+                        <!-- Col 1: Analise Tecnica -->
+                        <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
+                             <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
+                                <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Em Análise Técnica</h3>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Analise Tecnica').length"></span>
+                            </div>
+                            <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
+                                <template x-for="ticket in techTickets.filter(t => t.status === 'Analise Tecnica')" :key="ticket.id">
+                                    <!-- Card Component (Reused logic) -->
+                                     <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow"
+                                          @click="viewTicketDetails(ticket, 'tech')"
+                                          :class="ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')">
+
+                                        <div class="flex justify-between items-start mb-2">
+                                            <span class="font-mono text-gray-500 text-xs" x-text="'OS #' + ticket.os_number"></span>
+                                            <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
+                                        </div>
+                                        <h4 class="font-bold text-gray-900 text-sm mb-1 leading-tight" x-text="ticket.device_model"></h4>
+                                        <p class="text-gray-500 text-xs mb-2 line-clamp-2" x-text="ticket.defect_reported"></p>
+
+                                        <div class="text-[10px] text-gray-400 flex items-center mt-2 pt-2 border-t border-gray-50">
+                                            <i class="fa-regular fa-clock mr-1"></i>
+                                            <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleDateString() : 'S/ Prazo'"></span>
+                                        </div>
+                                     </div>
+                                </template>
+                                <div x-show="techTickets.filter(t => t.status === 'Analise Tecnica').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
+                                    Nenhum item em análise.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Col 2: Andamento Reparo -->
+                        <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
+                             <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
+                                <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Em Andamento Reparo</h3>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Andamento Reparo').length"></span>
+                            </div>
+                            <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
+                                <template x-for="ticket in techTickets.filter(t => t.status === 'Andamento Reparo')" :key="ticket.id">
+                                     <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow"
+                                          @click="viewTicketDetails(ticket, 'tech')"
+                                          :class="ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')">
+
+                                        <div class="flex justify-between items-start mb-2">
+                                            <span class="font-mono text-gray-500 text-xs" x-text="'OS #' + ticket.os_number"></span>
+                                            <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
+                                        </div>
+                                        <h4 class="font-bold text-gray-900 text-sm mb-1 leading-tight" x-text="ticket.device_model"></h4>
+
+                                        <!-- Timer -->
+                                        <template x-if="ticket.repair_start_at">
+                                            <div class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold mt-2 inline-flex items-center">
+                                                <i class="fa-solid fa-stopwatch mr-1"></i>
+                                                <span x-text="getDuration(ticket.repair_start_at)"></span>
+                                            </div>
+                                        </template>
+
+                                        <div class="text-[10px] text-gray-400 flex items-center mt-2 pt-2 border-t border-gray-50">
+                                            <i class="fa-regular fa-clock mr-1"></i>
+                                            <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleDateString() : 'S/ Prazo'"></span>
+                                        </div>
+                                     </div>
+                                </template>
+                                <div x-show="techTickets.filter(t => t.status === 'Andamento Reparo').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
+                                    Nenhum reparo em andamento.
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -928,7 +1006,71 @@
         </div>
     </div>
 
-    <!-- 4. OUTCOME MODAL (Success/Fail Logic) -->
+    <!-- 4. CALENDAR MODAL -->
+    <div x-show="modals.calendar" class="fixed inset-0 z-[90] overflow-y-auto" x-cloak>
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.calendar = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full">
+                <!-- Header -->
+                <div class="bg-black px-6 py-4 flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <h3 class="text-lg font-bold text-white">Calendário de Prazos</h3>
+                        <div class="flex items-center space-x-2 bg-gray-800 rounded-lg p-1">
+                            <button @click="changeMonth(-1)" class="text-white hover:text-brand-500 w-8 h-8 rounded flex items-center justify-center"><i class="fa-solid fa-chevron-left"></i></button>
+                            <span class="text-white font-bold w-32 text-center" x-text="currentCalendarDate.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})"></span>
+                            <button @click="changeMonth(1)" class="text-white hover:text-brand-500 w-8 h-8 rounded flex items-center justify-center"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <button @click="modals.calendar = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+                </div>
+
+                <!-- Body -->
+                <div class="p-6 bg-gray-50">
+                    <!-- Weekday Headers -->
+                    <div class="grid grid-cols-7 gap-px mb-2">
+                        <template x-for="day in ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']">
+                             <div class="text-center text-xs font-bold uppercase text-gray-500" x-text="day"></div>
+                        </template>
+                    </div>
+
+                    <!-- Days -->
+                    <div class="grid grid-cols-7 gap-2">
+                        <template x-for="(day, idx) in getMonthDays()" :key="idx">
+                            <div class="min-h-[120px] bg-white border border-gray-200 rounded-lg p-2 flex flex-col relative"
+                                 :class="!day ? 'bg-gray-50 border-transparent' : (isSameDay(day, new Date()) ? 'border-brand-500 ring-1 ring-brand-500' : '')">
+
+                                <template x-if="day">
+                                    <div>
+                                        <div class="text-right text-xs font-bold mb-2"
+                                             :class="isSameDay(day, new Date()) ? 'text-brand-600' : 'text-gray-400'"
+                                             x-text="day.getDate()"></div>
+
+                                        <div class="space-y-1 overflow-y-auto max-h-[100px] scrollbar-hide">
+                                            <template x-for="t in getCalendarTickets().filter(x => isSameDay(x.deadline, day))" :key="t.id">
+                                                 <div class="bg-gray-50 border border-gray-100 rounded px-1.5 py-1 text-[10px] shadow-sm cursor-help hover:bg-black hover:text-white transition-colors group relative truncate" :title="t.defect_reported">
+                                                     <span class="font-bold" x-text="'OS ' + t.os_number"></span>
+                                                     <span x-text="t.device_model"></span>
+                                                     <!-- Tooltip -->
+                                                      <div class="hidden group-hover:block absolute z-50 bottom-full left-0 w-48 bg-black text-white p-2 rounded text-xs mb-1 shadow-lg pointer-events-none">
+                                                         <p class="font-bold border-b border-gray-700 pb-1 mb-1" x-text="t.client_name"></p>
+                                                         <p x-text="t.defect_reported"></p>
+                                                     </div>
+                                                 </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. OUTCOME MODAL (Success/Fail Logic) -->
     <div x-show="modals.outcome" class="fixed inset-0 z-[80] flex items-center justify-center" x-cloak>
         <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.outcome = false"></div>
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md z-10 relative">
@@ -980,6 +1122,6 @@
     </div>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=2"></script>
+    <script src="js/main.js?v=3"></script>
 </body>
 </html>

@@ -67,11 +67,16 @@ function app() {
         logViewMode: 'timeline', // 'timeline' or 'detailed'
         modalSource: '', // 'kanban' or 'tech'
 
+        // Calendar State
+        calendarView: 'week',
+        currentCalendarDate: new Date(),
+        showAllCalendarTickets: false,
+
         // Time
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false },
+        modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false },
 
         // Constants
         PRIORITIES: ['Baixa', 'Normal', 'Alta', 'Urgente'],
@@ -722,14 +727,14 @@ function app() {
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
 
                 this.modals.outcome = false;
-                await this.updateStatus(ticket, 'Analise Tecnica', {
+                await this.updateStatus(ticket, 'Andamento Reparo', {
                     deadline: this.testFailureData.newDeadline,
                     priority: this.testFailureData.newPriority,
-                    repair_start_at: null,
+                    repair_start_at: null, // Reset timer so tech can start again
                     test_start_at: null,
-                    status: 'Analise Tecnica'
-                }, { action: 'Reprovou Testes', details: 'Retornado para bancada. Motivo: Falha nos testes' });
-                this.notify("Retornado para bancada com urgência!");
+                    status: 'Andamento Reparo'
+                }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Motivo: Falha nos testes' });
+                this.notify("Retornado para reparo com urgência!");
             }
         },
 
@@ -753,6 +758,71 @@ function app() {
         },
         async confirmPickup(ticket = this.selectedTicket) {
             await this.updateStatus(ticket, 'Finalizado', {}, { action: 'Finalizou Entrega', details: 'Entregue ao cliente' });
+        },
+
+        // --- CALENDAR HELPERS ---
+        getCalendarTickets() {
+            // Filter tickets based on toggle
+            let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
+
+            if (!this.showAllCalendarTickets) {
+                // Only assigned to me (conceptually - for now we use "created_by" or just all if we assume single shop,
+                // but user asked "atribuidos ao tecnico".
+                // Since we don't have a distinct "assigned_to" field in the schema yet,
+                // I will filter by the Technical Statuses that would appear on "Minha Bancada" OR if created by me?
+                // The user said "todos atribuidos ao tecnico".
+                // In the current system, "Minha Bancada" shows ALL tickets in Analise/Reparo.
+                // So I will stick to that logic + maybe "Testes"?
+                // Let's filter by statuses relevant to a technician.
+                const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
+                source = source.filter(t => techStatuses.includes(t.status));
+            }
+            return source;
+        },
+
+        getWeekDays() {
+            const curr = new Date();
+            const first = curr.getDate() - curr.getDay(); // First day is the day of the month - the day of the week
+            const days = [];
+            for (let i = 0; i < 7; i++) {
+                let next = new Date(curr.getTime());
+                next.setDate(first + i);
+                days.push(next);
+            }
+            return days;
+        },
+
+        getMonthDays() {
+            const year = this.currentCalendarDate.getFullYear();
+            const month = this.currentCalendarDate.getMonth();
+            const date = new Date(year, month, 1);
+            const days = [];
+
+            // Pad empty days at start
+            for(let i=0; i<date.getDay(); i++) {
+                days.push(null);
+            }
+
+            while (date.getMonth() === month) {
+                days.push(new Date(date));
+                date.setDate(date.getDate() + 1);
+            }
+            return days;
+        },
+
+        changeMonth(step) {
+            const newDate = new Date(this.currentCalendarDate);
+            newDate.setMonth(newDate.getMonth() + step);
+            this.currentCalendarDate = newDate;
+        },
+
+        isSameDay(d1, d2) {
+            if (!d1 || !d2) return false;
+            const date1 = new Date(d1);
+            const date2 = new Date(d2);
+            return date1.getDate() === date2.getDate() &&
+                   date1.getMonth() === date2.getMonth() &&
+                   date1.getFullYear() === date2.getFullYear();
         },
 
         // --- UTILS ---
