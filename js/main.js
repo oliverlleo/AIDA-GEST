@@ -59,6 +59,9 @@ function app() {
         selectedTicket: null,
         modalSource: '', // 'kanban' or 'tech'
 
+        // Time
+        currentTime: new Date(),
+
         // Modals
         modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false },
 
@@ -114,6 +117,30 @@ function app() {
             });
 
             this.loading = false;
+
+            // Clock Interval
+            setInterval(() => {
+                this.currentTime = new Date();
+            }, 1000);
+
+            // Reconnection / Tab Focus Logic
+            document.addEventListener("visibilitychange", async () => {
+                if (document.visibilityState === 'visible') {
+                    console.log("Tab visible, refreshing data...");
+                    // Force clear loading state in case it got stuck
+                    this.loading = false;
+
+                    // Refresh Session
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (session) {
+                        this.session = session;
+                    }
+                    // Refresh Data
+                    if (this.user) {
+                        this.fetchTickets();
+                    }
+                }
+            });
         },
 
         setupRealtime() {
@@ -262,7 +289,7 @@ function app() {
 
         // --- TICKET LOGIC ---
 
-        async fetchTickets() {
+        async fetchTickets(retryCount = 0) {
             if (!this.user?.workspace_id) return;
             const { data, error } = await supabaseClient
                 .from('tickets')
@@ -271,6 +298,15 @@ function app() {
                 .order('created_at', { ascending: false });
 
             if (error) {
+                // Handle AbortError (often caused by tab switching/suspension)
+                if (error.message && (error.message.includes('AbortError') || error.message.includes('signal is aborted'))) {
+                    console.warn(`Fetch aborted (attempt ${retryCount + 1}). Retrying in 500ms...`);
+                    if (retryCount < 3) {
+                        setTimeout(() => this.fetchTickets(retryCount + 1), 500);
+                    }
+                    return;
+                }
+
                 if (error.code === 'PGRST205') {
                     // Suppress "Missing Table" error to avoid crashing UI for user
                     // They will see empty data instead of an error until DB is ready.
@@ -388,22 +424,27 @@ function app() {
         // Generic Status Update
         async updateStatus(ticket, newStatus, additionalUpdates = {}) {
             this.loading = true;
-            await supabaseClient.from('ticket_logs').insert({
-                ticket_id: ticket.id,
-                action: 'Alteração de Status',
-                details: `De ${ticket.status} para ${newStatus}`,
-                user_name: this.user.name
-            });
+            try {
+                await supabaseClient.from('ticket_logs').insert({
+                    ticket_id: ticket.id,
+                    action: 'Alteração de Status',
+                    details: `De ${ticket.status} para ${newStatus}`,
+                    user_name: this.user.name
+                });
 
-            const updates = { status: newStatus, ...additionalUpdates };
-            const { error } = await supabaseClient.from('tickets').update(updates).eq('id', ticket.id);
+                const updates = { status: newStatus, ...additionalUpdates };
+                const { error } = await supabaseClient.from('tickets').update(updates).eq('id', ticket.id);
 
-            this.loading = false;
-            if (error) this.notify("Erro ao atualizar", "error");
-            else {
+                if (error) throw error;
+
                 this.notify("Status atualizado");
                 this.fetchTickets();
                 this.modals.viewTicket = false; // Close modal usually on big moves
+            } catch (error) {
+                console.error(error);
+                this.notify("Erro ao atualizar: " + (error.message || error), "error");
+            } finally {
+                this.loading = false;
             }
         },
 
@@ -563,6 +604,20 @@ function app() {
             if (hours < 24) return `${hours}h`;
             const days = Math.floor(hours / 24);
             return `${days}d ${hours % 24}h`;
+        },
+
+        getDuration(startTime) {
+            if (!startTime) return '00:00:00';
+            const start = new Date(startTime).getTime();
+            const now = this.currentTime.getTime();
+            const diff = now - start;
+            if (diff < 0) return '00:00:00';
+
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+
+            return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         },
 
         openModal(name) {
