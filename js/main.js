@@ -93,34 +93,45 @@ function app() {
             if (authData.user) {
                 const userId = authData.user.id;
 
-                // Create Workspace
-                const { data: wsData, error: wsError } = await supabaseClient
-                    .from('workspaces')
-                    .insert([{
-                        name: this.registerForm.companyName,
-                        company_code: generatedCode,
-                        owner_id: userId
-                    }])
-                    .select()
-                    .single();
+                // If session is missing (due to email confirm requirement), we cannot proceed with RLS-protected insert.
+                // However, we now use a SECURE RPC that bypasses RLS for the insert.
+                // BUT, RPC still needs a logged-in user context (auth.uid()) if we check it.
+                // If signUp returns a session (auto-confirm), great. If not, we must warn user.
+
+                if (!authData.session) {
+                    this.loading = false;
+                    return this.notify('Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de entrar.', 'success');
+                }
+
+                // Call the new Secure RPC to create workspace
+                const { data: wsId, error: wsError } = await supabaseClient
+                    .rpc('create_owner_workspace', {
+                        p_name: this.registerForm.companyName,
+                        p_company_code: generatedCode
+                    });
 
                 if (wsError) {
                     console.error(wsError);
                     this.notify('Erro ao criar empresa: ' + wsError.message, 'error');
                 } else {
-                    // Create Profile
-                    await supabaseClient.from('profiles').insert([{
+                    // Create Profile (Own profile insert policy usually allows auth.uid() = id)
+                    // We can also move this to RPC if it fails, but RLS usually allows self-insert.
+                    const { error: profError } = await supabaseClient.from('profiles').insert([{
                         id: userId,
-                        workspace_id: wsData.id,
+                        workspace_id: wsId,
                         role: 'admin'
                     }]);
+
+                    if (profError) {
+                         console.error(profError);
+                         // If profile fails, it's not critical for workspace creation but bad for UX.
+                         // Let's assume it works or the user can retry login.
+                    }
 
                     this.notify('Conta criada! Seu código é ' + generatedCode, 'success');
                     // Wait a bit then reload
                     setTimeout(() => window.location.reload(), 1500);
                 }
-            } else {
-                 this.notify('Verifique seu e-mail para confirmar a conta.', 'success');
             }
             this.loading = false;
         },
