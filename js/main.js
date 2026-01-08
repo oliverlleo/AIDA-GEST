@@ -427,16 +427,20 @@ function app() {
 
                 if (data) {
                     this.tickets = data;
+
                     // Apply Tech Filter to Minha Bancada
                     let filteredTechTickets = data;
+                    let effectiveFilter = this.selectedTechFilter;
 
-                    // Ensure filter is initialized if somehow missed (e.g. on reload)
-                    if (!this.selectedTechFilter && this.user) {
-                        this.initTechFilter();
+                    // STRICT FILTERING FOR TECHNICIANS (Override UI state if needed)
+                    if (!this.hasRole('admin') && this.hasRole('tecnico')) {
+                        effectiveFilter = this.user.id;
+                        this.selectedTechFilter = this.user.id; // Sync UI
                     }
 
-                    if (this.selectedTechFilter !== 'all' && this.selectedTechFilter) {
-                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === this.selectedTechFilter);
+                    // Apply Filter
+                    if (effectiveFilter !== 'all' && effectiveFilter) {
+                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === effectiveFilter);
                     }
 
                     this.techTickets = filteredTechTickets.filter(t =>
@@ -875,9 +879,15 @@ function app() {
             // Filter tickets based on toggle
             let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
 
+            // Determine Effective Filter
+            let effectiveFilter = this.selectedTechFilter;
+            if (!this.hasRole('admin') && this.hasRole('tecnico')) {
+                effectiveFilter = this.user.id;
+            }
+
             // Apply Technician Filter (Strict)
-            if (this.selectedTechFilter !== 'all' && this.selectedTechFilter) {
-                source = source.filter(t => t.technician_id === this.selectedTechFilter);
+            if (effectiveFilter !== 'all' && effectiveFilter) {
+                source = source.filter(t => t.technician_id === effectiveFilter);
             }
 
             if (!this.showAllCalendarTickets) {
