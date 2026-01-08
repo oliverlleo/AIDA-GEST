@@ -410,9 +410,16 @@ function app() {
                     this.techTickets = data.filter(t =>
                         ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                     ).sort((a, b) => {
+                        // Priority Requested (Top of list)
+                        if (a.priority_requested && !b.priority_requested) return -1;
+                        if (!a.priority_requested && b.priority_requested) return 1;
+
+                        // Standard Priority
                         const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                         const pDiff = pOrder[a.priority] - pOrder[b.priority];
                         if (pDiff !== 0) return pDiff;
+
+                        // Deadline
                         return new Date(a.deadline || 0) - new Date(b.deadline || 0);
                     });
                 }
@@ -770,6 +777,26 @@ function app() {
         },
         async confirmPickup(ticket = this.selectedTicket) {
             await this.updateStatus(ticket, 'Finalizado', {}, { action: 'Finalizou Entrega', details: 'Entregue ao cliente' });
+        },
+
+        async requestPriority(ticket) {
+            this.loading = true;
+            try {
+                // Log Action
+                await this.logTicketAction(ticket.id, 'Solicitou Prioridade', 'Cliente/Atendente solicitou urgência máxima');
+
+                // Update
+                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
+                    priority_requested: true
+                });
+
+                this.notify("Prioridade solicitada com sucesso!");
+                await this.fetchTickets();
+            } catch(e) {
+                this.notify("Erro: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
         },
 
         // --- CALENDAR HELPERS ---
