@@ -632,10 +632,16 @@ function app() {
         async startTest(ticket = this.selectedTicket) {
              this.loading = true;
              try {
+                 const now = new Date().toISOString();
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                    test_start_at: new Date().toISOString()
+                    test_start_at: now
                 });
+
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket = { ...this.selectedTicket, test_start_at: now };
+                }
+
                 await this.fetchTickets();
              } catch(e) {
                  this.notify("Erro: " + e.message, "error");

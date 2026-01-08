@@ -288,6 +288,22 @@
                                                         </div>
                                                     </template>
 
+                                                    <!-- Teste Final -->
+                                                    <template x-if="ticket.status === 'Teste Final'">
+                                                        <div>
+                                                            <template x-if="!ticket.test_start_at">
+                                                                <button @click="startTest(ticket)" class="w-full bg-indigo-50 text-indigo-600 text-xs font-bold py-2 rounded hover:bg-indigo-100">
+                                                                    Iniciar Testes
+                                                                </button>
+                                                            </template>
+                                                            <template x-if="ticket.test_start_at">
+                                                                <button @click="openOutcomeModal('test', ticket)" class="w-full bg-green-50 text-green-600 text-xs font-bold py-2 rounded hover:bg-green-100">
+                                                                    Concluir Testes
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+
                                                     <!-- Retirada -->
                                                     <template x-if="ticket.status === 'Retirada Cliente'">
                                                         <div>
