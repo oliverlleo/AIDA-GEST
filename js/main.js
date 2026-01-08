@@ -14,6 +14,9 @@ function app() {
         employeeSession: null, // Custom Employee Session object
         user: null, // Unified user object
         workspaceName: '',
+        companyCode: '', // New: Store company code
+        registrationSuccess: false, // New: Show welcome screen
+        newCompanyCode: '', // New: Store new code for display
         view: 'dashboard', // dashboard, employees, service_orders, stock
         authMode: 'employee', // employee, admin_login, admin_register
 
@@ -24,7 +27,7 @@ function app() {
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
         adminForm: { email: '', password: '' },
-        registerForm: { companyName: '', email: '', password: '' }, // Removed manual companyCode
+        registerForm: { companyName: '', email: '', password: '' },
         employeeForm: { name: '', username: '', password: '', roles: [] },
 
         // Modals
@@ -87,16 +90,10 @@ function app() {
             }
 
             // 2. Create Workspace & Profile
-            // Generates random 4-digit company code (1000-9999) as requested
             const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
 
             if (authData.user) {
                 const userId = authData.user.id;
-
-                // If session is missing (due to email confirm requirement), we cannot proceed with RLS-protected insert.
-                // However, we now use a SECURE RPC that bypasses RLS for the insert.
-                // BUT, RPC still needs a logged-in user context (auth.uid()) if we check it.
-                // If signUp returns a session (auto-confirm), great. If not, we must warn user.
 
                 if (!authData.session) {
                     this.loading = false;
@@ -114,23 +111,19 @@ function app() {
                     console.error(wsError);
                     this.notify('Erro ao criar empresa: ' + wsError.message, 'error');
                 } else {
-                    // Create Profile (Own profile insert policy usually allows auth.uid() = id)
-                    // We can also move this to RPC if it fails, but RLS usually allows self-insert.
+                    // Create Profile
                     const { error: profError } = await supabaseClient.from('profiles').insert([{
                         id: userId,
                         workspace_id: wsId,
                         role: 'admin'
                     }]);
 
-                    if (profError) {
-                         console.error(profError);
-                         // If profile fails, it's not critical for workspace creation but bad for UX.
-                         // Let's assume it works or the user can retry login.
-                    }
+                    if (profError) console.error(profError);
 
-                    this.notify('Conta criada! Seu código é ' + generatedCode, 'success');
-                    // Wait a bit then reload
-                    setTimeout(() => window.location.reload(), 1500);
+                    // Show success screen instead of reloading immediately
+                    this.newCompanyCode = generatedCode;
+                    this.registrationSuccess = true;
+                    this.notify('Conta criada com sucesso!', 'success');
                 }
             }
             this.loading = false;
@@ -180,11 +173,15 @@ function app() {
             const user = this.session.user;
 
             // Fetch Profile & Workspace
-            const { data: profile } = await supabaseClient
+            const { data: profile, error } = await supabaseClient
                 .from('profiles')
                 .select('*, workspaces(name, company_code)')
                 .eq('id', user.id)
                 .single();
+
+            if (error) {
+                console.error("Error loading admin profile:", error);
+            }
 
             if (profile) {
                 this.user = {
@@ -195,6 +192,7 @@ function app() {
                     workspace_id: profile.workspace_id
                 };
                 this.workspaceName = profile.workspaces?.name;
+                this.companyCode = profile.workspaces?.company_code; // Store for display
 
                 // Load Employees
                 this.fetchEmployees();
@@ -234,7 +232,12 @@ function app() {
         },
 
         async createEmployee() {
-            if (!this.user?.workspace_id) return;
+            // Debug check for workspace ID
+            if (!this.user?.workspace_id) {
+                console.error("Workspace ID missing in user object:", this.user);
+                return this.notify('Erro: Identificador da empresa não carregado. Recarregue a página.', 'error');
+            }
+
             if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) {
                 return this.notify('Preencha todos os campos', 'error');
             }

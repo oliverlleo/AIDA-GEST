@@ -60,7 +60,10 @@
         <nav x-show="session || employeeSession" class="bg-black text-white px-6 py-3 flex justify-between items-center shadow-md" x-cloak>
             <div class="flex items-center space-x-4">
                 <span class="text-2xl font-bold text-brand-500 tracking-tighter">TechAssist</span>
-                <span x-show="workspaceName" class="text-gray-400 text-sm border-l border-gray-700 pl-4" x-text="workspaceName"></span>
+                <div class="flex flex-col border-l border-gray-700 pl-4">
+                    <span x-show="workspaceName" class="text-white font-bold text-sm" x-text="workspaceName"></span>
+                    <span x-show="companyCode" class="text-brand-500 text-xs font-mono" x-text="'CÓDIGO: ' + companyCode"></span>
+                </div>
             </div>
             <div class="flex items-center space-x-6">
                 <div class="flex items-center space-x-2 text-sm">
@@ -122,8 +125,30 @@
             <!-- Page Views -->
             <div class="flex-grow bg-gray-50 p-6 overflow-y-auto h-[calc(100vh-64px)]">
 
+                <!-- SUCCESS REGISTRATION SCREEN -->
+                <div x-show="registrationSuccess" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-90" x-cloak>
+                    <div class="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full text-center border-t-8 border-brand-500">
+                        <div class="text-6xl text-brand-500 mb-4">
+                            <i class="fa-solid fa-check-circle"></i>
+                        </div>
+                        <h2 class="text-3xl font-bold text-gray-800 mb-2">Sucesso!</h2>
+                        <p class="text-gray-600 mb-6">Sua empresa foi cadastrada corretamente.</p>
+
+                        <div class="bg-gray-100 p-6 rounded-lg mb-6 border border-gray-300">
+                            <p class="text-sm text-gray-500 uppercase tracking-wider mb-2">Código da Empresa</p>
+                            <p class="text-5xl font-mono font-bold text-gray-900 tracking-widest" x-text="newCompanyCode">----</p>
+                        </div>
+
+                        <p class="text-sm text-gray-500 mb-6">Compartilhe este código com seus funcionários para que eles possam acessar o sistema.</p>
+
+                        <button @click="window.location.reload()" class="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-800 transition-colors shadow-lg">
+                            Ir para o Dashboard <i class="fa-solid fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- LOGIN / REGISTER SCREENS -->
-                <div x-show="!session && !employeeSession" class="max-w-md mx-auto mt-10" x-cloak>
+                <div x-show="!session && !employeeSession && !registrationSuccess" class="max-w-md mx-auto mt-10" x-cloak>
 
                     <!-- Tabs -->
                     <div class="flex mb-6 bg-white rounded-lg shadow p-1">
