@@ -24,7 +24,7 @@ function app() {
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
         adminForm: { email: '', password: '' },
-        registerForm: { companyName: '', companyCode: '', email: '', password: '' },
+        registerForm: { companyName: '', email: '', password: '' }, // Removed manual companyCode
         employeeForm: { name: '', username: '', password: '', roles: [] },
 
         // Modals
@@ -87,11 +87,8 @@ function app() {
             }
 
             // 2. Create Workspace & Profile
-            // We need to wait for the trigger or do it manually.
-            // Since we are doing manual inserts in our plan, we do it here.
-            // Note: RLS might block inserting workspace if we are not "owner".
-            // But 'owner_id' is the user. The user is logged in after signUp? Usually yes if auto-confirm is on.
-            // If email confirmation is required, this step fails. Assuming no email confirm for now or handling it.
+            // Generates random 6-char company code (Letters + Numbers)
+            const generatedCode = 'TECH-' + Math.random().toString(36).substring(2, 6).toUpperCase();
 
             if (authData.user) {
                 const userId = authData.user.id;
@@ -101,7 +98,7 @@ function app() {
                     .from('workspaces')
                     .insert([{
                         name: this.registerForm.companyName,
-                        company_code: this.registerForm.companyCode,
+                        company_code: generatedCode,
                         owner_id: userId
                     }])
                     .select()
@@ -109,7 +106,7 @@ function app() {
 
                 if (wsError) {
                     console.error(wsError);
-                    this.notify('Erro ao criar empresa. Código pode já existir.', 'error');
+                    this.notify('Erro ao criar empresa: ' + wsError.message, 'error');
                 } else {
                     // Create Profile
                     await supabaseClient.from('profiles').insert([{
@@ -118,9 +115,12 @@ function app() {
                         role: 'admin'
                     }]);
 
-                    this.notify('Conta criada com sucesso!', 'success');
-                    window.location.reload();
+                    this.notify('Conta criada! Seu código é ' + generatedCode, 'success');
+                    // Wait a bit then reload
+                    setTimeout(() => window.location.reload(), 1500);
                 }
+            } else {
+                 this.notify('Verifique seu e-mail para confirmar a conta.', 'success');
             }
             this.loading = false;
         },
@@ -229,30 +229,6 @@ function app() {
             }
 
             this.loading = true;
-
-            // We need to hash the password manually?
-            // Supabase client inserts data as is. The database stores 'password_hash'.
-            // We can use the 'pgcrypto' extension function `crypt` in the insert query?
-            // No, Supabase JS client doesn't support calling SQL functions inside insert values directly like `values (..., crypt('pass', gen_salt('bf')))`.
-            // We should use an RPC to create employee securely OR trust the client to send hash (bad) OR use a Trigger.
-            // Let's create a simple RPC for creating employee to handle hashing on server side.
-            // OR: We can just store plain text for MVP? NO. User asked for security.
-            // WORKAROUND for MVP without backend code deployment:
-            // Use an RPC `create_employee` that takes password and hashes it.
-
-            // Let's try to just insert and let a trigger handle it? No trigger set up.
-            // I will implement a client-side "hash" simulation or better, I'll add a `create_employee` RPC function now.
-            // Wait, I can't add more SQL easily now.
-            // I'll try to use the `pgcrypto` `crypt` function by sending a RAW Query if possible? No.
-
-            // Let's use `rpc` if I can create it.
-            // I will assume I can update the DB setup or use a workaround.
-            // Workaround: I will store the password as `crypt(password, gen_salt('bf'))` by using a VIEW or specialized setup? Too complex.
-
-            // I'll add `create_employee` RPC in the next step to fix this properly.
-            // For now, I'll log the intention.
-
-            // To proceed now without stopping: I'll use a temporary RPC call that I will create via SQL execution tool.
 
             const { error } = await supabaseClient.rpc('create_employee', {
                 p_workspace_id: this.user.workspace_id,
