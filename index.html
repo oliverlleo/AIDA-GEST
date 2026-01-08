@@ -26,6 +26,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Service Orders Module -->
+    <script src="js/service_orders.js"></script>
     <style>
         [x-cloak] { display: none !important; }
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
@@ -101,12 +103,21 @@
                         </a>
                     </template>
 
-                    <!-- Tech Only -->
-                    <template x-if="hasRole('admin') || hasRole('tecnico')">
-                        <a href="#" @click.prevent="view = 'service_orders'"
-                           :class="view === 'service_orders' ? 'bg-brand-50 text-brand-600 border-r-4 border-brand-500' : 'text-gray-600 hover:bg-gray-50'"
+                    <!-- Service Orders (General View) -->
+                    <template x-if="hasRole('admin') || hasRole('atendente')">
+                        <a href="#" @click.prevent="view = 'os_general'; osFilterMode = 'all'; fetchServiceOrders()"
+                           :class="view === 'os_general' ? 'bg-brand-50 text-brand-600 border-r-4 border-brand-500' : 'text-gray-600 hover:bg-gray-50'"
                            class="flex items-center px-4 py-3 text-sm font-medium transition-colors">
-                            <i class="fa-solid fa-wrench w-6"></i> Ordens de Serviço
+                            <i class="fa-solid fa-clipboard-list w-6"></i> Chamados
+                        </a>
+                    </template>
+
+                    <!-- Service Orders (Tech View) -->
+                    <template x-if="hasRole('admin') || hasRole('tecnico')">
+                        <a href="#" @click.prevent="view = 'os_tech'; osFilterMode = 'tech'; fetchServiceOrders()"
+                           :class="view === 'os_tech' ? 'bg-brand-50 text-brand-600 border-r-4 border-brand-500' : 'text-gray-600 hover:bg-gray-50'"
+                           class="flex items-center px-4 py-3 text-sm font-medium transition-colors">
+                            <i class="fa-solid fa-microchip w-6"></i> Ordem de Serviço
                         </a>
                     </template>
 
@@ -346,11 +357,111 @@
                     </div>
                 </div>
 
-                <!-- PLACEHOLDER VIEWS -->
-                <div x-show="view === 'service_orders'" class="max-w-7xl mx-auto text-center py-20" x-cloak>
-                    <i class="fa-solid fa-wrench text-6xl text-gray-300 mb-4"></i>
-                    <h2 class="text-xl font-bold text-gray-600">Módulo de Ordens de Serviço</h2>
-                    <p class="text-gray-500">Em desenvolvimento...</p>
+                <!-- KANBAN VIEW (Shared for 'os_general' and 'os_tech') -->
+                <div x-show="view === 'os_general' || view === 'os_tech'" class="h-full flex flex-col" x-cloak>
+
+                    <!-- Header -->
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+                        <div class="mb-4 md:mb-0">
+                            <h1 class="text-2xl font-bold text-gray-800" x-text="view === 'os_general' ? 'Gestão de Chamados' : 'Minhas Ordens de Serviço'"></h1>
+                            <p class="text-gray-500 text-sm" x-text="view === 'os_general' ? 'Visão completa do fluxo' : 'Foco técnico e execução'"></p>
+                        </div>
+
+                        <div class="flex items-center space-x-4 w-full md:w-auto">
+                            <!-- Search -->
+                            <div class="relative flex-grow md:flex-grow-0 md:w-80">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                    <i class="fa-solid fa-search"></i>
+                                </span>
+                                <input type="text"
+                                       x-model.debounce.500ms="osSearchQuery"
+                                       @input="fetchServiceOrders()"
+                                       class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
+                                       placeholder="Buscar por cliente, OS ou serial...">
+                            </div>
+
+                            <!-- New Button (Only for General View or if authorized) -->
+                            <template x-if="view === 'os_general' || hasRole('admin')">
+                                <button @click="showNewOsModal = true; loadChecklistTemplates();" class="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-all shadow-lg flex items-center">
+                                    <i class="fa-solid fa-plus mr-2"></i> Novo Chamado
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Kanban Board -->
+                    <div class="flex-grow overflow-x-auto overflow-y-hidden pb-4">
+                        <div class="flex h-full space-x-4 min-w-max">
+
+                            <template x-for="column in filteredColumns" :key="column.id">
+                                <div class="w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-xl border border-gray-200 h-full max-h-full">
+                                    <!-- Column Header -->
+                                    <div class="p-3 bg-gray-200 rounded-t-xl border-b border-gray-300 flex justify-between items-center sticky top-0 z-10">
+                                        <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide" x-text="column.title"></h3>
+                                        <span class="bg-gray-300 text-gray-600 text-xs px-2 py-1 rounded-full font-bold" x-text="getOrdersByStatus(column.id).length"></span>
+                                    </div>
+
+                                    <!-- Column Body -->
+                                    <div class="flex-1 p-2 overflow-y-auto space-y-3 custom-scrollbar">
+                                        <template x-for="order in getOrdersByStatus(column.id)" :key="order.id">
+                                            <!-- Card -->
+                                            <div @click="selectedOs = order; showOsDetailsModal = true"
+                                                 class="bg-white p-4 rounded-lg shadow-sm border-l-4 hover:shadow-md transition-shadow cursor-pointer relative group"
+                                                 :class="{
+                                                    'border-gray-400': order.priority === 'low',
+                                                    'border-blue-400': order.priority === 'normal',
+                                                    'border-orange-400': order.priority === 'high',
+                                                    'border-red-500': order.priority === 'urgent'
+                                                 }">
+
+                                                <!-- Delayed Indicator -->
+                                                <template x-if="order.deadline && new Date(order.deadline) < new Date()">
+                                                    <div class="absolute top-2 right-2 text-red-500 animate-pulse" title="Atrasado">
+                                                        <i class="fa-solid fa-circle-exclamation"></i>
+                                                    </div>
+                                                </template>
+
+                                                <div class="flex justify-between items-start mb-2">
+                                                    <span class="font-bold text-gray-800 text-lg" x-text="'#' + order.id.substring(0,6)"></span>
+                                                    <span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 font-mono" x-text="new Date(order.created_at).toLocaleDateString()"></span>
+                                                </div>
+
+                                                <h4 class="font-semibold text-gray-900 truncate" x-text="order.customer_name"></h4>
+                                                <p class="text-sm text-gray-500 truncate mb-2" x-text="order.device_model"></p>
+
+                                                <div class="flex justify-between items-center mt-3">
+                                                    <!-- Priority Badge -->
+                                                    <span class="text-xs font-bold px-2 py-0.5 rounded uppercase"
+                                                          :class="{
+                                                              'bg-gray-100 text-gray-600': order.priority === 'low',
+                                                              'bg-blue-50 text-blue-600': order.priority === 'normal',
+                                                              'bg-orange-50 text-orange-600': order.priority === 'high',
+                                                              'bg-red-50 text-red-600': order.priority === 'urgent'
+                                                          }"
+                                                          x-text="order.priority === 'urgent' ? 'Urgente' : (order.priority === 'high' ? 'Alta' : 'Normal')">
+                                                    </span>
+
+                                                    <!-- Deadline -->
+                                                    <template x-if="order.deadline">
+                                                        <span class="text-xs text-gray-500 flex items-center">
+                                                            <i class="fa-regular fa-calendar mr-1"></i>
+                                                            <span x-text="new Date(order.deadline).toLocaleDateString()"></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- Empty State -->
+                                        <div x-show="getOrdersByStatus(column.id).length === 0" class="text-center py-10 opacity-50">
+                                            <i class="fa-solid fa-inbox text-2xl text-gray-300 mb-2"></i>
+                                            <p class="text-xs text-gray-400">Vazio</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
 
                 <div x-show="view === 'stock'" class="max-w-7xl mx-auto text-center py-20" x-cloak>
@@ -364,6 +475,424 @@
     </div>
 
     <!-- MODALS -->
+
+    <!-- OS DETAILS MODAL -->
+    <div x-show="showOsDetailsModal" class="fixed inset-0 z-50 overflow-y-auto" x-cloak>
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="showOsDetailsModal" x-transition.opacity class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" @click="showOsDetailsModal = false"></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div x-show="showOsDetailsModal" x-transition.scale class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+
+                <template x-if="selectedOs">
+                    <div class="flex flex-col h-[80vh]">
+                        <!-- Header -->
+                        <div class="bg-gray-800 text-white px-6 py-4 flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center space-x-3 mb-1">
+                                    <h2 class="text-2xl font-bold tracking-tight" x-text="'OS #' + selectedOs.id.substring(0,6)"></h2>
+                                    <span class="px-2 py-0.5 rounded text-xs font-bold uppercase bg-brand-500 text-white" x-text="OS_LABELS[selectedOs.status]"></span>
+                                </div>
+                                <p class="text-sm text-gray-400">
+                                    Aberto em <span x-text="new Date(selectedOs.created_at).toLocaleDateString() + ' ' + new Date(selectedOs.created_at).toLocaleTimeString()"></span>
+                                </p>
+                            </div>
+                            <button @click="showOsDetailsModal = false" class="text-gray-400 hover:text-white transition-colors">
+                                <i class="fa-solid fa-times text-2xl"></i>
+                            </button>
+                        </div>
+
+                        <!-- Content Grid -->
+                        <div class="flex-grow overflow-y-auto bg-gray-50 p-6">
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                                <!-- LEFT COL: Info -->
+                                <div class="lg:col-span-2 space-y-6">
+
+                                    <!-- Device & Customer -->
+                                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                                        <div class="flex justify-between mb-4">
+                                            <div>
+                                                <h3 class="text-gray-500 text-xs uppercase font-bold tracking-wide">Cliente</h3>
+                                                <p class="font-bold text-lg text-gray-800" x-text="selectedOs.customer_name"></p>
+                                                <p class="text-gray-600 text-sm"><i class="fa-brands fa-whatsapp mr-1 text-green-500"></i> <span x-text="selectedOs.customer_phone"></span></p>
+                                            </div>
+                                            <div class="text-right">
+                                                <h3 class="text-gray-500 text-xs uppercase font-bold tracking-wide">Aparelho</h3>
+                                                <p class="font-bold text-gray-800" x-text="selectedOs.device_model"></p>
+                                                <p class="text-gray-500 text-xs font-mono" x-text="'S/N: ' + (selectedOs.serial_number || 'N/A')"></p>
+                                            </div>
+                                        </div>
+                                        <div class="bg-gray-50 p-3 rounded text-gray-700 text-sm border border-gray-100">
+                                            <span class="font-bold block mb-1">Defeito Relatado:</span>
+                                            <p x-text="selectedOs.description"></p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tabs for Checklist/Photos/History -->
+                                    <div x-data="{ tab: 'checklist' }">
+                                        <div class="border-b border-gray-200 mb-4">
+                                            <nav class="-mb-px flex space-x-6">
+                                                <a href="#" @click.prevent="tab = 'checklist'" :class="tab === 'checklist' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'" class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                                                    Checklist
+                                                </a>
+                                                <a href="#" @click.prevent="tab = 'photos'" :class="tab === 'photos' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'" class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                                                    Fotos (<span x-text="(selectedOs.photos_url || []).length"></span>)
+                                                </a>
+                                                <template x-if="hasRole('admin')">
+                                                    <a href="#" @click.prevent="tab = 'logs'; fetchLogs(selectedOs.id)" :class="tab === 'logs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'" class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm">
+                                                        Histórico
+                                                    </a>
+                                                </template>
+                                            </nav>
+                                        </div>
+
+                                        <!-- Tab Contents -->
+                                        <div x-show="tab === 'checklist'">
+                                            <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                                <template x-for="(checked, item) in (selectedOs.checklist || {})">
+                                                    <div class="flex items-center space-x-2 p-2 rounded border" :class="checked ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200 opacity-60'">
+                                                        <i :class="checked ? 'fa-solid fa-check-square text-red-500' : 'fa-regular fa-square text-gray-400'"></i>
+                                                        <span class="text-sm" :class="checked ? 'text-red-700 font-bold' : 'text-gray-500'" x-text="item"></span>
+                                                    </div>
+                                                </template>
+                                                <div x-show="Object.keys(selectedOs.checklist || {}).length === 0" class="text-gray-400 text-sm col-span-3 italic">Nenhum checklist preenchido.</div>
+                                            </div>
+                                        </div>
+
+                                        <div x-show="tab === 'photos'">
+                                            <div class="grid grid-cols-3 gap-2 mb-4">
+                                                <template x-for="url in (selectedOs.photos_url || [])">
+                                                    <a :href="url" target="_blank" class="block aspect-square rounded-lg overflow-hidden border hover:opacity-90 transition-opacity">
+                                                        <img :src="url" class="w-full h-full object-cover">
+                                                    </a>
+                                                </template>
+                                                <div x-show="(selectedOs.photos_url || []).length === 0" class="text-gray-400 text-sm col-span-3 italic">Nenhuma foto anexada.</div>
+                                            </div>
+
+                                            <!-- Add Photo Button -->
+                                            <div class="mt-2 border-t pt-2">
+                                                <label class="flex items-center justify-center w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors border border-gray-300">
+                                                    <i class="fa-solid fa-camera mr-2"></i> Adicionar Mais Fotos
+                                                    <input type="file" multiple accept="image/*" class="hidden" @change="uploadAdditionalPhotos(Array.from($event.target.files))">
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div x-show="tab === 'logs'">
+                                            <ul class="space-y-4 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                                                <template x-for="log in osLogs" :key="log.id">
+                                                    <li class="relative pl-4 border-l-2 border-gray-200">
+                                                        <div class="absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full bg-gray-400"></div>
+                                                        <p class="text-sm font-bold text-gray-800" x-text="log.action"></p>
+                                                        <p class="text-xs text-gray-500 mb-1">
+                                                            <span x-text="new Date(log.created_at).toLocaleString()"></span> por <span x-text="log.user_name || 'Sistema'"></span>
+                                                        </p>
+                                                        <template x-if="log.details">
+                                                            <div class="text-xs text-gray-600 bg-gray-50 p-2 rounded border" x-text="log.details"></div>
+                                                        </template>
+                                                    </li>
+                                                </template>
+                                                <li x-show="osLogs.length === 0" class="text-xs text-gray-500 italic">Nenhum registro encontrado.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <!-- Technical Notes / Budget (Visible if exists) -->
+                                    <template x-if="selectedOs.technical_notes || selectedOs.required_parts">
+                                        <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                            <h4 class="font-bold text-blue-800 mb-2 text-sm uppercase">Parecer Técnico</h4>
+                                            <p x-show="selectedOs.technical_notes" class="text-sm text-blue-900 mb-1"><strong>Notas:</strong> <span x-text="selectedOs.technical_notes"></span></p>
+                                            <p x-show="selectedOs.required_parts" class="text-sm text-blue-900"><strong>Peças:</strong> <span x-text="selectedOs.required_parts"></span></p>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="selectedOs.budget_value">
+                                        <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                                            <h4 class="font-bold text-green-800 mb-2 text-sm uppercase">Orçamento</h4>
+                                            <p class="text-lg font-mono font-bold text-green-700" x-text="'R$ ' + selectedOs.budget_value"></p>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <!-- RIGHT COL: Actions -->
+                                <div class="space-y-4">
+                                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                                        <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Ações Disponíveis</h3>
+
+                                        <!-- ACTION BUTTONS BASED ON STATUS -->
+
+                                        <!-- NEW -> ANALYZING -->
+                                        <template x-if="selectedOs.status === 'new'">
+                                            <button @click="startTriage()" class="w-full bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 transition-colors mb-2">
+                                                <i class="fa-solid fa-microscope mr-2"></i> Iniciar Triagem
+                                            </button>
+                                        </template>
+
+                                        <!-- ANALYZING -> APPROVAL -->
+                                        <template x-if="selectedOs.status === 'analyzing' && (hasRole('admin') || hasRole('tecnico'))">
+                                            <div class="space-y-2">
+                                                <textarea x-model="technicalAnalysisForm.notes" class="w-full text-sm border-gray-300 rounded p-2" placeholder="Observações Técnicas" rows="3"></textarea>
+                                                <input x-model="technicalAnalysisForm.parts" type="text" class="w-full text-sm border-gray-300 rounded p-2" placeholder="Peças Necessárias (Separar por vírgula)">
+                                                <button @click="finishAnalysis()" class="w-full bg-brand-600 text-white py-2 rounded font-bold hover:bg-brand-700 transition-colors">
+                                                    Finalizar Análise
+                                                </button>
+                                            </div>
+                                        </template>
+
+                                        <!-- APPROVAL (Attendant) -->
+                                        <template x-if="selectedOs.status === 'approval'">
+                                            <div class="space-y-3">
+                                                <!-- Step 1: Send Budget -->
+                                                <div x-show="!selectedOs.budget_sent">
+                                                    <label class="text-xs font-bold text-gray-500">Valor do Orçamento (R$)</label>
+                                                    <input x-model="budgetForm.value" type="number" step="0.01" class="w-full border-gray-300 rounded p-2 mb-2" placeholder="0.00">
+                                                    <button @click="sendBudget()" class="w-full bg-yellow-500 text-white py-2 rounded font-bold hover:bg-yellow-600 transition-colors">
+                                                        <i class="fa-solid fa-paper-plane mr-2"></i> Enviar Orçamento
+                                                    </button>
+                                                </div>
+
+                                                <!-- Step 2: Approve/Deny (Locked until budget sent) -->
+                                                <div x-show="selectedOs.budget_sent">
+                                                    <div class="p-2 bg-yellow-50 text-yellow-800 text-xs rounded mb-2 border border-yellow-200">Orçamento Enviado. Aguardando Cliente.</div>
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        <button @click="denyBudget()" class="bg-red-100 text-red-700 py-2 rounded font-bold hover:bg-red-200 border border-red-200">
+                                                            Negar
+                                                        </button>
+                                                        <button @click="approveBudget()" class="bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700">
+                                                            Aprovar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- BUYING PARTS -->
+                                        <template x-if="selectedOs.status === 'buying_parts'">
+                                            <button @click="partsArrived()" class="w-full bg-purple-600 text-white py-2 rounded font-bold hover:bg-purple-700 transition-colors">
+                                                <i class="fa-solid fa-box-open mr-2"></i> Peças Chegaram
+                                            </button>
+                                        </template>
+
+                                        <!-- REPAIRING -->
+                                        <template x-if="selectedOs.status === 'repairing' && (hasRole('admin') || hasRole('tecnico'))">
+                                            <div class="space-y-2">
+                                                <button @click="startRepair()" class="w-full bg-gray-800 text-white py-2 rounded font-bold hover:bg-gray-900 text-sm">
+                                                    <i class="fa-solid fa-play mr-2"></i> Iniciar Execução (Log)
+                                                </button>
+
+                                                <div class="border-t pt-2 mt-2">
+                                                    <p class="text-xs font-bold text-gray-500 mb-1">Finalizar Reparo</p>
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        <button @click="failureReason = prompt('Motivo da Falha?'); if(failureReason) finishRepair(false)" class="bg-red-100 text-red-700 py-2 rounded font-bold hover:bg-red-200 border border-red-200 text-sm">
+                                                            Falha
+                                                        </button>
+                                                        <button @click="finishRepair(true)" class="bg-brand-600 text-white py-2 rounded font-bold hover:bg-brand-700 text-sm">
+                                                            Sucesso
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- TESTING -->
+                                        <template x-if="selectedOs.status === 'testing'">
+                                            <div class="space-y-2">
+                                                <p class="text-xs font-bold text-gray-500 mb-1">Resultado dos Testes</p>
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <button @click="testNotes = prompt('O que falhou?'); if(testNotes) finishTest(false)" class="bg-red-100 text-red-700 py-2 rounded font-bold hover:bg-red-200 border border-red-200 text-sm">
+                                                        Problema
+                                                    </button>
+                                                    <button @click="finishTest(true)" class="bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700 text-sm">
+                                                        Aprovado
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- READY -->
+                                        <template x-if="selectedOs.status === 'ready'">
+                                            <button @click="deliverDevice()" class="w-full bg-gray-800 text-white py-2 rounded font-bold hover:bg-black transition-colors">
+                                                <i class="fa-solid fa-handshake mr-2"></i> Entregar / Finalizar
+                                            </button>
+                                        </template>
+
+                                        <!-- FINISHED/CANCELED -->
+                                        <template x-if="['finished', 'canceled'].includes(selectedOs.status)">
+                                            <div class="text-center p-4 bg-gray-50 rounded border border-gray-200 text-gray-500 italic">
+                                                Ordem Finalizada / Arquivada
+                                            </div>
+                                        </template>
+
+                                    </div>
+
+                                    <!-- Priority Badge Large -->
+                                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col items-center justify-center text-center">
+                                        <span class="text-xs text-gray-500 uppercase tracking-wide mb-1">Prioridade</span>
+                                        <span class="text-xl font-bold uppercase"
+                                              :class="{
+                                                  'text-gray-600': selectedOs.priority === 'low',
+                                                  'text-blue-600': selectedOs.priority === 'normal',
+                                                  'text-orange-600': selectedOs.priority === 'high',
+                                                  'text-red-600': selectedOs.priority === 'urgent'
+                                              }"
+                                              x-text="OS_PRIORITY_LABELS[selectedOs.priority]">
+                                        </span>
+                                    </div>
+
+                                    <!-- Deadline Large -->
+                                    <template x-if="selectedOs.deadline">
+                                        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col items-center justify-center text-center">
+                                            <span class="text-xs text-gray-500 uppercase tracking-wide mb-1">Prazo</span>
+                                            <span class="text-lg font-bold text-gray-800" x-text="new Date(selectedOs.deadline).toLocaleDateString()"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW OS MODAL -->
+    <div x-show="showNewOsModal" class="fixed inset-0 z-50 overflow-y-auto" x-cloak>
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="showNewOsModal" x-transition.opacity class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" @click="showNewOsModal = false"></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div x-show="showNewOsModal" x-transition.scale class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+
+                <!-- Modal Header -->
+                <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg leading-6 font-bold text-gray-900">Nova Ordem de Serviço</h3>
+                    <button @click="showNewOsModal = false" class="text-gray-400 hover:text-gray-500">
+                        <i class="fa-solid fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="px-6 py-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <!-- Client Info -->
+                        <div class="col-span-2">
+                            <h4 class="text-sm font-bold text-brand-600 uppercase tracking-wide mb-2 border-b pb-1">Cliente</h4>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Nome do Cliente</label>
+                            <input type="text" x-model="newOsForm.customer_name" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-brand-500 focus:border-brand-500" placeholder="João da Silva">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Telefone / WhatsApp</label>
+                            <input type="text" x-model="newOsForm.customer_phone" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-brand-500 focus:border-brand-500" placeholder="(11) 99999-9999">
+                        </div>
+
+                        <!-- Device Info -->
+                        <div class="col-span-2 mt-2">
+                            <h4 class="text-sm font-bold text-brand-600 uppercase tracking-wide mb-2 border-b pb-1">Aparelho</h4>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Modelo</label>
+                            <input type="text" x-model="newOsForm.device_model" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-brand-500 focus:border-brand-500" placeholder="Ex: iPhone 13">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Nº de Série / IMEI</label>
+                            <input type="text" x-model="newOsForm.serial_number" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-brand-500 focus:border-brand-500">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700">Descrição do Defeito</label>
+                            <textarea x-model="newOsForm.description" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-brand-500 focus:border-brand-500" placeholder="Descreva o problema relatado..."></textarea>
+                        </div>
+
+                        <!-- Priority & Deadline -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Prioridade</label>
+                            <select x-model="newOsForm.priority" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-brand-500 focus:border-brand-500">
+                                <option value="low">Baixa</option>
+                                <option value="normal">Normal</option>
+                                <option value="high">Alta</option>
+                                <option value="urgent">Urgente</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Prazo Estimado</label>
+                            <input type="date" x-model="newOsForm.deadline" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 border focus:ring-brand-500 focus:border-brand-500">
+                        </div>
+
+                        <!-- Checklist -->
+                        <div class="col-span-2 mt-4">
+                            <h4 class="text-sm font-bold text-brand-600 uppercase tracking-wide mb-2 border-b pb-1 flex justify-between items-center">
+                                Checklist Inicial
+                                <select x-model="newOsForm.template_id" @change="applyTemplate()" class="ml-2 text-xs border-gray-300 rounded p-1 font-normal text-gray-600 w-48">
+                                    <option value="">Carregar Modelo...</option>
+                                    <template x-for="t in checklistTemplates" :key="t.id">
+                                        <option :value="t.id" x-text="t.name"></option>
+                                    </template>
+                                </select>
+                            </h4>
+
+                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    <template x-for="item in currentChecklistItems" :key="item">
+                                        <label class="inline-flex items-center space-x-2 cursor-pointer">
+                                            <input type="checkbox" x-model="newOsForm.checklist[item]" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500 h-4 w-4">
+                                            <span class="text-sm text-gray-700" x-text="item"></span>
+                                        </label>
+                                    </template>
+                                </div>
+
+                                <!-- Add Item -->
+                                <div class="mt-3 flex items-center space-x-2">
+                                    <input type="text" x-model="newChecklistItem" @keydown.enter.prevent="addChecklistItem" placeholder="+ Novo item" class="text-sm border-gray-300 rounded p-1 w-32 border">
+                                    <button @click="addChecklistItem" type="button" class="text-brand-600 hover:text-brand-800 text-sm font-bold"><i class="fa-solid fa-plus"></i></button>
+                                </div>
+
+                                <!-- Save Template -->
+                                <div class="mt-3 pt-2 border-t border-gray-200">
+                                    <label class="inline-flex items-center">
+                                        <input type="checkbox" x-model="isSavingTemplate" class="rounded border-gray-300 text-brand-600">
+                                        <span class="ml-2 text-xs text-gray-500">Salvar esta lista como modelo</span>
+                                    </label>
+                                    <input x-show="isSavingTemplate" x-model="saveTemplateName" type="text" placeholder="Nome do Modelo (Ex: Celulares)" class="ml-2 text-xs border-gray-300 rounded p-1 w-40 border">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Photos -->
+                        <div class="col-span-2 mt-2">
+                            <h4 class="text-sm font-bold text-brand-600 uppercase tracking-wide mb-2 border-b pb-1">Fotos do Aparelho</h4>
+                            <div class="flex items-center justify-center w-full">
+                                <label class="flex flex-col w-full h-32 border-4 border-dashed hover:bg-gray-100 hover:border-gray-300 group cursor-pointer rounded-lg transition-colors">
+                                    <div class="flex flex-col items-center justify-center pt-7">
+                                        <i class="fa-solid fa-camera text-gray-400 group-hover:text-gray-600 text-3xl mb-2"></i>
+                                        <p class="pt-1 text-sm tracking-wider text-gray-400 group-hover:text-gray-600">
+                                            <span x-show="newOsForm.photos.length === 0">Selecione as fotos</span>
+                                            <span x-show="newOsForm.photos.length > 0" x-text="newOsForm.photos.length + ' foto(s) selecionada(s)'"></span>
+                                        </p>
+                                    </div>
+                                    <input type="file" multiple accept="image/*" class="opacity-0" @change="newOsForm.photos = Array.from($event.target.files)">
+                                </label>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="bg-gray-50 px-6 py-3 border-t border-gray-200 flex justify-end space-x-3">
+                    <button @click="showNewOsModal = false" class="px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50 font-medium">Cancelar</button>
+                    <button @click="createServiceOrder()" class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-bold shadow-md">
+                        <i class="fa-solid fa-check mr-2"></i> Criar Chamado
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- New Employee Modal -->
     <div x-show="modals.newEmployee" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" x-cloak>
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">

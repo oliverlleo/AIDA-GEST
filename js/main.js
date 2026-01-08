@@ -7,7 +7,12 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 function app() {
+    // Merge core state with OS module state if available
+    const osState = window.osModule ? window.osModule() : {};
+
     return {
+        ...osState,
+
         // State
         loading: false,
         session: null, // Admin Auth Session
