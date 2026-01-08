@@ -47,7 +47,14 @@ function app() {
                 if (storedEmp) {
                     this.employeeSession = JSON.parse(storedEmp);
                     this.user = this.employeeSession;
-                    this.workspaceName = await this.getWorkspaceName(this.employeeSession.workspace_id);
+                    // Restore company info from session
+                    if (this.employeeSession.workspace_name) {
+                        this.workspaceName = this.employeeSession.workspace_name;
+                    }
+                    if (this.employeeSession.company_code) {
+                        this.companyCode = this.employeeSession.company_code;
+                    }
+
                     // Also fetch employees if logged in as employee (to populate team view)
                     this.fetchEmployees();
                 }
@@ -81,10 +88,7 @@ function app() {
         async registerAdmin() {
             this.loading = true;
 
-            // Save company name locally in case we lose context (e.g. email confirmation)
-            if (this.registerForm.companyName) {
-                localStorage.setItem('pending_company_name', this.registerForm.companyName);
-            }
+            // NOTE: companyName removed from initial form, so we skip saving it.
 
             // 1. Sign Up
             const { data: authData, error: authError } = await supabaseClient.auth.signUp({
@@ -106,7 +110,8 @@ function app() {
                     return this.notify('Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de entrar.', 'success');
                 }
 
-                await this.completeCompanySetup();
+                // We cannot create workspace yet because we don't have the name.
+                // The user will be redirected to dashboard -> "setup_required" -> completeCompanySetup
             }
             this.loading = false;
         },
@@ -114,9 +119,10 @@ function app() {
         async completeCompanySetup() {
              this.loading = true;
 
-             // Retrieve name from storage if form is empty (e.g. after reload)
+             // Check name
              if (!this.registerForm.companyName) {
-                 this.registerForm.companyName = localStorage.getItem('pending_company_name') || 'Minha Assistência';
+                 this.loading = false;
+                 return this.notify('Por favor, digite o nome da empresa.', 'error');
              }
 
              const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
@@ -134,8 +140,8 @@ function app() {
             } else {
                 this.newCompanyCode = generatedCode;
                 this.registrationSuccess = true;
-                localStorage.removeItem('pending_company_name'); // Cleanup
                 this.notify('Conta criada com sucesso!', 'success');
+                // Reload after success will load profile correctly
             }
             this.loading = false;
         },
@@ -158,8 +164,12 @@ function app() {
                 const emp = data[0]; // RPC returns an array
                 this.employeeSession = emp;
                 this.user = emp;
+
+                // Set UI state immediately
+                this.workspaceName = emp.workspace_name;
+                this.companyCode = emp.company_code;
+
                 localStorage.setItem('techassist_employee', JSON.stringify(emp));
-                this.workspaceName = await this.getWorkspaceName(emp.workspace_id);
                 this.notify('Bem-vindo, ' + emp.name, 'success');
                 this.fetchEmployees(); // Load colleagues
             } else {
@@ -181,6 +191,7 @@ function app() {
                 this.user = null;
                 this.session = null;
                 this.workspaceName = '';
+                this.companyCode = '';
                 localStorage.removeItem('techassist_employee');
 
                 this.view = 'dashboard';
@@ -204,7 +215,7 @@ function app() {
 
             // CRITICAL RECOVERY: If profile missing...
             if (error && error.code === 'PGRST116') {
-                console.log("Profile missing. Attempting self-repair...");
+                console.log("Profile missing. Checking workspace or zombie state...");
 
                 // Try finding ANY workspace owned by user
                 const { data: wsData } = await supabaseClient
@@ -232,15 +243,8 @@ function app() {
                      error = retry.error;
                 } else {
                     // FATAL: Auth exists, but NO Workspace and NO Profile.
-                    // Redirect to "Setup Required" view.
+                    // Redirect to "Setup Required" view to ASK FOR COMPANY NAME.
                     console.error("ZOMBIE ACCOUNT DETECTED: No workspace, no profile.");
-
-                    // Try to recover company name from local storage to allow auto-fill
-                    const pendingName = localStorage.getItem('pending_company_name');
-                    if (pendingName) {
-                        this.registerForm.companyName = pendingName;
-                    }
-
                     this.view = 'setup_required';
                     return;
                 }
@@ -296,7 +300,8 @@ function app() {
         },
 
         async getWorkspaceName(id) {
-            return 'Área de Trabalho';
+            // Deprecated: Name is loaded via profile join or login RPC
+            return this.workspaceName || 'Área de Trabalho';
         },
 
         // --- ACTIONS ---
