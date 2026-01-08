@@ -2,7 +2,9 @@
 // Configuração do Supabase
 const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Renomeando para evitar conflito com variável global 'supabase' do CDN
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 function app() {
     return {
@@ -32,7 +34,7 @@ function app() {
             this.loading = true;
 
             // Check for Admin Session
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
                 this.session = session;
                 await this.loadAdminData();
@@ -47,7 +49,7 @@ function app() {
             }
 
             // Listen for Auth Changes (Admin)
-            supabase.auth.onAuthStateChange(async (_event, session) => {
+            supabaseClient.auth.onAuthStateChange(async (_event, session) => {
                 this.session = session;
                 if (session) {
                     await this.loadAdminData();
@@ -63,7 +65,7 @@ function app() {
 
         async loginAdmin() {
             this.loading = true;
-            const { error } = await supabase.auth.signInWithPassword({
+            const { error } = await supabaseClient.auth.signInWithPassword({
                 email: this.adminForm.email,
                 password: this.adminForm.password,
             });
@@ -74,7 +76,7 @@ function app() {
         async registerAdmin() {
             this.loading = true;
             // 1. Sign Up
-            const { data: authData, error: authError } = await supabase.auth.signUp({
+            const { data: authData, error: authError } = await supabaseClient.auth.signUp({
                 email: this.registerForm.email,
                 password: this.registerForm.password,
             });
@@ -95,7 +97,7 @@ function app() {
                 const userId = authData.user.id;
 
                 // Create Workspace
-                const { data: wsData, error: wsError } = await supabase
+                const { data: wsData, error: wsError } = await supabaseClient
                     .from('workspaces')
                     .insert([{
                         name: this.registerForm.companyName,
@@ -110,7 +112,7 @@ function app() {
                     this.notify('Erro ao criar empresa. Código pode já existir.', 'error');
                 } else {
                     // Create Profile
-                    await supabase.from('profiles').insert([{
+                    await supabaseClient.from('profiles').insert([{
                         id: userId,
                         workspace_id: wsData.id,
                         role: 'admin'
@@ -125,7 +127,7 @@ function app() {
 
         async loginEmployee() {
             this.loading = true;
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .rpc('employee_login', {
                     p_company_code: this.loginForm.company_code,
                     p_username: this.loginForm.username,
@@ -151,7 +153,7 @@ function app() {
 
         logout() {
             if (this.session) {
-                supabase.auth.signOut();
+                supabaseClient.auth.signOut();
             }
             this.employeeSession = null;
             this.user = null;
@@ -167,7 +169,7 @@ function app() {
             const user = this.session.user;
 
             // Fetch Profile & Workspace
-            const { data: profile } = await supabase
+            const { data: profile } = await supabaseClient
                 .from('profiles')
                 .select('*, workspaces(name, company_code)')
                 .eq('id', user.id)
@@ -191,7 +193,7 @@ function app() {
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
 
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('employees')
                 .select('*')
                 .eq('workspace_id', this.user.workspace_id)
@@ -252,7 +254,7 @@ function app() {
 
             // To proceed now without stopping: I'll use a temporary RPC call that I will create via SQL execution tool.
 
-            const { error } = await supabase.rpc('create_employee', {
+            const { error } = await supabaseClient.rpc('create_employee', {
                 p_workspace_id: this.user.workspace_id,
                 p_name: this.employeeForm.name,
                 p_username: this.employeeForm.username,
@@ -275,7 +277,7 @@ function app() {
         async deleteEmployee(id) {
             if (!confirm('Tem certeza?')) return;
 
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('employees')
                 .delete()
                 .eq('id', id);
