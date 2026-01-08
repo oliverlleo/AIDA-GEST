@@ -161,6 +161,12 @@ function app() {
                     if (storedEmp) {
                         try {
                             this.employeeSession = JSON.parse(storedEmp);
+
+                            // Normalize ID if loaded from old storage format
+                            if (this.employeeSession.employee_id && !this.employeeSession.id) {
+                                this.employeeSession.id = this.employeeSession.employee_id;
+                            }
+
                             this.user = this.employeeSession;
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
@@ -282,10 +288,17 @@ function app() {
 
                 if (data && data.length > 0) {
                     const emp = data[0];
+
+                    // Normalize ID (RPC returns employee_id)
+                    if (emp.employee_id && !emp.id) {
+                        emp.id = emp.employee_id;
+                    }
+
                     this.employeeSession = emp;
                     this.user = emp;
-                    this.workspaceName = emp.workspace_name;
-                    this.companyCode = emp.company_code;
+                    this.workspaceName = emp.workspace_name; // Note: RPC might not return workspace_name directly, check this too
+                    this.companyCode = this.loginForm.company_code; // Save from form input as RPC takes it but returns ID
+
                     localStorage.setItem('techassist_employee', JSON.stringify(emp));
                     this.notify('Bem-vindo, ' + emp.name, 'success');
                     await this.fetchEmployees();
