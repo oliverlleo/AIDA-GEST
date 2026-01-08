@@ -59,7 +59,7 @@ function app() {
         analysisForm: { needsParts: false, partsList: '' },
         outcomeMode: '', // 'repair' or 'test'
         showTestFailureForm: false,
-        testFailureData: { newDeadline: '', newPriority: 'Normal' },
+        testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '' },
 
         // Selected Ticket
         selectedTicket: null,
@@ -725,15 +725,27 @@ function app() {
                 await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: 'Aparelho aprovado nos testes' });
             } else {
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
+                if (!this.testFailureData.reason) return this.notify("Descreva o defeito apresentado", "error");
+
+                // Prepare new note
+                const newNote = {
+                    date: new Date().toISOString(),
+                    text: this.testFailureData.reason,
+                    user: this.user.name
+                };
+
+                const existingNotes = Array.isArray(ticket.test_notes) ? ticket.test_notes : [];
+                const updatedNotes = [...existingNotes, newNote];
 
                 this.modals.outcome = false;
                 await this.updateStatus(ticket, 'Andamento Reparo', {
                     deadline: this.testFailureData.newDeadline,
                     priority: this.testFailureData.newPriority,
-                    repair_start_at: null, // Reset timer so tech can start again
+                    repair_start_at: null, // Reset timer
                     test_start_at: null,
-                    status: 'Andamento Reparo'
-                }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Motivo: Falha nos testes' });
+                    status: 'Andamento Reparo',
+                    test_notes: updatedNotes
+                }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Defeito: ' + this.testFailureData.reason });
                 this.notify("Retornado para reparo com urgência!");
             }
         },
