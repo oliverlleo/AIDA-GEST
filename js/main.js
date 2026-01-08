@@ -17,7 +17,7 @@ function app() {
         companyCode: '', // New: Store company code
         registrationSuccess: false, // New: Show welcome screen
         newCompanyCode: '', // New: Store new code for display
-        view: 'dashboard', // dashboard, employees, service_orders, stock
+        view: 'dashboard', // dashboard, employees, service_orders, stock, setup_required
         authMode: 'employee', // employee, admin_login, admin_register
 
         // Data
@@ -89,34 +89,38 @@ function app() {
                 return this.notify(authError.message, 'error');
             }
 
-            // 2. Create Workspace & Profile
-            const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
+            // If user already exists, signUp returns user/session.
+            // Proceed to create workspace.
 
             if (authData.user) {
-                const userId = authData.user.id;
-
                 if (!authData.session) {
                     this.loading = false;
                     return this.notify('Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de entrar.', 'success');
                 }
 
-                // Call the new ATOMIC RPC to create workspace AND profile
-                // This prevents PGRST116 errors later
-                const { data: wsId, error: wsError } = await supabaseClient
-                    .rpc('create_owner_workspace_and_profile', {
-                        p_name: this.registerForm.companyName,
-                        p_company_code: generatedCode
-                    });
+                await this.completeCompanySetup();
+            }
+            this.loading = false;
+        },
 
-                if (wsError) {
-                    console.error(wsError);
-                    this.notify('Erro ao criar empresa: ' + wsError.message, 'error');
-                } else {
-                    // Show success screen instead of reloading immediately
-                    this.newCompanyCode = generatedCode;
-                    this.registrationSuccess = true;
-                    this.notify('Conta criada com sucesso!', 'success');
-                }
+        async completeCompanySetup() {
+             this.loading = true;
+             const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+             // Call the new ATOMIC RPC to create workspace AND profile
+             const { data: wsId, error: wsError } = await supabaseClient
+                .rpc('create_owner_workspace_and_profile', {
+                    p_name: this.registerForm.companyName || 'Minha Assistência', // Fallback if name lost
+                    p_company_code: generatedCode
+                });
+
+            if (wsError) {
+                console.error(wsError);
+                this.notify('Erro ao criar empresa: ' + wsError.message, 'error');
+            } else {
+                this.newCompanyCode = generatedCode;
+                this.registrationSuccess = true;
+                this.notify('Conta criada com sucesso!', 'success');
             }
             this.loading = false;
         },
@@ -156,6 +160,7 @@ function app() {
             this.workspaceName = '';
             localStorage.removeItem('techassist_employee');
             this.view = 'dashboard';
+            window.location.reload();
         },
 
         // --- DATA LOADING ---
@@ -171,10 +176,11 @@ function app() {
                 .eq('id', user.id)
                 .single();
 
-            // RECOVERY MECHANISM: If profile is missing (Error PGRST116), try to find workspace owned by user and create profile
+            // CRITICAL RECOVERY: If profile missing...
             if (error && error.code === 'PGRST116') {
                 console.log("Profile missing. Attempting self-repair...");
 
+                // Try finding ANY workspace owned by user
                 const { data: wsData } = await supabaseClient
                     .from('workspaces')
                     .select('id, name, company_code')
@@ -198,6 +204,12 @@ function app() {
 
                      profile = retry.data;
                      error = retry.error;
+                } else {
+                    // FATAL: Auth exists, but NO Workspace and NO Profile.
+                    // Redirect to "Setup Required" view.
+                    console.error("ZOMBIE ACCOUNT DETECTED: No workspace, no profile.");
+                    this.view = 'setup_required';
+                    return;
                 }
             }
 
