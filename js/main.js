@@ -434,15 +434,21 @@ function app() {
                     let filteredTechTickets = data;
                     let effectiveFilter = this.selectedTechFilter;
 
-                    // STRICT FILTERING FOR TECHNICIANS (Override UI state if needed)
-                    if (!this.hasRole('admin') && this.hasRole('tecnico')) {
+                    // SAFETY: If pure technician, FORCE filter to self regardless of state
+                    if (!this.hasRole('admin') && this.hasRole('tecnico') && this.user) {
                         effectiveFilter = this.user.id;
-                        this.selectedTechFilter = this.user.id; // Sync UI
+                        this.selectedTechFilter = this.user.id;
                     }
 
                     // Apply Filter
-                    if (effectiveFilter !== 'all' && effectiveFilter) {
+                    if (effectiveFilter && effectiveFilter !== 'all') {
                         filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === effectiveFilter);
+                    } else if (!this.hasRole('admin') && this.hasRole('tecnico')) {
+                         // Fallback: If filter failed to set but user is tech, show nothing or re-force self
+                         // This catches the case where effectiveFilter might be empty string
+                         if (this.user) {
+                             filteredTechTickets = filteredTechTickets.filter(t => t.technician_id === this.user.id);
+                         }
                     }
 
                     this.techTickets = filteredTechTickets.filter(t =>
@@ -965,12 +971,11 @@ function app() {
             // Debugging
             console.log("Initializing Tech Filter. User:", this.user);
 
-            if (this.hasRole('admin')) {
-                this.selectedTechFilter = 'all';
-            } else if (this.hasRole('tecnico')) {
-                // If technician, default to self
+            // Prioritize setting filter to self if user is a technician (even if admin)
+            // This ensures they see their own bench first.
+            if (this.hasRole('tecnico') && this.user && this.user.id) {
                 this.selectedTechFilter = this.user.id;
-                console.log("Filter set to self:", this.selectedTechFilter);
+                console.log("Filter set to self (Tech):", this.selectedTechFilter);
             } else {
                 this.selectedTechFilter = 'all';
             }
