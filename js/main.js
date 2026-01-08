@@ -727,14 +727,14 @@ function app() {
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
 
                 this.modals.outcome = false;
-                await this.updateStatus(ticket, 'Analise Tecnica', {
+                await this.updateStatus(ticket, 'Andamento Reparo', {
                     deadline: this.testFailureData.newDeadline,
                     priority: this.testFailureData.newPriority,
-                    repair_start_at: null,
+                    repair_start_at: null, // Reset timer so tech can start again
                     test_start_at: null,
-                    status: 'Analise Tecnica'
-                }, { action: 'Reprovou Testes', details: 'Retornado para bancada. Motivo: Falha nos testes' });
-                this.notify("Retornado para bancada com urgência!");
+                    status: 'Andamento Reparo'
+                }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Motivo: Falha nos testes' });
+                this.notify("Retornado para reparo com urgência!");
             }
         },
 
@@ -774,7 +774,7 @@ function app() {
                 // In the current system, "Minha Bancada" shows ALL tickets in Analise/Reparo.
                 // So I will stick to that logic + maybe "Testes"?
                 // Let's filter by statuses relevant to a technician.
-                const techStatuses = ['Analise Tecnica', 'Andamento Reparo', 'Teste Final'];
+                const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
                 source = source.filter(t => techStatuses.includes(t.status));
             }
             return source;
