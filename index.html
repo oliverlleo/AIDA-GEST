@@ -255,6 +255,13 @@
                                                         </button>
                                                     </template>
 
+                                                    <!-- Pedir Prioridade (General Action for Tech Stages) -->
+                                                    <template x-if="['Analise Tecnica', 'Andamento Reparo'].includes(ticket.status) && !ticket.priority_requested">
+                                                        <button @click="requestPriority(ticket)" class="w-full bg-white border border-orange-200 text-orange-600 text-xs font-bold py-2 rounded hover:bg-orange-50 mb-2">
+                                                            <i class="fa-solid fa-bell mr-1"></i> Pedir Prioridade
+                                                        </button>
+                                                    </template>
+
                                                     <!-- Aprovação -->
                                                     <template x-if="ticket.status === 'Aprovacao'">
                                                         <div>
@@ -397,9 +404,14 @@
                                     <!-- Card Component (Reused logic) -->
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow"
                                           @click="viewTicketDetails(ticket, 'tech')"
-                                          :class="ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')">
+                                          :class="ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500'))">
 
-                                        <div class="flex justify-between items-start mb-2">
+                                        <!-- Priority Requested Badge -->
+                                        <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
+                                            <i class="fa-solid fa-bell fa-shake mr-1"></i> PRIORIDADE SOLICITADA
+                                        </div>
+
+                                        <div class="flex justify-between items-start mb-2 mt-1">
                                             <span class="font-mono text-gray-500 text-xs" x-text="'OS #' + ticket.os_number"></span>
                                             <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
                                         </div>
@@ -428,9 +440,14 @@
                                 <template x-for="ticket in techTickets.filter(t => t.status === 'Andamento Reparo')" :key="ticket.id">
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow"
                                           @click="viewTicketDetails(ticket, 'tech')"
-                                          :class="ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')">
+                                          :class="ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500'))">
 
-                                        <div class="flex justify-between items-start mb-2">
+                                        <!-- Priority Requested Badge -->
+                                        <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
+                                            <i class="fa-solid fa-bell fa-shake mr-1"></i> PRIORIDADE SOLICITADA
+                                        </div>
+
+                                        <div class="flex justify-between items-start mb-2 mt-1">
                                             <span class="font-mono text-gray-500 text-xs" x-text="'OS #' + ticket.os_number"></span>
                                             <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
                                         </div>

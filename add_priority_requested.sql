@@ -1,0 +1,2 @@
+
+ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS priority_requested BOOLEAN DEFAULT FALSE;
