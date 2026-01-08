@@ -40,28 +40,27 @@ function app() {
 
         // Ticket Form
         ticketForm: {
-            client_name: '',
-            os_number: '',
-            model: '',
-            serial: '',
-            defect: '',
-            priority: 'Normal',
-            contact: '',
-            deadline: '',
-            device_condition: '',
-            checklist: [],
-            photos: [],
-            notes: ''
+            client_name: '', os_number: '', model: '', serial: '',
+            defect: '', priority: 'Normal', contact: '',
+            deadline: '', device_condition: '',
+            checklist: [], photos: [], notes: ''
         },
         newChecklistItem: '',
         selectedTemplateId: '',
         newTemplateName: '',
 
+        // UI State for Actions
+        analysisForm: { needsParts: false, partsList: '' },
+        outcomeMode: '', // 'repair' or 'test'
+        showTestFailureForm: false,
+        testFailureData: { newDeadline: '', newPriority: 'Normal' },
+
         // Selected Ticket
         selectedTicket: null,
+        modalSource: '', // 'kanban' or 'tech'
 
         // Modals
-        modals: { newEmployee: false, ticket: false, viewTicket: false },
+        modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false },
 
         // Constants
         PRIORITIES: ['Baixa', 'Normal', 'Alta', 'Urgente'],
@@ -125,6 +124,10 @@ function app() {
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
                 payload => {
                    this.fetchTickets();
+                   // If viewing a ticket, refresh it too
+                   if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
+                       this.selectedTicket = { ...this.selectedTicket, ...payload.new };
+                   }
                 })
                 .subscribe();
         },
@@ -139,7 +142,6 @@ function app() {
             this.loading = false;
             if (error) this.notify(error.message, 'error');
         },
-
         async registerAdmin() {
             this.loading = true;
             const { data: authData, error: authError } = await supabaseClient.auth.signUp({
@@ -158,7 +160,6 @@ function app() {
             }
             this.loading = false;
         },
-
         async completeCompanySetup() {
              this.loading = true;
              if (!this.registerForm.companyName) {
@@ -181,7 +182,6 @@ function app() {
             }
             this.loading = false;
         },
-
         async loginEmployee() {
             this.loading = true;
             const { data, error } = await supabaseClient
@@ -209,7 +209,6 @@ function app() {
                  this.notify('Credenciais inválidas.', 'error');
             }
         },
-
         async logout() {
             this.loading = true;
             try { if (this.session) await supabaseClient.auth.signOut(); } catch (e) {}
@@ -221,7 +220,6 @@ function app() {
             this.loading = false;
             window.location.reload();
         },
-
         async loadAdminData() {
             if (!this.session) return;
             const user = this.session.user;
@@ -251,7 +249,6 @@ function app() {
                 this.setupRealtime();
             }
         },
-
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
             let result;
@@ -274,19 +271,28 @@ function app() {
                 .order('created_at', { ascending: false });
 
             if (error) {
+                if (error.code === 'PGRST205') {
+                    // Suppress "Missing Table" error to avoid crashing UI for user
+                    // They will see empty data instead of an error until DB is ready.
+                    console.warn("Database tables missing (PGRST205). Waiting for setup.");
+                    this.tickets = [];
+                    this.techTickets = [];
+                    return;
+                }
                 console.error("Error fetching tickets:", error);
                 return;
             }
 
             this.tickets = data;
 
-            // Filter for Tech View (Removed Teste Final)
+            // Filter for Tech View (Only Analysis and Repair)
             this.techTickets = data.filter(t =>
                 ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
             ).sort((a, b) => {
                 const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                 const pDiff = pOrder[a.priority] - pOrder[b.priority];
                 if (pDiff !== 0) return pDiff;
+                // Then by Deadline
                 return new Date(a.deadline || 0) - new Date(b.deadline || 0);
             });
         },
@@ -299,18 +305,10 @@ function app() {
 
         openNewTicketModal() {
             this.ticketForm = {
-                client_name: '',
-                os_number: '',
-                model: '',
-                serial: '',
-                defect: '',
-                priority: 'Normal',
-                contact: '',
-                deadline: '',
-                device_condition: '',
-                checklist: [],
-                photos: [],
-                notes: ''
+                client_name: '', os_number: '', model: '', serial: '',
+                defect: '', priority: 'Normal', contact: '',
+                deadline: '', device_condition: '',
+                checklist: [], photos: [], notes: ''
             };
             this.modals.ticket = true;
         },
@@ -321,21 +319,17 @@ function app() {
                 this.newChecklistItem = '';
             }
         },
-
         removeChecklistItem(index) {
             this.ticketForm.checklist.splice(index, 1);
         },
-
         async saveTemplate() {
             if (!this.newTemplateName) return this.notify("Nomeie o modelo", "error");
             if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
-
             const { error } = await supabaseClient.from('checklist_templates').insert({
                 workspace_id: this.user.workspace_id,
                 name: this.newTemplateName,
                 items: this.ticketForm.checklist.map(i => i.item)
             });
-
             if (error) this.notify("Erro ao salvar", "error");
             else {
                 this.notify("Modelo salvo!");
@@ -343,21 +337,16 @@ function app() {
                 this.fetchTemplates();
             }
         },
-
         loadTemplate() {
             const tmpl = this.checklistTemplates.find(t => t.id === this.selectedTemplateId);
-            if (tmpl) {
-                this.ticketForm.checklist = tmpl.items.map(s => ({ item: s, ok: false }));
-            }
+            if (tmpl) this.ticketForm.checklist = tmpl.items.map(s => ({ item: s, ok: false }));
         },
 
         async createTicket() {
              if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model) {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
-
              this.loading = true;
-
              const ticketData = {
                  workspace_id: this.user.workspace_id,
                  client_name: this.ticketForm.client_name,
@@ -373,31 +362,32 @@ function app() {
                  status: 'Aberto',
                  created_by_name: this.user.name
              };
-
              const { error } = await supabaseClient.from('tickets').insert(ticketData);
-
              this.loading = false;
              if (error) {
                  console.error(error);
-                 this.notify("Erro ao criar chamado. Verifique se o SQL foi executado.", "error");
+                 this.notify("Erro ao criar chamado. Verifique SQL.", "error");
              } else {
-                 this.notify("Chamado criado com sucesso!");
+                 this.notify("Chamado criado!");
                  this.modals.ticket = false;
                  this.fetchTickets();
              }
         },
 
-        viewTicketDetails(ticket) {
+        viewTicketDetails(ticket, source = 'kanban') {
             this.selectedTicket = ticket;
-            if (!Array.isArray(this.selectedTicket.checklist_data)) {
-                 this.selectedTicket.checklist_data = [];
-            }
+            this.modalSource = source;
+            if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
+            // Reset UI states
+            this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
             this.modals.viewTicket = true;
         },
 
-        async updateStatus(ticket, newStatus) {
-            this.loading = true;
+        // --- WORKFLOW ACTIONS ---
 
+        // Generic Status Update
+        async updateStatus(ticket, newStatus, additionalUpdates = {}) {
+            this.loading = true;
             await supabaseClient.from('ticket_logs').insert({
                 ticket_id: ticket.id,
                 action: 'Alteração de Status',
@@ -405,40 +395,149 @@ function app() {
                 user_name: this.user.name
             });
 
-            const updates = { status: newStatus };
-
-            const { error } = await supabaseClient
-                .from('tickets')
-                .update(updates)
-                .eq('id', ticket.id);
+            const updates = { status: newStatus, ...additionalUpdates };
+            const { error } = await supabaseClient.from('tickets').update(updates).eq('id', ticket.id);
 
             this.loading = false;
-
-            if (error) this.notify("Erro ao mover card", "error");
+            if (error) this.notify("Erro ao atualizar", "error");
             else {
                 this.notify("Status atualizado");
                 this.fetchTickets();
-                this.modals.viewTicket = false;
+                this.modals.viewTicket = false; // Close modal usually on big moves
             }
         },
 
-        async saveTicketChanges() {
-            if (!this.selectedTicket) return;
+        // 2. Finish Analysis
+        async finishAnalysis() {
+            if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
+                return this.notify("Liste as peças necessárias.", "error");
+            }
+            // If needs parts -> log it, but standard flow goes to Approval first
+            await this.updateStatus(this.selectedTicket, 'Aprovacao', {
+                parts_needed: this.analysisForm.partsList,
+                tech_notes: this.selectedTicket.tech_notes // Save notes too
+            });
+        },
+
+        // 3. Approval Actions
+        async sendBudget(ticket = this.selectedTicket) {
             this.loading = true;
-
-            const { error } = await supabaseClient
-                .from('tickets')
-                .update({
-                    tech_notes: this.selectedTicket.tech_notes,
-                    parts_needed: this.selectedTicket.parts_needed,
-                    checklist_data: this.selectedTicket.checklist_data,
-                    budget_value: this.selectedTicket.budget_value
-                })
-                .eq('id', this.selectedTicket.id);
-
+            const { error } = await supabaseClient.from('tickets').update({
+                budget_status: 'Enviado',
+                budget_sent_at: new Date().toISOString()
+            }).eq('id', ticket.id);
             this.loading = false;
-            if (error) this.notify("Erro ao salvar", "error");
-            else this.notify("Alterações salvas");
+            if (!error) {
+                // Force reactivity update
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
+                }
+                this.notify("Orçamento marcado como Enviado.");
+                this.fetchTickets();
+            }
+        },
+        async approveRepair(ticket = this.selectedTicket) {
+            // Check if needs parts
+            const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
+            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' });
+        },
+        async denyRepair(ticket = this.selectedTicket) {
+             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false });
+        },
+
+        // 4. Purchase Actions
+        async markPurchased(ticket = this.selectedTicket) {
+             this.loading = true;
+             await supabaseClient.from('tickets').update({
+                parts_status: 'Comprado',
+                parts_purchased_at: new Date().toISOString()
+            }).eq('id', ticket.id);
+            this.loading = false;
+            this.fetchTickets();
+        },
+        async confirmReceived(ticket = this.selectedTicket) {
+             await this.updateStatus(ticket, 'Andamento Reparo', {
+                 parts_status: 'Recebido',
+                 parts_received_at: new Date().toISOString()
+             });
+        },
+
+        // 5. Repair Actions
+        async startRepair(ticket = this.selectedTicket) {
+             this.loading = true;
+             const now = new Date().toISOString();
+             await supabaseClient.from('tickets').update({
+                repair_start_at: now
+            }).eq('id', ticket.id);
+            this.loading = false;
+            // Force reactivity
+            if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                this.selectedTicket = { ...this.selectedTicket, repair_start_at: now };
+            }
+            this.fetchTickets();
+        },
+
+        openOutcomeModal(mode, ticket = this.selectedTicket) {
+            this.selectedTicket = ticket; // Set context
+            this.outcomeMode = mode;
+            this.showTestFailureForm = false;
+            this.modals.outcome = true;
+        },
+
+        async finishRepair(success) {
+            const ticket = this.selectedTicket;
+            const nextStatus = success ? 'Teste Final' : 'Retirada Cliente';
+            const updates = {
+                repair_successful: success,
+                repair_end_at: new Date().toISOString()
+            };
+            this.modals.outcome = false;
+            await this.updateStatus(ticket, nextStatus, updates);
+        },
+
+        // 6. Test Actions
+        async startTest(ticket = this.selectedTicket) {
+             this.loading = true;
+             await supabaseClient.from('tickets').update({
+                test_start_at: new Date().toISOString()
+            }).eq('id', ticket.id);
+            this.loading = false;
+            this.fetchTickets();
+        },
+
+        async concludeTest(success) {
+            const ticket = this.selectedTicket;
+            if (success) {
+                this.modals.outcome = false;
+                await this.updateStatus(ticket, 'Retirada Cliente');
+            } else {
+                // Failure -> Back to Analysis with new params
+                if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
+
+                this.modals.outcome = false;
+                await this.updateStatus(ticket, 'Analise Tecnica', {
+                    deadline: this.testFailureData.newDeadline,
+                    priority: this.testFailureData.newPriority,
+                    repair_start_at: null, // Reset execution flags
+                    test_start_at: null,
+                    status: 'Analise Tecnica' // Explicit return
+                });
+                this.notify("Retornado para bancada com urgência!");
+            }
+        },
+
+        // 7. Pickup Actions
+        async markAvailable(ticket = this.selectedTicket) {
+             this.loading = true;
+             await supabaseClient.from('tickets').update({
+                pickup_available: true,
+                pickup_available_at: new Date().toISOString()
+            }).eq('id', ticket.id);
+            this.loading = false;
+            this.fetchTickets();
+        },
+        async confirmPickup(ticket = this.selectedTicket) {
+            await this.updateStatus(ticket, 'Finalizado');
         },
 
         // --- UTILS ---
@@ -456,6 +555,14 @@ function app() {
                 return 'border-l-4 border-red-600 bg-red-50';
             }
             return 'bg-white';
+        },
+
+        getOverdueTime(deadline) {
+            const diff = new Date() - new Date(deadline);
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            if (hours < 24) return `${hours}h`;
+            const days = Math.floor(hours / 24);
+            return `${days}d ${hours % 24}h`;
         },
 
         openModal(name) {
