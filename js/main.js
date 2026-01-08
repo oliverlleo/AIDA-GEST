@@ -64,6 +64,7 @@ function app() {
         // Selected Ticket
         selectedTicket: null,
         ticketLogs: [],
+        logViewMode: 'timeline', // 'timeline' or 'detailed'
         modalSource: '', // 'kanban' or 'tech'
 
         // Time
@@ -381,6 +382,7 @@ function app() {
             this.loading = true;
             try {
                 this.ticketLogs = await this.fetchTicketLogs(ticket.id);
+                this.logViewMode = 'timeline'; // Reset to default view
                 this.modals.logs = true;
             } finally {
                 this.loading = false;

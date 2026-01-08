@@ -853,27 +853,66 @@
             <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
                 <div class="bg-black px-6 py-4 flex justify-between items-center">
                     <h3 class="text-lg font-bold text-white">Histórico de Atividades</h3>
-                    <button @click="modals.logs = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+                    <div class="flex items-center space-x-4">
+                        <button @click="logViewMode = logViewMode === 'timeline' ? 'detailed' : 'timeline'"
+                                class="text-xs font-bold uppercase tracking-wider text-brand-500 hover:text-white transition-colors border border-brand-500 px-3 py-1 rounded-full">
+                            <i class="fa-solid" :class="logViewMode === 'timeline' ? 'fa-list' : 'fa-timeline'"></i>
+                            <span x-text="logViewMode === 'timeline' ? 'Ver Detalhes' : 'Ver Timeline'"></span>
+                        </button>
+                        <button @click="modals.logs = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+                    </div>
                 </div>
 
                 <div class="p-0 max-h-[70vh] overflow-y-auto bg-gray-50">
-                     <template x-for="log in ticketLogs" :key="log.id">
-                        <div class="p-4 border-b border-gray-200 bg-white hover:bg-gray-50 transition-colors">
-                            <div class="flex justify-between items-start mb-1">
-                                <span class="font-bold text-gray-800 text-sm" x-text="log.action"></span>
-                                <span class="text-xs text-gray-500 font-mono" x-text="new Date(log.created_at).toLocaleString()"></span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <p class="text-sm text-gray-600 flex-grow" x-text="log.details || '-'"></p>
-                                <div class="ml-4 flex items-center">
-                                    <div class="h-6 w-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs font-bold mr-2">
-                                        <span x-text="(log.user_name || '?').charAt(0).toUpperCase()"></span>
+                     <!-- TIMELINE VIEW -->
+                     <div x-show="logViewMode === 'timeline'" class="p-6 space-y-4">
+                        <template x-for="log in ticketLogs.filter(l => l.user_name !== 'Sistema')" :key="log.id">
+                            <div class="flex flex-col relative pl-4 border-l-2 border-gray-200 pb-4 last:border-0 last:pb-0">
+                                <!-- Dot -->
+                                <div class="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-brand-500 border-2 border-white"></div>
+
+                                <!-- Content -->
+                                <div class="text-sm text-gray-800">
+                                    <span class="font-bold capitalize" x-text="log.action"></span>
+                                    por <span class="font-bold text-gray-600" x-text="log.user_name"></span>
+                                    - <span class="text-gray-500 text-xs" x-text="new Date(log.created_at).toLocaleString()"></span>
+                                </div>
+
+                                <!-- Duration Line (If present in details) -->
+                                <template x-if="log.details && log.details.includes('Tempo de Reparo')">
+                                    <div class="mt-1 text-sm font-bold text-brand-600 flex items-center">
+                                        <i class="fa-solid fa-stopwatch mr-2"></i>
+                                        <span x-text="'Reparo levou ' + log.details.split('Tempo de Reparo:')[1].trim()"></span>
                                     </div>
-                                    <span class="text-xs font-bold text-gray-900" x-text="log.user_name || 'Sistema'"></span>
+                                </template>
+                            </div>
+                        </template>
+                        <div x-show="ticketLogs.filter(l => l.user_name !== 'Sistema').length === 0" class="text-center text-gray-400 italic">
+                            Nenhuma atividade de usuário registrada.
+                        </div>
+                     </div>
+
+                     <!-- DETAILED VIEW -->
+                     <div x-show="logViewMode === 'detailed'">
+                        <template x-for="log in ticketLogs" :key="log.id">
+                            <div class="p-4 border-b border-gray-200 bg-white hover:bg-gray-50 transition-colors">
+                                <div class="flex justify-between items-start mb-1">
+                                    <span class="font-bold text-gray-800 text-sm" x-text="log.action"></span>
+                                    <span class="text-xs text-gray-500 font-mono" x-text="new Date(log.created_at).toLocaleString()"></span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <p class="text-sm text-gray-600 flex-grow" x-text="log.details || '-'"></p>
+                                    <div class="ml-4 flex items-center">
+                                        <div class="h-6 w-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs font-bold mr-2">
+                                            <span x-text="(log.user_name || '?').charAt(0).toUpperCase()"></span>
+                                        </div>
+                                        <span class="text-xs font-bold text-gray-900" x-text="log.user_name || 'Sistema'"></span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </template>
+                        </template>
+                     </div>
+
                     <div x-show="ticketLogs.length === 0" class="p-8 text-center text-gray-500">
                         <i class="fa-solid fa-clock-rotate-left text-3xl mb-2 text-gray-300"></i>
                         <p>Nenhum registro encontrado.</p>
