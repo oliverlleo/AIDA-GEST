@@ -134,13 +134,12 @@ function app() {
                 this.currentTime = new Date();
             }, 1000);
 
-            // Clean visibility handler - just data refresh
             let visibilityTimer;
             document.addEventListener("visibilitychange", () => {
                 if (document.visibilityState === 'visible') {
                     clearTimeout(visibilityTimer);
                     visibilityTimer = setTimeout(async () => {
-                        console.log("Tab visible. Refreshing...");
+                        // console.log("Tab visible. Refreshing...");
                         if (this.user) {
                             await this.fetchTickets();
                         }
@@ -149,21 +148,25 @@ function app() {
             });
         },
 
-        // --- CORE FIX: Ensure Valid Session Before Action ---
+        // --- CORE FIX: Non-Blocking Connection Check ---
         async ensureConnection() {
-            // For employee login (custom RPC), we rely on the static key, but for Admin, we need the session.
-            // Even for RPC, refreshing the auth state helps the internal client headers.
+            // We race the session refresh against a timeout.
+            // If the lock is stuck (infinite hang), the timeout wins,
+            // we skip the refresh and try to use the existing cached token.
+            // This guarantees the UI never freezes.
             try {
-                const { data, error } = await supabaseClient.auth.getSession();
-                if (data?.session) {
-                    this.session = data.session;
-                } else {
-                    // If Session is missing but we have an employee logged in locally,
-                    // we might need to re-establish the anonymous auth state if Supabase lost it.
-                    // But usually, Anon key is enough for RPC if RLS allows.
+                const refreshPromise = supabaseClient.auth.getSession();
+                const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 2000));
+
+                const result = await Promise.race([refreshPromise, timeoutPromise]);
+
+                if (result === 'timeout') {
+                    console.warn("Session refresh timed out (lock stuck). Proceeding with cached token.");
+                } else if (result?.data?.session) {
+                    this.session = result.data.session;
                 }
             } catch (e) {
-                console.warn("Connection check warning:", e);
+                console.warn("Connection check skipped:", e);
             }
         },
 
