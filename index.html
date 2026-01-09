@@ -152,15 +152,15 @@
                         </div>
                     </template>
 
-                    <!-- Admin Section -->
+                    <!-- Admin Section (Renamed to Configuração) -->
                     <template x-if="hasRole('admin')">
                         <div class="mb-6 md:px-4">
                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 hidden md:block">Gestão</p>
                             <a href="#" @click.prevent="view = 'employees'"
                                :class="view === 'employees' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group">
-                                <i class="fa-solid fa-users-gear w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'employees' ? 'text-brand-500' : 'text-gray-400'"></i>
-                                <span class="ml-3 font-medium text-sm hidden md:block">Equipe</span>
+                                <i class="fa-solid fa-cog w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'employees' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Configuração</span>
                             </a>
                         </div>
                     </template>
@@ -549,16 +549,35 @@
                     </div>
                 </div>
 
-                <!-- VIEW: EMPLOYEES (Copied from previous file) -->
+                <!-- VIEW: CONFIGURATION (Was Employees) -->
                 <div x-show="(session || employeeSession) && view === 'employees'" class="max-w-7xl mx-auto p-8" x-cloak>
                     <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-2xl font-bold text-gray-800">Gerenciar Funcionários</h1>
-                        <button @click="openModal('newEmployee')" class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors">
-                            <i class="fa-solid fa-plus mr-2"></i> Novo Funcionário
-                        </button>
+                        <h1 class="text-2xl font-bold text-gray-800">Configuração</h1>
                     </div>
-                    <!-- Table Code (Simplified) -->
+
+                    <!-- Section 1: Company Data -->
+                    <div class="bg-white rounded-lg shadow p-6 mb-8">
+                         <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Dados da Empresa</h2>
+                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div>
+                                 <label class="block text-sm font-bold text-gray-600 mb-1">WhatsApp da Empresa</label>
+                                 <p class="text-xs text-gray-400 mb-2">Este número aparecerá no botão "Precisa de Ajuda?" da página do cliente.</p>
+                                 <div class="flex">
+                                     <input type="text" x-model="whatsappNumber" placeholder="Ex: 5511999999999" class="flex-grow border rounded-l-lg p-2 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                     <button @click="saveCompanyConfig()" class="bg-brand-500 text-white px-4 py-2 rounded-r-lg font-bold hover:bg-brand-600">Salvar</button>
+                                 </div>
+                             </div>
+                         </div>
+                    </div>
+
+                    <!-- Section 2: Manage Team -->
                     <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+                             <h2 class="text-lg font-bold text-gray-800">Gerenciar Equipe</h2>
+                             <button @click="openModal('newEmployee')" class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors text-sm">
+                                <i class="fa-solid fa-plus mr-2"></i> Novo Funcionário
+                            </button>
+                        </div>
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -917,15 +936,19 @@
                             <p class="text-gray-500 text-sm" x-text="selectedTicket.client_name"></p>
                         </div>
                         <div class="flex flex-col items-end space-y-2">
-                            <div class="text-xs text-gray-500 uppercase font-bold tracking-wider">Status Atual</div>
-                            <div class="text-lg font-bold text-brand-600" x-text="getStatusLabel(selectedTicket.status)"></div>
-
-                            <!-- Logs Button (Admin Only) -->
-                            <template x-if="hasRole('admin')">
-                                <button @click="openLogs(selectedTicket)" class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300 font-bold transition-colors">
-                                    <i class="fa-solid fa-clock-rotate-left mr-1"></i> Ver Histórico
+                            <div class="flex items-center space-x-2">
+                                <!-- Share Button (New) -->
+                                <button @click="openShareModal()" class="text-xs bg-brand-500 text-white px-2 py-1 rounded hover:bg-brand-600 font-bold transition-colors">
+                                    <i class="fa-solid fa-share-nodes mr-1"></i> Compartilhar
                                 </button>
-                            </template>
+                                <!-- Logs Button (Admin Only) -->
+                                <template x-if="hasRole('admin')">
+                                    <button @click="openLogs(selectedTicket)" class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300 font-bold transition-colors">
+                                        <i class="fa-solid fa-clock-rotate-left mr-1"></i> Histórico
+                                    </button>
+                                </template>
+                            </div>
+                             <div class="text-lg font-bold text-brand-600 mt-1" x-text="getStatusLabel(selectedTicket.status)"></div>
                         </div>
                     </div>
 
@@ -1172,6 +1195,30 @@
                     <button @click="modals.viewTicket = false" class="text-gray-600 hover:text-black font-bold text-sm">Fechar</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 6. SHARE MODAL (New) -->
+    <div x-show="showShareModal" class="fixed inset-0 z-[110] flex items-center justify-center" x-cloak>
+        <div class="fixed inset-0 bg-black bg-opacity-75" @click="showShareModal = false"></div>
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm z-10 relative text-center">
+            <div class="mb-4">
+                 <div class="bg-brand-100 text-brand-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
+                     <i class="fa-solid fa-share-nodes text-xl"></i>
+                 </div>
+                 <h3 class="text-lg font-bold text-gray-900">Compartilhar Acompanhamento</h3>
+                 <p class="text-sm text-gray-500">Envie este link para o cliente acompanhar o status.</p>
+            </div>
+
+            <div class="bg-gray-100 p-3 rounded-lg mb-4 flex items-center justify-between">
+                <span class="text-xs text-gray-600 truncate mr-2" x-text="selectedTicket ? getTrackingLink(selectedTicket.id) : ''"></span>
+                <button @click="copyTrackingLink()" class="text-brand-600 hover:text-brand-800 font-bold text-xs uppercase">Copiar</button>
+            </div>
+
+            <button @click="sendTrackingWhatsApp()" class="w-full bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600 flex items-center justify-center mb-2">
+                <i class="fa-brands fa-whatsapp text-xl mr-2"></i> Enviar no WhatsApp
+            </button>
+            <button @click="showShareModal = false" class="w-full py-2 text-gray-500 font-bold text-sm hover:text-black">Fechar</button>
         </div>
     </div>
 

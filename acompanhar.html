@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acompanhe seu Reparo | TechAssist</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#FF6B00',
+                            600: '#E65100',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-orange-50 text-gray-900 font-sans min-h-screen flex items-center justify-center p-4" x-data="tracker()">
+
+    <!-- Loading State -->
+    <div x-show="loading" class="text-center" x-transition>
+        <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-brand-500 mx-auto mb-4"></div>
+        <p class="text-brand-600 font-bold animate-pulse">Buscando seu aparelho...</p>
+    </div>
+
+    <!-- Error State -->
+    <div x-show="!loading && error" class="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full border-l-4 border-red-500" x-cloak>
+        <i class="fa-solid fa-circle-exclamation text-4xl text-red-500 mb-4"></i>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Ops! Algo deu errado.</h2>
+        <p class="text-gray-500 mb-6" x-text="error"></p>
+        <a href="#" @click.prevent="window.location.reload()" class="text-brand-600 font-bold hover:underline">Tentar novamente</a>
+    </div>
+
+    <!-- Main Content -->
+    <div x-show="!loading && !error && ticket" class="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden relative" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+
+        <!-- Top Decoration -->
+        <div class="bg-black h-2 w-full"></div>
+
+        <!-- Header -->
+        <div class="p-8 pb-4 text-center">
+            <div class="inline-flex items-center justify-center bg-brand-100 w-16 h-16 rounded-full mb-4 shadow-sm text-brand-600">
+                <i class="fa-solid fa-mobile-screen-button text-3xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900 mb-1" x-text="ticket.device_model"></h1>
+            <div class="flex items-center justify-center space-x-2 text-sm text-gray-500">
+                <span class="bg-gray-100 px-2 py-1 rounded font-mono font-bold tracking-wider" x-text="'OS #' + ticket.os_number"></span>
+                <span>&bull;</span>
+                <span x-text="new Date(ticket.created_at).toLocaleDateString('pt-BR')"></span>
+            </div>
+        </div>
+
+        <!-- GOOD NEWS CARD (Conditional) -->
+        <template x-if="isReady">
+            <div class="mx-6 mt-2 bg-green-50 border border-green-200 rounded-xl p-6 text-center shadow-inner relative overflow-hidden">
+                <div class="absolute -right-4 -top-4 text-green-100 opacity-50 transform rotate-12">
+                    <i class="fa-solid fa-gift text-9xl"></i>
+                </div>
+                <div class="relative z-10">
+                    <i class="fa-solid fa-circle-check text-4xl text-green-500 mb-3 bounce"></i>
+                    <h3 class="text-lg font-bold text-green-800 mb-1">Boa notícia!</h3>
+                    <p class="text-green-700 text-sm leading-relaxed">
+                        Seu aparelho está pronto e testado. <br>
+                        <span class="font-bold">Pode vir buscá-lo quando quiser!</span>
+                    </p>
+                </div>
+            </div>
+        </template>
+
+        <!-- Timeline Section -->
+        <div class="p-8">
+            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6 text-center">Status do Serviço</h2>
+
+            <!-- Progress Bar Container -->
+            <div class="relative mb-8 px-2">
+                <!-- Background Line -->
+                <div class="absolute top-1/2 left-0 w-full h-1 bg-gray-200 rounded-full -translate-y-1/2 z-0"></div>
+
+                <!-- Active Progress Line -->
+                <div class="absolute top-1/2 left-0 h-1 bg-brand-500 rounded-full -translate-y-1/2 z-0 transition-all duration-1000 ease-out"
+                     :style="'width: ' + getProgressPercent() + '%'"></div>
+
+                <!-- Steps (Dots) -->
+                <div class="flex justify-between relative z-10 w-full">
+                    <template x-for="(step, index) in steps" :key="index">
+                        <div class="relative flex flex-col items-center group">
+                             <!-- Dot -->
+                            <div class="w-4 h-4 rounded-full border-2 transition-all duration-500 ease-in-out z-10 bg-white"
+                                 :class="index <= currentStepIndex ? 'border-brand-500 bg-brand-500 scale-125' : 'border-gray-300'">
+                            </div>
+
+                            <!-- Animated Icon (Only for current step) -->
+                            <template x-if="index === currentStepIndex && !isReady">
+                                <div class="absolute -top-8 text-brand-600 animate-bounce">
+                                    <i class="fa-solid fa-screwdriver-wrench"></i>
+                                </div>
+                            </template>
+
+                             <!-- Ready Icon -->
+                            <template x-if="index === currentStepIndex && isReady">
+                                <div class="absolute -top-8 text-green-600 animate-bounce">
+                                    <i class="fa-solid fa-gift text-xl"></i>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Current Status Text -->
+            <div class="text-center mb-8">
+                <p class="text-sm text-gray-400 font-medium uppercase mb-1">Fase Atual</p>
+                <div class="text-xl font-bold text-brand-600 transition-all" x-text="getStatusLabel(ticket.status)"></div>
+                <template x-if="ticket.deadline && !isReady && ticket.status !== 'Finalizado'">
+                    <p class="text-xs text-gray-500 mt-2 bg-gray-50 inline-block px-3 py-1 rounded-full">
+                        <i class="fa-regular fa-clock mr-1"></i>
+                        Previsão de conclusão: <span class="font-bold" x-text="new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                    </p>
+                </template>
+            </div>
+
+            <!-- Help Button -->
+             <div class="text-center">
+                 <a :href="getWhatsAppLink()" target="_blank"
+                    class="inline-flex items-center justify-center space-x-2 text-green-600 bg-green-50 hover:bg-green-100 border border-green-200 px-6 py-3 rounded-xl font-bold transition-all w-full">
+                     <i class="fa-brands fa-whatsapp text-xl"></i>
+                     <span>Precisa de ajuda?</span>
+                 </a>
+                 <p class="text-[10px] text-gray-400 mt-3">
+                     ID de Acompanhamento Seguro: <span class="font-mono" x-text="ticket.id.substring(0,8) + '...'"></span>
+                 </p>
+             </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-gray-50 p-4 text-center border-t border-gray-100">
+            <p class="text-xs text-gray-400 font-medium">TechAssist &copy; 2024</p>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
+
+        function tracker() {
+            return {
+                loading: true,
+                error: null,
+                ticket: null,
+                // STATUS_COLUMNS from main system
+                steps: ['Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca', 'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'],
+
+                get currentStepIndex() {
+                    if (!this.ticket) return 0;
+                    return this.steps.indexOf(this.ticket.status);
+                },
+
+                get isReady() {
+                    return this.ticket && this.ticket.status === 'Retirada Cliente' && this.ticket.pickup_available;
+                },
+
+                async init() {
+                    const params = new URLSearchParams(window.location.search);
+                    const id = params.get('id');
+
+                    if (!id) {
+                        this.error = "Link inválido. Verifique o endereço digitado.";
+                        this.loading = false;
+                        return;
+                    }
+
+                    try {
+                        // Native Fetch to avoiding loading the heavy supabase-js lib if possible,
+                        // but we included it just in case. Let's use native fetch for speed.
+                        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_client_ticket_details`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': SUPABASE_KEY,
+                                'Authorization': `Bearer ${SUPABASE_KEY}`, // Anon key
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ p_ticket_id: id })
+                        });
+
+                        if (!response.ok) throw new Error("Erro ao buscar dados.");
+
+                        const data = await response.json();
+
+                        if (!data || data.length === 0) {
+                            this.error = "Chamado não encontrado ou acesso restrito.";
+                        } else {
+                            this.ticket = data[0];
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        this.error = "Não foi possível carregar as informações. Tente novamente.";
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                getStatusLabel(status) {
+                    const labels = {
+                        'Aberto': 'Aberto',
+                        'Analise Tecnica': 'Em Análise Técnica',
+                        'Aprovacao': 'Aguardando Aprovação',
+                        'Compra Peca': 'Aguardando Peças',
+                        'Andamento Reparo': 'Em Reparo',
+                        'Teste Final': 'Testes Finais',
+                        'Retirada Cliente': 'Pronto para Retirada',
+                        'Finalizado': 'Finalizado'
+                    };
+                    // Special case for Ready
+                    if (status === 'Retirada Cliente' && this.ticket.pickup_available) return 'Pronto para Retirada';
+                    if (status === 'Retirada Cliente' && !this.ticket.pickup_available) return 'Aguardando Liberação';
+
+                    return labels[status] || status;
+                },
+
+                getProgressPercent() {
+                    const idx = this.currentStepIndex;
+                    if (idx === -1) return 0;
+                    return (idx / (this.steps.length - 1)) * 100;
+                },
+
+                getWhatsAppLink() {
+                    if (!this.ticket || !this.ticket.whatsapp_number) return '#';
+                    let num = this.ticket.whatsapp_number.replace(/\D/g, '');
+                    if (num.length <= 11) num = '55' + num;
+                    const text = `Olá, estou acompanhando a OS ${this.ticket.os_number} e gostaria de tirar uma dúvida.`;
+                    return `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

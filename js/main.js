@@ -26,6 +26,7 @@ function app() {
         user: null,
         workspaceName: '',
         companyCode: '',
+        whatsappNumber: '', // New Field
         registrationSuccess: false,
         newCompanyCode: '',
         view: 'dashboard',
@@ -67,6 +68,7 @@ function app() {
         ticketLogs: [],
         logViewMode: 'timeline', // 'timeline' or 'detailed'
         modalSource: '', // 'kanban' or 'tech'
+        showShareModal: false, // New
 
         // Calendar State
         calendarView: 'week',
@@ -111,9 +113,6 @@ function app() {
             const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
 
             // Determine Auth Token
-            // If Admin (session exists), use Access Token.
-            // If Employee (no session, just local state), use Anon Key (RLS allows specific access).
-            // If Login/Public, use Anon Key.
             let token = SUPABASE_KEY;
             if (this.session && this.session.access_token) {
                 token = this.session.access_token;
@@ -126,6 +125,11 @@ function app() {
                 // Preferences for minimal response or representation
                 'Prefer': method === 'GET' ? undefined : 'return=representation'
             };
+
+            // --- SECURITY FIX: INJECT WORKSPACE ID FOR RLS ---
+            if (this.user && this.user.workspace_id) {
+                headers['x-workspace-id'] = this.user.workspace_id;
+            }
 
             const options = {
                 method,
@@ -362,18 +366,18 @@ function app() {
 
             // REFACTORED: Native Fetch
             try {
-                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code)&id=eq.${user.id}`);
+                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
                 let profile = profileData && profileData.length > 0 ? profileData[0] : null;
 
                 // Handle missing profile case (equivalent to PGRST116)
                 if (!profile) {
-                    const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code&owner_id=eq.${user.id}`);
+                    const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code,whatsapp_number&owner_id=eq.${user.id}`);
                     const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
 
                     if (workspace) {
                         await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
                         // Re-fetch
-                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code)&id=eq.${user.id}`);
+                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
                         profile = newProfileData[0];
                     } else {
                         this.view = 'setup_required';
@@ -385,6 +389,7 @@ function app() {
                     this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
                     this.workspaceName = profile.workspaces?.name;
                     this.companyCode = profile.workspaces?.company_code;
+                    this.whatsappNumber = profile.workspaces?.whatsapp_number || '';
                     await this.fetchEmployees();
                     this.initTechFilter(); // Admin defaults to 'all'
                     await this.fetchTickets();
@@ -411,6 +416,22 @@ function app() {
                 if (data) this.employees = data;
             } catch (e) {
                  console.error("Fetch Employees Error:", e);
+            }
+        },
+
+        // --- COMPANY CONFIG ---
+        async saveCompanyConfig() {
+            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
+            this.loading = true;
+            try {
+                await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
+                    whatsapp_number: this.whatsappNumber
+                });
+                this.notify("Configurações salvas!");
+            } catch (e) {
+                this.notify("Erro ao salvar: " + e.message, "error");
+            } finally {
+                this.loading = false;
             }
         },
 
@@ -712,6 +733,10 @@ function app() {
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch('tickets', 'POST', ticketData);
 
+                 // --- AUTOMATION: Send WhatsApp ---
+                 // Not implemented directly here to avoid blocking UI,
+                 // but we can trigger the link generation logic in modal later.
+
                  this.notify("Chamado criado!");
                  this.modals.ticket = false;
                  await this.fetchTickets();
@@ -747,6 +772,40 @@ function app() {
              } finally {
                  this.loading = false;
              }
+        },
+
+        // --- SHARE TICKET ---
+        getTrackingLink(ticketId) {
+            // Assumes the file is in the same directory
+            const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '') + 'acompanhar.html';
+            return `${baseUrl}?id=${ticketId}`;
+        },
+
+        openShareModal() {
+            if (this.selectedTicket) {
+                this.showShareModal = true;
+            }
+        },
+
+        copyTrackingLink() {
+             if (!this.selectedTicket) return;
+             const link = this.getTrackingLink(this.selectedTicket.id);
+             navigator.clipboard.writeText(link).then(() => {
+                 this.notify("Link copiado!");
+             });
+        },
+
+        sendTrackingWhatsApp() {
+            if (!this.selectedTicket || !this.selectedTicket.contact_info) return this.notify("Sem contato cadastrado", "error");
+
+            const link = this.getTrackingLink(this.selectedTicket.id);
+            const msg = `Olá ${this.selectedTicket.client_name}, acompanhe o progresso do seu reparo em tempo real aqui: ${link}`;
+
+            // Re-use existing openWhatsApp logic but with message
+            let number = this.selectedTicket.contact_info.replace(/\D/g, '');
+            if (number.length <= 11) number = '55' + number;
+
+            window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
         },
 
         // --- WORKFLOW ACTIONS ---
@@ -825,10 +884,20 @@ function app() {
                     budget_sent_at: new Date().toISOString()
                 });
 
+                // AUTOMATION: Generate Tracking Link
+                const link = this.getTrackingLink(ticket.id);
+                const msg = `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`;
+
+                // Trigger WA open (User has to click send)
+                // We notify user to check the popup
+                let number = ticket.contact_info.replace(/\D/g, '');
+                if (number.length <= 11) number = '55' + number;
+                window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+
                 if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
                     this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
                 }
-                this.notify("Orçamento marcado como Enviado.");
+                this.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
                 await this.fetchTickets();
             } catch(e) {
                  this.notify("Erro: " + e.message, "error");
