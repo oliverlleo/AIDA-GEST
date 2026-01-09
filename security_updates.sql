@@ -103,9 +103,18 @@ USING (workspace_id = (current_setting('request.headers', true)::json->>'x-works
 
 -- === NOTIFICATIONS ===
 DROP POLICY IF EXISTS "Admin manage notifications" ON public.notifications;
+-- FIXED POLICY: Ensure Admins only see notifications related to tickets in their workspace
+-- Note: Notifications table has 'ticket_id' but usually not 'workspace_id' directly.
+-- We join via tickets table to check workspace ownership.
 CREATE POLICY "Admin manage notifications" ON public.notifications
 FOR ALL TO authenticated
-USING (true);
+USING (
+   EXISTS (
+      SELECT 1 FROM public.tickets t
+      JOIN public.workspaces w ON t.workspace_id = w.id
+      WHERE t.id = ticket_id AND w.owner_id = auth.uid()
+   )
+);
 
 DROP POLICY IF EXISTS "Access notifications via ticket workspace" ON public.notifications;
 CREATE POLICY "Access notifications via ticket workspace" ON public.notifications
