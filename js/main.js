@@ -982,6 +982,12 @@ function app() {
             return this.employees.filter(e => e.roles && e.roles.includes('tecnico'));
         },
 
+        getEmployeeName(id) {
+            if (!id) return 'Não atribuído';
+            const emp = this.employees.find(e => e.id === id);
+            return emp ? emp.name : 'Desconhecido';
+        },
+
         initTechFilter() {
             // Debugging
             console.log("Initializing Tech Filter. User:", this.user);
