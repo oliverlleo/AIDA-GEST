@@ -86,6 +86,14 @@
             </div>
 
             <div class="flex items-center space-x-6">
+                <!-- Notifications Bell -->
+                <button @click="modals.notifications = true" class="relative text-gray-400 hover:text-white transition-colors">
+                    <i class="fa-solid fa-bell text-xl"></i>
+                    <span x-show="notificationsList.filter(n => !n.is_read).length > 0"
+                          class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse"
+                          x-text="notificationsList.filter(n => !n.is_read).length"></span>
+                </button>
+
                 <div class="flex items-center space-x-3">
                     <div class="text-right hidden sm:block">
                         <p class="text-sm font-medium text-white" x-text="user?.name"></p>
@@ -431,9 +439,12 @@
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
                                 <template x-for="ticket in techTickets.filter(t => t.status === 'Analise Tecnica')" :key="ticket.id">
                                     <!-- Card Component (Reused logic) -->
-                                     <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow"
+                                     <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket, 'tech')"
-                                          :class="ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500'))">
+                                          :class="[
+                                              ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
+                                              (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
+                                          ]">
 
                                         <!-- Priority Requested Badge -->
                                         <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
@@ -474,9 +485,12 @@
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
                                 <template x-for="ticket in techTickets.filter(t => t.status === 'Andamento Reparo')" :key="ticket.id">
-                                     <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow"
+                                     <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket, 'tech')"
-                                          :class="ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500'))">
+                                          :class="[
+                                              ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
+                                              (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
+                                          ]">
 
                                         <!-- Priority Requested Badge -->
                                         <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
@@ -609,6 +623,71 @@
                     </div>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- NOTIFICATIONS PANEL (Slide-over) -->
+    <div x-show="modals.notifications" class="fixed inset-0 z-[100] overflow-hidden" x-cloak>
+        <div class="absolute inset-0 overflow-hidden">
+            <div class="absolute inset-0 bg-gray-900 bg-opacity-75 transition-opacity" @click="modals.notifications = false"></div>
+            <div class="fixed inset-y-0 right-0 pl-10 max-w-full flex">
+                <div class="w-screen max-w-md transform transition ease-in-out duration-500 sm:duration-700 translate-x-0" x-transition:enter="translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="translate-x-0" x-transition:leave-end="translate-x-full">
+                    <div class="h-full flex flex-col bg-white shadow-xl overflow-y-scroll">
+                        <div class="p-6 bg-black text-white">
+                            <div class="flex items-start justify-between">
+                                <h2 class="text-lg font-medium">Notificações</h2>
+                                <button @click="modals.notifications = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button @click="markAllRead()" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded transition-colors">Marcar todas lidas</button>
+                                <label class="flex items-center space-x-2 text-xs text-gray-400 cursor-pointer">
+                                    <input type="checkbox" x-model="showReadNotifications" class="rounded bg-gray-700 border-none">
+                                    <span>Mostrar lidas</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="flex-1 p-6 space-y-4 bg-gray-50">
+                            <template x-for="notif in notificationsList.filter(n => showReadNotifications || !n.is_read)" :key="notif.id">
+                                <div class="bg-white p-4 rounded-lg shadow-sm border-l-4 relative group transition-all hover:shadow-md"
+                                     :class="{
+                                        'border-blue-500': notif.type === 'info',
+                                        'border-orange-500': notif.type === 'warning',
+                                        'border-red-600': notif.type === 'urgent',
+                                        'opacity-60': notif.is_read
+                                     }">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex items-start space-x-3">
+                                            <div class="mt-0.5">
+                                                <i class="fa-solid"
+                                                   :class="{
+                                                       'fa-circle-info text-blue-500': notif.type === 'info',
+                                                       'fa-triangle-exclamation text-orange-500': notif.type === 'warning',
+                                                       'fa-bell fa-shake text-red-600': notif.type === 'urgent'
+                                                   }"></i>
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-bold text-gray-800" x-text="notif.message"></p>
+                                                <p class="text-xs text-gray-500 mt-1" x-text="new Date(notif.created_at).toLocaleString()"></p>
+                                                <template x-if="notif.tickets">
+                                                    <p class="text-xs font-mono text-gray-400 mt-1" x-text="'Ref: OS ' + notif.tickets.os_number"></p>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <button x-show="!notif.is_read" @click="markNotificationRead(notif.id)" class="text-gray-300 hover:text-brand-500" title="Marcar como lida">
+                                            <i class="fa-solid fa-check"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="notificationsList.filter(n => showReadNotifications || !n.is_read).length === 0" class="text-center text-gray-400 py-10">
+                                <i class="fa-regular fa-bell-slash text-4xl mb-2"></i>
+                                <p>Nenhuma notificação.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
