@@ -1026,7 +1026,13 @@
                              <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
                                 <h4 class="font-bold text-gray-700 text-xs uppercase mb-2">Cliente</h4>
                                 <p class="text-sm mb-1"><span class="font-bold">Nome:</span> <span x-text="selectedTicket.client_name"></span></p>
-                                <p class="text-sm mb-1"><span class="font-bold">Contato:</span> <span x-text="selectedTicket.contact_info || '-'"></span></p>
+                                <p class="text-sm mb-1 flex items-center">
+                                    <span class="font-bold mr-2">Contato:</span>
+                                    <button @click="openWhatsApp(selectedTicket.contact_info)" class="text-green-600 hover:text-green-800 font-bold flex items-center transition-colors" title="Abrir WhatsApp">
+                                        <span x-text="selectedTicket.contact_info || '-'"></span>
+                                        <i x-show="selectedTicket.contact_info" class="fa-brands fa-whatsapp ml-2"></i>
+                                    </button>
+                                </p>
                             </div>
                         </div>
 
