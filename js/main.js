@@ -81,10 +81,14 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false },
+        modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, share: false },
 
         // Notifications
         notificationsList: [],
+
+        // Settings
+        companyWhatsApp: '',
+        shareLink: '',
         showReadNotifications: false,
 
         // Constants
@@ -362,18 +366,18 @@ function app() {
 
             // REFACTORED: Native Fetch
             try {
-                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code)&id=eq.${user.id}`);
+                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
                 let profile = profileData && profileData.length > 0 ? profileData[0] : null;
 
                 // Handle missing profile case (equivalent to PGRST116)
                 if (!profile) {
-                    const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code&owner_id=eq.${user.id}`);
+                    const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code,whatsapp_number&owner_id=eq.${user.id}`);
                     const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
 
                     if (workspace) {
                         await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
                         // Re-fetch
-                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code)&id=eq.${user.id}`);
+                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
                         profile = newProfileData[0];
                     } else {
                         this.view = 'setup_required';
@@ -385,6 +389,12 @@ function app() {
                     this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
                     this.workspaceName = profile.workspaces?.name;
                     this.companyCode = profile.workspaces?.company_code;
+
+                    // Load WhatsApp
+                    if (profile.workspaces && profile.workspaces.whatsapp_number) {
+                        this.companyWhatsApp = profile.workspaces.whatsapp_number;
+                    }
+
                     await this.fetchEmployees();
                     this.initTechFilter(); // Admin defaults to 'all'
                     await this.fetchTickets();
@@ -1210,6 +1220,63 @@ function app() {
             } catch(e) {
                 this.notify('Erro ao excluir', 'error');
             }
+        },
+
+        async saveCompanySettings() {
+            if (!this.user?.workspace_id) return;
+
+            // Clean number (keep only digits)
+            const cleanNumber = this.companyWhatsApp.replace(/\D/g, '');
+
+            this.loading = true;
+            try {
+                await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
+                    whatsapp_number: cleanNumber
+                });
+                this.companyWhatsApp = cleanNumber;
+                this.notify("Configurações salvas!");
+            } catch(e) {
+                this.notify("Erro ao salvar: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        openShareModal(ticket) {
+            this.selectedTicket = ticket;
+            const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+            // Ensure trailing slash logic if needed, but easier to target file directly if in same dir
+            // Assuming acompanhar.html is next to index.html
+            const trackingUrl = `${baseUrl}acompanhar.html?id=${ticket.id}`;
+            this.shareLink = trackingUrl;
+            this.modals.share = true;
+        },
+
+        copyShareLink() {
+            if (!this.shareLink) return;
+            navigator.clipboard.writeText(this.shareLink).then(() => {
+                this.notify("Link copiado!");
+            }).catch(() => {
+                this.notify("Erro ao copiar", "error");
+            });
+        },
+
+        shareViaWhatsApp() {
+            if (!this.selectedTicket) return;
+            const link = this.shareLink;
+            const message = `Olá ${this.selectedTicket.client_name}, acompanhe o progresso do seu reparo em tempo real aqui: ${link}`;
+            const encoded = encodeURIComponent(message);
+
+            // Try to use client phone if available
+            let url = `https://wa.me/?text=${encoded}`;
+            if (this.selectedTicket.contact_info) {
+                let phone = this.selectedTicket.contact_info.replace(/\D/g, '');
+                if (phone.length >= 10) {
+                    if (phone.length <= 11) phone = '55' + phone;
+                    url = `https://wa.me/${phone}?text=${encoded}`;
+                }
+            }
+            window.open(url, '_blank');
         },
 
         hasRole(role) {

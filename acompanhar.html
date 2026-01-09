@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acompanhar Reparo</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#FF6B00',
+                            600: '#E65100',
+                            900: '#1a1a1a',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-900 antialiased flex flex-col items-center justify-center p-4 transition-colors duration-1000"
+      :class="isSuccess ? 'bg-green-50' : 'bg-brand-500'"
+      x-data="tracker()">
+
+    <!-- Loading -->
+    <div x-show="loading" class="text-white text-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-white mb-4 mx-auto"></div>
+        <p class="animate-pulse font-bold">Buscando informações...</p>
+    </div>
+
+    <!-- Error -->
+    <div x-show="error" class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center" x-cloak>
+        <div class="text-red-500 text-5xl mb-4"><i class="fa-solid fa-circle-exclamation"></i></div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-2">Chamado não encontrado</h2>
+        <p class="text-gray-500">Verifique o link e tente novamente.</p>
+    </div>
+
+    <!-- Content -->
+    <div x-show="ticket && !loading" class="w-full max-w-lg relative" x-cloak>
+
+        <!-- Success Banner -->
+        <div x-show="isSuccess" class="bg-white border-4 border-green-500 rounded-2xl p-6 shadow-2xl mb-6 text-center transform transition-all duration-1000 scale-100"
+             x-transition:enter="transition ease-out duration-500"
+             x-transition:enter-start="opacity-0 scale-90"
+             x-transition:enter-end="opacity-100 scale-100">
+            <div class="text-green-500 text-5xl mb-3">
+                <i class="fa-solid fa-gift fa-bounce"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-1">🎉 Boa notícia!</h2>
+            <p class="text-green-700 font-medium">Seu aparelho está pronto e testado.<br>Pode vir buscá-lo quando quiser!</p>
+        </div>
+
+        <!-- Ticket Card -->
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+            <!-- Header -->
+            <div class="bg-black text-white p-6 text-center">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status do Reparo</p>
+                <h1 class="text-2xl font-bold" x-text="ticket?.device_model"></h1>
+                <p class="text-brand-500 font-mono text-sm mt-1" x-text="'OS #' + ticket?.os_number"></p>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6">
+
+                <!-- Status Text -->
+                <div class="text-center mb-8">
+                    <span class="inline-block px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wide"
+                          :class="isSuccess ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-brand-600'">
+                        <span x-text="getStatusLabel(ticket?.status)"></span>
+                    </span>
+                    <p class="text-gray-400 text-xs mt-3 font-medium" x-show="ticket?.deadline">
+                        <i class="fa-regular fa-clock mr-1"></i> Previsão para conclusão: <span class="text-gray-600" x-text="new Date(ticket?.deadline).toLocaleString('pt-BR')"></span>
+                    </p>
+                </div>
+
+                <!-- Animated Timeline -->
+                <div class="relative mb-8 px-2">
+                    <!-- Line Background -->
+                    <div class="absolute top-1/2 left-0 w-full h-1 bg-gray-200 -translate-y-1/2 z-0 rounded-full"></div>
+
+                    <!-- Progress Line (Colored) -->
+                    <div class="absolute top-1/2 left-0 h-1 bg-brand-500 -translate-y-1/2 z-0 rounded-full transition-all duration-1000"
+                         :style="'width: ' + getProgressPercent() + '%'"></div>
+
+                    <!-- Icons Row -->
+                    <div class="relative z-10 flex justify-between">
+                         <template x-for="(step, idx) in STEPS" :key="idx">
+                             <div class="flex flex-col items-center group relative" :style="'width: ' + (100 / (STEPS.length - 1)) + '%'">
+                                 <!-- Dot/Icon -->
+                                 <div class="w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-500 z-10 bg-white"
+                                      :class="idx <= currentStepIndex ? 'border-brand-500 text-brand-500 scale-110 shadow-md' : 'border-gray-300 text-gray-300'">
+
+                                     <!-- Active Icon (Phone moving) -->
+                                     <template x-if="idx === currentStepIndex && !isSuccess">
+                                         <i class="fa-solid fa-mobile-screen fa-shake"></i>
+                                     </template>
+
+                                     <!-- Past Icon (Check) -->
+                                     <template x-if="idx < currentStepIndex || (idx === currentStepIndex && isSuccess)">
+                                         <i class="fa-solid fa-check text-xs"></i>
+                                     </template>
+
+                                     <!-- Future Icon (Dot) -->
+                                     <template x-if="idx > currentStepIndex">
+                                         <div class="w-2 h-2 rounded-full bg-gray-300"></div>
+                                     </template>
+                                 </div>
+
+                                 <!-- Label (Only show active or first/last on mobile to avoid clutter) -->
+                                 <div class="absolute top-10 text-[9px] font-bold uppercase text-center w-20 transition-opacity duration-300"
+                                      :class="idx === currentStepIndex ? 'opacity-100 text-brand-600' : 'opacity-0 md:opacity-50 text-gray-400'">
+                                     <span x-text="step.label"></span>
+                                 </div>
+                             </div>
+                         </template>
+                    </div>
+                </div>
+
+                <!-- Footer Info -->
+                <div class="border-t border-gray-100 pt-6 mt-2 text-center space-y-2">
+                     <p class="text-sm text-gray-500" x-show="ticket?.technician_id">
+                        Técnico responsável: <span class="font-bold text-gray-800" x-text="ticket?.technician_name || 'Especialista'"></span>
+                    </p>
+
+                    <!-- Help Button -->
+                    <div class="pt-4" x-show="workspacePhone">
+                        <a :href="'https://wa.me/' + workspacePhone" target="_blank"
+                           class="inline-flex items-center justify-center bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg shadow-green-500/30 w-full">
+                            <i class="fa-brands fa-whatsapp text-xl mr-2"></i>
+                            Precisa de ajuda?
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <p class="text-center text-white/60 text-xs mt-8 font-light">TechAssist - Acompanhamento em Tempo Real</p>
+    </div>
+
+    <script>
+        const STATUS_MAPPING = [
+            { id: 'Aberto', label: 'Recebido' },
+            { id: 'Analise Tecnica', label: 'Análise' },
+            { id: 'Aprovacao', label: 'Aprovação' },
+            { id: 'Compra Peca', label: 'Peças' },
+            { id: 'Andamento Reparo', label: 'Reparo' },
+            { id: 'Teste Final', label: 'Testes' },
+            { id: 'Retirada Cliente', label: 'Pronto' },
+            { id: 'Finalizado', label: 'Entregue' }
+        ];
+
+        function tracker() {
+            return {
+                loading: true,
+                error: false,
+                ticket: null,
+                workspacePhone: null,
+                STEPS: STATUS_MAPPING,
+
+                get currentStepIndex() {
+                    if (!this.ticket) return 0;
+                    const idx = this.STEPS.findIndex(s => s.id === this.ticket.status);
+                    return idx === -1 ? 0 : idx;
+                },
+
+                get isSuccess() {
+                    return this.ticket?.status === 'Retirada Cliente' && this.ticket?.pickup_available;
+                },
+
+                async init() {
+                    const params = new URLSearchParams(window.location.search);
+                    const id = params.get('id');
+
+                    if (!id) {
+                        this.loading = false;
+                        this.error = true;
+                        return;
+                    }
+
+                    try {
+                        // Native Fetch to bypass any client config issues
+                        // We rely on the public RLS policy for reading ticket by ID (implicit in goal, likely need to check policy)
+                        // If RLS blocks ID lookup for anon, we might need a secure function.
+                        // But standard RLS 'true' allows this.
+
+                        const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
+                        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
+
+                        const response = await fetch(`${SUPABASE_URL}/rest/v1/tickets?select=*,employees!tickets_technician_id_fkey(name)&id=eq.${id}`, {
+                            headers: {
+                                'apikey': SUPABASE_KEY,
+                                'Authorization': `Bearer ${SUPABASE_KEY}`
+                            }
+                        });
+
+                        const data = await response.json();
+
+                        if (!data || data.length === 0) throw new Error("Not Found");
+
+                        this.ticket = data[0];
+                        if (this.ticket.employees) {
+                            // Extract First Name only for privacy
+                            const fullName = this.ticket.employees.name || '';
+                            this.ticket.technician_name = fullName.split(' ')[0];
+                        }
+
+                        // Fetch Workspace Phone
+                        if (this.ticket.workspace_id) {
+                            const wsRes = await fetch(`${SUPABASE_URL}/rest/v1/workspaces?select=whatsapp_number&id=eq.${this.ticket.workspace_id}`, {
+                                headers: {
+                                    'apikey': SUPABASE_KEY,
+                                    'Authorization': `Bearer ${SUPABASE_KEY}`
+                                }
+                            });
+                            const wsData = await wsRes.json();
+                            if (wsData && wsData.length > 0) {
+                                this.workspacePhone = wsData[0].whatsapp_number;
+                            }
+                        }
+
+                    } catch (e) {
+                        console.error(e);
+                        this.error = true;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                getStatusLabel(status) {
+                    const map = {
+                        'Aberto': 'Aberto',
+                        'Analise Tecnica': 'Em Análise',
+                        'Aprovacao': 'Aguardando Aprovação',
+                        'Compra Peca': 'Comprando Peças',
+                        'Andamento Reparo': 'Em Reparo',
+                        'Teste Final': 'Testes Finais',
+                        'Retirada Cliente': 'Pronto para Retirada',
+                        'Finalizado': 'Finalizado'
+                    };
+                    return map[status] || status;
+                },
+
+                getProgressPercent() {
+                    const total = this.STEPS.length - 1;
+                    const current = this.currentStepIndex;
+                    return (current / total) * 100;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
