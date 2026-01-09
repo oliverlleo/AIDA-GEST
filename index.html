@@ -211,7 +211,14 @@
                         <h2 class="text-xl font-bold flex items-center">
                             <i class="fa-solid fa-layer-group text-brand-500 mr-2"></i> Quadro de Chamados
                         </h2>
-                        <div class="flex space-x-2">
+                        <div class="flex space-x-3 items-center">
+                             <!-- Search Bar -->
+                             <div class="relative">
+                                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                 <input type="text" x-model="searchQuery" placeholder="Buscar OS, Cliente, Serial..."
+                                        class="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all w-64 bg-gray-50 focus:bg-white">
+                             </div>
+
                              <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
                                 <i class="fa-solid fa-plus mr-1"></i> Novo
                             </button>
@@ -233,7 +240,7 @@
 
                                     <!-- Cards Area -->
                                     <div class="p-2 flex-grow overflow-y-auto space-y-3 kanban-col">
-                                        <template x-for="ticket in tickets.filter(t => t.status === status)" :key="ticket.id">
+                                         <template x-for="ticket in tickets.filter(t => t.status === status && matchesSearch(t))" :key="ticket.id">
                                             <div @click="viewTicketDetails(ticket)"
                                                  class="bg-white p-4 rounded-lg shadow-sm border-l-4 cursor-pointer hover:shadow-md transition-shadow group relative"
                                                  :class="getCardColor(ticket) + ' ' + (ticket.priority === 'Urgente' ? 'border-red-500' : 'border-gray-300')">
@@ -362,10 +369,18 @@
                     <div class="flex justify-between items-center mb-6">
                          <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-wrench mr-2 text-brand-500"></i> Minha Bancada</h2>
 
-                         <!-- Tech Filter (Admin: Dropdown, Tech: Fixed) -->
-                         <div x-show="hasRole('admin') || hasRole('tecnico')">
-                             <div class="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
-                                 <i class="fa-solid fa-filter text-gray-400 text-xs"></i>
+                         <div class="flex items-center space-x-3">
+                             <!-- Search Bar (Tech) -->
+                             <div class="relative">
+                                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                 <input type="text" x-model="searchQuery" placeholder="Buscar na Bancada..."
+                                        class="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all w-64 bg-white">
+                             </div>
+
+                             <!-- Tech Filter (Admin: Dropdown, Tech: Fixed) -->
+                             <div x-show="hasRole('admin') || hasRole('tecnico')">
+                                 <div class="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                                     <i class="fa-solid fa-filter text-gray-400 text-xs"></i>
                                  <template x-if="hasRole('admin')">
                                      <select x-model="selectedTechFilter" @change="fetchTickets()" class="text-sm font-bold text-gray-700 bg-transparent border-none focus:ring-0 cursor-pointer">
                                          <option value="all">Todos os Técnicos</option>
@@ -437,7 +452,7 @@
                                 <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Analise Tecnica').length"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
-                                <template x-for="ticket in techTickets.filter(t => t.status === 'Analise Tecnica')" :key="ticket.id">
+                                <template x-for="ticket in techTickets.filter(t => t.status === 'Analise Tecnica' && matchesSearch(t))" :key="ticket.id">
                                     <!-- Card Component (Reused logic) -->
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket, 'tech')"
@@ -484,7 +499,7 @@
                                 <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Andamento Reparo').length"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
-                                <template x-for="ticket in techTickets.filter(t => t.status === 'Andamento Reparo')" :key="ticket.id">
+                                <template x-for="ticket in techTickets.filter(t => t.status === 'Andamento Reparo' && matchesSearch(t))" :key="ticket.id">
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket, 'tech')"
                                           :class="[
