@@ -276,7 +276,7 @@
 
                                                     <!-- Aberto -->
                                                     <template x-if="ticket.status === 'Aberto'">
-                                                        <button @click="updateStatus(ticket, 'Analise Tecnica')" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
+                                                        <button @click="updateStatus(ticket, 'Analise Tecnica', {}, { action: 'Iniciou Atendimento', details: 'Moveu para Análise Técnica via Kanban' })" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
                                                             Iniciar Análise
                                                         </button>
                                                     </template>
@@ -395,6 +395,7 @@
                              </div>
                          </div>
                     </div>
+                </div>
 
                     <!-- Weekly Calendar Bar -->
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
@@ -933,7 +934,7 @@
 
                         <!-- 1. Aberto -> Analise -->
                         <template x-if="selectedTicket.status === 'Aberto'">
-                            <button @click="updateStatus(selectedTicket, 'Analise Tecnica')" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 text-sm shadow flex items-center">
+                            <button @click="updateStatus(selectedTicket, 'Analise Tecnica', {}, { action: 'Iniciou Atendimento', details: 'Moveu para Análise Técnica' })" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 text-sm shadow flex items-center">
                                 <i class="fa-solid fa-microscope mr-2"></i> Iniciar Atendimento (Ir para Análise)
                             </button>
                         </template>
