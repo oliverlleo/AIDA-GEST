@@ -51,11 +51,14 @@ function app() {
             defect: '', priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '', // New field
-            checklist: [], photos: [], notes: ''
+            checklist: [], checklist_final: [], photos: [], notes: ''
         },
         newChecklistItem: '',
         selectedTemplateId: '',
         newTemplateName: '',
+        newChecklistFinalItem: '',
+        selectedTemplateIdFinal: '',
+        newTemplateNameFinal: '',
 
         // UI State for Actions
         analysisForm: { needsParts: false, partsList: '' },
@@ -651,7 +654,7 @@ function app() {
                 defect: '', priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
                 technician_id: '',
-                checklist: [], photos: [], notes: ''
+                checklist: [], checklist_final: [], photos: [], notes: ''
             };
             this.modals.ticket = true;
         },
@@ -706,6 +709,53 @@ function app() {
             if (tmpl) this.ticketForm.checklist = tmpl.items.map(s => ({ item: s, ok: false }));
         },
 
+        // --- FINAL CHECKLIST HELPERS ---
+        addChecklistFinalItem() {
+            if (this.newChecklistFinalItem.trim()) {
+                this.ticketForm.checklist_final.push({ item: this.newChecklistFinalItem, ok: false });
+                this.newChecklistFinalItem = '';
+            }
+        },
+        removeChecklistFinalItem(index) {
+            this.ticketForm.checklist_final.splice(index, 1);
+        },
+        async saveTemplateFinal() {
+            if (!this.newTemplateNameFinal) return this.notify("Nomeie o modelo final", "error");
+            if (this.ticketForm.checklist_final.length === 0) return this.notify("Adicione itens", "error");
+
+            try {
+                // Saving as a regular template (user can use naming convention to distinguish)
+                await this.supabaseFetch('checklist_templates', 'POST', {
+                    workspace_id: this.user.workspace_id,
+                    name: this.newTemplateNameFinal,
+                    items: this.ticketForm.checklist_final.map(i => i.item)
+                });
+
+                this.notify("Modelo final salvo!");
+                this.newTemplateNameFinal = '';
+                this.fetchTemplates();
+            } catch (error) {
+                this.notify("Erro ao salvar: " + error.message, "error");
+            }
+        },
+        async deleteTemplateFinal() {
+            // Re-use logic or separate if needed. Using selectedTemplateIdFinal
+            if (!this.selectedTemplateIdFinal) return;
+            if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
+            try {
+                await this.supabaseFetch(`checklist_templates?id=eq.${this.selectedTemplateIdFinal}`, 'DELETE');
+                this.notify("Modelo excluído.");
+                this.selectedTemplateIdFinal = '';
+                this.fetchTemplates();
+            } catch (e) {
+                this.notify("Erro: " + e.message, "error");
+            }
+        },
+        loadTemplateFinal() {
+            const tmpl = this.checklistTemplates.find(t => t.id === this.selectedTemplateIdFinal);
+            if (tmpl) this.ticketForm.checklist_final = tmpl.items.map(s => ({ item: s, ok: false }));
+        },
+
         async createTicket() {
              if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model) {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
@@ -737,6 +787,7 @@ function app() {
                      device_condition: this.ticketForm.device_condition,
                      technician_id: this.ticketForm.technician_id || null, // New Field
                      checklist_data: this.ticketForm.checklist,
+                     checklist_final_data: this.ticketForm.checklist_final,
                      status: 'Aberto',
                      created_by_name: this.user.name
                  };
@@ -762,6 +813,7 @@ function app() {
             this.selectedTicket = ticket;
             this.modalSource = source;
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
+            if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
             // Reset UI states
             this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
             this.modals.viewTicket = true;
@@ -774,9 +826,11 @@ function app() {
              try {
                  await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', {
                      tech_notes: this.selectedTicket.tech_notes,
-                     parts_needed: this.selectedTicket.parts_needed
+                     parts_needed: this.selectedTicket.parts_needed,
+                     checklist_data: this.selectedTicket.checklist_data,
+                     checklist_final_data: this.selectedTicket.checklist_final_data
                  });
-                 this.notify("Anotações salvas!");
+                 this.notify("Alterações salvas!");
                  await this.fetchTickets();
              } catch (e) {
                  this.notify("Erro ao salvar: " + e.message, "error");
