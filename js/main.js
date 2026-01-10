@@ -37,6 +37,8 @@ function app() {
         tickets: [],
         techTickets: [],
         checklistTemplates: [],
+        checklistTemplatesEntry: [],
+        checklistTemplatesFinal: [],
         notifications: [],
 
         // Forms
@@ -642,7 +644,12 @@ function app() {
              try {
                  // REFACTORED: Native Fetch
                  const data = await this.supabaseFetch('checklist_templates?select=*');
-                 if (data) this.checklistTemplates = data;
+                 if (data) {
+                     this.checklistTemplates = data; // Keep raw
+                     // Filter by type
+                     this.checklistTemplatesEntry = data.filter(t => !t.type || t.type === 'entry');
+                     this.checklistTemplatesFinal = data.filter(t => t.type === 'final');
+                 }
              } catch (e) {
                  console.error("Fetch Templates Error:", e);
              }
@@ -677,7 +684,8 @@ function app() {
                 await this.supabaseFetch('checklist_templates', 'POST', {
                     workspace_id: this.user.workspace_id,
                     name: this.newTemplateName,
-                    items: this.ticketForm.checklist.map(i => i.item)
+                    items: this.ticketForm.checklist.map(i => i.item),
+                    type: 'entry'
                 });
 
                 this.notify("Modelo salvo!");
@@ -724,11 +732,12 @@ function app() {
             if (this.ticketForm.checklist_final.length === 0) return this.notify("Adicione itens", "error");
 
             try {
-                // Saving as a regular template (user can use naming convention to distinguish)
+                // Saving as 'final' type
                 await this.supabaseFetch('checklist_templates', 'POST', {
                     workspace_id: this.user.workspace_id,
                     name: this.newTemplateNameFinal,
-                    items: this.ticketForm.checklist_final.map(i => i.item)
+                    items: this.ticketForm.checklist_final.map(i => i.item),
+                    type: 'final'
                 });
 
                 this.notify("Modelo final salvo!");
