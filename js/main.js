@@ -68,6 +68,10 @@ function app() {
         showTestFailureForm: false,
         testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '' },
 
+        // Edit Deadlines State
+        editingDeadlines: false,
+        editDeadlineForm: { deadline: '', analysis_deadline: '' },
+
         // Selected Ticket
         selectedTicket: null,
         ticketLogs: [],
@@ -825,7 +829,90 @@ function app() {
             if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
             // Reset UI states
             this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
+            this.editingDeadlines = false; // Reset editing mode
+            this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
             this.modals.viewTicket = true;
+        },
+
+        startEditingDeadlines() {
+            if (!this.selectedTicket) return;
+            // Format dates for datetime-local input (YYYY-MM-DDThh:mm)
+            const formatForInput = (dateStr) => {
+                if (!dateStr) return '';
+                const d = new Date(dateStr);
+                const pad = (n) => n < 10 ? '0' + n : n;
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            };
+
+            this.editDeadlineForm.deadline = formatForInput(this.selectedTicket.deadline);
+            this.editDeadlineForm.analysis_deadline = formatForInput(this.selectedTicket.analysis_deadline);
+            this.editingDeadlines = true;
+        },
+
+        cancelEditingDeadlines() {
+            this.editingDeadlines = false;
+            this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
+        },
+
+        async saveDeadlines() {
+            if (!this.selectedTicket) return;
+
+            // Validation
+            if (this.editDeadlineForm.deadline && this.editDeadlineForm.analysis_deadline) {
+                const deadline = new Date(this.editDeadlineForm.deadline);
+                const analysis = new Date(this.editDeadlineForm.analysis_deadline);
+                if (analysis > deadline) {
+                    return this.notify("O Prazo de Análise não pode ser maior que o Prazo de Entrega.", "error");
+                }
+            }
+
+            this.loading = true;
+            try {
+                // Determine changes for logging
+                const oldDeadline = this.selectedTicket.deadline ? new Date(this.selectedTicket.deadline).toLocaleString() : 'Não definido';
+                const newDeadline = this.editDeadlineForm.deadline ? new Date(this.editDeadlineForm.deadline).toLocaleString() : 'Não definido';
+
+                const oldAnalysis = this.selectedTicket.analysis_deadline ? new Date(this.selectedTicket.analysis_deadline).toLocaleString() : 'Não definido';
+                const newAnalysis = this.editDeadlineForm.analysis_deadline ? new Date(this.editDeadlineForm.analysis_deadline).toLocaleString() : 'Não definido';
+
+                // Log Delivery Change
+                if (oldDeadline !== newDeadline) {
+                    await this.logTicketAction(
+                        this.selectedTicket.id,
+                        'Alterou Prazo',
+                        `${this.user.name} alterou o prazo de ${oldDeadline} para ${newDeadline}`
+                    );
+                }
+
+                // Log Analysis Change
+                if (oldAnalysis !== newAnalysis) {
+                    await this.logTicketAction(
+                        this.selectedTicket.id,
+                        'Alterou Prazo Análise',
+                        `${this.user.name} alterou o prazo de análise de ${oldAnalysis} para ${newAnalysis}`
+                    );
+                }
+
+                // Update
+                const updates = {
+                    deadline: this.editDeadlineForm.deadline || null,
+                    analysis_deadline: this.editDeadlineForm.analysis_deadline || null
+                };
+
+                await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', updates);
+
+                // Refresh local state immediately for UI
+                this.selectedTicket.deadline = updates.deadline;
+                this.selectedTicket.analysis_deadline = updates.analysis_deadline;
+
+                this.notify("Prazos atualizados!");
+                this.editingDeadlines = false;
+                await this.fetchTickets(); // Full refresh
+            } catch (e) {
+                this.notify("Erro ao salvar prazos: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
         },
 
         // REFACTORED: Native Fetch Implementation
