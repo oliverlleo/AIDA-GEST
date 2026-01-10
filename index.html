@@ -257,8 +257,30 @@
 
                                                 <!-- Footer -->
                                                 <div class="mt-3 pt-2 border-t border-gray-50 space-y-1">
-                                                    <div class="flex justify-between items-center text-[10px] text-gray-400">
-                                                        <div class="flex items-center">
+                                                    <!-- Deadlines Section -->
+                                                    <div class="space-y-0.5 mb-2">
+                                                        <!-- Analysis Deadline -->
+                                                        <template x-if="ticket.analysis_deadline">
+                                                            <div class="flex items-center justify-between text-[10px]">
+                                                                <span class="font-bold text-purple-700 uppercase">Análise:</span>
+                                                                <div class="flex items-center text-purple-700 font-medium">
+                                                                    <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
+                                                                    <span x-text="new Date(ticket.analysis_deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                        <!-- Delivery Deadline -->
+                                                        <div class="flex items-center justify-between text-[10px]">
+                                                            <span class="font-bold text-gray-500 uppercase">Entrega:</span>
+                                                            <div class="flex items-center font-medium" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600' : 'text-gray-500'">
+                                                                <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
+                                                                <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' }) : 'S/ Prazo'"></span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="flex justify-between items-center text-[10px] text-gray-400 border-t border-gray-50 pt-1">
+                                                        <div class="flex items-center" title="Criado em">
                                                             <i class="fa-regular fa-clock mr-1"></i>
                                                             <span x-text="new Date(ticket.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })"></span>
                                                         </div>
@@ -475,13 +497,29 @@
                                         <p class="text-gray-500 text-xs mb-2 line-clamp-2" x-text="ticket.defect_reported"></p>
 
                                         <div class="mt-2 pt-2 border-t border-gray-50 space-y-1">
-                                            <div class="text-[10px] text-gray-400 flex items-center justify-between">
-                                                <span>
-                                                    <i class="fa-regular fa-clock mr-1"></i>
-                                                    <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'S/ Prazo'"></span>
-                                                </span>
+                                            <!-- Deadlines Section -->
+                                            <div class="space-y-0.5 mb-2">
+                                                <!-- Analysis Deadline -->
+                                                <template x-if="ticket.analysis_deadline">
+                                                    <div class="flex items-center justify-between text-[10px]">
+                                                        <span class="font-bold text-purple-700 uppercase">Análise:</span>
+                                                        <div class="flex items-center text-purple-700 font-medium">
+                                                            <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
+                                                            <span x-text="new Date(ticket.analysis_deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <!-- Delivery Deadline -->
+                                                <div class="flex items-center justify-between text-[10px]">
+                                                    <span class="font-bold text-gray-500 uppercase">Entrega:</span>
+                                                    <div class="flex items-center font-medium" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600' : 'text-gray-500'">
+                                                        <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
+                                                        <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' }) : 'S/ Prazo'"></span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="text-[10px] font-bold text-gray-600 truncate">
+
+                                            <div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
                                                 Técnico: <span class="font-normal" x-text="getEmployeeName(ticket.technician_id)"></span>
                                             </div>
                                         </div>
@@ -528,13 +566,29 @@
                                         </template>
 
                                         <div class="mt-2 pt-2 border-t border-gray-50 space-y-1">
-                                            <div class="text-[10px] text-gray-400 flex items-center justify-between">
-                                                <span>
-                                                    <i class="fa-regular fa-clock mr-1"></i>
-                                                    <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'S/ Prazo'"></span>
-                                                </span>
+                                            <!-- Deadlines Section -->
+                                            <div class="space-y-0.5 mb-2">
+                                                <!-- Analysis Deadline -->
+                                                <template x-if="ticket.analysis_deadline">
+                                                    <div class="flex items-center justify-between text-[10px]">
+                                                        <span class="font-bold text-purple-700 uppercase">Análise:</span>
+                                                        <div class="flex items-center text-purple-700 font-medium">
+                                                            <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
+                                                            <span x-text="new Date(ticket.analysis_deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <!-- Delivery Deadline -->
+                                                <div class="flex items-center justify-between text-[10px]">
+                                                    <span class="font-bold text-gray-500 uppercase">Entrega:</span>
+                                                    <div class="flex items-center font-medium" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600' : 'text-gray-500'">
+                                                        <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
+                                                        <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' }) : 'S/ Prazo'"></span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="text-[10px] font-bold text-gray-600 truncate">
+
+                                            <div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
                                                 Técnico: <span class="font-normal" x-text="getEmployeeName(ticket.technician_id)"></span>
                                             </div>
                                         </div>
@@ -834,6 +888,10 @@
                             <input type="datetime-local" x-model="ticketForm.deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Análise</label>
+                            <input type="datetime-local" x-model="ticketForm.analysis_deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                        </div>
+                        <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho</label>
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
                         </div>
@@ -1122,6 +1180,7 @@
                                     <p class="text-sm"><span class="font-bold text-gray-600">Condição:</span> <span x-text="selectedTicket.device_condition || '-'"></span></p>
                                     <p class="text-sm"><span class="font-bold text-gray-600">Técnico:</span> <span class="bg-black text-white px-2 py-0.5 rounded text-xs" x-text="getEmployeeName(selectedTicket.technician_id)"></span></p>
                                     <p class="text-sm"><span class="font-bold text-gray-600">Prazo:</span> <span x-text="selectedTicket.deadline ? new Date(selectedTicket.deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não definido'" :class="new Date(selectedTicket.deadline) < new Date() ? 'text-red-600 font-bold' : ''"></span></p>
+                                    <p class="text-sm" x-show="selectedTicket.analysis_deadline"><span class="font-bold text-gray-600">Prazo Análise:</span> <span x-text="new Date(selectedTicket.analysis_deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })" class="text-purple-600 font-bold"></span></p>
                                 </div>
 
                                 <p class="text-sm mb-1 font-bold text-gray-700">Defeito Inicial:</p>
