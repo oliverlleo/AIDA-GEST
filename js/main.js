@@ -710,6 +710,16 @@ function app() {
              if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model) {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
+
+             // VALIDATION: Analysis Deadline vs Delivery Deadline
+             if (this.ticketForm.deadline && this.ticketForm.analysis_deadline) {
+                 const deadline = new Date(this.ticketForm.deadline);
+                 const analysis = new Date(this.ticketForm.analysis_deadline);
+                 if (analysis > deadline) {
+                     return this.notify("O Prazo de Análise não pode ser maior que o Prazo de Entrega.", "error");
+                 }
+             }
+
              this.loading = true;
 
              try {
