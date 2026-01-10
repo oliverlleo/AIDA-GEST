@@ -49,7 +49,7 @@ function app() {
         ticketForm: {
             client_name: '', os_number: '', model: '', serial: '',
             defect: '', priority: 'Normal', contact: '',
-            deadline: '', device_condition: '',
+            deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '', // New field
             checklist: [], photos: [], notes: ''
         },
@@ -649,7 +649,7 @@ function app() {
             this.ticketForm = {
                 client_name: '', os_number: '', model: '', serial: '',
                 defect: '', priority: 'Normal', contact: '',
-                deadline: '', device_condition: '',
+                deadline: '', analysis_deadline: '', device_condition: '',
                 technician_id: '',
                 checklist: [], photos: [], notes: ''
             };
@@ -723,6 +723,7 @@ function app() {
                      priority: this.ticketForm.priority,
                      contact_info: this.ticketForm.contact,
                      deadline: this.ticketForm.deadline || null,
+                     analysis_deadline: this.ticketForm.analysis_deadline || null,
                      device_condition: this.ticketForm.device_condition,
                      technician_id: this.ticketForm.technician_id || null, // New Field
                      checklist_data: this.ticketForm.checklist,

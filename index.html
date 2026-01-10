@@ -834,6 +834,10 @@
                             <input type="datetime-local" x-model="ticketForm.deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Análise</label>
+                            <input type="datetime-local" x-model="ticketForm.analysis_deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                        </div>
+                        <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho</label>
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
                         </div>
@@ -1122,6 +1126,7 @@
                                     <p class="text-sm"><span class="font-bold text-gray-600">Condição:</span> <span x-text="selectedTicket.device_condition || '-'"></span></p>
                                     <p class="text-sm"><span class="font-bold text-gray-600">Técnico:</span> <span class="bg-black text-white px-2 py-0.5 rounded text-xs" x-text="getEmployeeName(selectedTicket.technician_id)"></span></p>
                                     <p class="text-sm"><span class="font-bold text-gray-600">Prazo:</span> <span x-text="selectedTicket.deadline ? new Date(selectedTicket.deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Não definido'" :class="new Date(selectedTicket.deadline) < new Date() ? 'text-red-600 font-bold' : ''"></span></p>
+                                    <p class="text-sm" x-show="selectedTicket.analysis_deadline"><span class="font-bold text-gray-600">Prazo Análise:</span> <span x-text="new Date(selectedTicket.analysis_deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })" class="text-purple-600 font-bold"></span></p>
                                 </div>
 
                                 <p class="text-sm mb-1 font-bold text-gray-700">Defeito Inicial:</p>
