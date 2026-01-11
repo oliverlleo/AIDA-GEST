@@ -36,6 +36,8 @@ function app() {
         employees: [],
         tickets: [],
         techTickets: [],
+        deletedTickets: [],
+        deletedEmployees: [],
         checklistTemplates: [],
         checklistTemplatesEntry: [],
         checklistTemplatesFinal: [],
@@ -92,7 +94,7 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false },
 
         // Notifications
         notificationsList: [],
@@ -416,10 +418,10 @@ function app() {
             try {
                 let data;
                 if (this.session) {
-                     // Table Select
-                     data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&order=created_at.desc`);
+                     // Table Select (Standard Admin View - Exclude Deleted)
+                     data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
                 } else {
-                     // RPC Call
+                     // RPC Call (Already excludes deleted in SQL)
                      data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
                 }
                 if (data) this.employees = data;
@@ -584,8 +586,9 @@ function app() {
 
             try {
                 // REFACTORED: Native Fetch
+                // Soft Delete Filter: deleted_at=is.null
                 const data = await this.supabaseFetch(
-                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&order=created_at.desc`
+                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`
                 );
 
                 if (data) {
@@ -1468,15 +1471,87 @@ function app() {
         },
 
         async deleteEmployee(id) {
-            if (!confirm('Confirma?')) return;
+            if (!confirm('Tem certeza que deseja mover este funcionário para a Lixeira?')) return;
             try {
-                // REFACTORED: Native Fetch
-                await this.supabaseFetch(`employees?id=eq.${id}`, 'DELETE');
-                this.notify('Excluído.');
-                this.fetchEmployees();
+                // Soft Delete
+                await this.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
+                    deleted_at: new Date().toISOString()
+                });
+                this.notify('Funcionário movido para a Lixeira.');
+                await this.fetchEmployees();
             } catch(e) {
-                this.notify('Erro ao excluir', 'error');
+                this.notify('Erro ao excluir: ' + e.message, 'error');
             }
+        },
+
+        async deleteTicket() {
+            if (!this.selectedTicket) return;
+            if (!confirm('Tem certeza que deseja excluir este chamado? Ele irá para a Lixeira e não aparecerá nas listagens.')) return;
+
+            this.loading = true;
+            try {
+                await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', {
+                    deleted_at: new Date().toISOString()
+                });
+                this.notify('Chamado movido para a Lixeira.');
+                this.modals.viewTicket = false;
+                await this.fetchTickets();
+            } catch(e) {
+                this.notify('Erro ao excluir: ' + e.message, 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async fetchDeletedItems() {
+            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
+            this.loading = true;
+            try {
+                // Fetch Deleted Tickets
+                const tickets = await this.supabaseFetch(
+                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
+                );
+                this.deletedTickets = tickets || [];
+
+                // Fetch Deleted Employees
+                const emps = await this.supabaseFetch(
+                    `employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
+                );
+                this.deletedEmployees = emps || [];
+
+            } catch(e) {
+                this.notify("Erro ao buscar lixeira: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async restoreItem(type, id) {
+            // type: 'ticket' or 'employee'
+            if (!confirm("Deseja restaurar este item?")) return;
+            this.loading = true;
+            try {
+                const endpoint = type === 'ticket' ? 'tickets' : 'employees';
+                await this.supabaseFetch(`${endpoint}?id=eq.${id}`, 'PATCH', {
+                    deleted_at: null
+                });
+                this.notify("Item restaurado!");
+
+                // Refresh lists
+                await this.fetchDeletedItems();
+                if (type === 'ticket') await this.fetchTickets();
+                if (type === 'employee') await this.fetchEmployees();
+
+            } catch(e) {
+                this.notify("Erro ao restaurar: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        openRecycleBin() {
+            this.fetchDeletedItems();
+            this.modals.recycleBin = true;
         },
 
         hasRole(role) {

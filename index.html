@@ -630,9 +630,14 @@
                     <div class="bg-white rounded-lg shadow overflow-hidden">
                         <div class="p-6 border-b flex justify-between items-center bg-gray-50">
                              <h2 class="text-lg font-bold text-gray-800">Gerenciar Equipe</h2>
-                             <button @click="openModal('newEmployee')" class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors text-sm">
-                                <i class="fa-solid fa-plus mr-2"></i> Novo Funcionário
-                            </button>
+                             <div class="flex gap-2">
+                                <button x-show="hasRole('admin')" @click="openRecycleBin()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition-colors text-sm font-bold flex items-center">
+                                    <i class="fa-solid fa-trash-arrow-up mr-2"></i> Lixeira
+                                </button>
+                                <button @click="openModal('newEmployee')" class="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 transition-colors text-sm">
+                                    <i class="fa-solid fa-plus mr-2"></i> Novo Funcionário
+                                </button>
+                             </div>
                         </div>
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
@@ -1415,7 +1420,92 @@
 
                 <div class="bg-gray-100 px-6 py-3 flex justify-between items-center">
                     <p class="text-xs text-gray-400">ID: <span x-text="selectedTicket?.id"></span></p>
-                    <button @click="modals.viewTicket = false" class="text-gray-600 hover:text-black font-bold text-sm">Fechar</button>
+                    <div class="flex gap-3 items-center">
+                        <button x-show="hasRole('admin')" @click="deleteTicket()" class="text-red-500 hover:text-red-700 font-bold text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-trash"></i> Excluir
+                        </button>
+                        <button @click="modals.viewTicket = false" class="text-gray-600 hover:text-black font-bold text-sm">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Recycle Bin -->
+    <div x-show="modals.recycleBin" class="fixed inset-0 z-[120] overflow-y-auto" x-cloak>
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.recycleBin = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                            <i class="fa-solid fa-trash-arrow-up text-brand-500"></i> Lixeira
+                        </h3>
+                        <button @click="modals.recycleBin = false" class="text-gray-400 hover:text-gray-500">
+                            <i class="fa-solid fa-times text-xl"></i>
+                        </button>
+                    </div>
+
+                    <div x-data="{ tab: 'tickets' }" class="mt-2">
+                        <div class="flex border-b border-gray-200 mb-4">
+                            <button @click="tab = 'tickets'" :class="{'border-brand-500 text-brand-600': tab === 'tickets', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'tickets'}" class="py-2 px-4 text-sm font-medium border-b-2 focus:outline-none">
+                                Chamados
+                            </button>
+                            <button @click="tab = 'employees'" :class="{'border-brand-500 text-brand-600': tab === 'employees', 'border-transparent text-gray-500 hover:text-gray-700': tab !== 'employees'}" class="py-2 px-4 text-sm font-medium border-b-2 focus:outline-none">
+                                Funcionários
+                            </button>
+                        </div>
+
+                        <!-- Tickets Tab -->
+                        <div x-show="tab === 'tickets'">
+                            <template x-if="deletedTickets.length === 0">
+                                <p class="text-gray-500 text-center py-4 text-sm">Nenhum chamado na lixeira.</p>
+                            </template>
+                            <ul class="divide-y divide-gray-200 max-h-[300px] overflow-y-auto">
+                                <template x-for="t in deletedTickets" :key="t.id">
+                                    <li class="py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded">
+                                        <div>
+                                            <p class="text-sm font-bold text-gray-800" x-text="'OS: ' + t.os_number"></p>
+                                            <p class="text-xs text-gray-600" x-text="t.client_name + ' - ' + t.device_model"></p>
+                                            <p class="text-xs text-red-500" x-text="'Excluído: ' + new Date(t.deleted_at).toLocaleDateString()"></p>
+                                        </div>
+                                        <button @click="restoreItem('ticket', t.id)" class="text-green-600 hover:text-green-800 text-xs font-bold border border-green-200 bg-green-50 px-3 py-1 rounded transition-colors">
+                                            Restaurar
+                                        </button>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+
+                        <!-- Employees Tab -->
+                        <div x-show="tab === 'employees'">
+                            <template x-if="deletedEmployees.length === 0">
+                                <p class="text-gray-500 text-center py-4 text-sm">Nenhum funcionário na lixeira.</p>
+                            </template>
+                            <ul class="divide-y divide-gray-200 max-h-[300px] overflow-y-auto">
+                                <template x-for="e in deletedEmployees" :key="e.id">
+                                    <li class="py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded">
+                                        <div>
+                                            <p class="text-sm font-bold text-gray-800" x-text="e.name"></p>
+                                            <p class="text-xs text-gray-600" x-text="e.username"></p>
+                                            <p class="text-xs text-red-500" x-text="'Excluído: ' + new Date(e.deleted_at).toLocaleDateString()"></p>
+                                        </div>
+                                        <button @click="restoreItem('employee', e.id)" class="text-green-600 hover:text-green-800 text-xs font-bold border border-green-200 bg-green-50 px-3 py-1 rounded transition-colors">
+                                            Restaurar
+                                        </button>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                     <button @click="modals.recycleBin = false" class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Fechar
+                    </button>
                 </div>
             </div>
         </div>
