@@ -92,7 +92,7 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false },
 
         // Notifications
         notificationsList: [],
@@ -1421,6 +1421,43 @@ function app() {
 
                 this.notify('Criado!');
                 this.modals.newEmployee = false;
+                await this.fetchEmployees();
+            } catch(e) {
+                console.error(e);
+                this.notify('Erro: ' + e.message, 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        openEditEmployee(emp) {
+            this.employeeForm = {
+                id: emp.id,
+                name: emp.name,
+                username: emp.username,
+                password: emp.plain_password || '', // Show plain password if available
+                roles: emp.roles || []
+            };
+            this.modals.editEmployee = true;
+        },
+
+        async updateEmployee() {
+            if (!this.employeeForm.id) return;
+            if (!this.employeeForm.name || !this.employeeForm.username) return this.notify('Preencha campos obrigatórios', 'error');
+
+            this.loading = true;
+            try {
+                // REFACTORED: Native Fetch for RPC
+                await this.supabaseFetch('rpc/update_employee', 'POST', {
+                    p_id: this.employeeForm.id,
+                    p_name: this.employeeForm.name,
+                    p_username: this.employeeForm.username,
+                    p_password: this.employeeForm.password, // Optional: if empty, handled by SQL to ignore
+                    p_roles: this.employeeForm.roles
+                });
+
+                this.notify('Atualizado!');
+                this.modals.editEmployee = false;
                 await this.fetchEmployees();
             } catch(e) {
                 console.error(e);
