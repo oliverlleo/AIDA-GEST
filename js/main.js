@@ -683,23 +683,36 @@ function app() {
             if (!this.user?.workspace_id) return;
 
             // Check duplicate
-            if (this.deviceModels.some(m => m.name.toLowerCase() === name.toLowerCase())) {
+            if (this.deviceModels.some(m => m.name.toLowerCase() === name.trim().toLowerCase())) {
                 return this.notify("Modelo já existe.", "error");
             }
 
             try {
-                const data = await this.supabaseFetch('device_models', 'POST', {
+                await this.supabaseFetch('device_models', 'POST', {
                     workspace_id: this.user.workspace_id,
                     name: name.trim()
                 });
-                // Optimistic or re-fetch
-                // data might be null if using Prefer: minimal, but we usually want representation
-                // My helper doesn't enforce return=representation for POST unless specified
-                // Let's just refetch to be safe/simple
                 await this.fetchDeviceModels();
                 this.notify("Modelo cadastrado!", "success");
+                return true; // Return success
             } catch(e) {
                 this.notify("Erro ao salvar modelo: " + e.message, "error");
+                return false;
+            }
+        },
+
+        async deleteDeviceModel(id) {
+            if (!confirm("Excluir este modelo da lista?")) return;
+            try {
+                await this.supabaseFetch(`device_models?id=eq.${id}`, 'DELETE');
+                this.notify("Modelo excluído.");
+                await this.fetchDeviceModels();
+                // Clear selection if deleted
+                if (this.ticketForm.model && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
+                    this.ticketForm.model = '';
+                }
+            } catch(e) {
+                this.notify("Erro ao excluir: " + e.message, "error");
             }
         },
 
@@ -816,6 +829,11 @@ function app() {
         async createTicket() {
              if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model) {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
+             }
+
+             // Validation: Strict Model (Must exist in list)
+             if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
+                 return this.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
              }
 
              // VALIDATION: Analysis Deadline vs Delivery Deadline
