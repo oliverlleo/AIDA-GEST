@@ -89,6 +89,7 @@ function app() {
 
         // Search
         searchQuery: '',
+        showFinalized: true,
 
         // Time
         currentTime: new Date(),
