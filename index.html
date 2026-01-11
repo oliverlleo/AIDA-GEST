@@ -960,7 +960,17 @@
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Modelo *</label>
-                            <input type="text" x-model="ticketForm.model" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                            <div class="flex">
+                                <input type="text" x-model="ticketForm.model" list="device-models-list" class="w-full border rounded-l-lg p-2.5 bg-gray-50" placeholder="Digite ou selecione...">
+                                <button @click="createDeviceModel(ticketForm.model)" class="bg-gray-200 hover:bg-gray-300 px-3 border border-l-0 rounded-r-lg" title="Salvar Modelo">
+                                    <i class="fa-solid fa-plus text-gray-600"></i>
+                                </button>
+                            </div>
+                            <datalist id="device-models-list">
+                                <template x-for="m in deviceModels" :key="m.id">
+                                    <option :value="m.name"></option>
+                                </template>
+                            </datalist>
                         </div>
                          <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Nº Série / IMEI</label>

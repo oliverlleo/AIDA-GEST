@@ -38,6 +38,7 @@ function app() {
         techTickets: [],
         deletedTickets: [],
         deletedEmployees: [],
+        deviceModels: [], // New state
         checklistTemplates: [],
         checklistTemplatesEntry: [],
         checklistTemplatesFinal: [],
@@ -205,6 +206,7 @@ function app() {
                     this.initTechFilter(); // Ensure filter is set for Admin session restore too
                     await this.fetchTickets();
                     await this.fetchTemplates();
+                    await this.fetchDeviceModels(); // New fetch
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -342,6 +344,7 @@ function app() {
                     this.initTechFilter(); // Initialize filter before fetching
                     await this.fetchTickets();
                     await this.fetchTemplates();
+                    await this.fetchDeviceModels(); // New fetch
 
                     // Redirect Technician directly to Bench
                     if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
@@ -406,6 +409,7 @@ function app() {
                     this.initTechFilter(); // Admin defaults to 'all'
                     await this.fetchTickets();
                     await this.fetchTemplates();
+                    await this.fetchDeviceModels(); // New fetch
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -661,6 +665,42 @@ function app() {
              } catch (e) {
                  console.error("Fetch Templates Error:", e);
              }
+        },
+
+        // --- DEVICE MODELS ---
+        async fetchDeviceModels() {
+            if (!this.user?.workspace_id) return;
+            try {
+                const data = await this.supabaseFetch(`device_models?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
+                if (data) this.deviceModels = data;
+            } catch(e) {
+                console.error("Fetch Models Error:", e);
+            }
+        },
+
+        async createDeviceModel(name) {
+            if (!name || !name.trim()) return;
+            if (!this.user?.workspace_id) return;
+
+            // Check duplicate
+            if (this.deviceModels.some(m => m.name.toLowerCase() === name.toLowerCase())) {
+                return this.notify("Modelo já existe.", "error");
+            }
+
+            try {
+                const data = await this.supabaseFetch('device_models', 'POST', {
+                    workspace_id: this.user.workspace_id,
+                    name: name.trim()
+                });
+                // Optimistic or re-fetch
+                // data might be null if using Prefer: minimal, but we usually want representation
+                // My helper doesn't enforce return=representation for POST unless specified
+                // Let's just refetch to be safe/simple
+                await this.fetchDeviceModels();
+                this.notify("Modelo cadastrado!", "success");
+            } catch(e) {
+                this.notify("Erro ao salvar modelo: " + e.message, "error");
+            }
         },
 
         openNewTicketModal() {
