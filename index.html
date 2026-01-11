@@ -884,12 +884,12 @@
                             <input type="text" x-model="ticketForm.serial" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Prazo (Data/Hora)</label>
-                            <input type="datetime-local" x-model="ticketForm.deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
-                        </div>
-                        <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Análise</label>
                             <input type="datetime-local" x-model="ticketForm.analysis_deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Entrega</label>
+                            <input type="datetime-local" x-model="ticketForm.deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho</label>
@@ -1242,24 +1242,24 @@
                                         <!-- Display Mode -->
                                         <div x-show="!editingDeadlines" class="space-y-1">
                                             <p class="text-sm flex justify-between">
-                                                <span class="font-bold text-gray-600">Entrega:</span>
-                                                <span x-text="selectedTicket.deadline ? new Date(selectedTicket.deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'" :class="new Date(selectedTicket.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-800'"></span>
-                                            </p>
-                                            <p class="text-sm flex justify-between">
                                                 <span class="font-bold text-gray-600">Análise:</span>
                                                 <span x-text="selectedTicket.analysis_deadline ? new Date(selectedTicket.analysis_deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'" class="text-purple-600 font-bold"></span>
+                                            </p>
+                                            <p class="text-sm flex justify-between">
+                                                <span class="font-bold text-gray-600">Entrega:</span>
+                                                <span x-text="selectedTicket.deadline ? new Date(selectedTicket.deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'" :class="new Date(selectedTicket.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-800'"></span>
                                             </p>
                                         </div>
 
                                         <!-- Edit Mode -->
                                         <div x-show="editingDeadlines" class="space-y-2 mt-2">
                                             <div>
-                                                <label class="block text-[10px] font-bold text-gray-500">Entrega</label>
-                                                <input type="datetime-local" x-model="editDeadlineForm.deadline" class="w-full border rounded p-1 text-xs">
-                                            </div>
-                                            <div>
                                                 <label class="block text-[10px] font-bold text-purple-600">Análise</label>
                                                 <input type="datetime-local" x-model="editDeadlineForm.analysis_deadline" class="w-full border rounded p-1 text-xs">
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-gray-500">Entrega</label>
+                                                <input type="datetime-local" x-model="editDeadlineForm.deadline" class="w-full border rounded p-1 text-xs">
                                             </div>
                                         </div>
                                     </div>
