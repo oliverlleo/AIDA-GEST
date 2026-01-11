@@ -219,9 +219,17 @@
                                         class="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all w-64 bg-gray-50 focus:bg-white">
                              </div>
 
-                             <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
-                                <i class="fa-solid fa-plus mr-1"></i> Novo
-                            </button>
+                             <div class="flex items-center space-x-2">
+                                <button @click="showFinalized = !showFinalized"
+                                        class="text-xs px-3 py-2 rounded font-bold border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                                        :class="showFinalized ? 'bg-gray-100 text-brand-600 border-brand-200' : ''">
+                                    <i class="fa-solid" :class="showFinalized ? 'fa-eye' : 'fa-eye-slash'"></i>
+                                    <span x-text="showFinalized ? 'Ocultar Finalizados' : 'Mostrar Finalizados'" class="ml-1 hidden sm:inline"></span>
+                                </button>
+                                <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
+                                    <i class="fa-solid fa-plus mr-1"></i> Novo
+                                </button>
+                             </div>
                         </div>
                     </div>
 
@@ -231,7 +239,7 @@
 
                             <!-- Loop Columns -->
                             <template x-for="status in STATUS_COLUMNS" :key="status">
-                                <div class="w-80 flex flex-col bg-gray-100 rounded-lg h-full border border-gray-200">
+                                <div x-show="showFinalized || status !== 'Finalizado'" class="w-80 flex flex-col bg-gray-100 rounded-lg h-full border border-gray-200">
                                     <!-- Header -->
                                     <div class="p-3 border-b border-gray-200 bg-gray-200 rounded-t-lg flex justify-between items-center sticky top-0">
                                          <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide" x-text="getStatusLabel(status)"></h3>
@@ -247,8 +255,18 @@
 
                                                 <!-- Priority Badge -->
                                                 <div class="flex justify-between items-start mb-2">
-                                                    <span class="text-xs font-bold px-2 py-0.5 rounded uppercase"
-                                                          :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-xs font-bold px-2 py-0.5 rounded uppercase"
+                                                              :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
+                                                        <!-- Success/Fail Badge for Finished Tickets -->
+                                                        <template x-if="ticket.repair_successful !== null && (ticket.status === 'Finalizado' || ticket.status === 'Retirada Cliente')">
+                                                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase"
+                                                                  :class="ticket.repair_successful ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'">
+                                                                <i class="fa-solid" :class="ticket.repair_successful ? 'fa-check' : 'fa-xmark'"></i>
+                                                                <span x-text="ticket.repair_successful ? 'Sucesso' : 'Sem Sucesso'"></span>
+                                                            </span>
+                                                        </template>
+                                                    </div>
                                                     <span class="text-xs text-gray-400 font-mono" x-text="'OS: ' + ticket.os_number"></span>
                                                 </div>
 
