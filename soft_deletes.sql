@@ -31,16 +31,17 @@ DECLARE
     v_company_code_found TEXT;
     v_employee_record RECORD;
 BEGIN
-    -- Find workspace by code
-    SELECT id, name, company_code INTO v_workspace_id, v_workspace_name, v_company_code_found
-    FROM public.workspaces
-    WHERE company_code = p_company_code;
+    -- Find workspace by code (Use alias w to avoid ambiguity with output param 'name')
+    SELECT w.id, w.name, w.company_code INTO v_workspace_id, v_workspace_name, v_company_code_found
+    FROM public.workspaces w
+    WHERE w.company_code = p_company_code;
 
     IF v_workspace_id IS NULL THEN
         RAISE EXCEPTION 'Código da empresa inválido';
     END IF;
 
     -- Find employee (EXCLUDING DELETED)
+    -- Using alias e
     SELECT * INTO v_employee_record
     FROM public.employees e
     WHERE e.workspace_id = v_workspace_id
