@@ -280,9 +280,9 @@
                                                 <!-- Analysis Deadline -->
                                                 <template x-if="ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
-                                                        <span class="font-bold text-purple-700 uppercase">Análise:</span>
+                                                        <span class="font-bold text-gray-500 uppercase">Análise:</span>
                                                         <div class="flex items-center font-medium"
-                                                             :class="new Date(ticket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-purple-700'">
+                                                             :class="new Date(ticket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-500'">
                                                             <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
                                                             <span x-text="new Date(ticket.analysis_deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
                                                         </div>
@@ -521,9 +521,9 @@
                                                 <!-- Analysis Deadline -->
                                                 <template x-if="ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
-                                                        <span class="font-bold text-purple-700 uppercase">Análise:</span>
+                                                        <span class="font-bold text-gray-500 uppercase">Análise:</span>
                                                         <div class="flex items-center font-medium"
-                                                             :class="new Date(ticket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-purple-700'">
+                                                             :class="new Date(ticket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-500'">
                                                             <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
                                                             <span x-text="new Date(ticket.analysis_deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
                                                         </div>
@@ -591,8 +591,8 @@
                                                 <!-- Analysis Deadline -->
                                                 <template x-if="ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
-                                                        <span class="font-bold text-purple-700 uppercase">Análise:</span>
-                                                        <div class="flex items-center text-purple-700 font-medium">
+                                                        <span class="font-bold text-gray-500 uppercase">Análise:</span>
+                                                        <div class="flex items-center text-gray-500 font-medium">
                                                             <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
                                                             <span x-text="new Date(ticket.analysis_deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
                                                         </div>
@@ -1397,7 +1397,7 @@
                                             <p class="text-sm flex justify-between">
                                                 <span class="font-bold text-gray-600">Análise:</span>
                                                 <span x-text="selectedTicket.analysis_deadline ? new Date(selectedTicket.analysis_deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'"
-                                                      :class="new Date(selectedTicket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-purple-600 font-bold'"></span>
+                                                      :class="new Date(selectedTicket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-800'"></span>
                                             </p>
                                             <p class="text-sm flex justify-between">
                                                 <span class="font-bold text-gray-600">Entrega:</span>
@@ -1409,7 +1409,7 @@
                                         <!-- Edit Mode -->
                                         <div x-show="editingDeadlines" class="space-y-2 mt-2">
                                             <div>
-                                                <label class="block text-[10px] font-bold text-purple-600">Análise</label>
+                                                <label class="block text-[10px] font-bold text-gray-500">Análise</label>
                                                 <input type="datetime-local" x-model="editDeadlineForm.analysis_deadline" class="w-full border rounded p-1 text-xs">
                                             </div>
                                             <div>
