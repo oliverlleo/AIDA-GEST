@@ -718,6 +718,7 @@ function app() {
 
         openNewTicketModal() {
             this.ticketForm = {
+                id: crypto.randomUUID(), // Generate ID upfront for uploads
                 client_name: '', os_number: '', model: '', serial: '',
                 defect: '', priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
@@ -849,6 +850,7 @@ function app() {
 
              try {
                  const ticketData = {
+                     id: this.ticketForm.id,
                      workspace_id: this.user.workspace_id,
                      client_name: this.ticketForm.client_name,
                      os_number: this.ticketForm.os_number,
@@ -863,6 +865,7 @@ function app() {
                      technician_id: this.ticketForm.technician_id || null, // New Field
                      checklist_data: this.ticketForm.checklist,
                      checklist_final_data: this.ticketForm.checklist_final,
+                     photos_urls: this.ticketForm.photos,
                      status: 'Aberto',
                      created_by_name: this.user.name
                  };
@@ -889,6 +892,7 @@ function app() {
             this.modalSource = source;
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
             if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
+            if (!Array.isArray(this.selectedTicket.photos_urls)) this.selectedTicket.photos_urls = [];
             // Reset UI states
             this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
             this.editingDeadlines = false; // Reset editing mode
@@ -986,7 +990,8 @@ function app() {
                      tech_notes: this.selectedTicket.tech_notes,
                      parts_needed: this.selectedTicket.parts_needed,
                      checklist_data: this.selectedTicket.checklist_data,
-                     checklist_final_data: this.selectedTicket.checklist_final_data
+                     checklist_final_data: this.selectedTicket.checklist_final_data,
+                     photos_urls: this.selectedTicket.photos_urls
                  });
                  this.notify("Alterações salvas!");
                  await this.fetchTickets();
@@ -994,6 +999,87 @@ function app() {
                  this.notify("Erro ao salvar: " + e.message, "error");
              } finally {
                  this.loading = false;
+             }
+        },
+
+        async uploadTicketPhoto(file, ticketId) {
+            if (!this.user?.workspace_id) return;
+            this.loading = true;
+
+            const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+            const path = `${this.user.workspace_id}/${ticketId}/${fileName}`;
+            const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
+
+            try {
+                // Determine Auth Token
+                let token = SUPABASE_KEY;
+                if (this.session && this.session.access_token) {
+                    token = this.session.access_token;
+                }
+
+                const headers = {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${token}`,
+                    'x-workspace-id': this.user.workspace_id,
+                    'Content-Type': file.type
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: file
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || 'Upload falhou');
+                }
+
+                // Public URL
+                // Format: {SUPABASE_URL}/storage/v1/object/public/ticket_photos/{path}
+                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
+                return publicUrl;
+
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro upload: " + e.message, "error");
+                return null;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async handlePhotoUpload(event, targetList = 'new') {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            let ticketId;
+            let targetArray;
+
+            if (targetList === 'new') {
+                ticketId = this.ticketForm.id;
+                targetArray = this.ticketForm.photos;
+            } else {
+                ticketId = this.selectedTicket.id;
+                if (!this.selectedTicket.photos_urls) this.selectedTicket.photos_urls = [];
+                targetArray = this.selectedTicket.photos_urls;
+            }
+
+            for (let i = 0; i < files.length; i++) {
+                const url = await this.uploadTicketPhoto(files[i], ticketId);
+                if (url) {
+                    targetArray.push(url);
+                }
+            }
+
+            event.target.value = '';
+        },
+
+        removePhoto(index, targetList = 'new') {
+             if (targetList === 'new') {
+                 this.ticketForm.photos.splice(index, 1);
+             } else {
+                 this.selectedTicket.photos_urls.splice(index, 1);
              }
         },
 
