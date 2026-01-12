@@ -857,8 +857,8 @@ function app() {
                      defect_reported: this.ticketForm.defect,
                      priority: this.ticketForm.priority,
                      contact_info: this.ticketForm.contact,
-                     deadline: this.ticketForm.deadline || null,
-                     analysis_deadline: this.ticketForm.analysis_deadline || null,
+                     deadline: this.toUTC(this.ticketForm.deadline) || null,
+                     analysis_deadline: this.toUTC(this.ticketForm.analysis_deadline) || null,
                      device_condition: this.ticketForm.device_condition,
                      technician_id: this.ticketForm.technician_id || null, // New Field
                      checklist_data: this.ticketForm.checklist,
@@ -957,8 +957,8 @@ function app() {
 
                 // Update
                 const updates = {
-                    deadline: this.editDeadlineForm.deadline || null,
-                    analysis_deadline: this.editDeadlineForm.analysis_deadline || null
+                    deadline: this.toUTC(this.editDeadlineForm.deadline) || null,
+                    analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
                 };
 
                 await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', updates);
@@ -1254,7 +1254,7 @@ function app() {
 
                 this.modals.outcome = false;
                 await this.updateStatus(ticket, 'Andamento Reparo', {
-                    deadline: this.testFailureData.newDeadline,
+                    deadline: this.toUTC(this.testFailureData.newDeadline),
                     priority: this.testFailureData.newPriority,
                     repair_start_at: null, // Reset timer
                     test_start_at: null,
@@ -1460,6 +1460,11 @@ function app() {
             const s = Math.floor((diff % 60000) / 1000);
 
             return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        },
+
+        toUTC(localDateString) {
+            if (!localDateString) return null;
+            return new Date(localDateString).toISOString();
         },
 
         openModal(name) {
