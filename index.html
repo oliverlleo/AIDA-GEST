@@ -1138,12 +1138,25 @@
                         </div>
                     </div>
 
-                    <!-- Section 4: Photos (Placeholder) -->
+                    <!-- Section 4: Photos -->
                      <div>
                         <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide mb-2 border-b pb-2">Fotos</h4>
-                        <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center text-gray-400">
-                            <i class="fa-solid fa-camera text-2xl mb-2"></i>
-                            <p class="text-xs">Upload de fotos em breve.</p>
+                        <div class="mb-3">
+                            <label class="cursor-pointer bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 text-xs font-bold py-2 px-4 rounded inline-flex items-center transition-colors">
+                                <i class="fa-solid fa-camera mr-2"></i> Adicionar Fotos
+                                <input type="file" multiple accept="image/*" class="hidden" @change="handlePhotoUpload($event, 'new')">
+                            </label>
+                            <span x-show="loading" class="text-xs text-gray-400 ml-2 animate-pulse">Enviando...</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2">
+                            <template x-for="(url, idx) in ticketForm.photos" :key="idx">
+                                <div class="relative group aspect-square">
+                                    <img :src="url" class="w-full h-full object-cover rounded-lg border border-gray-200 cursor-pointer" @click="window.open(url, '_blank')">
+                                    <button @click="removePhoto(idx, 'new')" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <i class="fa-solid fa-times"></i>
+                                    </button>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -1449,6 +1462,31 @@
                                     <label class="block text-xs font-bold text-gray-500 mb-1">Peças Necessárias</label>
                                     <input type="text" x-model="selectedTicket.parts_needed" class="w-full text-sm border-gray-300 rounded-md" placeholder="Ex: Tela, Bateria...">
                                 </div>
+
+                                <!-- Photos in Tech Notes -->
+                                <div class="mt-4 border-t pt-4">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-xs font-bold text-gray-500 uppercase">Fotos do Aparelho</label>
+                                        <label class="cursor-pointer text-brand-600 hover:text-brand-800 text-xs font-bold flex items-center">
+                                            <i class="fa-solid fa-plus mr-1"></i> Adicionar
+                                            <input type="file" multiple accept="image/*" class="hidden" @change="handlePhotoUpload($event, 'existing')">
+                                        </label>
+                                    </div>
+                                    <div class="grid grid-cols-4 gap-2">
+                                        <template x-for="(url, idx) in selectedTicket.photos_urls" :key="idx">
+                                            <div class="relative group aspect-square">
+                                                <img :src="url" class="w-full h-full object-cover rounded border border-gray-200 cursor-pointer" @click="window.open(url, '_blank')">
+                                                <button @click="removePhoto(idx, 'existing')" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <i class="fa-solid fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <div x-show="!selectedTicket.photos_urls || selectedTicket.photos_urls.length === 0" class="col-span-4 text-center py-4 text-gray-400 text-xs italic bg-gray-50 rounded">
+                                            Sem fotos.
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="mt-3 text-right">
                                     <button @click="saveTicketChanges()" class="text-xs bg-gray-800 text-white px-3 py-1 rounded hover:bg-black">Salvar Anotações</button>
                                 </div>
