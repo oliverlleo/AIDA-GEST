@@ -274,14 +274,6 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Análise combinada</label>
-                                <select x-model="adminDashboardFilters.analysisMode" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
-                                    <option value="combined">Aparelho + Defeito</option>
-                                    <option value="defects">Somente defeitos gerais</option>
-                                    <option value="models">Somente aparelhos</option>
-                                </select>
-                            </div>
-                            <div>
                                 <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Visão rápida</label>
                                 <select x-model="adminDashboardFilters.quickView" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
                                     <option value="summary">Resumo executivo</option>
@@ -414,35 +406,22 @@
                         </div>
                         <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                             <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-sm font-semibold text-gray-900" x-text="adminDashboardFilters.analysisMode === 'models' ? 'Modelos mais frequentes' : 'Defeitos mais frequentes'">Defeitos mais frequentes</h3>
+                                <h3 class="text-sm font-semibold text-gray-900">Defeitos mais frequentes</h3>
                                 <span class="text-xs text-gray-500 uppercase tracking-wide">Ranking</span>
                             </div>
                             <div class="space-y-3">
-                                <template x-if="adminDashboardFilters.analysisMode === 'models'">
-                                    <template x-for="model in metrics.topModels" :key="model.label">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-gray-700" x-text="model.label"></span>
-                                            <span class="text-sm font-semibold text-gray-900" x-text="model.value"></span>
-                                        </div>
-                                    </template>
+                                <template x-for="defect in metrics.topDefects" :key="defect.label">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700" x-text="defect.label"></span>
+                                        <span class="text-sm font-semibold text-gray-900" x-text="defect.value"></span>
+                                    </div>
                                 </template>
-                                <template x-if="adminDashboardFilters.analysisMode !== 'models'">
-                                    <template x-for="defect in metrics.topDefects" :key="defect.label">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-gray-700" x-text="defect.label"></span>
-                                            <span class="text-sm font-semibold text-gray-900" x-text="defect.value"></span>
-                                        </div>
-                                    </template>
-                                </template>
-                                <template x-if="adminDashboardFilters.analysisMode === 'models' && !metrics.topModels?.length">
-                                    <div class="text-sm text-gray-500">Sem dados de modelos.</div>
-                                </template>
-                                <template x-if="adminDashboardFilters.analysisMode !== 'models' && !metrics.topDefects?.length">
+                                <template x-if="!metrics.topDefects?.length">
                                     <div class="text-sm text-gray-500">Sem dados de defeitos.</div>
                                 </template>
                             </div>
                             <div class="mt-6 rounded-xl border border-dashed border-gray-200 p-4">
-                                <div class="text-xs text-gray-500 uppercase tracking-wide mb-2" x-text="adminDashboardFilters.analysisMode === 'combined' ? 'Aparelho x defeito' : 'Top combinações'">Aparelho x defeito</div>
+                                <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Aparelho x defeito</div>
                                 <div class="space-y-2">
                                     <template x-for="combo in metrics.topCombos" :key="combo.label">
                                         <div class="flex items-center justify-between text-sm">

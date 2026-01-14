@@ -38,7 +38,6 @@ function app() {
             defect: 'all',
             technician: 'all',
             status: 'all',
-            analysisMode: 'combined',
             quickView: 'summary'
         },
 
@@ -1195,7 +1194,7 @@ function app() {
                      await this.logTicketAction(ticket.id, 'Alteração de Status', `De ${ticket.status} para ${newStatus}`);
                 }
 
-                const updates = { status: newStatus, ...additionalUpdates };
+                const updates = { status: newStatus, updated_at: new Date().toISOString(), ...additionalUpdates };
 
                 // REFACTORED: Native Fetch - Update Ticket
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
@@ -1436,7 +1435,9 @@ function app() {
              }
         },
         async confirmPickup(ticket = this.selectedTicket) {
-            await this.updateStatus(ticket, 'Finalizado', {}, { action: 'Finalizou Entrega', details: 'Entregue ao cliente' });
+            await this.updateStatus(ticket, 'Finalizado', {
+                delivered_at: new Date().toISOString()
+            }, { action: 'Finalizou Entrega', details: 'Entregue ao cliente' });
         },
 
         async requestPriority(ticket) {
@@ -1884,8 +1885,11 @@ function app() {
             const avgSolution = solutionDurations.length ? solutionDurations.reduce((a, b) => a + b, 0) / solutionDurations.length : null;
 
             const deliveryDurations = filteredTickets
-                .filter(t => t.status === 'Finalizado' && t.created_at && t.updated_at)
-                .map(t => new Date(t.updated_at) - new Date(t.created_at))
+                .filter(t => t.status === 'Finalizado' && t.created_at && (t.delivered_at || t.updated_at))
+                .map(t => {
+                    const deliveredAt = t.delivered_at || t.updated_at;
+                    return new Date(deliveredAt) - new Date(t.created_at);
+                })
                 .filter(ms => ms > 0);
             const avgDelivery = deliveryDurations.length ? deliveryDurations.reduce((a, b) => a + b, 0) / deliveryDurations.length : null;
 
