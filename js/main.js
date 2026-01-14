@@ -1853,6 +1853,17 @@ function app() {
             return diff;
         },
 
+        getDefectList(defectReported) {
+            if (!defectReported) return [];
+            if (Array.isArray(defectReported)) {
+                return defectReported.map(defect => defect.trim()).filter(Boolean);
+            }
+            return String(defectReported)
+                .split(',')
+                .map(defect => defect.trim())
+                .filter(Boolean);
+        },
+
         getTopItems(items, limit = 4) {
             return Object.entries(items)
                 .sort((a, b) => b[1].total - a[1].total) // Sort by object.total property

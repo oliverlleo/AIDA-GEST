@@ -406,15 +406,15 @@
                             <div class="grid grid-cols-3 gap-3">
                                 <div class="rounded-xl border border-gray-200 p-4 text-center">
                                     <p class="text-xs text-gray-500 uppercase tracking-wide">Hoje</p>
-                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsToday">0</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsToday || 0">0</p>
                                 </div>
                                 <div class="rounded-xl border border-gray-200 p-4 text-center">
                                     <p class="text-xs text-gray-500 uppercase tracking-wide">Semana</p>
-                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsWeek">0</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsWeek || 0">0</p>
                                 </div>
                                 <div class="rounded-xl border border-gray-200 p-4 text-center">
                                     <p class="text-xs text-gray-500 uppercase tracking-wide">Mês</p>
-                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsMonth">0</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsMonth || 0">0</p>
                                 </div>
                             </div>
 
@@ -2204,6 +2204,6 @@
     </div>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=4"></script>
+    <script src="js/main.js?v=5"></script>
 </body>
 </html>
