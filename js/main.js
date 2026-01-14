@@ -93,6 +93,16 @@ function app() {
         searchQuery: '',
         showFinalized: true,
 
+        // Dashboard (Strategic)
+        dashboardFilters: { period: 'month', model: '', defect: '' },
+        dashboardMetrics: {
+            successRate: 0, volume: 0, avgTicket: 0,
+            avgRepairTime: 0, avgSolutionTime: 0, avgDeliveryTime: 0, commercialAgility: 0
+        },
+        techRanking: [],
+        dashboardAlerts: [],
+        specialistRecommendation: null,
+
         // Time
         currentTime: new Date(),
 
@@ -233,10 +243,14 @@ function app() {
             // Notification Poller (Every 1 min for testing, maybe 5 in prod)
             setInterval(() => {
                 this.checkTimeBasedAlerts();
+                this.checkSmartAlerts(); // New Strategic Alerts
             }, 60000);
 
             // Removed visibilitychange listener to prevent lock conflicts.
             // Data is kept fresh via Realtime subscriptions.
+
+            // Watchers
+            this.$watch('ticketForm.model', () => this.identifySpecialist());
         },
 
         setupRealtime() {
@@ -596,8 +610,9 @@ function app() {
             try {
                 // REFACTORED: Native Fetch
                 // Soft Delete Filter: deleted_at=is.null
+                // LIMIT INCREASED for Dashboard Stats (3000 items)
                 const data = await this.supabaseFetch(
-                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`
+                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc&limit=3000`
                 );
 
                 if (data) {
@@ -670,6 +685,287 @@ function app() {
              } catch (e) {
                  console.error("Fetch Templates Error:", e);
              }
+        },
+
+        // --- STRATEGIC DASHBOARD LOGIC ---
+
+        calculateDashboardData() {
+            if (!this.tickets) return;
+
+            // 1. Filter Tickets based on Period & Dropdowns
+            const now = new Date();
+            let startDate = new Date();
+
+            // Set Start Date based on Period
+            switch(this.dashboardFilters.period) {
+                case 'today': startDate.setHours(0,0,0,0); break;
+                case '7days': startDate.setDate(now.getDate() - 7); break;
+                case '30days': startDate.setDate(now.getDate() - 30); break;
+                case 'month': startDate = new Date(now.getFullYear(), now.getMonth(), 1); break;
+                case 'all': startDate = new Date(0); break; // Epoch
+            }
+
+            // Filter subset
+            const filtered = this.tickets.filter(t => {
+                const dateRef = new Date(t.created_at); // Entry Date for Volume
+                // Check Date
+                if (dateRef < startDate) return false;
+
+                // Check Device Filter
+                if (this.dashboardFilters.model && t.device_model !== this.dashboardFilters.model) return false;
+
+                // Check Defect Filter
+                if (this.dashboardFilters.defect) {
+                    // Defect is string "A, B". Check if it includes selection
+                    if (!t.defect_reported || !t.defect_reported.includes(this.dashboardFilters.defect)) return false;
+                }
+
+                return true;
+            });
+
+            // 2. Calculate KPI Metrics
+
+            // A. Volume (Entradas)
+            const volume = filtered.length;
+
+            // B. Success Rate (Based on tickets FINALIZED in this period, possibly filtered by device/defect too)
+            // Note: 'filtered' currently holds tickets CREATED in period.
+            // For rigorous stats, Success Rate should usually be "Tickets Finalized in Period".
+            // Let's create a subset for "Closed Tickets" within filters.
+
+            const closedInPeriod = this.tickets.filter(t => {
+                 if (t.status !== 'Finalizado' && t.status !== 'Retirada Cliente') return false;
+                 // Date check: use updated_at or repair_end_at? repair_end_at is better for technical success.
+                 const end = t.repair_end_at ? new Date(t.repair_end_at) : new Date(t.updated_at);
+                 if (end < startDate) return false;
+                 if (this.dashboardFilters.model && t.device_model !== this.dashboardFilters.model) return false;
+                 if (this.dashboardFilters.defect && (!t.defect_reported || !t.defect_reported.includes(this.dashboardFilters.defect))) return false;
+                 return true;
+            });
+
+            const successCount = closedInPeriod.filter(t => t.repair_successful).length;
+            const successRate = closedInPeriod.length > 0 ? Math.round((successCount / closedInPeriod.length) * 100) : 0;
+
+            // C. Times (Avg)
+            let totalRepairTime = 0; // ms
+            let totalSolutionTime = 0; // ms
+            let totalDeliveryTime = 0; // ms
+            let totalCommercialTime = 0; // ms
+            let repairCount = 0;
+            let solutionCount = 0;
+            let deliveryCount = 0;
+            let commercialCount = 0;
+
+            closedInPeriod.forEach(t => {
+                // Repair Time: repair_end_at - repair_start_at
+                if (t.repair_end_at && t.repair_start_at) {
+                    totalRepairTime += (new Date(t.repair_end_at) - new Date(t.repair_start_at));
+                    repairCount++;
+                }
+                // Solution (SLA): pickup_available_at - created_at
+                if (t.pickup_available_at) {
+                    totalSolutionTime += (new Date(t.pickup_available_at) - new Date(t.created_at));
+                    solutionCount++;
+                }
+                // Delivery Cycle: updated_at (Finalizado) - created_at
+                if (t.status === 'Finalizado') {
+                    totalDeliveryTime += (new Date(t.updated_at) - new Date(t.created_at));
+                    deliveryCount++;
+                }
+            });
+
+            // Commercial Agility: budget_sent_at - created_at (Use 'filtered' list as it applies to tickets entered recently too)
+            const budgetedTickets = filtered.filter(t => t.budget_sent_at);
+            budgetedTickets.forEach(t => {
+                totalCommercialTime += (new Date(t.budget_sent_at) - new Date(t.created_at));
+                commercialCount++;
+            });
+
+            // Helpers for Hours formatting
+            const toHours = (ms) => ms > 0 ? Math.round(ms / (1000 * 60 * 60)) : 0;
+
+            this.dashboardMetrics = {
+                volume,
+                successRate,
+                avgRepairTime: repairCount ? toHours(totalRepairTime / repairCount) : 0,
+                avgSolutionTime: solutionCount ? toHours(totalSolutionTime / solutionCount) : 0, // SLA
+                avgDeliveryTime: deliveryCount ? Math.round((totalDeliveryTime / deliveryCount) / (1000 * 60 * 60 * 24)) : 0, // Days for full cycle
+                commercialAgility: commercialCount ? toHours(totalCommercialTime / commercialCount) : 0
+            };
+
+            // 3. Tech Ranking
+            this.calculateTechRanking(startDate);
+        },
+
+        calculateTechRanking(startDate) {
+            // Get technicians
+            const techs = this.getTechnicians();
+
+            // Map stats
+            this.techRanking = techs.map(tech => {
+                // Tickets worked on by this tech in period (Finalized)
+                const techTickets = this.tickets.filter(t => {
+                    if (t.technician_id !== tech.id) return false;
+                    if (t.status !== 'Finalizado' && t.status !== 'Retirada Cliente') return false;
+                    const end = t.repair_end_at ? new Date(t.repair_end_at) : new Date(t.updated_at);
+                    return end >= startDate;
+                });
+
+                const volume = techTickets.length;
+                const success = techTickets.filter(t => t.repair_successful).length;
+                const rate = volume > 0 ? Math.round((success / volume) * 100) : 0;
+
+                // Speed (Avg Repair Time)
+                let totalTime = 0;
+                let count = 0;
+                techTickets.forEach(t => {
+                    if (t.repair_start_at && t.repair_end_at) {
+                        totalTime += (new Date(t.repair_end_at) - new Date(t.repair_start_at));
+                        count++;
+                    }
+                });
+                const avgSpeed = count > 0 ? Math.round(totalTime / count / (1000 * 60)) : 0; // Minutes
+
+                return {
+                    id: tech.id,
+                    name: tech.name,
+                    volume,
+                    successRate: rate,
+                    avgSpeed // minutes
+                };
+            }).sort((a, b) => b.successRate - a.successRate || b.volume - a.volume); // Rank by Quality then Volume
+        },
+
+        checkSmartAlerts() {
+            if (!this.tickets || !this.hasRole('admin')) return;
+
+            const alerts = [];
+            const now = new Date();
+
+            // A. Overload Alert (Dynamic Capacity)
+            const techs = this.getTechnicians();
+            techs.forEach(tech => {
+                // 1. Calculate Historical Daily Avg (Last 30 days finished)
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(now.getDate() - 30);
+
+                const finishedLast30 = this.tickets.filter(t =>
+                    t.technician_id === tech.id &&
+                    ['Finalizado', 'Retirada Cliente'].includes(t.status) &&
+                    new Date(t.updated_at) > thirtyDaysAgo
+                ).length;
+
+                const dailyAvg = finishedLast30 / 22; // approx working days
+                const threshold = Math.max(dailyAvg * 2, 5); // Threshold: Double the average or at least 5
+
+                // 2. Count Active
+                const active = this.tickets.filter(t =>
+                    t.technician_id === tech.id &&
+                    ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
+                ).length;
+
+                if (active > threshold) {
+                    alerts.push({
+                        type: 'overload',
+                        level: 'warning',
+                        message: `Sobrecarga: ${tech.name} tem ${active} chamados (Média diária: ${dailyAvg.toFixed(1)})`,
+                        tech_id: tech.id
+                    });
+                }
+            });
+
+            // B. Smart Budget Alert (Orçamento Pendente)
+            const openTickets = this.tickets.filter(t => ['Aberto', 'Analise Tecnica'].includes(t.status) && !t.budget_sent_at);
+
+            openTickets.forEach(t => {
+                const created = new Date(t.created_at);
+                const diffHours = (now - created) / (1000 * 60 * 60);
+                let alertThreshold = 24; // Default 24h
+
+                if (t.deadline) {
+                    const deadline = new Date(t.deadline);
+                    const hoursToDeadline = (deadline - now) / (1000 * 60 * 60);
+
+                    if (hoursToDeadline < 24) alertThreshold = 2; // Urgent: Alert after 2h
+                    else if (hoursToDeadline < 72) alertThreshold = 12; // Close: Alert after 12h
+                } else if (t.priority === 'Urgente') {
+                    alertThreshold = 2;
+                }
+
+                if (diffHours > alertThreshold) {
+                    alerts.push({
+                        type: 'budget_delay',
+                        level: 'orange', // Branding color
+                        message: `Orçamento Pendente: OS #${t.os_number} aguardando há ${Math.floor(diffHours)}h`,
+                        ticket_id: t.id
+                    });
+                }
+            });
+
+            // C. Stuck Ticket (Aparelho Travado)
+            // Logic: Repair Time > Global Average for this Model/Defect * 1.5
+            // First, need a way to get "Global Average" for current ticket context.
+            // Simplified: If in 'Andamento Reparo' for > 48h (default) or calculated avg.
+            const repairTickets = this.tickets.filter(t => t.status === 'Andamento Reparo' && t.repair_start_at);
+
+            repairTickets.forEach(t => {
+                const start = new Date(t.repair_start_at);
+                const durationHours = (now - start) / (1000 * 60 * 60);
+
+                // Ideally we calculate specific avg, but for performance let's use a hard limit or global avg
+                // Let's use the Dashboard's calculated "Avg Repair Time" as baseline if available, else 4h.
+                const baseline = this.dashboardMetrics.avgRepairTime || 4;
+                const limit = Math.max(baseline * 3, 24); // 3x average or 24h min
+
+                if (durationHours > limit) {
+                    alerts.push({
+                        type: 'stuck',
+                        level: 'pulsing', // Visual effect
+                        message: `Travado na Bancada: OS #${t.os_number} em reparo há ${Math.floor(durationHours)}h`,
+                        ticket_id: t.id
+                    });
+                }
+            });
+
+            this.dashboardAlerts = alerts;
+        },
+
+        identifySpecialist() {
+            // Logic to suggest specialist in New Ticket Modal
+            const model = this.ticketForm.model;
+            // First defect
+            const defect = (this.ticketForm.defects && this.ticketForm.defects.length > 0) ? this.ticketForm.defects[0] : null;
+
+            if (!model && !defect) {
+                this.specialistRecommendation = null;
+                return;
+            }
+
+            // Find tech with best success rate for this Model OR Defect
+            const techs = this.getTechnicians();
+            let bestTech = null;
+            let bestScore = -1;
+
+            techs.forEach(tech => {
+                // Filter history
+                const history = this.tickets.filter(t =>
+                    t.technician_id === tech.id &&
+                    (t.status === 'Finalizado' || t.status === 'Retirada Cliente') &&
+                    t.repair_successful &&
+                    ((model && t.device_model === model) || (defect && t.defect_reported && t.defect_reported.includes(defect)))
+                );
+
+                if (history.length > 2) { // Minimum samples
+                     // Score = Count * 1 + (1 / avg_time?) - Simple: Just Volume of Success for this specific problem
+                     const score = history.length;
+                     if (score > bestScore) {
+                         bestScore = score;
+                         bestTech = tech;
+                     }
+                }
+            });
+
+            this.specialistRecommendation = bestTech;
         },
 
         // --- DEVICE MODELS ---
@@ -774,6 +1070,7 @@ function app() {
                 technician_id: '',
                 checklist: [], checklist_final: [], photos: [], notes: ''
             };
+            this.specialistRecommendation = null;
             this.modals.ticket = true;
         },
 
@@ -1530,9 +1827,11 @@ function app() {
             const existing = this.ticketForm.defects || [];
             if (existing.some(defect => defect.toLowerCase() === trimmed.toLowerCase())) return;
             this.ticketForm.defects = [...existing, trimmed];
+            this.identifySpecialist(); // Check for specialist on change
         },
         removeDefectFromTicket(defectName) {
             this.ticketForm.defects = (this.ticketForm.defects || []).filter(defect => defect !== defectName);
+            this.identifySpecialist(); // Check for specialist on change
         },
         getDefectList(defectReported) {
             if (!defectReported) return [];
