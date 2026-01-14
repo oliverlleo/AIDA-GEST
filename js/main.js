@@ -1855,9 +1855,9 @@ function app() {
 
         getTopItems(items, limit = 4) {
             return Object.entries(items)
-                .sort((a, b) => b[1] - a[1])
+                .sort((a, b) => b[1].total - a[1].total) // Sort by object.total property
                 .slice(0, limit)
-                .map(([label, value]) => ({ label, value }));
+                .map(([label, stats]) => ({ label, ...stats }));
         },
 
         getAdminMetrics() {
@@ -1910,23 +1910,47 @@ function app() {
             const defectsMap = {};
             const modelsMap = {};
             const comboMap = {};
+
             filteredTickets.forEach(ticket => {
+                // Models Logic
                 if (ticket.device_model) {
-                    modelsMap[ticket.device_model] = (modelsMap[ticket.device_model] || 0) + 1;
+                    if (!modelsMap[ticket.device_model]) modelsMap[ticket.device_model] = { total: 0, success: 0, fail: 0 };
+                    modelsMap[ticket.device_model].total++;
+                    if (ticket.repair_successful === true) modelsMap[ticket.device_model].success++;
+                    if (ticket.repair_successful === false) modelsMap[ticket.device_model].fail++;
                 }
+
+                // Defects Logic
                 const defects = this.getDefectList(ticket.defect_reported);
                 defects.forEach(defect => {
-                    defectsMap[defect] = (defectsMap[defect] || 0) + 1;
+                    // Top Defects
+                    if (!defectsMap[defect]) defectsMap[defect] = { total: 0, success: 0, fail: 0 };
+                    defectsMap[defect].total++;
+                    if (ticket.repair_successful === true) defectsMap[defect].success++;
+                    if (ticket.repair_successful === false) defectsMap[defect].fail++;
+
+                    // Combo Logic
                     if (ticket.device_model) {
                         const comboKey = `${ticket.device_model} · ${defect}`;
-                        comboMap[comboKey] = (comboMap[comboKey] || 0) + 1;
+                        if (!comboMap[comboKey]) comboMap[comboKey] = { total: 0, success: 0, fail: 0 };
+                        comboMap[comboKey].total++;
+                         if (ticket.repair_successful === true) comboMap[comboKey].success++;
+                        if (ticket.repair_successful === false) comboMap[comboKey].fail++;
                     }
                 });
             });
 
-            const topDefects = this.getTopItems(defectsMap, 4);
-            const topModels = this.getTopItems(modelsMap, 4);
-            const topCombos = this.getTopItems(comboMap, 4);
+            // Helper to calculate percentages
+            const enhanceStats = (list) => list.map(item => ({
+                ...item,
+                successRate: item.total ? Math.round((item.success / item.total) * 100) : 0,
+                failRate: item.total ? Math.round((item.fail / item.total) * 100) : 0
+            }));
+
+            // Use 50 limit for scrolling
+            const topDefects = enhanceStats(this.getTopItems(defectsMap, 50));
+            const topModels = enhanceStats(this.getTopItems(modelsMap, 4)); // Keep models widget small
+            const topCombos = enhanceStats(this.getTopItems(comboMap, 50));
 
             const ticketsPerDay = Math.round(filteredTickets.length / rangeDays);
 
