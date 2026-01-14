@@ -31,6 +31,16 @@ function app() {
         newCompanyCode: '',
         view: 'dashboard',
         authMode: 'employee',
+        adminDashboardFilters: {
+            dateStart: '',
+            dateEnd: '',
+            deviceModel: 'all',
+            defect: 'all',
+            technician: 'all',
+            status: 'all',
+            analysisMode: 'combined',
+            quickView: 'summary'
+        },
 
         // Data
         employees: [],
@@ -1778,6 +1788,219 @@ function app() {
         openRecycleBin() {
             this.fetchDeletedItems();
             this.modals.recycleBin = true;
+        },
+
+        formatDuration(ms) {
+            if (!ms || Number.isNaN(ms)) return '-';
+            const totalMinutes = Math.round(ms / 60000);
+            const days = Math.floor(totalMinutes / 1440);
+            const hours = Math.floor((totalMinutes % 1440) / 60);
+            const minutes = totalMinutes % 60;
+            const parts = [];
+            if (days) parts.push(`${days}d`);
+            if (hours || days) parts.push(`${hours}h`);
+            parts.push(`${minutes}m`);
+            return parts.join(' ');
+        },
+
+        toArray(value) {
+            if (!value) return [];
+            if (Array.isArray(value)) return value;
+            return [value];
+        },
+
+        getAdminFilteredTickets() {
+            if (!this.tickets || !this.tickets.length) return [];
+
+            const { dateStart, dateEnd, deviceModel, defect, technician, status } = this.adminDashboardFilters;
+            const startDate = dateStart ? new Date(`${dateStart}T00:00:00`) : null;
+            const endDate = dateEnd ? new Date(`${dateEnd}T23:59:59`) : null;
+
+            return this.tickets.filter(ticket => {
+                const createdAt = ticket.created_at ? new Date(ticket.created_at) : null;
+                if ((startDate || endDate) && !createdAt) return false;
+                if (startDate && createdAt < startDate) return false;
+                if (endDate && createdAt > endDate) return false;
+
+                if (deviceModel !== 'all' && ticket.device_model !== deviceModel) return false;
+                if (defect !== 'all') {
+                    const defects = this.toArray(ticket.defects);
+                    if (!defects.includes(defect)) return false;
+                }
+                if (technician !== 'all' && ticket.technician_id != technician) return false;
+                if (status !== 'all' && ticket.status !== status) return false;
+                return true;
+            });
+        },
+
+        getAdminRangeDays(filteredTickets) {
+            if (!filteredTickets.length) return 1;
+            const { dateStart, dateEnd } = this.adminDashboardFilters;
+            if (dateStart || dateEnd) {
+                const timestamps = filteredTickets.map(t => new Date(t.created_at).getTime()).filter(Boolean);
+                if (!timestamps.length) return 1;
+                const start = dateStart ? new Date(`${dateStart}T00:00:00`) : new Date(Math.min(...timestamps));
+                const end = dateEnd ? new Date(`${dateEnd}T23:59:59`) : new Date(Math.max(...timestamps));
+                const diff = Math.max(1, Math.ceil((end - start) / 86400000));
+                return diff;
+            }
+            const timestamps = filteredTickets.map(t => new Date(t.created_at).getTime()).filter(Boolean);
+            if (!timestamps.length) return 1;
+            const min = Math.min(...timestamps);
+            const max = Math.max(...timestamps);
+            const diff = Math.max(1, Math.ceil((max - min) / 86400000));
+            return diff;
+        },
+
+        getTopItems(items, limit = 4) {
+            return Object.entries(items)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, limit)
+                .map(([label, value]) => ({ label, value }));
+        },
+
+        getAdminMetrics() {
+            const filteredTickets = this.getAdminFilteredTickets();
+            const rangeDays = this.getAdminRangeDays(filteredTickets);
+
+            const successTickets = filteredTickets.filter(t => t.repair_successful !== null && t.repair_successful !== undefined);
+            const successCount = successTickets.filter(t => t.repair_successful).length;
+            const successRate = successTickets.length ? Math.round((successCount / successTickets.length) * 100) : null;
+
+            const repairDurations = filteredTickets
+                .filter(t => t.repair_start_at && t.repair_end_at)
+                .map(t => new Date(t.repair_end_at) - new Date(t.repair_start_at))
+                .filter(ms => ms > 0);
+            const avgRepair = repairDurations.length ? repairDurations.reduce((a, b) => a + b, 0) / repairDurations.length : null;
+
+            const solutionDurations = filteredTickets
+                .map(t => {
+                    if (!t.created_at) return null;
+                    const readyAt = t.pickup_available_at || t.repair_end_at;
+                    if (!readyAt) return null;
+                    return new Date(readyAt) - new Date(t.created_at);
+                })
+                .filter(ms => ms && ms > 0);
+            const avgSolution = solutionDurations.length ? solutionDurations.reduce((a, b) => a + b, 0) / solutionDurations.length : null;
+
+            const deliveryDurations = filteredTickets
+                .filter(t => t.status === 'Finalizado' && t.created_at && t.updated_at)
+                .map(t => new Date(t.updated_at) - new Date(t.created_at))
+                .filter(ms => ms > 0);
+            const avgDelivery = deliveryDurations.length ? deliveryDurations.reduce((a, b) => a + b, 0) / deliveryDurations.length : null;
+
+            const budgetDurations = filteredTickets
+                .filter(t => t.created_at && t.budget_sent_at)
+                .map(t => new Date(t.budget_sent_at) - new Date(t.created_at))
+                .filter(ms => ms > 0);
+            const avgBudget = budgetDurations.length ? budgetDurations.reduce((a, b) => a + b, 0) / budgetDurations.length : null;
+
+            const pickupDurations = filteredTickets
+                .filter(t => t.created_at && t.pickup_available_at)
+                .map(t => new Date(t.pickup_available_at) - new Date(t.created_at))
+                .filter(ms => ms > 0);
+            const avgPickupNotify = pickupDurations.length ? pickupDurations.reduce((a, b) => a + b, 0) / pickupDurations.length : null;
+
+            const analysisCount = filteredTickets.filter(t => t.status === 'Analise Tecnica').length;
+            const repairCount = filteredTickets.filter(t => t.status === 'Andamento Reparo').length;
+
+            const defectsMap = {};
+            const modelsMap = {};
+            const comboMap = {};
+            filteredTickets.forEach(ticket => {
+                if (ticket.device_model) {
+                    modelsMap[ticket.device_model] = (modelsMap[ticket.device_model] || 0) + 1;
+                }
+                const defects = this.toArray(ticket.defects);
+                defects.forEach(defect => {
+                    defectsMap[defect] = (defectsMap[defect] || 0) + 1;
+                    if (ticket.device_model) {
+                        const comboKey = `${ticket.device_model} · ${defect}`;
+                        comboMap[comboKey] = (comboMap[comboKey] || 0) + 1;
+                    }
+                });
+            });
+
+            const topDefects = this.getTopItems(defectsMap, 4);
+            const topModels = this.getTopItems(modelsMap, 4);
+            const topCombos = this.getTopItems(comboMap, 4);
+
+            const ticketsPerDay = Math.round(filteredTickets.length / rangeDays);
+
+            const now = new Date();
+            const oneDayAgo = new Date(now);
+            oneDayAgo.setDate(now.getDate() - 1);
+            const oneWeekAgo = new Date(now);
+            oneWeekAgo.setDate(now.getDate() - 7);
+            const oneMonthAgo = new Date(now);
+            oneMonthAgo.setDate(now.getDate() - 30);
+
+            const getRepairTimestamp = ticket => {
+                if (ticket.repair_end_at) return new Date(ticket.repair_end_at);
+                if (ticket.status === 'Finalizado' && ticket.updated_at) return new Date(ticket.updated_at);
+                return null;
+            };
+
+            const repairsToday = filteredTickets.filter(t => {
+                const timestamp = getRepairTimestamp(t);
+                return timestamp && timestamp >= oneDayAgo;
+            }).length;
+
+            const repairsWeek = filteredTickets.filter(t => {
+                const timestamp = getRepairTimestamp(t);
+                return timestamp && timestamp >= oneWeekAgo;
+            }).length;
+
+            const repairsMonth = filteredTickets.filter(t => {
+                const timestamp = getRepairTimestamp(t);
+                return timestamp && timestamp >= oneMonthAgo;
+            }).length;
+
+            const techMap = {};
+            filteredTickets.forEach(ticket => {
+                const techId = ticket.technician_id || 'unassigned';
+                if (!techMap[techId]) {
+                    techMap[techId] = { total: 0, success: 0 };
+                }
+                techMap[techId].total += 1;
+                if (ticket.repair_successful) {
+                    techMap[techId].success += 1;
+                }
+            });
+
+            const techStats = Object.entries(techMap)
+                .map(([techId, data]) => {
+                    const tech = this.employees.find(emp => emp.id == techId);
+                    const name = tech ? tech.name : techId === 'unassigned' ? 'Sem técnico' : 'Técnico';
+                    return {
+                        id: techId,
+                        name,
+                        total: data.total,
+                        successRate: data.total ? Math.round((data.success / data.total) * 100) : null
+                    };
+                })
+                .sort((a, b) => b.total - a.total);
+
+            return {
+                filteredTickets,
+                rangeDays,
+                successRate,
+                avgRepair,
+                avgSolution,
+                avgDelivery,
+                avgBudget,
+                avgPickupNotify,
+                analysisPerDay: Math.round(analysisCount / rangeDays),
+                repairPerDay: Math.round(repairCount / rangeDays),
+                ticketsPerDay,
+                repairsToday,
+                repairsWeek,
+                repairsMonth,
+                topDefects,
+                topModels,
+                topCombos,
+                techStats
+            };
         },
 
         hasRole(role) {

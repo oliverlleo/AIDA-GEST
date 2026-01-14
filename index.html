@@ -156,6 +156,12 @@
                     <template x-if="hasRole('admin')">
                         <div class="mb-6 md:px-4">
                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 hidden md:block">Gestão</p>
+                            <a href="#" @click.prevent="view = 'admin_dashboard'"
+                               :class="view === 'admin_dashboard' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-chart-line w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'admin_dashboard' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Dashboard Gestor</span>
+                            </a>
                             <a href="#" @click.prevent="view = 'employees'"
                                :class="view === 'employees' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group">
@@ -202,6 +208,255 @@
                             <div class="text-4xl font-bold text-green-600" x-text="tickets.filter(t => t.status === 'Retirada Cliente').length">0</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- VIEW: ADMIN DASHBOARD -->
+                <div x-show="view === 'admin_dashboard' && hasRole('admin')" class="p-8 overflow-y-auto h-full" x-transition.opacity x-cloak x-data="{ metrics: {} }" x-init="metrics = getAdminMetrics()" x-effect="metrics = getAdminMetrics()">
+                    <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900">Dashboard do Gestor</h1>
+                            <p class="text-gray-500">Painel estratégico para análise detalhada por aparelho, defeito e técnico.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-3">
+                            <button class="bg-black text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-brand-500 transition-colors">
+                                Exportar relatório
+                            </button>
+                            <button class="bg-white text-gray-700 px-5 py-2.5 rounded-lg border border-gray-200 font-semibold hover:border-brand-500 hover:text-brand-600 transition-colors">
+                                Salvar visão
+                            </button>
+                        </div>
+                    </header>
+
+                    <section class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
+                        <h2 class="text-lg font-semibold text-gray-900 mb-4">Filtros inteligentes</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Período</label>
+                                <div class="mt-2 flex gap-2">
+                                    <input type="date" x-model="adminDashboardFilters.dateStart" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <input type="date" x-model="adminDashboardFilters.dateEnd" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Modelo de aparelho</label>
+                                <select x-model="adminDashboardFilters.deviceModel" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="all">Todos os modelos</option>
+                                    <template x-for="model in deviceModels" :key="model.id">
+                                        <option :value="model.name" x-text="model.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Defeito</label>
+                                <select x-model="adminDashboardFilters.defect" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="all">Todos os defeitos</option>
+                                    <template x-for="defect in defectOptions" :key="defect.id">
+                                        <option :value="defect.name" x-text="defect.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Técnico</label>
+                                <select x-model="adminDashboardFilters.technician" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="all">Todos os técnicos</option>
+                                    <template x-for="employee in employees.filter(emp => (emp.roles || []).includes('tecnico'))" :key="employee.id">
+                                        <option :value="employee.id" x-text="employee.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status do reparo</label>
+                                <select x-model="adminDashboardFilters.status" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="all">Todos os status</option>
+                                    <template x-for="status in STATUS_COLUMNS" :key="status">
+                                        <option :value="status" x-text="getStatusLabel(status)"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Análise combinada</label>
+                                <select x-model="adminDashboardFilters.analysisMode" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="combined">Aparelho + Defeito</option>
+                                    <option value="defects">Somente defeitos gerais</option>
+                                    <option value="models">Somente aparelhos</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Visão rápida</label>
+                                <select x-model="adminDashboardFilters.quickView" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="summary">Resumo executivo</option>
+                                    <option value="repair">Detalhar tempo de reparo</option>
+                                    <option value="sla">Detalhar SLA e entregas</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button @click="adminDashboardFilters = { ...adminDashboardFilters }" class="w-full bg-brand-500 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-brand-600 transition-colors">
+                                    Atualizar visão
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Taxa de sucesso</p>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-3xl font-bold text-gray-900" x-text="metrics.successRate !== null ? metrics.successRate + '%' : '-'">-</span>
+                                <span class="text-sm text-gray-500 font-semibold" x-text="metrics.filteredTickets?.length ? metrics.filteredTickets.length + ' reparos avaliados' : 'Sem dados'">Sem dados</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3">Reparos concluídos com êxito.</p>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tempo médio de reparo</p>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-3xl font-bold text-gray-900" x-text="formatDuration(metrics.avgRepair)">-</span>
+                                <span class="text-sm text-brand-600 font-semibold">Cronômetro técnico</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3">Tempo em bancada até finalizar.</p>
+                        </div>
+                        <div x-show="adminDashboardFilters.quickView !== 'repair'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tempo médio de solução</p>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-3xl font-bold text-gray-900" x-text="formatDuration(metrics.avgSolution)">-</span>
+                                <span class="text-sm text-gray-500 font-semibold">Chamado → pronto</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3">Até liberar para o cliente.</p>
+                        </div>
+                        <div x-show="adminDashboardFilters.quickView !== 'repair'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tempo médio para entrega</p>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-3xl font-bold text-gray-900" x-text="formatDuration(metrics.avgDelivery)">-</span>
+                                <span class="text-sm text-gray-500 font-semibold">Chamado → retirada</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3">Até o cliente retirar.</p>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Entradas médias por dia</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Em análise</span>
+                                    <span class="text-lg font-semibold text-gray-900" x-text="metrics.analysisPerDay + ' aparelhos'">0 aparelhos</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Em reparo</span>
+                                    <span class="text-lg font-semibold text-gray-900" x-text="metrics.repairPerDay + ' aparelhos'">0 aparelhos</span>
+                                </div>
+                                <div class="bg-gray-100 rounded-lg px-4 py-3 text-sm text-gray-500">
+                                    Baseado em <span x-text="metrics.rangeDays">0</span> dias.
+                                </div>
+                            </div>
+                        </div>
+                        <div x-show="adminDashboardFilters.quickView !== 'repair'" class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Chamados e orçamentos</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Chamados por dia</span>
+                                    <span class="text-lg font-semibold text-gray-900" x-text="metrics.ticketsPerDay">0</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Tempo para orçamento</span>
+                                    <span class="text-lg font-semibold text-gray-900" x-text="formatDuration(metrics.avgBudget)">-</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Aviso de retirada</span>
+                                    <span class="text-lg font-semibold text-gray-900" x-text="formatDuration(metrics.avgPickupNotify)">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Técnicos e performance</h3>
+                            <div class="space-y-4">
+                                <template x-if="metrics.techStats?.length">
+                                    <div class="space-y-3">
+                                        <template x-for="tech in metrics.techStats.slice(0, 3)" :key="tech.id">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-gray-500" x-text="tech.name"></span>
+                                                <span class="text-lg font-semibold text-gray-900" x-text="tech.total + ' aparelhos · ' + (tech.successRate !== null ? tech.successRate + '%' : '-')"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!metrics.techStats?.length">
+                                    <div class="text-sm text-gray-500">Sem dados de técnicos no período.</div>
+                                </template>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-semibold text-gray-900">Reparos por dia/semana/mês</h3>
+                                <span class="text-xs text-gray-500 uppercase tracking-wide">Volume</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="rounded-xl border border-gray-200 p-4 text-center">
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Hoje</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.repairsToday">0</p>
+                                </div>
+                                <div class="rounded-xl border border-gray-200 p-4 text-center">
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Semana</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.repairsWeek">0</p>
+                                </div>
+                                <div class="rounded-xl border border-gray-200 p-4 text-center">
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Mês</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.repairsMonth">0</p>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
+                                <template x-for="model in metrics.topModels" :key="model.label">
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full" x-text="'Modelo: ' + model.label + ' (' + model.value + ')'"></span>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-semibold text-gray-900" x-text="adminDashboardFilters.analysisMode === 'models' ? 'Modelos mais frequentes' : 'Defeitos mais frequentes'">Defeitos mais frequentes</h3>
+                                <span class="text-xs text-gray-500 uppercase tracking-wide">Ranking</span>
+                            </div>
+                            <div class="space-y-3">
+                                <template x-if="adminDashboardFilters.analysisMode === 'models'">
+                                    <template x-for="model in metrics.topModels" :key="model.label">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-gray-700" x-text="model.label"></span>
+                                            <span class="text-sm font-semibold text-gray-900" x-text="model.value"></span>
+                                        </div>
+                                    </template>
+                                </template>
+                                <template x-if="adminDashboardFilters.analysisMode !== 'models'">
+                                    <template x-for="defect in metrics.topDefects" :key="defect.label">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-gray-700" x-text="defect.label"></span>
+                                            <span class="text-sm font-semibold text-gray-900" x-text="defect.value"></span>
+                                        </div>
+                                    </template>
+                                </template>
+                                <template x-if="adminDashboardFilters.analysisMode === 'models' && !metrics.topModels?.length">
+                                    <div class="text-sm text-gray-500">Sem dados de modelos.</div>
+                                </template>
+                                <template x-if="adminDashboardFilters.analysisMode !== 'models' && !metrics.topDefects?.length">
+                                    <div class="text-sm text-gray-500">Sem dados de defeitos.</div>
+                                </template>
+                            </div>
+                            <div class="mt-6 rounded-xl border border-dashed border-gray-200 p-4">
+                                <div class="text-xs text-gray-500 uppercase tracking-wide mb-2" x-text="adminDashboardFilters.analysisMode === 'combined' ? 'Aparelho x defeito' : 'Top combinações'">Aparelho x defeito</div>
+                                <div class="space-y-2">
+                                    <template x-for="combo in metrics.topCombos" :key="combo.label">
+                                        <div class="flex items-center justify-between text-sm">
+                                            <span class="text-gray-600" x-text="combo.label"></span>
+                                            <span class="font-semibold text-gray-900" x-text="combo.value"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!metrics.topCombos?.length">
+                                        <div class="text-sm text-gray-500">Sem combinações registradas.</div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 <!-- VIEW: KANBAN BOARD -->
