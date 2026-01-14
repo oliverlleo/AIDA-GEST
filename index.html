@@ -43,7 +43,7 @@
         .kanban-col:hover::-webkit-scrollbar-thumb { background: #A0AEC0; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
+<body class="bg-gray-100 text-gray-900 antialiased" x-data="app()" x-effect="calculateMetrics()">
 
     <!-- Loading Overlay -->
     <div x-show="loading" class="fixed inset-0 bg-white z-[99] flex items-center justify-center bg-opacity-90 transition-opacity" x-transition.opacity>
@@ -210,7 +210,7 @@
                     </div>
 
                     <!-- OPERATIONAL DASHBOARD (Atendente Focus) -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8" x-data="{ ops: getDashboardOps() }" x-effect="ops = getDashboardOps()">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                         <!-- Col 1: Client Communication (2/3) -->
                         <div class="lg:col-span-2 space-y-6">
@@ -456,7 +456,7 @@
                 </div>
 
                 <!-- VIEW: ADMIN DASHBOARD -->
-                <div x-show="view === 'admin_dashboard' && hasRole('admin')" class="p-8 overflow-y-auto h-full" x-transition.opacity x-cloak x-data="{ metrics: {} }" x-init="metrics = getAdminMetrics()" x-effect="metrics = getAdminMetrics()">
+                <div x-show="view === 'admin_dashboard' && hasRole('admin')" class="p-8 overflow-y-auto h-full" x-transition.opacity x-cloak>
                     <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
                         <div>
                             <h1 class="text-3xl font-bold text-gray-900">Dashboard do Gestor</h1>

@@ -57,6 +57,52 @@ function app() {
         checklistTemplatesFinal: [],
         notifications: [],
 
+        // Dashboard Data
+        ops: {
+            pendingBudgets: [],
+            pendingPickups: [],
+            urgentAnalysis: [],
+            delayedDeliveries: [],
+            priorityTickets: [],
+            pendingPurchase: [],
+            pendingReceipt: []
+        },
+        metrics: {
+             filteredTickets: [],
+             techDeepDive: [],
+             topModels: [],
+             topDefects: [],
+             topCombos: [],
+             slowestModels: [],
+             slowestDefects: [],
+             slowestCombos: [],
+             fastestTechs: [],
+             slowestModelsSolution: [],
+             slowestDefectsSolution: [],
+             slowestCombosSolution: [],
+             fastestTechsSolution: [],
+             slowestModelsDelivery: [],
+             slowestDefectsDelivery: [],
+             slowestCombosDelivery: [],
+             fastestTechsDelivery: [],
+             techStats: [],
+             successRate: 0,
+             avgRepair: 0,
+             avgSolution: 0,
+             avgDelivery: 0,
+             avgBudget: 0,
+             avgPickupNotify: 0,
+             analysisCount: 0,
+             repairCount: 0,
+             ticketsPerDay: 0,
+             repairsToday: 0,
+             repairsWeek: 0,
+             repairsMonth: 0,
+             ticketsToday: 0,
+             ticketsWeek: 0,
+             ticketsMonth: 0
+        },
+
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
         adminForm: { email: '', password: '' },
@@ -223,6 +269,7 @@ function app() {
                     await this.fetchTemplates();
                     await this.fetchDeviceModels(); // New fetch
                     await this.fetchDefectOptions();
+                    this.fetchGlobalLogs();
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -251,6 +298,11 @@ function app() {
 
             // Removed visibilitychange listener to prevent lock conflicts.
             // Data is kept fresh via Realtime subscriptions.
+        },
+
+        calculateMetrics() {
+            this.ops = this.getDashboardOps();
+            this.metrics = this.getAdminMetrics();
         },
 
         setupRealtime() {
@@ -362,6 +414,7 @@ function app() {
                     await this.fetchTemplates();
                     await this.fetchDeviceModels(); // New fetch
                     await this.fetchDefectOptions();
+                    this.fetchGlobalLogs();
 
                     // Redirect Technician directly to Bench
                     if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
@@ -428,6 +481,7 @@ function app() {
                     await this.fetchTemplates();
                     await this.fetchDeviceModels(); // New fetch
                     await this.fetchDefectOptions();
+                    this.fetchGlobalLogs();
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -669,6 +723,8 @@ function app() {
                         // Deadline
                         return new Date(a.deadline || 0) - new Date(b.deadline || 0);
                     });
+
+                    this.calculateMetrics();
                 }
             } catch (err) {
                  console.warn("Fetch exception:", err);
