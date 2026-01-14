@@ -128,6 +128,16 @@
                             </a>
                         </template>
 
+                        <!-- Admin Analytics -->
+                        <template x-if="hasRole('admin')">
+                            <a href="#" @click.prevent="view = 'admin-analytics'"
+                               :class="view === 'admin-analytics' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-chart-line w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'admin-analytics' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Analytics</span>
+                            </a>
+                        </template>
+
                         <!-- Kanban (Admin/Atendente only) -->
                         <template x-if="hasRole('admin') || hasRole('atendente')">
                             <a href="#" @click.prevent="view = 'kanban'"
@@ -202,6 +212,233 @@
                             <div class="text-4xl font-bold text-green-600" x-text="tickets.filter(t => t.status === 'Retirada Cliente').length">0</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- VIEW: ADMIN ANALYTICS -->
+                <div x-show="view === 'admin-analytics' && hasRole('admin')" class="p-8 overflow-y-auto h-full" x-transition.opacity>
+                    <header class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900">Dashboard Administrativo</h1>
+                            <p class="text-gray-500">Análises detalhadas por aparelho, defeito e técnico.</p>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-gray-400">
+                            <span class="h-2 w-2 rounded-full bg-brand-500"></span>
+                            <span>Atualizado em tempo real</span>
+                        </div>
+                    </header>
+
+                    <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-2">Período</label>
+                                <select x-model="analyticsFilters.period" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent">
+                                    <option value="today">Hoje</option>
+                                    <option value="week">Últimos 7 dias</option>
+                                    <option value="month">Últimos 30 dias</option>
+                                    <option value="all">Todo o histórico</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-2">Modelo do aparelho</label>
+                                <select x-model="analyticsFilters.deviceModel" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent">
+                                    <option value="all">Todos</option>
+                                    <template x-for="model in deviceModels" :key="model.id">
+                                        <option :value="model.name" x-text="model.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-2">Defeito</label>
+                                <select x-model="analyticsFilters.defect" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent">
+                                    <option value="all">Todos</option>
+                                    <template x-for="defect in defectOptions" :key="defect.id">
+                                        <option :value="defect.name" x-text="defect.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-2">Técnico</label>
+                                <select x-model="analyticsFilters.technician" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent">
+                                    <option value="all">Todos</option>
+                                    <template x-for="tech in getTechnicians()" :key="tech.id">
+                                        <option :value="tech.id" x-text="tech.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+                        <div class="bg-black text-white rounded-2xl p-5 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-300">Taxa de sucesso</div>
+                            <div class="text-3xl font-bold mt-2" x-text="getAnalyticsSuccessRate(getAnalyticsTickets()).rate + '%'">0%</div>
+                            <p class="text-xs text-gray-400 mt-1" x-text="getAnalyticsSuccessRate(getAnalyticsTickets()).success + ' de ' + getAnalyticsSuccessRate(getAnalyticsTickets()).total + ' reparos'"></p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-400">Tempo médio de reparo</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-2" x-text="formatDurationFromMs(getAverageDuration(getAnalyticsTickets(), 'repair_start_at', 'repair_end_at'))">—</div>
+                            <p class="text-xs text-gray-400 mt-1">Cronômetro de execução</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-400">Tempo médio de solução</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-2" x-text="formatDurationFromMs(getAverageDuration(getAnalyticsTickets(), 'created_at', 'repair_end_at'))">—</div>
+                            <p class="text-xs text-gray-400 mt-1">Da criação até a solução técnica</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-400">Tempo médio de entrega</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-2" x-text="formatDurationFromMs(getAverageDuration(getAnalyticsTickets().filter(t => t.status === 'Finalizado'), 'created_at', 'updated_at'))">—</div>
+                            <p class="text-xs text-gray-400 mt-1">Criação → finalização</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-400">Tempo para orçamento</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-2" x-text="formatDurationFromMs(getAverageDuration(getAnalyticsTickets(), 'created_at', 'budget_sent_at'))">—</div>
+                            <p class="text-xs text-gray-400 mt-1">Criação → envio</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-400">Tempo para avisar retirada</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-2" x-text="formatDurationFromMs(getAverageDuration(getAnalyticsTickets(), 'created_at', 'pickup_available_at'))">—</div>
+                            <p class="text-xs text-gray-400 mt-1">Criação → aviso ao cliente</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-400">Média diária em análise</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-2" x-text="getAverageDailyCount(['Analise Tecnica']).toFixed(1)">0</div>
+                            <p class="text-xs text-gray-400 mt-1">Chamados em análise técnica</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-400">Média diária em reparo</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-2" x-text="getAverageDailyCount(['Andamento Reparo']).toFixed(1)">0</div>
+                            <p class="text-xs text-gray-400 mt-1">Chamados em execução</p>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div class="text-xs uppercase tracking-wider text-gray-400">Chamados por dia</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-2" x-text="(getAnalyticsTickets().length / getAnalyticsPeriodDays(getAnalyticsTickets())).toFixed(1)">0</div>
+                            <p class="text-xs text-gray-400 mt-1">Média diária de entradas</p>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 xl:col-span-2">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold text-gray-800">Produtividade por técnico</h3>
+                                <span class="text-xs text-gray-400">Qtd. de aparelhos & taxa de sucesso</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full text-sm">
+                                    <thead>
+                                        <tr class="text-left text-xs uppercase tracking-wider text-gray-400 border-b">
+                                            <th class="py-2">Técnico</th>
+                                            <th class="py-2">Aparelhos</th>
+                                            <th class="py-2">Sucesso</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="tech in getTechnicianPerformance()" :key="tech.id">
+                                            <tr class="border-b last:border-0">
+                                                <td class="py-3 font-semibold text-gray-700" x-text="tech.name"></td>
+                                                <td class="py-3 text-gray-600" x-text="tech.total"></td>
+                                                <td class="py-3 text-gray-600" x-text="tech.successRate + '%'"></td>
+                                            </tr>
+                                        </template>
+                                        <tr x-show="getTechnicianPerformance().length === 0">
+                                            <td colspan="3" class="py-4 text-center text-gray-400 text-sm">Sem dados no período.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <h3 class="font-bold text-gray-800 mb-4">Modelos & defeitos mais frequentes</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <p class="text-xs uppercase tracking-wider text-gray-400 mb-2">Modelos (últimos 30 dias)</p>
+                                    <div class="space-y-2">
+                                        <template x-for="item in getTopModels(getTicketsInLastDays('repair_end_at', 30))" :key="item.name">
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-700" x-text="item.name"></span>
+                                                <span class="text-gray-500" x-text="item.count"></span>
+                                            </div>
+                                        </template>
+                                        <p x-show="getTopModels(getTicketsInLastDays('repair_end_at', 30)).length === 0" class="text-xs text-gray-400">Sem dados.</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase tracking-wider text-gray-400 mb-2">Defeitos (últimos 30 dias)</p>
+                                    <div class="space-y-2">
+                                        <template x-for="item in getTopDefects(getTicketsInLastDays('repair_end_at', 30))" :key="item.name">
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-700" x-text="item.name"></span>
+                                                <span class="text-gray-500" x-text="item.count"></span>
+                                            </div>
+                                        </template>
+                                        <p x-show="getTopDefects(getTicketsInLastDays('repair_end_at', 30)).length === 0" class="text-xs text-gray-400">Sem dados.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold text-gray-800">Chamados por dia</h3>
+                                <span class="text-xs text-gray-400">Semana e mês</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-gray-50 rounded-xl p-4">
+                                    <p class="text-xs uppercase tracking-wider text-gray-400 mb-3">Últimos 7 dias</p>
+                                    <div class="space-y-2">
+                                        <template x-for="item in getDailyCounts('created_at', 7)" :key="item.label">
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-600" x-text="item.label"></span>
+                                                <span class="font-semibold text-gray-800" x-text="item.count"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50 rounded-xl p-4">
+                                    <p class="text-xs uppercase tracking-wider text-gray-400 mb-3">Últimos 30 dias</p>
+                                    <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                        <template x-for="item in getDailyCounts('created_at', 30)" :key="item.label">
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-600" x-text="item.label"></span>
+                                                <span class="font-semibold text-gray-800" x-text="item.count"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold text-gray-800">Reparos finalizados por dia</h3>
+                                <span class="text-xs text-gray-400">Semana e mês</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-gray-50 rounded-xl p-4">
+                                    <p class="text-xs uppercase tracking-wider text-gray-400 mb-3">Últimos 7 dias</p>
+                                    <div class="space-y-2">
+                                        <template x-for="item in getDailyCounts('repair_end_at', 7)" :key="item.label">
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-600" x-text="item.label"></span>
+                                                <span class="font-semibold text-gray-800" x-text="item.count"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50 rounded-xl p-4">
+                                    <p class="text-xs uppercase tracking-wider text-gray-400 mb-3">Últimos 30 dias</p>
+                                    <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                        <template x-for="item in getDailyCounts('repair_end_at', 30)" :key="item.label">
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-600" x-text="item.label"></span>
+                                                <span class="font-semibold text-gray-800" x-text="item.count"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 <!-- VIEW: KANBAN BOARD -->
