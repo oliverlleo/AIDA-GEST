@@ -271,6 +271,56 @@
                                     <div x-show="!ops.pendingPickups.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
+
+                            <h3 class="text-lg font-bold text-gray-800 flex items-center pt-2">
+                                <i class="fa-solid fa-truck-fast text-brand-500 mr-2"></i> Pendências com Fornecedor
+                            </h3>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <!-- Waiting for Purchase -->
+                                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                    <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex justify-between items-center">
+                                        <h4 class="font-bold text-purple-800 text-sm">Aguardando Compra</h4>
+                                        <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingPurchase.length">0</span>
+                                    </div>
+                                    <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                        <template x-for="t in ops.pendingPurchase" :key="t.id">
+                                            <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
+                                                <div>
+                                                    <div class="font-bold text-gray-800 text-sm" x-text="t.device_model"></div>
+                                                    <div class="text-xs text-gray-500 truncate w-32" x-text="t.parts_needed || 'Peças não listadas'"></div>
+                                                </div>
+                                                <button @click="viewTicketDetails(t)" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded font-bold hover:bg-purple-200 transition-colors">
+                                                    Ver
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <div x-show="!ops.pendingPurchase.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhuma compra pendente.</div>
+                                    </div>
+                                </div>
+
+                                <!-- Waiting for Receipt -->
+                                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                    <div class="bg-teal-50 px-4 py-3 border-b border-teal-100 flex justify-between items-center">
+                                        <h4 class="font-bold text-teal-800 text-sm">Aguardando Recebimento</h4>
+                                        <span class="bg-teal-200 text-teal-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingReceipt.length">0</span>
+                                    </div>
+                                    <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                        <template x-for="t in ops.pendingReceipt" :key="t.id">
+                                            <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
+                                                <div>
+                                                    <div class="font-bold text-gray-800 text-sm" x-text="t.device_model"></div>
+                                                    <div class="text-xs text-gray-500 truncate w-32" x-text="t.parts_needed || 'Peças'"></div>
+                                                </div>
+                                                <button @click="viewTicketDetails(t)" class="text-xs bg-teal-100 text-teal-700 px-3 py-1.5 rounded font-bold hover:bg-teal-200 transition-colors">
+                                                    Ver
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <div x-show="!ops.pendingReceipt.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum recebimento pendente.</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Col 2: Alerts & Activity (1/3) -->

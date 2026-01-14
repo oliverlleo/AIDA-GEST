@@ -1648,12 +1648,20 @@ function app() {
             // 5. Priority Requested
             const priorityTickets = tickets.filter(t => t.priority_requested);
 
+            // 6. Pending Purchase
+            const pendingPurchase = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status !== 'Comprado');
+
+            // 7. Pending Receipt
+            const pendingReceipt = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status === 'Comprado');
+
             return {
                 pendingBudgets,
                 pendingPickups,
                 urgentAnalysis,
                 delayedDeliveries,
-                priorityTickets
+                priorityTickets,
+                pendingPurchase,
+                pendingReceipt
             };
         },
 
