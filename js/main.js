@@ -1940,12 +1940,20 @@ function app() {
                 });
             });
 
-            // Helper to calculate percentages
-            const enhanceStats = (list) => list.map(item => ({
-                ...item,
-                successRate: item.total ? Math.round((item.success / item.total) * 100) : 0,
-                failRate: item.total ? Math.round((item.fail / item.total) * 100) : 0
-            }));
+            // Helper to calculate percentages with robust checks
+            const enhanceStats = (list) => list.map(item => {
+                const total = item.total || 0;
+                const success = item.success || 0;
+                const fail = item.fail || 0;
+                return {
+                    ...item,
+                    total: total,
+                    success: success,
+                    fail: fail,
+                    successRate: total > 0 ? Math.round((success / total) * 100) : 0,
+                    failRate: total > 0 ? Math.round((fail / total) * 100) : 0
+                };
+            });
 
             // Use 50 limit for scrolling
             const topDefects = enhanceStats(this.getTopItems(defectsMap, 50));

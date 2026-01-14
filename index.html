@@ -417,15 +417,17 @@
                             <div class="space-y-3 overflow-y-auto pr-2 scrollbar-hide flex-grow" style="max-height: 250px;">
                                 <template x-for="defect in metrics.topDefects" :key="defect.label">
                                     <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50 rounded px-2 transition-colors">
-                                        <span class="text-gray-700 text-sm font-medium truncate w-1/2" x-text="defect.label" :title="defect.label"></span>
-                                        <div class="flex gap-4 text-sm font-mono items-center w-1/2 justify-end">
-                                            <span class="font-bold text-gray-900 w-8 text-center" x-text="defect.total"></span>
-                                            <span class="text-green-600 w-16 text-right text-xs">
-                                                <span x-text="defect.success"></span> <span class="text-[10px] opacity-75" x-text="'(' + defect.successRate + '%)'"></span>
-                                            </span>
-                                            <span class="text-red-500 w-16 text-right text-xs">
-                                                <span x-text="defect.fail"></span> <span class="text-[10px] opacity-75" x-text="'(' + defect.failRate + '%)'"></span>
-                                            </span>
+                                        <span class="text-gray-700 text-sm font-medium truncate w-5/12" x-text="defect.label" :title="defect.label"></span>
+                                        <div class="flex flex-1 justify-end items-center gap-2 text-sm font-mono">
+                                            <div class="w-10 text-center font-bold text-gray-900" x-text="defect.total || 0"></div>
+                                            <div class="w-20 text-right text-green-600 text-xs">
+                                                <span x-text="defect.success || 0"></span>
+                                                <span class="opacity-75" x-text="'(' + (defect.successRate || 0) + '%)'"></span>
+                                            </div>
+                                            <div class="w-20 text-right text-red-500 text-xs">
+                                                <span x-text="defect.fail || 0"></span>
+                                                <span class="opacity-75" x-text="'(' + (defect.failRate || 0) + '%)'"></span>
+                                            </div>
                                         </div>
                                     </div>
                                 </template>
@@ -441,15 +443,17 @@
                                 <div class="space-y-2 overflow-y-auto pr-2 scrollbar-hide flex-grow" style="max-height: 200px;">
                                     <template x-for="combo in metrics.topCombos" :key="combo.label">
                                         <div class="flex items-center justify-between text-xs py-1.5 hover:bg-gray-50 rounded px-2 transition-colors">
-                                            <span class="text-gray-600 truncate w-1/2" x-text="combo.label" :title="combo.label"></span>
-                                            <div class="flex gap-4 font-mono items-center w-1/2 justify-end">
-                                                <span class="font-bold text-gray-900 w-8 text-center" x-text="combo.total"></span>
-                                                <span class="text-green-600 w-16 text-right">
-                                                    <span x-text="combo.success"></span> <span class="text-[10px] opacity-75" x-text="'(' + combo.successRate + '%)'"></span>
-                                                </span>
-                                                <span class="text-red-500 w-16 text-right">
-                                                    <span x-text="combo.fail"></span> <span class="text-[10px] opacity-75" x-text="'(' + combo.failRate + '%)'"></span>
-                                                </span>
+                                            <span class="text-gray-600 truncate w-5/12" x-text="combo.label" :title="combo.label"></span>
+                                            <div class="flex flex-1 justify-end items-center gap-2 font-mono">
+                                                <div class="w-10 text-center font-bold text-gray-900" x-text="combo.total || 0"></div>
+                                                <div class="w-20 text-right text-green-600">
+                                                    <span x-text="combo.success || 0"></span>
+                                                    <span class="opacity-75" x-text="'(' + (combo.successRate || 0) + '%)'"></span>
+                                                </div>
+                                                <div class="w-20 text-right text-red-500">
+                                                    <span x-text="combo.fail || 0"></span>
+                                                    <span class="opacity-75" x-text="'(' + (combo.failRate || 0) + '%)'"></span>
+                                                </div>
                                             </div>
                                         </div>
                                     </template>
