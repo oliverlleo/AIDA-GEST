@@ -1030,9 +1030,12 @@
                                 <template x-if="metrics.techStats?.length">
                                     <div class="space-y-3">
                                         <template x-for="tech in metrics.techStats.slice(0, 3)" :key="tech.id">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-gray-500" x-text="tech.name"></span>
-                                                <span class="text-lg font-semibold text-gray-900" x-text="tech.total + ' aparelhos · ' + (tech.successRate !== null ? tech.successRate + '%' : '-')"></span>
+                                            <div class="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                                <span class="text-gray-600 font-medium text-sm" x-text="tech.name"></span>
+                                                <div class="text-right">
+                                                    <span class="block text-sm font-bold text-gray-900" x-text="tech.successRate + '% Sucesso'"></span>
+                                                    <span class="block text-xs text-gray-400" x-text="tech.completed + ' concluídos'"></span>
+                                                </div>
                                             </div>
                                         </template>
                                     </div>
