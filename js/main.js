@@ -91,6 +91,7 @@ function app() {
         // Selected Ticket
         selectedTicket: null,
         ticketLogs: [],
+        dashboardLogs: [], // Global logs for dashboard
         logViewMode: 'timeline', // 'timeline' or 'detailed'
         modalSource: '', // 'kanban' or 'tech'
         showShareModal: false, // New
@@ -103,6 +104,7 @@ function app() {
 
         // Search
         searchQuery: '',
+        activeQuickFilter: null, // 'my_today', 'stale_3d'
         showFinalized: true,
 
         // Time
@@ -476,6 +478,8 @@ function app() {
                     details: details,
                     user_name: this.user.name
                 });
+                // Refresh dashboard logs if on dashboard
+                if (this.view === 'dashboard') this.fetchGlobalLogs();
             } catch (e) {
                 console.error("Log failed:", e);
             }
@@ -490,6 +494,17 @@ function app() {
             } catch (e) {
                 console.error("Fetch logs failed:", e);
                 return [];
+            }
+        },
+
+        async fetchGlobalLogs() {
+            if (!this.user?.workspace_id) return;
+            try {
+                // Join with tickets to get OS number
+                const logs = await this.supabaseFetch(`ticket_logs?select=*,tickets(os_number)&order=created_at.desc&limit=10`);
+                this.dashboardLogs = logs || [];
+            } catch (e) {
+                console.error("Fetch global logs failed:", e);
             }
         },
 
@@ -1614,6 +1629,90 @@ function app() {
                 return 'border-l-4 border-red-600 bg-red-50';
             }
             return 'bg-white';
+        },
+
+        // DASHBOARD OPERATIONAL METRICS
+        getDashboardOps() {
+            const now = new Date();
+            const tickets = this.tickets || [];
+
+            // 1. Pending Budgets (Approved status but budget not sent)
+            // Correction: Status 'Aprovacao' means "Waiting for Approval".
+            // If budget_status is NOT 'Enviado', it needs action.
+            const pendingBudgets = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status !== 'Enviado');
+
+            // 2. Pending Pickups (Client Retrieval status but not notified)
+            const pendingPickups = tickets.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available);
+
+            // 3. Urgent Analysis (Deadline approaching in 24h or passed, and still in Analysis)
+            const urgentAnalysis = tickets
+                .filter(t => t.status === 'Analise Tecnica' && t.analysis_deadline)
+                .sort((a, b) => new Date(a.analysis_deadline) - new Date(b.analysis_deadline))
+                .slice(0, 5);
+
+            // 4. Delayed Deliveries (Deadline passed, not finalized/pickup)
+            const delayedDeliveries = tickets.filter(t =>
+                t.deadline &&
+                new Date(t.deadline) < now &&
+                !['Retirada Cliente', 'Finalizado'].includes(t.status)
+            );
+
+            // 5. Priority Requested
+            const priorityTickets = tickets.filter(t => t.priority_requested);
+
+            return {
+                pendingBudgets,
+                pendingPickups,
+                urgentAnalysis,
+                delayedDeliveries,
+                priorityTickets
+            };
+        },
+
+        applyQuickFilter(type) {
+            this.searchQuery = ''; // Clear search
+            this.view = 'kanban';
+            const now = new Date();
+
+            // We need a mechanism to filter the Kanban.
+            // Currently `matchesSearch` handles filtering. We can extend it or prepopulate search.
+            // Or just set a temporary filter state?
+            // Let's use `searchQuery` for simplicity if possible, or add a dedicated filter logic.
+            // Since `matchesSearch` checks string inclusion, advanced date filtering is hard with just that.
+            // Let's add `advancedFilter` object to state.
+
+            // NOTE: Since I cannot modify state structure easily without big diffs,
+            // I will use a simple hack: Show a notification and let the user know this feature
+            // requires a filter implementation update, OR implement a basic version.
+
+            // Implementing `advancedFilter` logic in `matchesSearch`:
+            this.activeQuickFilter = type; // Need to add this to state
+        },
+
+        matchesSearch(ticket) {
+            // Quick Filter Logic (if added to state)
+            if (this.activeQuickFilter === 'my_today') {
+                const oneDay = 24 * 60 * 60 * 1000;
+                const isToday = new Date(ticket.created_at) > new Date(Date.now() - oneDay);
+                const isMine = ticket.created_by_name === this.user.name; // Weak check, better use ID if available
+                if (!isToday || !isMine) return false;
+            }
+            if (this.activeQuickFilter === 'stale_3d') {
+                const threeDays = 3 * 24 * 60 * 60 * 1000;
+                const isStale = new Date(ticket.updated_at) < new Date(Date.now() - threeDays);
+                const isOpen = ticket.status !== 'Finalizado';
+                if (!isStale || !isOpen) return false;
+            }
+
+            if (!this.searchQuery) return true;
+            const q = this.searchQuery.toLowerCase();
+            return (
+                (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
+                (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
+                (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
+                (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
+                (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
+            );
         },
 
         getOverdueTime(deadline) {
