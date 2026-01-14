@@ -156,6 +156,12 @@
                     <template x-if="hasRole('admin')">
                         <div class="mb-6 md:px-4">
                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 hidden md:block">Gestão</p>
+                            <a href="#" @click.prevent="view = 'admin_dashboard'"
+                               :class="view === 'admin_dashboard' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-chart-line w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'admin_dashboard' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Dashboard Gestor</span>
+                            </a>
                             <a href="#" @click.prevent="view = 'employees'"
                                :class="view === 'employees' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group">
@@ -202,6 +208,223 @@
                             <div class="text-4xl font-bold text-green-600" x-text="tickets.filter(t => t.status === 'Retirada Cliente').length">0</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- VIEW: ADMIN DASHBOARD -->
+                <div x-show="view === 'admin_dashboard' && hasRole('admin')" class="p-8 overflow-y-auto h-full" x-transition.opacity x-cloak>
+                    <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900">Dashboard do Gestor</h1>
+                            <p class="text-gray-500">Painel estratégico para análise detalhada por aparelho, defeito e técnico.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-3">
+                            <button class="bg-black text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-brand-500 transition-colors">
+                                Exportar relatório
+                            </button>
+                            <button class="bg-white text-gray-700 px-5 py-2.5 rounded-lg border border-gray-200 font-semibold hover:border-brand-500 hover:text-brand-600 transition-colors">
+                                Salvar visão
+                            </button>
+                        </div>
+                    </header>
+
+                    <section class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
+                        <h2 class="text-lg font-semibold text-gray-900 mb-4">Filtros inteligentes</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Período</label>
+                                <div class="mt-2 flex gap-2">
+                                    <input type="date" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <input type="date" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Modelo de aparelho</label>
+                                <select class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option>Todos os modelos</option>
+                                    <option>Smartphone</option>
+                                    <option>Notebook</option>
+                                    <option>Tablet</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Defeito</label>
+                                <select class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option>Todos os defeitos</option>
+                                    <option>Tela</option>
+                                    <option>Bateria</option>
+                                    <option>Placa</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Técnico</label>
+                                <select class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option>Todos os técnicos</option>
+                                    <option>Técnico A</option>
+                                    <option>Técnico B</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status do reparo</label>
+                                <select class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option>Todos os status</option>
+                                    <option>Finalizado</option>
+                                    <option>Reprovado</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Análise combinada</label>
+                                <select class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option>Aparelho + Defeito</option>
+                                    <option>Somente defeitos gerais</option>
+                                    <option>Somente aparelhos</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Visão rápida</label>
+                                <select class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option>Resumo executivo</option>
+                                    <option>Detalhar tempo de reparo</option>
+                                    <option>Detalhar SLA e entregas</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button class="w-full bg-brand-500 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-brand-600 transition-colors">
+                                    Aplicar filtros
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Taxa de sucesso</p>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-3xl font-bold text-gray-900">92%</span>
+                                <span class="text-sm text-green-600 font-semibold">+3% vs mês anterior</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3">Reparos concluídos com êxito.</p>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tempo médio de reparo</p>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-3xl font-bold text-gray-900">4h 32m</span>
+                                <span class="text-sm text-brand-600 font-semibold">Cronômetro técnico</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3">Tempo em bancada até finalizar.</p>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tempo médio de solução</p>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-3xl font-bold text-gray-900">2d 6h</span>
+                                <span class="text-sm text-gray-500 font-semibold">Chamado → pronto</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3">Até liberar para o cliente.</p>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tempo médio para entrega</p>
+                            <div class="mt-3 flex items-end justify-between">
+                                <span class="text-3xl font-bold text-gray-900">3d 1h</span>
+                                <span class="text-sm text-gray-500 font-semibold">Chamado → retirada</span>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-3">Até o cliente retirar.</p>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Entradas médias por dia</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Em análise</span>
+                                    <span class="text-lg font-semibold text-gray-900">18 aparelhos</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Em reparo</span>
+                                    <span class="text-lg font-semibold text-gray-900">12 aparelhos</span>
+                                </div>
+                                <div class="bg-gray-100 rounded-lg px-4 py-3 text-sm text-gray-500">
+                                    Pico: terça-feira (24 entradas)
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Chamados e orçamentos</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Chamados por dia</span>
+                                    <span class="text-lg font-semibold text-gray-900">26</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Tempo para orçamento</span>
+                                    <span class="text-lg font-semibold text-gray-900">6h 10m</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Aviso de retirada</span>
+                                    <span class="text-lg font-semibold text-gray-900">1h 20m</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Técnicos e performance</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Aparelhos por técnico</span>
+                                    <span class="text-lg font-semibold text-gray-900">8/dia</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Sucesso médio</span>
+                                    <span class="text-lg font-semibold text-gray-900">89%</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-500">Top técnico</span>
+                                    <span class="text-lg font-semibold text-gray-900">Técnico A</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-semibold text-gray-900">Reparos por dia/semana/mês</h3>
+                                <span class="text-xs text-gray-500 uppercase tracking-wide">Volume</span>
+                            </div>
+                            <div class="h-52 rounded-xl border border-dashed border-gray-200 flex items-center justify-center text-gray-400 text-sm">
+                                Gráfico de tendência (dia/semana/mês)
+                            </div>
+                            <div class="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
+                                <span class="bg-gray-100 px-3 py-1 rounded-full">Modelo campeão: iPhone 11</span>
+                                <span class="bg-gray-100 px-3 py-1 rounded-full">Defeito líder: Tela</span>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-semibold text-gray-900">Defeitos mais frequentes</h3>
+                                <span class="text-xs text-gray-500 uppercase tracking-wide">Ranking</span>
+                            </div>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-700">Tela</span>
+                                    <span class="text-sm font-semibold text-gray-900">34%</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-700">Bateria</span>
+                                    <span class="text-sm font-semibold text-gray-900">22%</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-700">Placa</span>
+                                    <span class="text-sm font-semibold text-gray-900">14%</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-700">Câmera</span>
+                                    <span class="text-sm font-semibold text-gray-900">9%</span>
+                                </div>
+                            </div>
+                            <div class="mt-6 h-24 rounded-xl border border-dashed border-gray-200 flex items-center justify-center text-gray-400 text-sm">
+                                Heatmap por modelo x defeito
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 <!-- VIEW: KANBAN BOARD -->
