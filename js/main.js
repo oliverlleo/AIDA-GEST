@@ -876,7 +876,7 @@ function app() {
         },
 
         async createTicket() {
-             if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model) {
+             if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model || !this.ticketForm.defects || this.ticketForm.defects.length === 0) {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
 
