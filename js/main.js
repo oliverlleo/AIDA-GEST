@@ -2016,6 +2016,76 @@ function app() {
                 };
             });
 
+            // REPAIR TIME DRILLDOWN LOGIC
+            const modelTimes = {};
+            const defectTimes = {};
+            const comboTimes = {};
+            const techTimes = {};
+
+            filteredTickets.forEach(t => {
+                if (t.repair_start_at && t.repair_end_at) {
+                    const duration = new Date(t.repair_end_at) - new Date(t.repair_start_at);
+                    if (duration > 0) {
+                        // Model
+                        if (!modelTimes[t.device_model]) modelTimes[t.device_model] = { totalTime: 0, count: 0 };
+                        modelTimes[t.device_model].totalTime += duration;
+                        modelTimes[t.device_model].count++;
+
+                        // Defect
+                        const defectList = this.getDefectList(t.defect_reported);
+                        defectList.forEach(d => {
+                            if (!defectTimes[d]) defectTimes[d] = { totalTime: 0, count: 0 };
+                            defectTimes[d].totalTime += duration;
+                            defectTimes[d].count++;
+
+                            // Combo
+                            const k = `${t.device_model} - ${d}`;
+                            if (!comboTimes[k]) comboTimes[k] = { totalTime: 0, count: 0 };
+                            comboTimes[k].totalTime += duration;
+                            comboTimes[k].count++;
+                        });
+
+                        // Tech
+                        if (t.technician_id) {
+                            if (!techTimes[t.technician_id]) techTimes[t.technician_id] = { totalTime: 0, count: 0, successCount: 0, totalTickets: 0 };
+                            techTimes[t.technician_id].totalTime += duration;
+                            techTimes[t.technician_id].count++;
+                        }
+                    }
+                }
+                // Tech Success Rate (Independent of duration)
+                if (t.technician_id) {
+                    if (!techTimes[t.technician_id]) techTimes[t.technician_id] = { totalTime: 0, count: 0, successCount: 0, totalTickets: 0 };
+                    techTimes[t.technician_id].totalTickets++;
+                    if (t.repair_successful) techTimes[t.technician_id].successCount++;
+                }
+            });
+
+            const processTimes = (map, limit, sortDesc = true) => {
+                return Object.entries(map)
+                    .map(([label, stats]) => ({
+                        label,
+                        avgTime: stats.count ? stats.totalTime / stats.count : 0,
+                        count: stats.count
+                    }))
+                    .sort((a, b) => sortDesc ? b.avgTime - a.avgTime : a.avgTime - b.avgTime)
+                    .slice(0, limit);
+            };
+
+            const slowestModels = processTimes(modelTimes, 5, true);
+            const slowestDefects = processTimes(defectTimes, 5, true);
+            const slowestCombos = processTimes(comboTimes, 5, true);
+
+            const fastestTechs = Object.entries(techTimes)
+                .map(([id, stats]) => ({
+                    name: this.getEmployeeName(id),
+                    avgTime: stats.count ? stats.totalTime / stats.count : 0,
+                    successRate: stats.totalTickets ? Math.round((stats.successCount / stats.totalTickets) * 100) : 0,
+                    count: stats.count
+                }))
+                .filter(t => t.avgTime > 0) // Only techs with timed repairs
+                .sort((a, b) => a.avgTime - b.avgTime); // Ascending (Fastest)
+
             const ticketsPerDay = Math.round(filteredTickets.length / rangeDays);
 
             const now = new Date();
@@ -2101,7 +2171,11 @@ function app() {
                 topModels,
                 topCombos,
                 techStats,
-                techDeepDive
+                techDeepDive,
+                slowestModels,
+                slowestDefects,
+                slowestCombos,
+                fastestTechs
             };
         },
 
