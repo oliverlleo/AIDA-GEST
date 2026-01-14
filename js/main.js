@@ -91,9 +91,13 @@ function app() {
         // Selected Ticket
         selectedTicket: null,
         ticketLogs: [],
+        dashboardLogs: [], // New for Dashboard Feed
         logViewMode: 'timeline', // 'timeline' or 'detailed'
         modalSource: '', // 'kanban' or 'tech'
         showShareModal: false, // New
+
+        // Kanban Quick Filter
+        kanbanQuickFilter: null, // 'my_today', 'stale_3d', etc.
 
         // Calendar State
         calendarView: 'week',
@@ -221,6 +225,7 @@ function app() {
                     await this.fetchTemplates();
                     await this.fetchDeviceModels(); // New fetch
                     await this.fetchDefectOptions();
+                    await this.fetchDashboardLogs(); // New
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -263,6 +268,7 @@ function app() {
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
                 payload => {
                    this.fetchTickets();
+                   this.fetchDashboardLogs(); // Update feed on ticket changes
                    if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
                        this.selectedTicket = { ...this.selectedTicket, ...payload.new };
                    }
@@ -1430,6 +1436,20 @@ function app() {
                     pickup_available: true,
                     pickup_available_at: new Date().toISOString()
                 });
+
+                // AUTOMATION: WhatsApp
+                const link = this.getTrackingLink(ticket.id);
+                const msg = `Olá ${ticket.client_name}, seu aparelho está pronto para retirada! Detalhes: ${link}`;
+
+                if (ticket.contact_info) {
+                    let number = ticket.contact_info.replace(/\D/g, '');
+                    if (number.length <= 11) number = '55' + number;
+                    window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+                    this.notify("Cliente notificado (WhatsApp aberto)!");
+                } else {
+                    this.notify("Marcado como disponível (Sem contato para WhatsApp).");
+                }
+
                 await this.fetchTickets();
              } catch(e) {
                  this.notify("Erro: " + e.message, "error");
@@ -1564,16 +1584,93 @@ function app() {
             return this.STATUS_LABELS[status] || status;
         },
 
-        matchesSearch(ticket) {
-            if (!this.searchQuery) return true;
-            const q = this.searchQuery.toLowerCase();
-            return (
-                (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
-                (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
-                (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
-                (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
-                (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
+        // --- DASHBOARD HELPERS ---
+        getUrgentAnalysis() {
+            if (!this.tickets) return [];
+            return this.tickets
+                .filter(t => t.analysis_deadline && !['Finalizado', 'Retirada Cliente'].includes(t.status))
+                .sort((a, b) => new Date(a.analysis_deadline) - new Date(b.analysis_deadline))
+                .slice(0, 5);
+        },
+        getOverdueDelivery() {
+            if (!this.tickets) return [];
+            const now = new Date();
+            return this.tickets.filter(t =>
+                t.deadline &&
+                new Date(t.deadline) < now &&
+                !['Finalizado', 'Retirada Cliente'].includes(t.status)
             );
+        },
+        getPriorityTickets() {
+             if (!this.tickets) return [];
+             return this.tickets.filter(t => t.priority_requested);
+        },
+        getPendingBudget() {
+            if (!this.tickets) return [];
+            // "Aguardando Orçamento": Status Approval AND Budget not Sent
+            return this.tickets.filter(t => t.status === 'Aprovacao' && t.budget_status !== 'Enviado');
+        },
+        getReadyForPickup() {
+            if (!this.tickets) return [];
+             // "Prontos para Retirada": Status Retirada AND Not yet available/notified
+            return this.tickets.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available);
+        },
+
+        async fetchDashboardLogs() {
+            // Allow Admin OR Attendant
+            if (!this.hasRole('admin') && !this.hasRole('atendente')) return;
+
+            try {
+                // Fetch recent logs globally (filtered by workspace via join)
+                // Note: We use !inner to force the join and filter by workspace
+                const query = `ticket_logs?select=*,tickets!inner(os_number,device_model,workspace_id)&tickets.workspace_id=eq.${this.user.workspace_id}&order=created_at.desc&limit=10`;
+                const logs = await this.supabaseFetch(query);
+                if (logs) {
+                    this.dashboardLogs = logs;
+                }
+            } catch (e) {
+                console.error("Dashboard Logs Error:", e);
+            }
+        },
+
+        applyQuickFilter(type) {
+            this.kanbanQuickFilter = type;
+            this.view = 'kanban';
+            this.searchQuery = ''; // Optional: clear text search to avoid confusion
+        },
+
+        matchesSearch(ticket) {
+            // 1. Text Search
+            let matchesText = true;
+            if (this.searchQuery) {
+                const q = this.searchQuery.toLowerCase();
+                matchesText = (
+                    (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
+                    (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
+                    (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
+                    (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
+                    (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
+                );
+            }
+
+            // 2. Quick Filter (Smart Shortcuts)
+            let matchesQuick = true;
+            if (this.kanbanQuickFilter) {
+                if (this.kanbanQuickFilter === 'my_today') {
+                    // Created by me (using name as proxy per existing logic) AND Created Today
+                    const isMe = ticket.created_by_name === this.user.name;
+                    const isToday = this.isSameDay(ticket.created_at, new Date());
+                    matchesQuick = isMe && isToday;
+                } else if (this.kanbanQuickFilter === 'stale_3d') {
+                    // Updated > 3 days ago
+                    const updated = new Date(ticket.updated_at || ticket.created_at);
+                    const diffTime = Math.abs(new Date() - updated);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    matchesQuick = diffDays > 3;
+                }
+            }
+
+            return matchesText && matchesQuick;
         },
 
         getTechnicians() {

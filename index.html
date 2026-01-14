@@ -208,6 +208,191 @@
                             <div class="text-4xl font-bold text-green-600" x-text="tickets.filter(t => t.status === 'Retirada Cliente').length">0</div>
                         </div>
                     </div>
+
+                    <!-- OPERATIONAL DASHBOARD -->
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+                        <!-- LEFT COL (66%) -->
+                        <div class="xl:col-span-2 space-y-8">
+
+                            <!-- Smart Filters -->
+                            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                                <h3 class="font-bold text-gray-800 mb-4 flex items-center">
+                                    <i class="fa-solid fa-filter text-brand-500 mr-2"></i> Filtros Rápidos
+                                </h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <button @click="applyQuickFilter('my_today')" class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-brand-500 hover:shadow-md transition-all group text-left">
+                                        <div>
+                                            <span class="block font-bold text-gray-800 group-hover:text-brand-600">Meus chamados hoje</span>
+                                            <span class="text-xs text-gray-500">Criados por mim nas últimas 24h</span>
+                                        </div>
+                                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-brand-500"></i>
+                                    </button>
+                                    <button @click="applyQuickFilter('stale_3d')" class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-brand-500 hover:shadow-md transition-all group text-left">
+                                        <div>
+                                            <span class="block font-bold text-gray-800 group-hover:text-brand-600">Parados > 3 dias</span>
+                                            <span class="text-xs text-gray-500">Sem atualização recente</span>
+                                        </div>
+                                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-brand-500"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- "Ready for Contact" Panel -->
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                <div class="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                                    <h3 class="font-bold text-gray-800 flex items-center">
+                                        <i class="fa-solid fa-comments text-blue-500 mr-2"></i> Pronto para Contato
+                                    </h3>
+                                </div>
+                                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                                    <!-- Pending Budget -->
+                                    <div>
+                                        <h4 class="text-xs font-bold text-yellow-600 uppercase mb-3 flex items-center">
+                                            <i class="fa-solid fa-file-invoice-dollar mr-2"></i> Aguardando Orçamento
+                                        </h4>
+                                        <div class="space-y-3">
+                                            <template x-for="t in getPendingBudget()" :key="t.id">
+                                                <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-100">
+                                                    <div class="truncate mr-2">
+                                                        <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                        <div class="text-xs text-gray-500 truncate" x-text="t.device_model + ' - ' + t.defect_reported"></div>
+                                                    </div>
+                                                    <button @click="sendBudget(t)" class="text-green-600 hover:text-green-800 bg-white p-2 rounded-full shadow-sm hover:shadow transition-all" title="Enviar WhatsApp">
+                                                        <i class="fa-brands fa-whatsapp text-lg"></i>
+                                                    </button>
+                                                </div>
+                                            </template>
+                                            <div x-show="getPendingBudget().length === 0" class="text-center py-4 text-gray-400 text-xs italic">Nada pendente.</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Ready for Pickup -->
+                                    <div>
+                                        <h4 class="text-xs font-bold text-green-600 uppercase mb-3 flex items-center">
+                                            <i class="fa-solid fa-box-open mr-2"></i> Prontos para Retirada
+                                        </h4>
+                                        <div class="space-y-3">
+                                            <template x-for="t in getReadyForPickup()" :key="t.id">
+                                                <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-100">
+                                                    <div class="truncate mr-2">
+                                                        <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                        <div class="text-xs text-gray-500 truncate" x-text="'OS: ' + t.os_number"></div>
+                                                    </div>
+                                                    <button @click="markAvailable(t)" class="text-green-600 hover:text-green-800 bg-white p-2 rounded-full shadow-sm hover:shadow transition-all" title="Avisar Cliente via WhatsApp">
+                                                        <i class="fa-brands fa-whatsapp text-lg"></i>
+                                                    </button>
+                                                </div>
+                                            </template>
+                                            <div x-show="getReadyForPickup().length === 0" class="text-center py-4 text-gray-400 text-xs italic">Nenhum aguardando retirada.</div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT COL (33%) -->
+                        <div class="space-y-8">
+
+                            <!-- Urgent Actions -->
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                <div class="p-4 border-b border-gray-100 bg-red-50">
+                                    <h3 class="font-bold text-red-700 flex items-center text-sm">
+                                        <i class="fa-solid fa-triangle-exclamation mr-2"></i> Ações Urgentes
+                                    </h3>
+                                </div>
+                                <div class="p-4 space-y-4">
+
+                                    <!-- Analysis Deadline -->
+                                    <div x-show="getUrgentAnalysis().length > 0">
+                                        <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">Prazo Análise Expirando</p>
+                                        <div class="space-y-2">
+                                            <template x-for="t in getUrgentAnalysis()" :key="t.id">
+                                                <div @click="viewTicketDetails(t)" class="cursor-pointer flex justify-between items-center p-2 bg-gray-50 rounded border-l-4 border-red-500 hover:bg-gray-100 transition-colors">
+                                                    <div class="truncate w-2/3">
+                                                        <div class="font-bold text-gray-800 text-xs truncate" x-text="t.device_model"></div>
+                                                        <div class="text-[10px] text-red-500 font-bold" x-text="new Date(t.analysis_deadline).toLocaleString()"></div>
+                                                    </div>
+                                                    <div class="text-[10px] bg-white border px-1 rounded text-gray-500" x-text="'OS ' + t.os_number"></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Overdue Delivery -->
+                                    <div x-show="getOverdueDelivery().length > 0">
+                                        <p class="text-[10px] font-bold text-gray-400 uppercase mb-2 mt-4">Atraso na Entrega</p>
+                                        <div class="space-y-2">
+                                            <template x-for="t in getOverdueDelivery()" :key="t.id">
+                                                <div @click="viewTicketDetails(t)" class="cursor-pointer flex justify-between items-center p-2 bg-red-50 rounded border border-red-100 hover:bg-red-100 transition-colors">
+                                                    <div class="truncate w-2/3">
+                                                        <div class="font-bold text-red-800 text-xs truncate" x-text="t.client_name"></div>
+                                                        <div class="text-[10px] text-red-600" x-text="'Prazo: ' + new Date(t.deadline).toLocaleDateString()"></div>
+                                                    </div>
+                                                    <i class="fa-solid fa-clock text-red-400"></i>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Priority -->
+                                    <div x-show="getPriorityTickets().length > 0">
+                                        <p class="text-[10px] font-bold text-gray-400 uppercase mb-2 mt-4">Solicitações de Prioridade</p>
+                                        <div class="space-y-2">
+                                            <template x-for="t in getPriorityTickets()" :key="t.id">
+                                                <div @click="viewTicketDetails(t)" class="cursor-pointer flex justify-between items-center p-2 bg-orange-50 rounded border border-orange-100 hover:bg-orange-100 transition-colors">
+                                                    <div class="truncate w-2/3">
+                                                        <div class="font-bold text-orange-800 text-xs truncate" x-text="t.device_model"></div>
+                                                        <div class="text-[10px] text-orange-600">Cliente cobrando</div>
+                                                    </div>
+                                                    <i class="fa-solid fa-bell fa-shake text-orange-500 text-xs"></i>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <div x-show="getUrgentAnalysis().length === 0 && getOverdueDelivery().length === 0 && getPriorityTickets().length === 0" class="text-center py-6 text-gray-400 text-xs">
+                                        <i class="fa-solid fa-check-circle text-green-500 text-2xl mb-2"></i>
+                                        <p>Tudo em dia!</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Activity Feed -->
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden max-h-[400px] flex flex-col">
+                                <div class="p-4 border-b border-gray-100 bg-gray-50">
+                                    <h3 class="font-bold text-gray-800 flex items-center text-sm">
+                                        <i class="fa-solid fa-list-ul mr-2 text-brand-500"></i> Atividades Recentes
+                                    </h3>
+                                </div>
+                                <div class="p-4 overflow-y-auto flex-grow space-y-4">
+                                    <template x-for="log in dashboardLogs" :key="log.id">
+                                        <div class="flex gap-3 relative pb-4 border-l-2 border-gray-100 last:border-0 pl-4 last:pb-0">
+                                            <div class="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-brand-500 ring-2 ring-white"></div>
+                                            <div>
+                                                <p class="text-xs text-gray-800">
+                                                    <span class="font-bold" x-text="log.user_name || 'Sistema'"></span>
+                                                    <span x-text="log.action"></span>
+                                                </p>
+                                                <p class="text-[10px] text-gray-400 mt-0.5" x-text="new Date(log.created_at).toLocaleString()"></p>
+                                                <template x-if="log.tickets">
+                                                    <p class="text-[10px] font-mono text-brand-600 mt-1 cursor-pointer hover:underline"
+                                                       @click="viewTicketDetails(tickets.find(t => t.id === log.ticket_id))"
+                                                       x-text="'OS ' + log.tickets.os_number + ' - ' + log.tickets.device_model"></p>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="dashboardLogs.length === 0" class="text-center py-4 text-gray-400 text-xs italic">
+                                        Nenhuma atividade recente.
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
                 </div>
 
                 <!-- VIEW: ADMIN DASHBOARD -->
@@ -760,9 +945,16 @@
                 <div x-show="view === 'kanban'" class="flex-grow flex flex-col h-full overflow-hidden" x-cloak>
                     <!-- Kanban Header -->
                     <div class="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm z-10">
-                        <h2 class="text-xl font-bold flex items-center">
-                            <i class="fa-solid fa-layer-group text-brand-500 mr-2"></i> Quadro de Chamados
-                        </h2>
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-xl font-bold flex items-center">
+                                <i class="fa-solid fa-layer-group text-brand-500 mr-2"></i> Quadro de Chamados
+                            </h2>
+                            <!-- Active Filter Badge -->
+                            <div x-show="kanbanQuickFilter" class="bg-brand-100 text-brand-800 text-xs font-bold px-3 py-1 rounded-full flex items-center animate-pulse">
+                                <span x-text="kanbanQuickFilter === 'my_today' ? 'Meus Hoje' : 'Parados > 3d'"></span>
+                                <button @click="kanbanQuickFilter = null" class="ml-2 hover:text-red-500"><i class="fa-solid fa-times"></i></button>
+                            </div>
+                        </div>
                         <div class="flex space-x-3 items-center">
                              <!-- Search Bar -->
                              <div class="relative">
