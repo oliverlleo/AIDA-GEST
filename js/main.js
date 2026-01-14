@@ -60,6 +60,7 @@ function app() {
         // Dashboard Data
         ops: {
             pendingBudgets: [],
+            waitingBudgetResponse: [],
             pendingPickups: [],
             urgentAnalysis: [],
             delayedDeliveries: [],
@@ -295,6 +296,13 @@ function app() {
             setInterval(() => {
                 this.checkTimeBasedAlerts();
             }, 60000);
+
+            // Reset filters when changing views
+            this.$watch('view', () => {
+                if (this.view !== 'kanban') {
+                    this.clearFilters();
+                }
+            });
 
             // Removed visibilitychange listener to prevent lock conflicts.
             // Data is kept fresh via Realtime subscriptions.
@@ -1685,6 +1693,10 @@ function app() {
             // If budget_status is NOT 'Enviado', it needs action.
             const pendingBudgets = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status !== 'Enviado');
 
+            // 1.5 Waiting Budget Response (Budget Sent, but not yet Approved/Denied)
+            // Ticket is in 'Aprovacao' status AND budget_status IS 'Enviado'
+            const waitingBudgetResponse = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status === 'Enviado');
+
             // 2. Pending Pickups (Client Retrieval status but not notified)
             const pendingPickups = tickets.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available);
 
@@ -1712,6 +1724,7 @@ function app() {
 
             return {
                 pendingBudgets,
+                waitingBudgetResponse,
                 pendingPickups,
                 urgentAnalysis,
                 delayedDeliveries,
@@ -1739,6 +1752,11 @@ function app() {
 
             // Implementing `advancedFilter` logic in `matchesSearch`:
             this.activeQuickFilter = type; // Need to add this to state
+        },
+
+        clearFilters() {
+            this.searchQuery = '';
+            this.activeQuickFilter = null;
         },
 
         matchesSearch(ticket) {

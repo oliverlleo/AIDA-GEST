@@ -245,6 +245,33 @@
                                 </div>
                             </div>
 
+                            <!-- Waiting Budget Response (NEW) -->
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div class="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
+                                    <h4 class="font-bold text-indigo-800 text-sm">Aguardando Resposta (Enviados)</h4>
+                                    <span class="bg-indigo-200 text-indigo-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.waitingBudgetResponse.length">0</span>
+                                </div>
+                                <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                    <template x-for="t in ops.waitingBudgetResponse" :key="t.id">
+                                        <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
+                                            <div>
+                                                <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                            </div>
+                                            <div class="flex items-center space-x-2">
+                                                <button @click="viewTicketDetails(t)" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-200 transition-colors">
+                                                    Ver
+                                                </button>
+                                                <button @click="openWhatsApp(t.contact_info)" class="text-green-500 hover:text-green-700 p-1" title="WhatsApp">
+                                                    <i class="fa-brands fa-whatsapp text-lg"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="!ops.waitingBudgetResponse.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum orçamento pendente de resposta.</div>
+                                </div>
+                            </div>
+
                             <!-- Pickups to Notify -->
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-blue-50 px-4 py-3 border-b border-blue-100 flex justify-between items-center">
@@ -1017,6 +1044,13 @@
                              </div>
 
                              <div class="flex items-center space-x-2">
+                                <!-- Clear Filter Button (Visible only when filter is active) -->
+                                <button x-show="activeQuickFilter || searchQuery" @click="clearFilters()"
+                                        class="text-xs px-3 py-2 rounded font-bold border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors flex items-center">
+                                    <i class="fa-solid fa-filter-circle-xmark mr-1"></i>
+                                    <span class="hidden sm:inline">Limpar Filtro</span>
+                                </button>
+
                                 <button @click="showFinalized = !showFinalized"
                                         class="text-xs px-3 py-2 rounded font-bold border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
                                         :class="showFinalized ? 'bg-gray-100 text-brand-600 border-brand-200' : ''">
