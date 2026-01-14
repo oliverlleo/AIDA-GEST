@@ -1,10 +1,5 @@
-127.0.0.1 - - [14/Jan/2026 11:15:44] "GET /index.html HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:15:44] "GET /logo.png HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:15:44] "GET /logologin.png HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:15:44] "GET /js/main.js?v=4 HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:15:47] "GET /index.html HTTP/1.1" 304 -
-127.0.0.1 - - [14/Jan/2026 11:16:34] "GET /index.html HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:16:34] "GET /logo.png HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:16:34] "GET /logologin.png HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:16:34] "GET /js/main.js?v=4 HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:16:35] "GET /index.html HTTP/1.1" 304 -
+127.0.0.1 - - [14/Jan/2026 11:34:54] "GET /index.html HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 11:34:54] "GET /logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 11:34:54] "GET /logologin.png HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 11:34:54] "GET /js/main.js?v=4 HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 11:34:55] "GET /index.html HTTP/1.1" 304 -
