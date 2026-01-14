@@ -348,19 +348,40 @@
                             </template>
                         </div>
 
-                        <!-- Extended Model List -->
-                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 class="font-bold text-gray-900 mb-4">Performance por Modelo</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <template x-for="model in metrics.topModels" :key="model.label">
-                                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                        <span class="font-bold text-gray-700 text-sm" x-text="model.label"></span>
-                                        <div class="text-right text-xs">
-                                            <div class="text-green-600 font-bold" x-text="'Sucesso: ' + (model.successRate || 0) + '% (' + (model.success || 0) + ')'"></div>
-                                            <div class="text-red-500" x-text="'Falha: ' + (model.failRate || 0) + '% (' + (model.fail || 0) + ')'"></div>
+                        <!-- Extended Model & Defect Lists -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Models -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-900 mb-4">Performance por Modelo</h3>
+                                <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-hide">
+                                    <template x-for="model in metrics.topModels" :key="model.label">
+                                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                                            <span class="font-bold text-gray-700 text-sm w-1/3 truncate" x-text="model.label" :title="model.label"></span>
+                                            <div class="text-right text-xs flex-grow flex justify-end gap-3">
+                                                <div class="text-gray-500 font-mono">Total: <span x-text="model.total"></span></div>
+                                                <div class="text-green-600 font-bold" x-text="'Suc: ' + (model.successRate || 0) + '% (' + (model.success || 0) + ')'"></div>
+                                                <div class="text-red-500" x-text="'Fal: ' + (model.failRate || 0) + '% (' + (model.fail || 0) + ')'"></div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </template>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Defects -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-900 mb-4">Performance por Defeito</h3>
+                                <div class="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-hide">
+                                    <template x-for="defect in metrics.topDefects" :key="defect.label">
+                                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+                                            <span class="font-bold text-gray-700 text-sm w-1/3 truncate" x-text="defect.label" :title="defect.label"></span>
+                                            <div class="text-right text-xs flex-grow flex justify-end gap-3">
+                                                <div class="text-gray-500 font-mono">Total: <span x-text="defect.total"></span></div>
+                                                <div class="text-green-600 font-bold" x-text="'Suc: ' + (defect.successRate || 0) + '% (' + (defect.success || 0) + ')'"></div>
+                                                <div class="text-red-500" x-text="'Fal: ' + (defect.failRate || 0) + '% (' + (defect.fail || 0) + ')'"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
                             </div>
                         </div>
                     </div>
