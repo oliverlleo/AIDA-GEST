@@ -29,6 +29,8 @@
     <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
     <!-- Supabase JS -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -161,6 +163,14 @@
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group">
                                 <i class="fa-solid fa-cog w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'employees' ? 'text-brand-500' : 'text-gray-400'"></i>
                                 <span class="ml-3 font-medium text-sm hidden md:block">Configuração</span>
+                            </a>
+
+                            <!-- Analytics (Reports) -->
+                            <a href="#" @click.prevent="view = 'analytics'; $nextTick(() => initCharts())"
+                               :class="view === 'analytics' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mt-1">
+                                <i class="fa-solid fa-chart-pie w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'analytics' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Relatórios</span>
                             </a>
                         </div>
                     </template>
@@ -621,6 +631,194 @@
                         </div>
 
                     </div>
+                </div>
+
+                <!-- VIEW: ANALYTICS (Admin Only) -->
+                <div x-show="hasRole('admin') && view === 'analytics'" class="p-8 overflow-y-auto h-full" x-cloak>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-800">Relatórios & KPIs</h1>
+                            <p class="text-sm text-gray-500">Análise de performance técnica e operacional.</p>
+                        </div>
+
+                        <!-- Filters Toolbar -->
+                        <div class="flex flex-wrap gap-2 bg-white p-2 rounded-lg shadow-sm border border-gray-200 items-center">
+                            <i class="fa-solid fa-filter text-gray-400 ml-2"></i>
+
+                            <!-- Period -->
+                            <select x-model="analyticsFilters.period" @change="updateAnalytics()" class="text-xs font-bold bg-transparent border-r border-gray-200 pr-2 focus:ring-0 outline-none cursor-pointer">
+                                <option value="all">Todo o Período</option>
+                                <option value="30d">Últimos 30 dias</option>
+                                <option value="month">Este Mês</option>
+                                <option value="custom">Personalizado</option>
+                            </select>
+
+                            <!-- Custom Dates -->
+                            <div x-show="analyticsFilters.period === 'custom'" class="flex items-center space-x-1">
+                                <input type="date" x-model="analyticsFilters.start" @change="updateAnalytics()" class="text-xs border rounded p-1">
+                                <span class="text-gray-400">-</span>
+                                <input type="date" x-model="analyticsFilters.end" @change="updateAnalytics()" class="text-xs border rounded p-1">
+                            </div>
+
+                            <!-- Tech Filter -->
+                            <select x-model="analyticsFilters.tech" @change="updateAnalytics()" class="text-xs bg-transparent border-gray-200 focus:ring-0 outline-none cursor-pointer max-w-[120px]">
+                                <option value="">Todos Técnicos</option>
+                                <template x-for="tech in getTechnicians()" :key="tech.id">
+                                    <option :value="tech.id" x-text="tech.name"></option>
+                                </template>
+                            </select>
+
+                            <!-- Model Filter -->
+                            <select x-model="analyticsFilters.model" @change="updateAnalytics()" class="text-xs bg-transparent border-l border-gray-200 pl-2 focus:ring-0 outline-none cursor-pointer max-w-[120px]">
+                                <option value="">Todos Modelos</option>
+                                <template x-for="m in deviceModels" :key="m.id">
+                                    <option :value="m.name" x-text="m.name"></option>
+                                </template>
+                            </select>
+
+                            <!-- Defect Search -->
+                             <input type="text" x-model="analyticsFilters.defect" @input.debounce.500ms="updateAnalytics()" placeholder="Filtrar Defeito..." class="text-xs border rounded p-1 w-32">
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                        <!-- Card 1: Success Rate -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                            <div class="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Taxa Sucesso</div>
+                            <div class="flex items-end space-x-2">
+                                <div class="text-2xl font-bold" :class="analyticsData.successRate >= 80 ? 'text-green-600' : (analyticsData.successRate >= 50 ? 'text-orange-500' : 'text-red-500')" x-text="analyticsData.successRate + '%'"></div>
+                            </div>
+                            <div class="text-[10px] text-gray-400 mt-1">Reparos Concluídos</div>
+                        </div>
+
+                        <!-- Card 2: Avg Repair Time -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                            <div class="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Tempo Reparo</div>
+                            <div class="text-xl font-bold text-gray-800" x-text="analyticsData.avgRepairTime"></div>
+                            <div class="text-[10px] text-gray-400 mt-1">Média Bancada</div>
+                        </div>
+
+                        <!-- Card 3: Avg Solution Time -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                            <div class="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Tempo Solução</div>
+                            <div class="text-xl font-bold text-gray-800" x-text="analyticsData.avgSolutionTime"></div>
+                            <div class="text-[10px] text-gray-400 mt-1">Entrada -> Disponível</div>
+                        </div>
+
+                        <!-- Card 4: Avg Delivery Time -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                            <div class="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Tempo Entrega</div>
+                            <div class="text-xl font-bold text-gray-800" x-text="analyticsData.avgDeliveryTime"></div>
+                            <div class="text-[10px] text-gray-400 mt-1">Entrada -> Retirada</div>
+                        </div>
+
+                        <!-- Card 5: Avg Budget Time -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                            <div class="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Tempo Orçamento</div>
+                            <div class="text-xl font-bold text-gray-800" x-text="analyticsData.avgBudgetTime"></div>
+                            <div class="text-[10px] text-gray-400 mt-1">Entrada -> Enviado</div>
+                        </div>
+
+                        <!-- Card 6: Notification Lag -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                            <div class="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Tempo p/ Avisar</div>
+                            <div class="text-xl font-bold text-brand-600" x-text="analyticsData.avgNotifyTime"></div>
+                            <div class="text-[10px] text-gray-400 mt-1">Pronto -> Avisado</div>
+                        </div>
+                    </div>
+
+                    <!-- Stats Details -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                         <div class="bg-white px-4 py-3 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                             <span class="text-xs text-gray-500 font-bold">Total Chamados</span>
+                             <span class="text-lg font-bold text-gray-800" x-text="analyticsData.totalTickets"></span>
+                         </div>
+                         <div class="bg-white px-4 py-3 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                             <span class="text-xs text-gray-500 font-bold">Reparados</span>
+                             <span class="text-lg font-bold text-green-600" x-text="analyticsData.totalRepaired"></span>
+                         </div>
+                         <div class="bg-white px-4 py-3 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                             <span class="text-xs text-gray-500 font-bold">Sem Sucesso</span>
+                             <span class="text-lg font-bold text-red-600" x-text="analyticsData.totalFailed"></span>
+                         </div>
+                          <div class="bg-white px-4 py-3 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center">
+                             <span class="text-xs text-gray-500 font-bold">Média Entradas/Dia</span>
+                             <span class="text-lg font-bold text-blue-600" x-text="analyticsData.avgTicketsPerDay"></span>
+                         </div>
+                    </div>
+
+                    <!-- Charts Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <!-- Volume Over Time -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <h3 class="text-sm font-bold text-gray-700 mb-4">Volume de Reparos (Tempo)</h3>
+                            <div class="relative h-64">
+                                <canvas id="chartVolume"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Success Rate by Tech -->
+                         <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <h3 class="text-sm font-bold text-gray-700 mb-4">Taxa de Sucesso (Geral vs Técnico)</h3>
+                            <div class="relative h-64">
+                                <canvas id="chartSuccess"></canvas>
+                            </div>
+                        </div>
+
+                         <!-- Top Defects -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <h3 class="text-sm font-bold text-gray-700 mb-4">Principais Defeitos</h3>
+                            <div class="relative h-64">
+                                <canvas id="chartDefects"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Top Models -->
+                         <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <h3 class="text-sm font-bold text-gray-700 mb-4">Principais Modelos</h3>
+                            <div class="relative h-64">
+                                <canvas id="chartModels"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tech Performance Table -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+                        <div class="px-6 py-4 border-b border-gray-100">
+                            <h3 class="font-bold text-gray-800">Performance Detalhada por Técnico</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Técnico</th>
+                                        <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Total Atribuídos</th>
+                                        <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Concluídos</th>
+                                        <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Sucesso</th>
+                                        <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Taxa Sucesso</th>
+                                        <th class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Tempo Médio Reparo</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <template x-for="stat in analyticsData.techStats" :key="stat.id">
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900" x-text="stat.name"></td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600" x-text="stat.total"></td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600" x-text="stat.completed"></td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-green-600 font-bold" x-text="stat.success"></td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-bold" :class="stat.rate >= 80 ? 'text-green-600' : 'text-orange-500'" x-text="stat.rate + '%'"></td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600 font-mono" x-text="stat.avgTime"></td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="analyticsData.techStats.length === 0">
+                                        <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-400 italic">Sem dados para exibir.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- VIEW: CONFIGURATION (Was Employees) -->
