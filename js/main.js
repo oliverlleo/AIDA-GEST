@@ -1991,6 +1991,11 @@ function app() {
                 return timestamp && timestamp >= oneMonthAgo;
             }).length;
 
+            // Tickets Created Breakdown (New Feature)
+            const ticketsToday = filteredTickets.filter(t => new Date(t.created_at) >= oneDayAgo).length;
+            const ticketsWeek = filteredTickets.filter(t => new Date(t.created_at) >= oneWeekAgo).length;
+            const ticketsMonth = filteredTickets.filter(t => new Date(t.created_at) >= oneMonthAgo).length;
+
             const techMap = {};
             filteredTickets.forEach(ticket => {
                 const techId = ticket.technician_id || 'unassigned';
@@ -2031,6 +2036,9 @@ function app() {
                 repairsToday,
                 repairsWeek,
                 repairsMonth,
+                ticketsToday,
+                ticketsWeek,
+                ticketsMonth,
                 topDefects,
                 topModels,
                 topCombos,
