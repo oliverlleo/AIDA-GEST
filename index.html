@@ -29,6 +29,8 @@
     <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
     <!-- Supabase JS -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -493,12 +495,15 @@
                             <button class="bg-black text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-brand-500 transition-colors">
                                 Exportar relatório
                             </button>
-                            <button class="bg-white text-gray-700 px-5 py-2.5 rounded-lg border border-gray-200 font-semibold hover:border-brand-500 hover:text-brand-600 transition-colors">
+                            <button @click="toggleAdminView()"
+                                    class="bg-white text-gray-700 px-5 py-2.5 rounded-lg border border-gray-200 font-semibold hover:border-brand-500 hover:text-brand-600 transition-colors"
+                                    x-text="adminDashboardFilters.viewType === 'data' ? 'Gráfico' : 'Dados'">
                                 Salvar visão
                             </button>
                         </div>
                     </header>
 
+                    <!-- FILTERS (Always Visible) -->
                     <section class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
                         <h2 class="text-lg font-semibold text-gray-900 mb-4">Filtros inteligentes</h2>
                         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -561,6 +566,7 @@
                         </div>
                     </section>
 
+                    <!-- KPI CARDS (Always Visible) -->
                     <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
                         <div @click="adminDashboardFilters.viewMode = 'success_drilldown'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm cursor-pointer hover:border-brand-500 hover:shadow-md transition-all group relative">
                             <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-brand-500"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
@@ -619,6 +625,48 @@
                             <p class="text-sm text-gray-500 mt-3">Até o cliente retirar.</p>
                         </div>
                     </section>
+
+                    <!-- VIEW MODE: CHART -->
+                    <div x-show="adminDashboardFilters.viewType === 'chart'" x-transition class="space-y-8">
+                        <h2 class="text-xl font-bold text-gray-800 border-b pb-2">Visualização Gráfica</h2>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Repairs Over Time -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Reparos Finalizados</h3>
+                                <div class="h-64">
+                                    <canvas id="repairsChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Tickets Created Over Time -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Chamados Criados</h3>
+                                <div class="h-64">
+                                    <canvas id="ticketsChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Top Defects -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Top Defeitos</h3>
+                                <div class="h-64 flex justify-center">
+                                    <canvas id="defectsChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Tech Efficiency -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Eficiência Técnica</h3>
+                                <div class="h-64">
+                                    <canvas id="techChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW MODE: DATA (Standard Wrapper) -->
+                    <div x-show="adminDashboardFilters.viewType === 'data'" x-transition>
 
                     <!-- DRILLDOWN VIEW: Success Analysis -->
                     <div x-show="adminDashboardFilters.viewMode === 'success_drilldown'" class="space-y-8" x-transition>
@@ -1058,6 +1106,8 @@
                             </div>
                         </div>
                     </section>
+
+                    </div> <!-- End x-show=viewType === 'data' -->
                 </div>
 
                 <!-- VIEW: KANBAN BOARD -->
