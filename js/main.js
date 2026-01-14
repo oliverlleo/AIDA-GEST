@@ -39,6 +39,7 @@ function app() {
         deletedTickets: [],
         deletedEmployees: [],
         deviceModels: [], // New state
+        defectOptions: [],
         checklistTemplates: [],
         checklistTemplatesEntry: [],
         checklistTemplatesFinal: [],
@@ -53,7 +54,7 @@ function app() {
         // Ticket Form
         ticketForm: {
             client_name: '', os_number: '', model: '', serial: '',
-            defect: '', priority: 'Normal', contact: '',
+            defects: [], priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '', // New field
             checklist: [], checklist_final: [], photos: [], notes: ''
@@ -207,6 +208,7 @@ function app() {
                     await this.fetchTickets();
                     await this.fetchTemplates();
                     await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDefectOptions();
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -345,6 +347,7 @@ function app() {
                     await this.fetchTickets();
                     await this.fetchTemplates();
                     await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDefectOptions();
 
                     // Redirect Technician directly to Bench
                     if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
@@ -410,6 +413,7 @@ function app() {
                     await this.fetchTickets();
                     await this.fetchTemplates();
                     await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDefectOptions();
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -678,6 +682,54 @@ function app() {
             }
         },
 
+        // --- DEFECT OPTIONS ---
+        async fetchDefectOptions() {
+            if (!this.user?.workspace_id) return;
+            try {
+                const data = await this.supabaseFetch(`defect_options?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
+                if (data) this.defectOptions = data;
+            } catch (e) {
+                console.error("Fetch Defects Error:", e);
+            }
+        },
+
+        async createDefectOption(name) {
+            if (!name || !name.trim()) return;
+            if (!this.user?.workspace_id) return;
+            const trimmed = name.trim();
+
+            if (this.defectOptions.some(option => option.name.toLowerCase() === trimmed.toLowerCase())) {
+                this.notify("Defeito já existe.", "error");
+                return false;
+            }
+
+            try {
+                await this.supabaseFetch('defect_options', 'POST', {
+                    workspace_id: this.user.workspace_id,
+                    name: trimmed
+                });
+                await this.fetchDefectOptions();
+                this.notify("Defeito cadastrado!", "success");
+                return true;
+            } catch (e) {
+                this.notify("Erro ao salvar defeito: " + e.message, "error");
+                return false;
+            }
+        },
+
+        async deleteDefectOption(id) {
+            if (!confirm("Excluir este defeito da lista?")) return;
+            try {
+                await this.supabaseFetch(`defect_options?id=eq.${id}`, 'DELETE');
+                this.notify("Defeito excluído.");
+                await this.fetchDefectOptions();
+                const existingNames = this.defectOptions.map(option => option.name);
+                this.ticketForm.defects = this.ticketForm.defects.filter(defect => existingNames.includes(defect));
+            } catch (e) {
+                this.notify("Erro ao excluir: " + e.message, "error");
+            }
+        },
+
         async createDeviceModel(name) {
             if (!name || !name.trim()) return;
             if (!this.user?.workspace_id) return;
@@ -720,7 +772,7 @@ function app() {
             this.ticketForm = {
                 id: crypto.randomUUID(), // Generate ID upfront for uploads
                 client_name: '', os_number: '', model: '', serial: '',
-                defect: '', priority: 'Normal', contact: '',
+                defects: [], priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
                 technician_id: '',
                 checklist: [], checklist_final: [], photos: [], notes: ''
@@ -856,7 +908,7 @@ function app() {
                      os_number: this.ticketForm.os_number,
                      device_model: this.ticketForm.model,
                      serial_number: this.ticketForm.serial,
-                     defect_reported: this.ticketForm.defect,
+                     defect_reported: this.serializeDefectReport(),
                      priority: this.ticketForm.priority,
                      contact_info: this.ticketForm.contact,
                      deadline: this.toUTC(this.ticketForm.deadline) || null,
@@ -979,6 +1031,58 @@ function app() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        addDefectToSelection(defect) {
+            const trimmed = defect?.trim();
+            if (!trimmed) return;
+            const exists = this.ticketForm.defects.some(item => item.toLowerCase() === trimmed.toLowerCase());
+            if (!exists) this.ticketForm.defects.push(trimmed);
+        },
+
+        removeDefectFromSelection(defect) {
+            this.ticketForm.defects = this.ticketForm.defects.filter(item => item !== defect);
+        },
+
+        toggleDefectSelection(defect) {
+            const trimmed = defect?.trim();
+            if (!trimmed) return;
+            const exists = this.ticketForm.defects.some(item => item.toLowerCase() === trimmed.toLowerCase());
+            if (exists) {
+                this.ticketForm.defects = this.ticketForm.defects.filter(item => item.toLowerCase() !== trimmed.toLowerCase());
+            } else {
+                this.ticketForm.defects.push(trimmed);
+            }
+        },
+
+        serializeDefectReport() {
+            const defects = (this.ticketForm.defects || []).map(defect => defect.trim()).filter(Boolean);
+            if (defects.length === 0) return '';
+            return JSON.stringify(defects);
+        },
+
+        getDefectList(defectReport) {
+            if (!defectReport) return [];
+            if (Array.isArray(defectReport)) return defectReport.filter(Boolean);
+            if (typeof defectReport === 'string') {
+                const trimmed = defectReport.trim();
+                if (!trimmed) return [];
+                if (trimmed.startsWith('[')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+                    } catch (e) {
+                        return [trimmed];
+                    }
+                }
+                return [trimmed];
+            }
+            return [];
+        },
+
+        formatDefectReport(defectReport) {
+            const defects = this.getDefectList(defectReport);
+            return defects.length ? defects.join(', ') : '';
         },
 
         // REFACTORED: Native Fetch Implementation

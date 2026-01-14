@@ -469,12 +469,12 @@
                                      <!-- Events -->
                                      <div class="space-y-1">
                                          <template x-for="t in getCalendarTickets().filter(x => isSameDay(x.deadline, day))" :key="t.id">
-                                             <div class="bg-white border border-gray-200 rounded px-1 py-0.5 text-[9px] shadow-sm truncate cursor-help group relative" :title="t.defect_reported">
+                                             <div class="bg-white border border-gray-200 rounded px-1 py-0.5 text-[9px] shadow-sm truncate cursor-help group relative" :title="formatDefectReport(t.defect_reported)">
                                                  <span class="font-bold" x-text="'OS ' + t.os_number"></span>
                                                  <span class="text-gray-500" x-text="t.device_model"></span>
                                                  <!-- Tooltip -->
                                                  <div class="hidden group-hover:block absolute z-50 bottom-full left-0 w-48 bg-black text-white p-2 rounded text-xs mb-1 shadow-lg">
-                                                     <p x-text="t.defect_reported"></p>
+                                                     <p x-text="formatDefectReport(t.defect_reported)"></p>
                                                  </div>
                                              </div>
                                          </template>
@@ -513,7 +513,7 @@
                                             <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
                                         </div>
                                         <h4 class="font-bold text-gray-900 text-sm mb-1 leading-tight" x-text="ticket.device_model"></h4>
-                                        <p class="text-gray-500 text-xs mb-2 line-clamp-2" x-text="ticket.defect_reported"></p>
+                                        <p class="text-gray-500 text-xs mb-2 line-clamp-2" x-text="formatDefectReport(ticket.defect_reported)"></p>
 
                                         <div class="mt-2 pt-2 border-t border-gray-50 space-y-1">
                                             <!-- Deadlines Section -->
@@ -1044,9 +1044,85 @@
                                 </template>
                             </select>
                         </div>
-                         <div class="col-span-2">
+                         <div class="col-span-2" x-data="{ open: false, search: '' }">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado *</label>
-                            <textarea x-model="ticketForm.defect" rows="2" class="w-full border rounded-lg p-2.5 bg-gray-50"></textarea>
+                            <div class="relative">
+                                <!-- Trigger Button -->
+                                <button @click="open = !open; search = ''; $nextTick(() => $refs.defectSearchInput.focus())"
+                                        type="button"
+                                        class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-left flex justify-between items-center focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+                                    <span x-text="ticketForm.defects.length ? (ticketForm.defects.length === 1 ? ticketForm.defects[0] : `${ticketForm.defects.length} defeitos selecionados`) : 'Selecione os defeitos...'"
+                                          :class="ticketForm.defects.length === 0 ? 'text-gray-400' : 'text-gray-900'"></span>
+                                    <i class="fa-solid fa-chevron-down text-xs text-gray-500"></i>
+                                </button>
+
+                                <!-- Dropdown -->
+                                <div x-show="open" @click.outside="open = false"
+                                     class="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                     x-transition:enter="transition ease-out duration-100"
+                                     x-transition:enter-start="transform opacity-0 scale-95"
+                                     x-transition:enter-end="transform opacity-100 scale-100"
+                                     x-transition:leave="transition ease-in duration-75"
+                                     x-transition:leave-start="transform opacity-100 scale-100"
+                                     x-transition:leave-end="transform opacity-0 scale-95"
+                                     x-cloak>
+
+                                    <!-- Search Input -->
+                                    <div class="sticky top-0 z-10 bg-white p-2 border-b">
+                                        <div class="flex gap-1">
+                                            <input x-ref="defectSearchInput" x-model="search" type="text"
+                                                   class="w-full p-2 border rounded text-sm focus:ring-brand-500 focus:border-brand-500"
+                                                   placeholder="Buscar ou criar...">
+
+                                            <!-- Add Button -->
+                                            <button x-show="search.length > 0 && !defectOptions.some(option => option.name.toLowerCase() === search.toLowerCase())"
+                                                    @click="createDefectOption(search).then(ok => { if (ok) { addDefectToSelection(search); search = ''; $nextTick(() => $refs.defectSearchInput.focus()); } })"
+                                                    class="bg-brand-500 text-white px-3 rounded hover:bg-brand-600 transition-colors" title="Cadastrar">
+                                                <i class="fa-solid fa-plus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- List -->
+                                    <ul class="py-1">
+                                        <template x-for="option in defectOptions.filter(o => o.name.toLowerCase().includes(search.toLowerCase()))" :key="option.id">
+                                            <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center"
+                                                @click="toggleDefectSelection(option.name)">
+                                                <span class="block truncate"
+                                                      :class="ticketForm.defects.some(defect => defect.toLowerCase() === option.name.toLowerCase()) ? 'font-bold text-brand-600' : 'text-gray-900'"
+                                                      x-text="option.name"></span>
+
+                                                <div class="flex items-center gap-2">
+                                                    <i x-show="ticketForm.defects.some(defect => defect.toLowerCase() === option.name.toLowerCase())"
+                                                       class="fa-solid fa-check text-xs text-brand-500"></i>
+                                                    <button @click.stop="deleteDefectOption(option.id)" class="mr-1 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <i class="fa-solid fa-trash text-xs"></i>
+                                                    </button>
+                                                </div>
+                                            </li>
+                                        </template>
+
+                                        <!-- No Results -->
+                                        <li x-show="defectOptions.filter(o => o.name.toLowerCase().includes(search.toLowerCase())).length === 0" class="text-gray-500 p-4 text-center italic text-xs">
+                                            <span x-show="search.length === 0">Comece a digitar...</span>
+                                            <span x-show="search.length > 0">Clique no + para criar.</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Selected Items -->
+                            <div class="flex flex-wrap gap-2 mt-2">
+                                <template x-for="defect in ticketForm.defects" :key="defect">
+                                    <span class="inline-flex items-center gap-1 bg-brand-50 text-brand-600 border border-brand-200 rounded-full px-2 py-1 text-xs font-semibold">
+                                        <span x-text="defect"></span>
+                                        <button @click="removeDefectFromSelection(defect)" class="text-brand-400 hover:text-brand-600">
+                                            <i class="fa-solid fa-xmark text-[10px]"></i>
+                                        </button>
+                                    </span>
+                                </template>
+                                <span x-show="ticketForm.defects.length === 0" class="text-xs text-gray-400">Nenhum defeito selecionado.</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1421,7 +1497,12 @@
                                 </div>
 
                                 <p class="text-sm mb-1 font-bold text-gray-700">Defeito Inicial:</p>
-                                <p class="text-sm text-gray-600 bg-white p-2 rounded border mb-2" x-text="selectedTicket.defect_reported"></p>
+                                <div class="flex flex-wrap gap-2 bg-white p-2 rounded border mb-2">
+                                    <template x-for="defect in getDefectList(selectedTicket.defect_reported)" :key="defect">
+                                        <span class="inline-flex items-center bg-brand-50 text-brand-600 border border-brand-200 rounded-full px-2 py-1 text-xs font-semibold" x-text="defect"></span>
+                                    </template>
+                                    <span x-show="getDefectList(selectedTicket.defect_reported).length === 0" class="text-sm text-gray-500">-</span>
+                                </div>
 
                                 <template x-if="selectedTicket.test_notes && selectedTicket.test_notes.length > 0">
                                     <div>
@@ -1772,13 +1853,13 @@
 
                                         <div class="space-y-1 overflow-y-auto max-h-[100px] scrollbar-hide">
                                             <template x-for="t in getCalendarTickets().filter(x => isSameDay(x.deadline, day))" :key="t.id">
-                                                 <div class="bg-gray-50 border border-gray-100 rounded px-1.5 py-1 text-[10px] shadow-sm cursor-help hover:bg-black hover:text-white transition-colors group relative truncate" :title="t.defect_reported">
+                                                 <div class="bg-gray-50 border border-gray-100 rounded px-1.5 py-1 text-[10px] shadow-sm cursor-help hover:bg-black hover:text-white transition-colors group relative truncate" :title="formatDefectReport(t.defect_reported)">
                                                      <span class="font-bold" x-text="'OS ' + t.os_number"></span>
                                                      <span x-text="t.device_model"></span>
                                                      <!-- Tooltip -->
                                                       <div class="hidden group-hover:block absolute z-50 bottom-full left-0 w-48 bg-black text-white p-2 rounded text-xs mb-1 shadow-lg pointer-events-none">
                                                          <p class="font-bold border-b border-gray-700 pb-1 mb-1" x-text="t.client_name"></p>
-                                                         <p x-text="t.defect_reported"></p>
+                                                         <p x-text="formatDefectReport(t.defect_reported)"></p>
                                                      </div>
                                                  </div>
                                             </template>
