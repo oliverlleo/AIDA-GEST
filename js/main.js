@@ -1885,10 +1885,9 @@ function app() {
             const avgSolution = solutionDurations.length ? solutionDurations.reduce((a, b) => a + b, 0) / solutionDurations.length : null;
 
             const deliveryDurations = filteredTickets
-                .filter(t => t.status === 'Finalizado' && t.created_at && (t.delivered_at || t.updated_at))
+                .filter(t => t.status === 'Finalizado' && t.created_at && t.delivered_at)
                 .map(t => {
-                    const deliveredAt = t.delivered_at || t.updated_at;
-                    return new Date(deliveredAt) - new Date(t.created_at);
+                    return new Date(t.delivered_at) - new Date(t.created_at);
                 })
                 .filter(ms => ms > 0);
             const avgDelivery = deliveryDurations.length ? deliveryDurations.reduce((a, b) => a + b, 0) / deliveryDurations.length : null;
@@ -1915,7 +1914,7 @@ function app() {
                 if (ticket.device_model) {
                     modelsMap[ticket.device_model] = (modelsMap[ticket.device_model] || 0) + 1;
                 }
-                const defects = this.toArray(ticket.defects);
+                const defects = this.getDefectList(ticket.defect_reported);
                 defects.forEach(defect => {
                     defectsMap[defect] = (defectsMap[defect] || 0) + 1;
                     if (ticket.device_model) {
