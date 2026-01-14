@@ -500,8 +500,8 @@ function app() {
         async fetchGlobalLogs() {
             if (!this.user?.workspace_id) return;
             try {
-                // Join with tickets to get OS number
-                const logs = await this.supabaseFetch(`ticket_logs?select=*,tickets(os_number)&order=created_at.desc&limit=10`);
+                // Join with tickets to get OS number, client name and device model
+                const logs = await this.supabaseFetch(`ticket_logs?select=*,tickets(os_number,client_name,device_model)&order=created_at.desc&limit=10`);
                 this.dashboardLogs = logs || [];
             } catch (e) {
                 console.error("Fetch global logs failed:", e);
@@ -1579,18 +1579,6 @@ function app() {
             return this.STATUS_LABELS[status] || status;
         },
 
-        matchesSearch(ticket) {
-            if (!this.searchQuery) return true;
-            const q = this.searchQuery.toLowerCase();
-            return (
-                (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
-                (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
-                (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
-                (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
-                (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
-            );
-        },
-
         getTechnicians() {
             return this.employees.filter(e => e.roles && e.roles.includes('tecnico'));
         },
@@ -1690,11 +1678,11 @@ function app() {
         },
 
         matchesSearch(ticket) {
-            // Quick Filter Logic (if added to state)
+            // Quick Filter Logic
             if (this.activeQuickFilter === 'my_today') {
                 const oneDay = 24 * 60 * 60 * 1000;
                 const isToday = new Date(ticket.created_at) > new Date(Date.now() - oneDay);
-                const isMine = ticket.created_by_name === this.user.name; // Weak check, better use ID if available
+                const isMine = ticket.created_by_name === this.user.name;
                 if (!isToday || !isMine) return false;
             }
             if (this.activeQuickFilter === 'stale_3d') {
@@ -1702,6 +1690,14 @@ function app() {
                 const isStale = new Date(ticket.updated_at) < new Date(Date.now() - threeDays);
                 const isOpen = ticket.status !== 'Finalizado';
                 if (!isStale || !isOpen) return false;
+            }
+            if (this.activeQuickFilter === 'priority') {
+                if (!ticket.priority_requested) return false;
+            }
+            if (this.activeQuickFilter === 'delayed') {
+                const now = new Date();
+                const isDelayed = ticket.deadline && new Date(ticket.deadline) < now && !['Retirada Cliente', 'Finalizado'].includes(ticket.status);
+                if (!isDelayed) return false;
             }
 
             if (!this.searchQuery) return true;
