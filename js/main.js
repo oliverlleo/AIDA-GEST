@@ -1194,7 +1194,7 @@ function app() {
                      await this.logTicketAction(ticket.id, 'Alteração de Status', `De ${ticket.status} para ${newStatus}`);
                 }
 
-                const updates = { status: newStatus, ...additionalUpdates };
+                const updates = { status: newStatus, updated_at: new Date().toISOString(), ...additionalUpdates };
 
                 // REFACTORED: Native Fetch - Update Ticket
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
