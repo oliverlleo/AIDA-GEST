@@ -2,3 +2,7 @@
 127.0.0.1 - - [14/Jan/2026 17:46:50] "GET /logo.png HTTP/1.1" 200 -
 127.0.0.1 - - [14/Jan/2026 17:46:50] "GET /logologin.png HTTP/1.1" 200 -
 127.0.0.1 - - [14/Jan/2026 17:46:50] "GET /js/main.js?v=5 HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 18:06:25] "GET /index.html HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 18:06:25] "GET /logologin.png HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 18:06:25] "GET /logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 18:06:25] "GET /js/main.js?v=5 HTTP/1.1" 200 -
