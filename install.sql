@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS public.tickets (
     test_start_at TIMESTAMP WITH TIME ZONE,
     pickup_available BOOLEAN DEFAULT FALSE,
     pickup_available_at TIMESTAMP WITH TIME ZONE,
+    delivered_at TIMESTAMP WITH TIME ZONE,
     created_by UUID,
     created_by_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,

@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS public.tickets (
     -- Retirada
     pickup_available BOOLEAN DEFAULT FALSE,
     pickup_available_at TIMESTAMP WITH TIME ZONE,
+    delivered_at TIMESTAMP WITH TIME ZONE,
 
     -- Auditoria
     created_by UUID,
