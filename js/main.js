@@ -67,7 +67,8 @@ function app() {
             delayedDeliveries: [],
             priorityTickets: [],
             pendingPurchase: [],
-            pendingReceipt: []
+            pendingReceipt: [],
+            pendingTech: []
         },
         metrics: {
              filteredTickets: [],
@@ -1917,6 +1918,9 @@ function app() {
             // 7. Pending Receipt
             const pendingReceipt = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status === 'Comprado');
 
+            // 8. Pending Tech Start (Status 'Aberto')
+            const pendingTech = tickets.filter(t => t.status === 'Aberto');
+
             return {
                 pendingBudgets,
                 waitingBudgetResponse,
@@ -1925,7 +1929,8 @@ function app() {
                 delayedDeliveries,
                 priorityTickets,
                 pendingPurchase,
-                pendingReceipt
+                pendingReceipt,
+                pendingTech
             };
         },
 
