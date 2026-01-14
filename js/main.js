@@ -618,7 +618,8 @@ function app() {
                     // Apply Filter
                     if (effectiveFilter && effectiveFilter !== 'all') {
                         // Use loose equality (==) to handle potential UUID type mismatches
-                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter);
+                        // Allow seeing tickets assigned to SELF OR 'Everyone' (null)
+                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter || t.technician_id == null);
                     } else if (isTechOnly) {
                          // FAIL CLOSED: If user is Tech Only and filter is missing/invalid, SHOW NOTHING.
                          // Do NOT allow falling through to the full list.
@@ -880,6 +881,10 @@ function app() {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
 
+             if (!this.ticketForm.technician_id) {
+                 return this.notify("Selecione um Técnico Responsável ou 'Todos'.", "error");
+             }
+
              // Validation: Strict Model (Must exist in list)
              if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
                  return this.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
@@ -897,6 +902,9 @@ function app() {
              this.loading = true;
 
              try {
+                 let techId = this.ticketForm.technician_id;
+                 if (techId === 'all') techId = null;
+
                  const ticketData = {
                      id: this.ticketForm.id,
                      workspace_id: this.user.workspace_id,
@@ -910,7 +918,7 @@ function app() {
                      deadline: this.toUTC(this.ticketForm.deadline) || null,
                      analysis_deadline: this.toUTC(this.ticketForm.analysis_deadline) || null,
                      device_condition: this.ticketForm.device_condition,
-                     technician_id: this.ticketForm.technician_id || null, // New Field
+                     technician_id: techId, // 'all' becomes null
                      checklist_data: this.ticketForm.checklist,
                      checklist_final_data: this.ticketForm.checklist_final,
                      photos_urls: this.ticketForm.photos,
@@ -1559,7 +1567,7 @@ function app() {
         },
 
         getEmployeeName(id) {
-            if (!id) return 'Não atribuído';
+            if (!id) return 'Todos';
             const emp = this.employees.find(e => e.id === id);
             return emp ? emp.name : 'Desconhecido';
         },

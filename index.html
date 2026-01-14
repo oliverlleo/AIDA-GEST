@@ -1036,9 +1036,10 @@
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Técnico Responsável</label>
-                            <select x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50">
-                                <option value="">-- Selecione --</option>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Técnico Responsável *</label>
+                            <select x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
+                                <option value="">-- Selecione um Técnico --</option>
+                                <option value="all">TODOS (Disponível para equipe)</option>
                                 <template x-for="tech in getTechnicians()" :key="tech.id">
                                     <option :value="tech.id" x-text="tech.name"></option>
                                 </template>
