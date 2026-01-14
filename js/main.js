@@ -93,6 +93,23 @@ function app() {
         searchQuery: '',
         showFinalized: true,
 
+        // Analytics State
+        analyticsFilters: { period: 'all', start: '', end: '', tech: '', model: '', defect: '' },
+        analyticsData: {
+            successRate: 0,
+            avgRepairTime: '0h',
+            avgSolutionTime: '0h',
+            avgDeliveryTime: '0h',
+            avgBudgetTime: '0h',
+            avgNotifyTime: '0h',
+            totalTickets: 0,
+            totalRepaired: 0,
+            totalFailed: 0,
+            avgTicketsPerDay: 0,
+            techStats: []
+        },
+        charts: {}, // Stores Chart.js instances
+
         // Time
         currentTime: new Date(),
 
@@ -1543,6 +1560,328 @@ function app() {
                 .split(',')
                 .map(defect => defect.trim())
                 .filter(Boolean);
+        },
+
+        // --- ANALYTICS LOGIC ---
+
+        initCharts() {
+            if (this.charts.volume) return; // Already initialized
+
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            };
+
+            // 1. Volume Chart (Line)
+            const ctxVol = document.getElementById('chartVolume').getContext('2d');
+            this.charts.volume = new Chart(ctxVol, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: { ...commonOptions, interaction: { mode: 'index', intersect: false } }
+            });
+
+            // 2. Success Rate (Doughnut)
+            const ctxSucc = document.getElementById('chartSuccess').getContext('2d');
+            this.charts.success = new Chart(ctxSucc, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [] },
+                options: commonOptions
+            });
+
+            // 3. Defects (Bar)
+            const ctxDef = document.getElementById('chartDefects').getContext('2d');
+            this.charts.defects = new Chart(ctxDef, {
+                type: 'bar',
+                data: { labels: [], datasets: [] },
+                options: { ...commonOptions, indexAxis: 'y' } // Horizontal Bar
+            });
+
+            // 4. Models (Bar)
+            const ctxMod = document.getElementById('chartModels').getContext('2d');
+            this.charts.models = new Chart(ctxMod, {
+                type: 'bar',
+                data: { labels: [], datasets: [] },
+                options: commonOptions
+            });
+
+            this.updateAnalytics();
+        },
+
+        updateAnalytics() {
+            if (!this.tickets) return;
+
+            // 1. Filter Data
+            let filtered = this.tickets.filter(t => !t.deleted_at); // Basics
+            const now = new Date();
+
+            // Date Filter
+            if (this.analyticsFilters.period === '30d') {
+                const limit = new Date();
+                limit.setDate(limit.getDate() - 30);
+                filtered = filtered.filter(t => new Date(t.created_at) >= limit);
+            } else if (this.analyticsFilters.period === 'month') {
+                filtered = filtered.filter(t => {
+                    const d = new Date(t.created_at);
+                    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                });
+            } else if (this.analyticsFilters.period === 'custom' && this.analyticsFilters.start && this.analyticsFilters.end) {
+                const start = new Date(this.analyticsFilters.start);
+                const end = new Date(this.analyticsFilters.end);
+                end.setHours(23, 59, 59);
+                filtered = filtered.filter(t => {
+                    const d = new Date(t.created_at);
+                    return d >= start && d <= end;
+                });
+            }
+
+            // Tech Filter
+            if (this.analyticsFilters.tech) {
+                filtered = filtered.filter(t => t.technician_id === this.analyticsFilters.tech);
+            }
+
+            // Model Filter
+            if (this.analyticsFilters.model) {
+                filtered = filtered.filter(t => t.device_model === this.analyticsFilters.model);
+            }
+
+            // Defect Filter (Search)
+            if (this.analyticsFilters.defect) {
+                const q = this.analyticsFilters.defect.toLowerCase();
+                filtered = filtered.filter(t => t.defect_reported && t.defect_reported.toLowerCase().includes(q));
+            }
+
+            // 2. Calculate KPIs
+            let totalRepairTime = 0;
+            let countRepairTime = 0;
+            let totalSolutionTime = 0;
+            let countSolutionTime = 0;
+            let totalDeliveryTime = 0;
+            let countDeliveryTime = 0;
+            let totalBudgetTime = 0;
+            let countBudgetTime = 0;
+            let totalNotifyTime = 0;
+            let countNotifyTime = 0;
+
+            let successful = 0;
+            let failed = 0;
+            let completed = 0;
+
+            filtered.forEach(t => {
+                const created = new Date(t.created_at);
+
+                // Success Rate (Only if finished/delivered or marked success/fail)
+                if (t.repair_successful !== null) {
+                    completed++;
+                    if (t.repair_successful) successful++; else failed++;
+                }
+
+                // Avg Repair Time (Stopwatch)
+                if (t.repair_start_at && t.repair_end_at) {
+                    totalRepairTime += (new Date(t.repair_end_at) - new Date(t.repair_start_at));
+                    countRepairTime++;
+                }
+
+                // Avg Solution Time (Created -> Available)
+                if (t.pickup_available_at) {
+                    totalSolutionTime += (new Date(t.pickup_available_at) - created);
+                    countSolutionTime++;
+                }
+
+                // Avg Delivery Time (Created -> Finalized/Delivered)
+                // We use updated_at if status is Finalized. Not perfect but close enough if no specific column.
+                // Or better: Check if we have 'pickup_available' (Available) vs 'Finalizado' (Delivered).
+                // Actually 'Finalizado' implies delivered.
+                if (t.status === 'Finalizado') {
+                    // Use updated_at as delivery date proxy
+                    totalDeliveryTime += (new Date(t.updated_at) - created);
+                    countDeliveryTime++;
+                }
+
+                // Avg Budget Time (Created -> Budget Sent)
+                if (t.budget_sent_at) {
+                    totalBudgetTime += (new Date(t.budget_sent_at) - created);
+                    countBudgetTime++;
+                }
+
+                // Avg Notify Time (Repair End -> Available)
+                if (t.pickup_available_at && t.repair_end_at) {
+                    const notifyDuration = new Date(t.pickup_available_at) - new Date(t.repair_end_at);
+                    if (notifyDuration > 0) {
+                        totalNotifyTime += notifyDuration;
+                        countNotifyTime++;
+                    }
+                }
+            });
+
+            // Format Helper
+            const fmtDuration = (ms) => {
+                if (!ms) return '0h';
+                const h = Math.floor(ms / 3600000);
+                const m = Math.floor((ms % 3600000) / 60000);
+                if (h > 24) return Math.floor(h/24) + 'd ' + (h%24) + 'h';
+                return h + 'h ' + m + 'm';
+            };
+
+            this.analyticsData = {
+                totalTickets: filtered.length,
+                totalRepaired: successful,
+                totalFailed: failed,
+                successRate: completed ? Math.round((successful / completed) * 100) : 0,
+                avgRepairTime: fmtDuration(countRepairTime ? totalRepairTime / countRepairTime : 0),
+                avgSolutionTime: fmtDuration(countSolutionTime ? totalSolutionTime / countSolutionTime : 0),
+                avgDeliveryTime: fmtDuration(countDeliveryTime ? totalDeliveryTime / countDeliveryTime : 0),
+                avgBudgetTime: fmtDuration(countBudgetTime ? totalBudgetTime / countBudgetTime : 0),
+                avgNotifyTime: fmtDuration(countNotifyTime ? totalNotifyTime / countNotifyTime : 0),
+                avgTicketsPerDay: 0, // Calculated below
+                techStats: []
+            };
+
+            // 3. Prepare Chart Data
+
+            // A. Volume (Group by Date)
+            const volMap = {};
+            filtered.forEach(t => {
+                const d = new Date(t.created_at).toLocaleDateString('pt-BR');
+                if (!volMap[d]) volMap[d] = { entry: 0, exit: 0 };
+                volMap[d].entry++;
+                // Exit = Repair Finished OR Finalized? Let's use Repair End or Available
+                if (t.repair_end_at || t.pickup_available_at) {
+                    // Which date? Use the latest relevant one
+                    const exitDate = new Date(t.repair_end_at || t.pickup_available_at).toLocaleDateString('pt-BR');
+                    if (!volMap[exitDate]) volMap[exitDate] = { entry: 0, exit: 0 };
+                    volMap[exitDate].exit++;
+                }
+            });
+            // Sort dates
+            const sortedDates = Object.keys(volMap).sort((a,b) => {
+                const [da, ma, ya] = a.split('/');
+                const [db, mb, yb] = b.split('/');
+                return new Date(ya, ma-1, da) - new Date(yb, mb-1, db);
+            });
+            // Avg Tickets/Day
+            let daysDivisor = sortedDates.length || 1;
+
+            if (this.analyticsFilters.period === '30d') {
+                daysDivisor = 30;
+            } else if (this.analyticsFilters.period === 'month') {
+                daysDivisor = Math.max(1, new Date().getDate());
+            } else if (this.analyticsFilters.period === 'custom' && this.analyticsFilters.start && this.analyticsFilters.end) {
+                const s = new Date(this.analyticsFilters.start);
+                const e = new Date(this.analyticsFilters.end);
+                daysDivisor = Math.max(1, Math.ceil((e - s) / (1000 * 60 * 60 * 24)) + 1);
+            }
+
+            this.analyticsData.avgTicketsPerDay = (filtered.length / daysDivisor).toFixed(1);
+
+            // B. Defects
+            const defectMap = {};
+            filtered.forEach(t => {
+                if (t.defect_reported) {
+                    const list = t.defect_reported.split(',');
+                    list.forEach(d => {
+                        const name = d.trim();
+                        if (name) defectMap[name] = (defectMap[name] || 0) + 1;
+                    });
+                }
+            });
+            const topDefects = Object.entries(defectMap).sort((a,b) => b[1] - a[1]).slice(0, 10);
+
+            // C. Models
+            const modelMap = {};
+            filtered.forEach(t => {
+                if (t.device_model) modelMap[t.device_model] = (modelMap[t.device_model] || 0) + 1;
+            });
+            const topModels = Object.entries(modelMap).sort((a,b) => b[1] - a[1]).slice(0, 10);
+
+            // D. Tech Stats
+            const techMap = {};
+            filtered.forEach(t => {
+                const tid = t.technician_id || 'unassigned';
+                if (!techMap[tid]) techMap[tid] = {
+                    id: tid,
+                    name: this.getEmployeeName(tid === 'unassigned' ? null : tid),
+                    total: 0,
+                    completed: 0,
+                    success: 0,
+                    repairTimeSum: 0,
+                    repairTimeCount: 0
+                };
+                const stat = techMap[tid];
+                stat.total++;
+                if (t.repair_successful !== null) {
+                    stat.completed++;
+                    if (t.repair_successful) stat.success++;
+                }
+                if (t.repair_start_at && t.repair_end_at) {
+                    stat.repairTimeSum += (new Date(t.repair_end_at) - new Date(t.repair_start_at));
+                    stat.repairTimeCount++;
+                }
+            });
+            this.analyticsData.techStats = Object.values(techMap).map(s => ({
+                ...s,
+                rate: s.completed ? Math.round((s.success / s.completed) * 100) : 0,
+                avgTime: fmtDuration(s.repairTimeCount ? s.repairTimeSum / s.repairTimeCount : 0)
+            })).sort((a,b) => b.completed - a.completed);
+
+            // 4. Update Charts
+            this.updateCharts(sortedDates, volMap, topDefects, topModels);
+        },
+
+        updateCharts(labels, volMap, topDefects, topModels) {
+            // 1. Volume
+            this.charts.volume.data.labels = labels;
+            this.charts.volume.data.datasets = [
+                {
+                    label: 'Entradas',
+                    data: labels.map(d => volMap[d].entry),
+                    borderColor: '#FF6B00',
+                    backgroundColor: 'rgba(255, 107, 0, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Concluídos',
+                    data: labels.map(d => volMap[d].exit),
+                    borderColor: '#10B981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }
+            ];
+            this.charts.volume.update();
+
+            // 2. Success (Tech breakdown for Doughnut? Or just overall Success/Fail?)
+            // Requirement: "Taxa de sucesso"
+            // Let's show Global Success vs Fail
+            const s = this.analyticsData.totalRepaired;
+            const f = this.analyticsData.totalFailed;
+            this.charts.success.data.labels = ['Sucesso', 'Falha'];
+            this.charts.success.data.datasets = [{
+                data: [s, f],
+                backgroundColor: ['#10B981', '#EF4444']
+            }];
+            this.charts.success.update();
+
+            // 3. Defects
+            this.charts.defects.data.labels = topDefects.map(d => d[0]);
+            this.charts.defects.data.datasets = [{
+                label: 'Ocorrências',
+                data: topDefects.map(d => d[1]),
+                backgroundColor: '#3B82F6'
+            }];
+            this.charts.defects.update();
+
+            // 4. Models
+            this.charts.models.data.labels = topModels.map(d => d[0]);
+            this.charts.models.data.datasets = [{
+                label: 'Volume',
+                data: topModels.map(d => d[1]),
+                backgroundColor: '#6366F1'
+            }];
+            this.charts.models.update();
         },
 
         // --- UTILS ---
