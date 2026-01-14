@@ -41,7 +41,8 @@ function app() {
             quickView: 'summary',
             viewMode: 'standard', // 'standard' or 'success_drilldown'
             defectSortField: 'total', // total, success, fail
-            defectSortDesc: true
+            defectSortDesc: true,
+            viewType: 'data'
         },
 
         // Data
@@ -301,6 +302,14 @@ function app() {
             this.$watch('view', () => {
                 if (this.view !== 'kanban') {
                     this.clearFilters();
+                }
+            });
+
+            // Watch for filter changes to update metrics and render charts if needed
+            this.$watch('adminDashboardFilters', () => {
+                this.calculateMetrics();
+                if (this.adminDashboardFilters.viewType === 'chart') {
+                    setTimeout(() => this.renderCharts(), 50);
                 }
             });
 
