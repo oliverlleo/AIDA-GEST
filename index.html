@@ -308,18 +308,20 @@
                             </div>
                             <p class="text-sm text-gray-500 mt-3">Tempo em bancada até finalizar.</p>
                         </div>
-                        <div x-show="adminDashboardFilters.quickView !== 'repair'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tempo médio de solução</p>
+                        <div x-show="adminDashboardFilters.quickView !== 'repair'" @click="adminDashboardFilters.viewMode = 'solution_drilldown'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm cursor-pointer hover:border-brand-500 hover:shadow-md transition-all group relative">
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-brand-500"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Tempo médio de solução (Detalhar)</p>
                             <div class="mt-3 flex items-end justify-between">
-                                <span class="text-3xl font-bold text-gray-900" x-text="formatDuration(metrics.avgSolution)">-</span>
+                                <span class="text-3xl font-bold text-gray-900 group-hover:text-brand-600" x-text="formatDuration(metrics.avgSolution)">-</span>
                                 <span class="text-sm text-gray-500 font-semibold">Chamado → pronto</span>
                             </div>
                             <p class="text-sm text-gray-500 mt-3">Até liberar para o cliente.</p>
                         </div>
-                        <div x-show="adminDashboardFilters.quickView !== 'repair'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tempo médio para entrega</p>
+                        <div x-show="adminDashboardFilters.quickView !== 'repair'" @click="adminDashboardFilters.viewMode = 'delivery_drilldown'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm cursor-pointer hover:border-brand-500 hover:shadow-md transition-all group relative">
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-brand-500"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Tempo médio para entrega (Detalhar)</p>
                             <div class="mt-3 flex items-end justify-between">
-                                <span class="text-3xl font-bold text-gray-900" x-text="formatDuration(metrics.avgDelivery)">-</span>
+                                <span class="text-3xl font-bold text-gray-900 group-hover:text-brand-600" x-text="formatDuration(metrics.avgDelivery)">-</span>
                                 <span class="text-sm text-gray-500 font-semibold">Chamado → retirada</span>
                             </div>
                             <p class="text-sm text-gray-500 mt-3">Até o cliente retirar.</p>
@@ -382,6 +384,136 @@
                                             </div>
                                         </div>
                                     </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DRILLDOWN VIEW: Solution Time Analysis -->
+                    <div x-show="adminDashboardFilters.viewMode === 'solution_drilldown'" class="space-y-8" x-transition>
+                        <h2 class="text-xl font-bold text-gray-800 border-b pb-2">Análise de Tempo de Solução (Criado → Pronto)</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <!-- Slowest Models -->
+                            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                <h4 class="font-bold text-red-600 text-sm uppercase mb-3">Modelos Mais Demorados</h4>
+                                <div class="space-y-2">
+                                    <template x-for="item in metrics.slowestModelsSolution" :key="item.label">
+                                        <div class="flex justify-between items-center text-xs p-2 bg-gray-50 rounded">
+                                            <span class="font-bold text-gray-700 truncate w-1/2" x-text="item.label"></span>
+                                            <span class="font-mono text-gray-900" x-text="formatDuration(item.avgTime)"></span>
+                                        </div>
+                                    </template>
+                                    <div x-show="!metrics.slowestModelsSolution?.length" class="text-xs text-gray-400 italic">Sem dados.</div>
+                                </div>
+                            </div>
+
+                            <!-- Slowest Defects -->
+                            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                <h4 class="font-bold text-red-600 text-sm uppercase mb-3">Defeitos Mais Demorados</h4>
+                                <div class="space-y-2">
+                                    <template x-for="item in metrics.slowestDefectsSolution" :key="item.label">
+                                        <div class="flex justify-between items-center text-xs p-2 bg-gray-50 rounded">
+                                            <span class="font-bold text-gray-700 truncate w-1/2" x-text="item.label"></span>
+                                            <span class="font-mono text-gray-900" x-text="formatDuration(item.avgTime)"></span>
+                                        </div>
+                                    </template>
+                                    <div x-show="!metrics.slowestDefectsSolution?.length" class="text-xs text-gray-400 italic">Sem dados.</div>
+                                </div>
+                            </div>
+
+                            <!-- Slowest Combos -->
+                            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                <h4 class="font-bold text-red-600 text-sm uppercase mb-3">Casos Complexos</h4>
+                                <div class="space-y-2">
+                                    <template x-for="item in metrics.slowestCombosSolution" :key="item.label">
+                                        <div class="flex justify-between items-center text-xs p-2 bg-gray-50 rounded">
+                                            <span class="font-bold text-gray-700 truncate w-1/2" x-text="item.label"></span>
+                                            <span class="font-mono text-gray-900" x-text="formatDuration(item.avgTime)"></span>
+                                        </div>
+                                    </template>
+                                    <div x-show="!metrics.slowestCombosSolution?.length" class="text-xs text-gray-400 italic">Sem dados.</div>
+                                </div>
+                            </div>
+
+                            <!-- Fastest Techs -->
+                            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                <h4 class="font-bold text-green-600 text-sm uppercase mb-3">Eficiência Técnica</h4>
+                                <div class="space-y-2">
+                                    <template x-for="(tech, idx) in metrics.fastestTechsSolution" :key="tech.name">
+                                        <div class="p-2 bg-gray-50 rounded border-l-4" :class="idx === 0 ? 'border-green-500' : 'border-gray-300'">
+                                            <div class="flex justify-between items-center mb-1">
+                                                <span class="font-bold text-gray-800 text-xs" x-text="tech.name"></span>
+                                                <span class="text-[10px] bg-black text-white px-1.5 rounded" x-text="tech.successRate + '% Sucesso'"></span>
+                                            </div>
+                                            <div class="text-right font-mono text-sm text-gray-600" x-text="formatDuration(tech.avgTime)"></div>
+                                        </div>
+                                    </template>
+                                    <div x-show="!metrics.fastestTechsSolution?.length" class="text-xs text-gray-400 italic">Sem dados.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DRILLDOWN VIEW: Delivery Time Analysis -->
+                    <div x-show="adminDashboardFilters.viewMode === 'delivery_drilldown'" class="space-y-8" x-transition>
+                        <h2 class="text-xl font-bold text-gray-800 border-b pb-2">Análise de Tempo de Entrega (Criado → Entregue)</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <!-- Slowest Models -->
+                            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                <h4 class="font-bold text-red-600 text-sm uppercase mb-3">Modelos - Retirada Lenta</h4>
+                                <div class="space-y-2">
+                                    <template x-for="item in metrics.slowestModelsDelivery" :key="item.label">
+                                        <div class="flex justify-between items-center text-xs p-2 bg-gray-50 rounded">
+                                            <span class="font-bold text-gray-700 truncate w-1/2" x-text="item.label"></span>
+                                            <span class="font-mono text-gray-900" x-text="formatDuration(item.avgTime)"></span>
+                                        </div>
+                                    </template>
+                                    <div x-show="!metrics.slowestModelsDelivery?.length" class="text-xs text-gray-400 italic">Sem dados.</div>
+                                </div>
+                            </div>
+
+                            <!-- Slowest Defects -->
+                            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                <h4 class="font-bold text-red-600 text-sm uppercase mb-3">Defeitos - Retirada Lenta</h4>
+                                <div class="space-y-2">
+                                    <template x-for="item in metrics.slowestDefectsDelivery" :key="item.label">
+                                        <div class="flex justify-between items-center text-xs p-2 bg-gray-50 rounded">
+                                            <span class="font-bold text-gray-700 truncate w-1/2" x-text="item.label"></span>
+                                            <span class="font-mono text-gray-900" x-text="formatDuration(item.avgTime)"></span>
+                                        </div>
+                                    </template>
+                                    <div x-show="!metrics.slowestDefectsDelivery?.length" class="text-xs text-gray-400 italic">Sem dados.</div>
+                                </div>
+                            </div>
+
+                            <!-- Slowest Combos -->
+                            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                <h4 class="font-bold text-red-600 text-sm uppercase mb-3">Casos Complexos</h4>
+                                <div class="space-y-2">
+                                    <template x-for="item in metrics.slowestCombosDelivery" :key="item.label">
+                                        <div class="flex justify-between items-center text-xs p-2 bg-gray-50 rounded">
+                                            <span class="font-bold text-gray-700 truncate w-1/2" x-text="item.label"></span>
+                                            <span class="font-mono text-gray-900" x-text="formatDuration(item.avgTime)"></span>
+                                        </div>
+                                    </template>
+                                    <div x-show="!metrics.slowestCombosDelivery?.length" class="text-xs text-gray-400 italic">Sem dados.</div>
+                                </div>
+                            </div>
+
+                            <!-- Fastest Techs -->
+                            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                                <h4 class="font-bold text-green-600 text-sm uppercase mb-3">Agilidade Geral</h4>
+                                <div class="space-y-2">
+                                    <template x-for="(tech, idx) in metrics.fastestTechsDelivery" :key="tech.name">
+                                        <div class="p-2 bg-gray-50 rounded border-l-4" :class="idx === 0 ? 'border-green-500' : 'border-gray-300'">
+                                            <div class="flex justify-between items-center mb-1">
+                                                <span class="font-bold text-gray-800 text-xs" x-text="tech.name"></span>
+                                                <span class="text-[10px] bg-black text-white px-1.5 rounded" x-text="tech.successRate + '% Sucesso'"></span>
+                                            </div>
+                                            <div class="text-right font-mono text-sm text-gray-600" x-text="formatDuration(tech.avgTime)"></div>
+                                        </div>
+                                    </template>
+                                    <div x-show="!metrics.fastestTechsDelivery?.length" class="text-xs text-gray-400 italic">Sem dados.</div>
                                 </div>
                             </div>
                         </div>

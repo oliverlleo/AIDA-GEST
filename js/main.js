@@ -2016,48 +2016,90 @@ function app() {
                 };
             });
 
-            // REPAIR TIME DRILLDOWN LOGIC
-            const modelTimes = {};
-            const defectTimes = {};
-            const comboTimes = {};
-            const techTimes = {};
+            // TIME DRILLDOWN LOGIC (Repair, Solution, Delivery)
+            const metricsMap = {
+                repair: { model: {}, defect: {}, combo: {}, tech: {} },
+                solution: { model: {}, defect: {}, combo: {}, tech: {} },
+                delivery: { model: {}, defect: {}, combo: {}, tech: {} }
+            };
+
+            // Helper to accumulate times
+            const accTime = (category, type, key, duration, techId) => {
+                const target = metricsMap[category][type];
+                if (!target[key]) target[key] = { totalTime: 0, count: 0 };
+                target[key].totalTime += duration;
+                target[key].count++;
+            };
+
+            // Helper to init tech stats if missing (for success rate tracking)
+            const initTech = (category, techId) => {
+                const target = metricsMap[category].tech;
+                if (!target[techId]) target[techId] = { totalTime: 0, count: 0, successCount: 0, totalTickets: 0 };
+                return target[techId];
+            };
 
             filteredTickets.forEach(t => {
+                const defectList = this.getDefectList(t.defect_reported);
+                const techId = t.technician_id;
+
+                // 1. REPAIR TIME
                 if (t.repair_start_at && t.repair_end_at) {
                     const duration = new Date(t.repair_end_at) - new Date(t.repair_start_at);
                     if (duration > 0) {
-                        // Model
-                        if (!modelTimes[t.device_model]) modelTimes[t.device_model] = { totalTime: 0, count: 0 };
-                        modelTimes[t.device_model].totalTime += duration;
-                        modelTimes[t.device_model].count++;
-
-                        // Defect
-                        const defectList = this.getDefectList(t.defect_reported);
+                        accTime('repair', 'model', t.device_model, duration);
                         defectList.forEach(d => {
-                            if (!defectTimes[d]) defectTimes[d] = { totalTime: 0, count: 0 };
-                            defectTimes[d].totalTime += duration;
-                            defectTimes[d].count++;
-
-                            // Combo
-                            const k = `${t.device_model} - ${d}`;
-                            if (!comboTimes[k]) comboTimes[k] = { totalTime: 0, count: 0 };
-                            comboTimes[k].totalTime += duration;
-                            comboTimes[k].count++;
+                            accTime('repair', 'defect', d, duration);
+                            accTime('repair', 'combo', `${t.device_model} - ${d}`, duration);
                         });
-
-                        // Tech
-                        if (t.technician_id) {
-                            if (!techTimes[t.technician_id]) techTimes[t.technician_id] = { totalTime: 0, count: 0, successCount: 0, totalTickets: 0 };
-                            techTimes[t.technician_id].totalTime += duration;
-                            techTimes[t.technician_id].count++;
+                        if (techId) {
+                            initTech('repair', techId).totalTime += duration;
+                            initTech('repair', techId).count++;
                         }
                     }
                 }
-                // Tech Success Rate (Independent of duration)
-                if (t.technician_id) {
-                    if (!techTimes[t.technician_id]) techTimes[t.technician_id] = { totalTime: 0, count: 0, successCount: 0, totalTickets: 0 };
-                    techTimes[t.technician_id].totalTickets++;
-                    if (t.repair_successful) techTimes[t.technician_id].successCount++;
+
+                // 2. SOLUTION TIME (Created -> Pickup Available OR Repair End)
+                if (t.created_at) {
+                    const readyAt = t.pickup_available_at || t.repair_end_at;
+                    if (readyAt) {
+                        const duration = new Date(readyAt) - new Date(t.created_at);
+                        if (duration > 0) {
+                            accTime('solution', 'model', t.device_model, duration);
+                            defectList.forEach(d => {
+                                accTime('solution', 'defect', d, duration);
+                                accTime('solution', 'combo', `${t.device_model} - ${d}`, duration);
+                            });
+                            if (techId) {
+                                initTech('solution', techId).totalTime += duration;
+                                initTech('solution', techId).count++;
+                            }
+                        }
+                    }
+                }
+
+                // 3. DELIVERY TIME (Created -> Delivered)
+                if (t.created_at && t.delivered_at) {
+                    const duration = new Date(t.delivered_at) - new Date(t.created_at);
+                    if (duration > 0) {
+                        accTime('delivery', 'model', t.device_model, duration);
+                        defectList.forEach(d => {
+                            accTime('delivery', 'defect', d, duration);
+                            accTime('delivery', 'combo', `${t.device_model} - ${d}`, duration);
+                        });
+                        if (techId) {
+                            initTech('delivery', techId).totalTime += duration;
+                            initTech('delivery', techId).count++;
+                        }
+                    }
+                }
+
+                // Tech Success Rate (Shared logic, but tracked per category context if needed, currently global per category)
+                if (techId) {
+                    ['repair', 'solution', 'delivery'].forEach(cat => {
+                        const stats = initTech(cat, techId);
+                        stats.totalTickets++;
+                        if (t.repair_successful) stats.successCount++;
+                    });
                 }
             });
 
@@ -2072,19 +2114,35 @@ function app() {
                     .slice(0, limit);
             };
 
-            const slowestModels = processTimes(modelTimes, 5, true);
-            const slowestDefects = processTimes(defectTimes, 5, true);
-            const slowestCombos = processTimes(comboTimes, 5, true);
+            const processTechs = (map) => {
+                return Object.entries(map)
+                    .map(([id, stats]) => ({
+                        name: this.getEmployeeName(id),
+                        avgTime: stats.count ? stats.totalTime / stats.count : 0,
+                        successRate: stats.totalTickets ? Math.round((stats.successCount / stats.totalTickets) * 100) : 0,
+                        count: stats.count
+                    }))
+                    .filter(t => t.avgTime > 0)
+                    .sort((a, b) => a.avgTime - b.avgTime);
+            };
 
-            const fastestTechs = Object.entries(techTimes)
-                .map(([id, stats]) => ({
-                    name: this.getEmployeeName(id),
-                    avgTime: stats.count ? stats.totalTime / stats.count : 0,
-                    successRate: stats.totalTickets ? Math.round((stats.successCount / stats.totalTickets) * 100) : 0,
-                    count: stats.count
-                }))
-                .filter(t => t.avgTime > 0) // Only techs with timed repairs
-                .sort((a, b) => a.avgTime - b.avgTime); // Ascending (Fastest)
+            // Repair Lists
+            const slowestModels = processTimes(metricsMap.repair.model, 5, true);
+            const slowestDefects = processTimes(metricsMap.repair.defect, 5, true);
+            const slowestCombos = processTimes(metricsMap.repair.combo, 5, true);
+            const fastestTechs = processTechs(metricsMap.repair.tech);
+
+            // Solution Lists
+            const slowestModelsSolution = processTimes(metricsMap.solution.model, 5, true);
+            const slowestDefectsSolution = processTimes(metricsMap.solution.defect, 5, true);
+            const slowestCombosSolution = processTimes(metricsMap.solution.combo, 5, true);
+            const fastestTechsSolution = processTechs(metricsMap.solution.tech);
+
+            // Delivery Lists
+            const slowestModelsDelivery = processTimes(metricsMap.delivery.model, 5, true);
+            const slowestDefectsDelivery = processTimes(metricsMap.delivery.defect, 5, true);
+            const slowestCombosDelivery = processTimes(metricsMap.delivery.combo, 5, true);
+            const fastestTechsDelivery = processTechs(metricsMap.delivery.tech);
 
             const ticketsPerDay = Math.round(filteredTickets.length / rangeDays);
 
@@ -2172,10 +2230,9 @@ function app() {
                 topCombos,
                 techStats,
                 techDeepDive,
-                slowestModels,
-                slowestDefects,
-                slowestCombos,
-                fastestTechs
+                slowestModels, slowestDefects, slowestCombos, fastestTechs,
+                slowestModelsSolution, slowestDefectsSolution, slowestCombosSolution, fastestTechsSolution,
+                slowestModelsDelivery, slowestDefectsDelivery, slowestCombosDelivery, fastestTechsDelivery
             };
         },
 
