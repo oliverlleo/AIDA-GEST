@@ -184,7 +184,7 @@
                     <header class="flex justify-between items-center mb-8">
                         <div>
                             <h1 class="text-3xl font-bold text-gray-800">Visão Geral</h1>
-                            <p class="text-gray-500">Resumo das atividades hoje.</p>
+                            <p class="text-gray-500">Resumo das atividades.</p>
                         </div>
                         <button @click="openNewTicketModal()" class="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-brand-500 transition-colors shadow-lg flex items-center">
                             <i class="fa-solid fa-plus mr-2"></i> Abrir Chamado
@@ -411,8 +411,9 @@
                                                              <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
                                                              <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
                                                         </div>
+                                                        <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
                                                         <div class="flex justify-between items-center">
-                                                            <div class="text-[10px] text-gray-500 truncate w-3/4" x-text="t.device_model"></div>
+                                                            <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-red-200 text-red-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
                                                             <i class="fa-solid fa-bell fa-shake text-[10px] text-red-500"></i>
                                                         </div>
                                                     </div>
@@ -438,7 +439,11 @@
                                                              <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
                                                              <span class="font-mono text-orange-600 font-bold" x-text="'OS ' + t.os_number"></span>
                                                         </div>
-                                                        <div class="text-[10px] text-gray-500 truncate" x-text="t.device_model"></div>
+                                                        <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
+                                                        <div class="flex flex-col">
+                                                            <span class="text-[9px] font-bold text-orange-700 uppercase"><i class="fa-solid fa-clock mr-1"></i> Entrega Atrasada</span>
+                                                            <span class="text-[9px] text-gray-600" x-text="'Etapa: ' + getStatusLabel(t.status)"></span>
+                                                        </div>
                                                     </div>
                                                 </template>
                                                 <div x-show="ops.delayedDeliveries.length > 5" class="text-center text-[10px] text-orange-400 cursor-pointer hover:underline" @click="applyQuickFilter('delayed')">
@@ -459,7 +464,8 @@
                                                             <span class="font-bold text-gray-700" x-text="'OS ' + t.os_number"></span>
                                                             <span class="text-red-600 font-bold" x-text="getOverdueTime(t.analysis_deadline)"></span>
                                                         </div>
-                                                        <div class="text-[10px] text-gray-500 truncate" x-text="t.device_model"></div>
+                                                        <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
+                                                        <div class="text-[9px] font-bold text-gray-400 uppercase">Prazo de Análise</div>
                                                     </div>
                                                 </template>
                                             </div>
@@ -1030,9 +1036,12 @@
                                 <template x-if="metrics.techStats?.length">
                                     <div class="space-y-3">
                                         <template x-for="tech in metrics.techStats.slice(0, 3)" :key="tech.id">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-gray-500" x-text="tech.name"></span>
-                                                <span class="text-lg font-semibold text-gray-900" x-text="tech.total + ' aparelhos · ' + (tech.successRate !== null ? tech.successRate + '%' : '-')"></span>
+                                            <div class="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                                <span class="text-gray-600 font-medium text-sm" x-text="tech.name"></span>
+                                                <div class="text-right">
+                                                    <span class="block text-sm font-bold text-gray-900" x-text="tech.successRate + '% Sucesso'"></span>
+                                                    <span class="block text-xs text-gray-400" x-text="tech.completed + ' concluídos'"></span>
+                                                </div>
                                             </div>
                                         </template>
                                     </div>

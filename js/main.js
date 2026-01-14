@@ -2561,11 +2561,16 @@ function app() {
             filteredTickets.forEach(ticket => {
                 const techId = ticket.technician_id || 'unassigned';
                 if (!techMap[techId]) {
-                    techMap[techId] = { total: 0, success: 0 };
+                    techMap[techId] = { totalAssigned: 0, completedCount: 0, successCount: 0 };
                 }
-                techMap[techId].total += 1;
-                if (ticket.repair_successful) {
-                    techMap[techId].success += 1;
+                techMap[techId].totalAssigned += 1;
+
+                // Completed: repair_successful is NOT null
+                if (ticket.repair_successful !== null && ticket.repair_successful !== undefined) {
+                    techMap[techId].completedCount += 1;
+                    if (ticket.repair_successful) {
+                        techMap[techId].successCount += 1;
+                    }
                 }
             });
 
@@ -2573,14 +2578,17 @@ function app() {
                 .map(([techId, data]) => {
                     const tech = this.employees.find(emp => emp.id == techId);
                     const name = tech ? tech.name : techId === 'unassigned' ? 'Sem técnico' : 'Técnico';
+                    const rate = data.completedCount > 0 ? Math.round((data.successCount / data.completedCount) * 100) : 0;
+
                     return {
                         id: techId,
                         name,
-                        total: data.total,
-                        successRate: data.total ? Math.round((data.success / data.total) * 100) : null
+                        total: data.totalAssigned,
+                        completed: data.completedCount,
+                        successRate: rate
                     };
                 })
-                .sort((a, b) => b.total - a.total);
+                .sort((a, b) => b.completed - a.completed); // Sort by completed volume
 
             return {
                 filteredTickets,
