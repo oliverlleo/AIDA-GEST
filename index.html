@@ -29,6 +29,8 @@
     <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
     <!-- Supabase JS -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -493,12 +495,15 @@
                             <button class="bg-black text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-brand-500 transition-colors">
                                 Exportar relatório
                             </button>
-                            <button class="bg-white text-gray-700 px-5 py-2.5 rounded-lg border border-gray-200 font-semibold hover:border-brand-500 hover:text-brand-600 transition-colors">
+                            <button @click="toggleAdminView()"
+                                    class="bg-white text-gray-700 px-5 py-2.5 rounded-lg border border-gray-200 font-semibold hover:border-brand-500 hover:text-brand-600 transition-colors"
+                                    x-text="adminDashboardFilters.viewType === 'data' ? 'Gráfico' : 'Dados'">
                                 Salvar visão
                             </button>
                         </div>
                     </header>
 
+                    <!-- FILTERS (Always Visible) -->
                     <section class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
                         <h2 class="text-lg font-semibold text-gray-900 mb-4">Filtros inteligentes</h2>
                         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -561,19 +566,30 @@
                         </div>
                     </section>
 
+                    <!-- KPI CARDS (Always Visible) -->
                     <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
                         <div @click="adminDashboardFilters.viewMode = 'success_drilldown'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm cursor-pointer hover:border-brand-500 hover:shadow-md transition-all group relative">
                             <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-brand-500"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Taxa de sucesso (Detalhar)</p>
+                            <div class="flex items-center gap-3 mb-1">
+                                <div class="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-chart-pie text-sm"></i>
+                                </div>
+                                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Taxa de sucesso</p>
+                            </div>
                             <div class="mt-3 flex items-end justify-between">
                                 <span class="text-3xl font-bold text-gray-900 group-hover:text-brand-600" x-text="metrics.successRate !== null ? metrics.successRate + '%' : '-'">-</span>
-                                <span class="text-sm text-gray-500 font-semibold" x-text="metrics.filteredTickets?.length ? metrics.filteredTickets.length + ' reparos avaliados' : 'Sem dados'">Sem dados</span>
+                                <span class="text-sm text-gray-500 font-semibold" x-text="metrics.filteredTickets?.length ? metrics.filteredTickets.length + ' reparos' : 'Sem dados'">Sem dados</span>
                             </div>
                             <p class="text-sm text-gray-500 mt-3">Reparos concluídos com êxito.</p>
                         </div>
                         <div @click="adminDashboardFilters.viewMode = 'repair_drilldown'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm cursor-pointer hover:border-brand-500 hover:shadow-md transition-all group relative">
                             <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-brand-500"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Tempo médio de reparo (Detalhar)</p>
+                            <div class="flex items-center gap-3 mb-1">
+                                <div class="w-8 h-8 rounded-full bg-orange-50 text-brand-600 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-screwdriver-wrench text-sm"></i>
+                                </div>
+                                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Tempo médio de reparo</p>
+                            </div>
                             <div class="mt-3 flex items-end justify-between">
                                 <span class="text-3xl font-bold text-gray-900 group-hover:text-brand-600" x-text="formatDuration(metrics.avgRepair)">-</span>
                                 <span class="text-sm text-brand-600 font-semibold">Cronômetro técnico</span>
@@ -582,7 +598,12 @@
                         </div>
                         <div x-show="adminDashboardFilters.quickView !== 'repair'" @click="adminDashboardFilters.viewMode = 'solution_drilldown'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm cursor-pointer hover:border-brand-500 hover:shadow-md transition-all group relative">
                             <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-brand-500"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Tempo médio de solução (Detalhar)</p>
+                            <div class="flex items-center gap-3 mb-1">
+                                <div class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-clipboard-check text-sm"></i>
+                                </div>
+                                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Tempo médio de solução</p>
+                            </div>
                             <div class="mt-3 flex items-end justify-between">
                                 <span class="text-3xl font-bold text-gray-900 group-hover:text-brand-600" x-text="formatDuration(metrics.avgSolution)">-</span>
                                 <span class="text-sm text-gray-500 font-semibold">Chamado → pronto</span>
@@ -591,7 +612,12 @@
                         </div>
                         <div x-show="adminDashboardFilters.quickView !== 'repair'" @click="adminDashboardFilters.viewMode = 'delivery_drilldown'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm cursor-pointer hover:border-brand-500 hover:shadow-md transition-all group relative">
                             <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-brand-500"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Tempo médio para entrega (Detalhar)</p>
+                            <div class="flex items-center gap-3 mb-1">
+                                <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-truck-fast text-sm"></i>
+                                </div>
+                                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Tempo médio para entrega</p>
+                            </div>
                             <div class="mt-3 flex items-end justify-between">
                                 <span class="text-3xl font-bold text-gray-900 group-hover:text-brand-600" x-text="formatDuration(metrics.avgDelivery)">-</span>
                                 <span class="text-sm text-gray-500 font-semibold">Chamado → retirada</span>
@@ -599,6 +625,72 @@
                             <p class="text-sm text-gray-500 mt-3">Até o cliente retirar.</p>
                         </div>
                     </section>
+
+                    <!-- VIEW MODE: CHART -->
+                    <div x-show="adminDashboardFilters.viewType === 'chart'" x-transition class="space-y-8">
+                        <h2 class="text-xl font-bold text-gray-800 border-b pb-2">Visualização Gráfica</h2>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Repairs Over Time -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Reparos Finalizados</h3>
+                                <div class="h-64">
+                                    <canvas id="repairsChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Tickets Created Over Time -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Chamados Criados</h3>
+                                <div class="h-64">
+                                    <canvas id="ticketsChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Top Defects -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Top Defeitos</h3>
+                                <div class="h-64 flex justify-center">
+                                    <canvas id="defectsChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Tech Efficiency -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Eficiência Técnica</h3>
+                                <div class="h-64">
+                                    <canvas id="techChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Solution Time by Model -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Tempo Solução (Modelo)</h3>
+                                <div class="h-64">
+                                    <canvas id="solutionTimeChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Delivery Time by Model -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                                <h3 class="font-bold text-gray-700 mb-4">Tempo Entrega (Modelo)</h3>
+                                <div class="h-64">
+                                    <canvas id="deliveryTimeChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Success Rate by Model -->
+                            <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm col-span-1 lg:col-span-2">
+                                <h3 class="font-bold text-gray-700 mb-4">Taxa de Sucesso por Modelo</h3>
+                                <div class="h-64">
+                                    <canvas id="modelSuccessChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW MODE: DATA (Standard Wrapper) -->
+                    <div x-show="adminDashboardFilters.viewType === 'data'" x-transition>
 
                     <!-- DRILLDOWN VIEW: Success Analysis -->
                     <div x-show="adminDashboardFilters.viewMode === 'success_drilldown'" class="space-y-8" x-transition>
@@ -859,7 +951,9 @@
                     <!-- STANDARD VIEW SECTIONS -->
                     <section x-show="adminDashboardFilters.viewMode === 'standard'" class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
                         <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Volume Atual (Bancada)</h3>
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-layer-group text-brand-500"></i> Volume Atual (Bancada)
+                            </h3>
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-500">Em análise (Agora)</span>
@@ -875,7 +969,9 @@
                             </div>
                         </div>
                         <div x-show="adminDashboardFilters.quickView !== 'repair'" class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Chamados e orçamentos</h3>
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-file-invoice-dollar text-brand-500"></i> Chamados e orçamentos
+                            </h3>
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-500">Chamados por dia</span>
@@ -892,7 +988,9 @@
                             </div>
                         </div>
                         <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Técnicos e performance</h3>
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-users-gear text-brand-500"></i> Técnicos e performance
+                            </h3>
                             <div class="space-y-4">
                                 <template x-if="metrics.techStats?.length">
                                     <div class="space-y-3">
@@ -914,7 +1012,9 @@
                     <section x-show="adminDashboardFilters.viewMode === 'standard'" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                         <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                             <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-sm font-semibold text-gray-900">Reparos por dia/semana/mês</h3>
+                                <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-calendar-days text-brand-500"></i> Reparos por dia/semana/mês
+                                </h3>
                                 <span class="text-xs text-gray-500 uppercase tracking-wide">Volume</span>
                             </div>
                             <div class="grid grid-cols-3 gap-3">
@@ -933,7 +1033,9 @@
                             </div>
 
                             <div class="flex items-center justify-between mt-6 mb-4">
-                                <h3 class="text-sm font-semibold text-gray-900">Chamados Criados</h3>
+                                <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-file-circle-plus text-brand-500"></i> Chamados Criados
+                                </h3>
                                 <span class="text-xs text-gray-500 uppercase tracking-wide">Entrada</span>
                             </div>
                             <div class="grid grid-cols-3 gap-3">
@@ -959,7 +1061,9 @@
                         </div>
                         <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col h-full max-h-[600px]">
                             <div class="flex items-center justify-between mb-4 flex-shrink-0">
-                                <h3 class="text-sm font-semibold text-gray-900">Defeitos mais frequentes</h3>
+                                <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-bug text-brand-500"></i> Defeitos mais frequentes
+                                </h3>
                                 <div class="flex gap-4 text-xs font-bold text-gray-400 uppercase tracking-wide cursor-pointer select-none">
                                     <span @click="adminDashboardFilters.defectSortField='total'; adminDashboardFilters.defectSortDesc = !adminDashboardFilters.defectSortDesc"
                                           :class="adminDashboardFilters.defectSortField === 'total' ? 'text-black underline' : 'hover:text-gray-600'">
@@ -1026,6 +1130,8 @@
                             </div>
                         </div>
                     </section>
+
+                    </div> <!-- End x-show=viewType === 'data' -->
                 </div>
 
                 <!-- VIEW: KANBAN BOARD -->

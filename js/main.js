@@ -41,7 +41,8 @@ function app() {
             quickView: 'summary',
             viewMode: 'standard', // 'standard' or 'success_drilldown'
             defectSortField: 'total', // total, success, fail
-            defectSortDesc: true
+            defectSortDesc: true,
+            viewType: 'data'
         },
 
         // Data
@@ -304,6 +305,22 @@ function app() {
                 }
             });
 
+            // Watch for filter changes to update metrics and render charts if needed
+            this.$watch('adminDashboardFilters', () => {
+                this.calculateMetrics();
+                if (this.adminDashboardFilters.viewType === 'chart') {
+                    setTimeout(() => this.renderCharts(), 50);
+                }
+            });
+
+            // Watch for filter changes to update metrics and render charts if needed
+            this.$watch('adminDashboardFilters', () => {
+                this.calculateMetrics();
+                if (this.adminDashboardFilters.viewType === 'chart') {
+                    setTimeout(() => this.renderCharts(), 50);
+                }
+            });
+
             // Removed visibilitychange listener to prevent lock conflicts.
             // Data is kept fresh via Realtime subscriptions.
         },
@@ -311,6 +328,184 @@ function app() {
         calculateMetrics() {
             this.ops = this.getDashboardOps();
             this.metrics = this.getAdminMetrics();
+        },
+
+        toggleAdminView() {
+            this.adminDashboardFilters.viewType = this.adminDashboardFilters.viewType === 'data' ? 'chart' : 'data';
+            this.calculateMetrics();
+            if (this.adminDashboardFilters.viewType === 'chart') {
+                setTimeout(() => this.renderCharts(), 50);
+            }
+        },
+
+        chartInstances: {},
+
+        renderCharts() {
+            if (typeof Chart === 'undefined') return;
+
+            const destroy = (id) => {
+                if (this.chartInstances[id]) {
+                    this.chartInstances[id].destroy();
+                    delete this.chartInstances[id];
+                }
+            };
+
+            const metrics = this.metrics;
+            const commonOptions = { responsive: true, maintainAspectRatio: false };
+
+            // 1. Repairs Over Time
+            destroy('repairsChart');
+            const repairsCtx = document.getElementById('repairsChart');
+            if (repairsCtx) {
+                this.chartInstances.repairsChart = new Chart(repairsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Hoje', 'Semana', 'Mês'],
+                        datasets: [{
+                            label: 'Reparos Finalizados',
+                            data: [metrics.repairsToday, metrics.repairsWeek, metrics.repairsMonth],
+                            backgroundColor: 'rgba(255, 107, 0, 0.6)',
+                            borderColor: 'rgba(255, 107, 0, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { ...commonOptions, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                });
+            }
+
+            // 2. Tickets Created Over Time
+            destroy('ticketsChart');
+            const ticketsCtx = document.getElementById('ticketsChart');
+            if (ticketsCtx) {
+                this.chartInstances.ticketsChart = new Chart(ticketsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Hoje', 'Semana', 'Mês'],
+                        datasets: [{
+                            label: 'Chamados Criados',
+                            data: [metrics.ticketsToday, metrics.ticketsWeek, metrics.ticketsMonth],
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { ...commonOptions, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                });
+            }
+
+            // 3. Top Defects
+            destroy('defectsChart');
+            const defectsCtx = document.getElementById('defectsChart');
+            if (defectsCtx && metrics.topDefects.length) {
+                this.chartInstances.defectsChart = new Chart(defectsCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: metrics.topDefects.slice(0, 5).map(d => d.label),
+                        datasets: [{
+                            data: metrics.topDefects.slice(0, 5).map(d => d.total),
+                            backgroundColor: ['#FF6B00', '#3B82F6', '#10B981', '#F59E0B', '#EF4444']
+                        }]
+                    },
+                    options: commonOptions
+                });
+            }
+
+            // 4. Tech Efficiency
+            destroy('techChart');
+            const techCtx = document.getElementById('techChart');
+            if (techCtx && metrics.techStats.length) {
+                this.chartInstances.techChart = new Chart(techCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: metrics.techStats.map(t => t.name),
+                        datasets: [
+                            {
+                                label: 'Volume Total',
+                                data: metrics.techStats.map(t => t.total),
+                                backgroundColor: 'rgba(156, 163, 175, 0.5)',
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Taxa Sucesso (%)',
+                                data: metrics.techStats.map(t => t.successRate),
+                                type: 'line',
+                                borderColor: '#10B981',
+                                tension: 0.1,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            y: { beginAtZero: true, position: 'left' },
+                            y1: { beginAtZero: true, position: 'right', max: 100, grid: { drawOnChartArea: false } }
+                        }
+                    }
+                });
+            }
+
+            // 5. Solution Time by Model (New)
+            destroy('solutionTimeChart');
+            const solutionCtx = document.getElementById('solutionTimeChart');
+            if (solutionCtx && metrics.slowestModelsSolution.length) {
+                this.chartInstances.solutionTimeChart = new Chart(solutionCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: metrics.slowestModelsSolution.map(m => m.label),
+                        datasets: [{
+                            label: 'Tempo Médio Solução (min)',
+                            data: metrics.slowestModelsSolution.map(m => Math.round(m.avgTime / 60000)),
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)'
+                        }]
+                    },
+                    options: { ...commonOptions, indexAxis: 'y' }
+                });
+            }
+
+            // 6. Delivery Time by Model (New)
+            destroy('deliveryTimeChart');
+            const deliveryCtx = document.getElementById('deliveryTimeChart');
+            if (deliveryCtx && metrics.slowestModelsDelivery.length) {
+                this.chartInstances.deliveryTimeChart = new Chart(deliveryCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: metrics.slowestModelsDelivery.map(m => m.label),
+                        datasets: [{
+                            label: 'Tempo Médio Entrega (horas)',
+                            data: metrics.slowestModelsDelivery.map(m => Math.round(m.avgTime / 3600000)),
+                            backgroundColor: 'rgba(16, 185, 129, 0.6)'
+                        }]
+                    },
+                    options: { ...commonOptions, indexAxis: 'y' }
+                });
+            }
+
+            // 7. Success Rate by Model (New)
+            destroy('modelSuccessChart');
+            const modelSuccessCtx = document.getElementById('modelSuccessChart');
+            if (modelSuccessCtx && metrics.topModels.length) {
+                const top5 = metrics.topModels.slice(0, 5);
+                this.chartInstances.modelSuccessChart = new Chart(modelSuccessCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: top5.map(m => m.label),
+                        datasets: [
+                            {
+                                label: 'Sucesso',
+                                data: top5.map(m => m.success),
+                                backgroundColor: '#10B981'
+                            },
+                            {
+                                label: 'Falha',
+                                data: top5.map(m => m.fail),
+                                backgroundColor: '#EF4444'
+                            }
+                        ]
+                    },
+                    options: { ...commonOptions, scales: { x: { stacked: true }, y: { stacked: true } } }
+                });
+            }
         },
 
         setupRealtime() {
