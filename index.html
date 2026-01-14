@@ -398,9 +398,29 @@
                                     <p class="text-2xl font-semibold text-gray-900" x-text="metrics.repairsMonth">0</p>
                                 </div>
                             </div>
+
+                            <div class="flex items-center justify-between mt-6 mb-4">
+                                <h3 class="text-sm font-semibold text-gray-900">Chamados Criados</h3>
+                                <span class="text-xs text-gray-500 uppercase tracking-wide">Entrada</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="rounded-xl border border-gray-200 p-4 text-center">
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Hoje</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsToday || 0">0</p>
+                                </div>
+                                <div class="rounded-xl border border-gray-200 p-4 text-center">
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Semana</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsWeek || 0">0</p>
+                                </div>
+                                <div class="rounded-xl border border-gray-200 p-4 text-center">
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">Mês</p>
+                                    <p class="text-2xl font-semibold text-gray-900" x-text="metrics.ticketsMonth || 0">0</p>
+                                </div>
+                            </div>
+
                             <div class="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
                                 <template x-for="model in metrics.topModels" :key="model.label">
-                                    <span class="bg-gray-100 px-3 py-1 rounded-full" x-text="'Modelo: ' + model.label + ' (' + model.value + ')'"></span>
+                                    <span class="bg-gray-100 px-3 py-1 rounded-full" x-text="'Modelo: ' + model.label + ' (' + (model.total || 0) + ')'"></span>
                                 </template>
                             </div>
                         </div>
@@ -2184,6 +2204,6 @@
     </div>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=4"></script>
+    <script src="js/main.js?v=5"></script>
 </body>
 </html>
