@@ -1044,9 +1044,55 @@
                                 </template>
                             </select>
                         </div>
-                         <div class="col-span-2">
+                         <div class="col-span-2" x-data="{ open: false }">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado *</label>
-                            <textarea x-model="ticketForm.defect" rows="2" class="w-full border rounded-lg p-2.5 bg-gray-50"></textarea>
+
+                            <div class="border rounded-lg p-2 bg-gray-50 focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500 relative min-h-[50px]">
+                                <!-- Chips -->
+                                <div class="flex flex-wrap gap-2 mb-2" x-show="tempDefects.length > 0">
+                                    <template x-for="(defect, idx) in tempDefects" :key="idx">
+                                        <span class="bg-brand-100 text-brand-800 text-xs font-bold px-2 py-1 rounded flex items-center shadow-sm">
+                                            <span x-text="defect"></span>
+                                            <button @click="removeDefectFromTicket(idx)" class="ml-2 text-brand-600 hover:text-red-500 transition-colors"><i class="fa-solid fa-times"></i></button>
+                                        </span>
+                                    </template>
+                                </div>
+
+                                <!-- Input -->
+                                <div class="relative" @click.outside="open = false">
+                                    <input type="text" x-model="defectSearch"
+                                           @focus="open = true"
+                                           @keydown.enter.prevent="if(defectSearch.trim() && defects.some(d => d.name.toLowerCase() === defectSearch.trim().toLowerCase())) { addDefectToTicket(defectSearch); open = false; }"
+                                           placeholder="Digite para adicionar defeitos..."
+                                           class="w-full bg-transparent outline-none text-sm placeholder-gray-400">
+
+                                     <!-- Dropdown -->
+                                    <div x-show="open && defectSearch.length > 0"
+                                         class="absolute z-50 mt-1 w-full bg-white shadow-xl max-h-48 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                         x-transition
+                                         x-cloak>
+
+                                        <ul class="py-1">
+                                             <template x-for="d in defects.filter(x => x.name.toLowerCase().includes(defectSearch.toLowerCase()))" :key="d.id">
+                                                <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 flex justify-between items-center group transition-colors"
+                                                    @click="addDefectToTicket(d.name); open = false">
+                                                     <span class="font-medium truncate text-gray-800" x-text="d.name"></span>
+                                                     <button @click.stop="deleteDefect(d.id)" class="mr-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1" title="Excluir do cadastro">
+                                                        <i class="fa-solid fa-trash text-xs"></i>
+                                                     </button>
+                                                </li>
+                                             </template>
+
+                                             <!-- Create Option -->
+                                             <li x-show="!defects.some(d => d.name.toLowerCase() === defectSearch.trim().toLowerCase())"
+                                                 class="cursor-pointer select-none relative py-2 pl-3 pr-9 bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold transition-colors"
+                                                 @click="addDefectToTicket(defectSearch); createDefect(defectSearch); open = false;">
+                                                 <i class="fa-solid fa-plus mr-2"></i> Cadastrar "<span x-text="defectSearch"></span>"
+                                             </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

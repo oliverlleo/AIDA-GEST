@@ -39,6 +39,7 @@ function app() {
         deletedTickets: [],
         deletedEmployees: [],
         deviceModels: [], // New state
+        defects: [], // New state for defect registry
         checklistTemplates: [],
         checklistTemplatesEntry: [],
         checklistTemplatesFinal: [],
@@ -91,6 +92,10 @@ function app() {
         // Search
         searchQuery: '',
         showFinalized: true,
+
+        // Defect UI State
+        defectSearch: '',
+        tempDefects: [],
 
         // Time
         currentTime: new Date(),
@@ -206,7 +211,8 @@ function app() {
                     this.initTechFilter(); // Ensure filter is set for Admin session restore too
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
+                    await this.fetchDefects(); // New fetch
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -344,7 +350,8 @@ function app() {
                     this.initTechFilter(); // Initialize filter before fetching
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
+                    await this.fetchDefects(); // New fetch
 
                     // Redirect Technician directly to Bench
                     if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
@@ -409,7 +416,8 @@ function app() {
                     this.initTechFilter(); // Admin defaults to 'all'
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
+                    await this.fetchDefects(); // New fetch
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -716,6 +724,51 @@ function app() {
             }
         },
 
+        // --- DEFECTS REGISTRY ---
+        async fetchDefects() {
+            if (!this.user?.workspace_id) return;
+            try {
+                const data = await this.supabaseFetch(`defects?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
+                if (data) this.defects = data;
+            } catch(e) {
+                console.error("Fetch Defects Error:", e);
+            }
+        },
+
+        async createDefect(name) {
+            if (!name || !name.trim()) return;
+            if (!this.user?.workspace_id) return;
+
+            // Check duplicate
+            if (this.defects.some(d => d.name.toLowerCase() === name.trim().toLowerCase())) {
+                return this.notify("Defeito já existe.", "error");
+            }
+
+            try {
+                await this.supabaseFetch('defects', 'POST', {
+                    workspace_id: this.user.workspace_id,
+                    name: name.trim()
+                });
+                await this.fetchDefects();
+                this.notify("Defeito cadastrado!", "success");
+                return true; // Return success
+            } catch(e) {
+                this.notify("Erro ao salvar defeito: " + e.message, "error");
+                return false;
+            }
+        },
+
+        async deleteDefect(id) {
+            if (!confirm("Excluir este defeito da lista de sugestões?")) return;
+            try {
+                await this.supabaseFetch(`defects?id=eq.${id}`, 'DELETE');
+                this.notify("Defeito excluído.");
+                await this.fetchDefects();
+            } catch(e) {
+                this.notify("Erro ao excluir: " + e.message, "error");
+            }
+        },
+
         openNewTicketModal() {
             this.ticketForm = {
                 id: crypto.randomUUID(), // Generate ID upfront for uploads
@@ -725,7 +778,29 @@ function app() {
                 technician_id: '',
                 checklist: [], checklist_final: [], photos: [], notes: ''
             };
+            this.tempDefects = [];
+            this.defectSearch = '';
             this.modals.ticket = true;
+        },
+
+        // --- DEFECT MULTI-SELECT ---
+        addDefectToTicket(name) {
+            if (!name || !name.trim()) return;
+            const val = name.trim();
+            if (!this.tempDefects.includes(val)) {
+                this.tempDefects.push(val);
+                this.syncDefectsToString();
+            }
+            this.defectSearch = '';
+        },
+
+        removeDefectFromTicket(index) {
+            this.tempDefects.splice(index, 1);
+            this.syncDefectsToString();
+        },
+
+        syncDefectsToString() {
+            this.ticketForm.defect = this.tempDefects.join(', ');
         },
 
         addChecklistItem() {
