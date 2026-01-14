@@ -301,6 +301,41 @@
                                 </div>
                             </div>
 
+                            <!-- Tech Pendencies (Aberto) -->
+                            <h3 class="text-lg font-bold text-gray-800 flex items-center pt-2">
+                                <i class="fa-solid fa-user-gear text-brand-500 mr-2"></i> Pendências com Técnico
+                            </h3>
+
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div class="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                                    <h4 class="font-bold text-gray-700 text-sm">Aguardando Início (Enviar p/ Análise)</h4>
+                                    <span class="bg-gray-300 text-gray-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingTech.length">0</span>
+                                </div>
+                                <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                    <template x-for="t in ops.pendingTech" :key="t.id">
+                                        <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                    <!-- Warning if Analysis Deadline is overdue -->
+                                                    <template x-if="t.analysis_deadline && new Date(t.analysis_deadline) < new Date()">
+                                                        <span class="text-[10px] bg-red-100 text-red-600 px-1.5 rounded border border-red-200 font-bold flex items-center" title="Prazo de envio excedido">
+                                                            <i class="fa-solid fa-clock mr-1"></i> Atrasado
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                                <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                            </div>
+                                            <button @click="updateStatus(t, 'Analise Tecnica', {}, { action: 'Iniciou Atendimento', details: 'Moveu para Análise via Dashboard' })"
+                                                    class="text-xs bg-gray-800 text-white px-3 py-1.5 rounded font-bold hover:bg-black transition-colors shadow-sm">
+                                                Iniciar
+                                            </button>
+                                        </div>
+                                    </template>
+                                    <div x-show="!ops.pendingTech.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum chamado aguardando início.</div>
+                                </div>
+                            </div>
+
                             <h3 class="text-lg font-bold text-gray-800 flex items-center pt-2">
                                 <i class="fa-solid fa-truck-fast text-brand-500 mr-2"></i> Pendências com Fornecedor
                             </h3>
