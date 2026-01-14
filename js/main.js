@@ -38,7 +38,10 @@ function app() {
             defect: 'all',
             technician: 'all',
             status: 'all',
-            quickView: 'summary'
+            quickView: 'summary',
+            viewMode: 'standard', // 'standard' or 'success_drilldown'
+            defectSortField: 'total', // total, success, fail
+            defectSortDesc: true
         },
 
         // Data
@@ -1921,6 +1924,7 @@ function app() {
             const defectsMap = {};
             const modelsMap = {};
             const comboMap = {};
+            const techDetailMap = {}; // { techId: { name, failures: {}, successes: {} } }
 
             filteredTickets.forEach(ticket => {
                 // Models Logic
@@ -1948,6 +1952,26 @@ function app() {
                          if (ticket.repair_successful === true) comboMap[comboKey].success++;
                         if (ticket.repair_successful === false) comboMap[comboKey].fail++;
                     }
+
+                    // Tech Detail Logic
+                    if (ticket.technician_id) {
+                        if (!techDetailMap[ticket.technician_id]) {
+                            techDetailMap[ticket.technician_id] = {
+                                name: this.getEmployeeName(ticket.technician_id),
+                                failureCounts: {},
+                                successCounts: {}
+                            };
+                        }
+                        const techStats = techDetailMap[ticket.technician_id];
+                        if (ticket.repair_successful === false) {
+                            const key = `${ticket.device_model} - ${defect}`;
+                            techStats.failureCounts[key] = (techStats.failureCounts[key] || 0) + 1;
+                        }
+                        if (ticket.repair_successful === true) {
+                            const key = `${ticket.device_model} - ${defect}`;
+                            techStats.successCounts[key] = (techStats.successCounts[key] || 0) + 1;
+                        }
+                    }
                 });
             });
 
@@ -1966,10 +1990,31 @@ function app() {
                 };
             });
 
-            // Use 50 limit for scrolling
-            const topDefects = enhanceStats(this.getTopItems(defectsMap, 50));
-            const topModels = enhanceStats(this.getTopItems(modelsMap, 4)); // Keep models widget small
+            // Sorting for Defects
+            let topDefects = enhanceStats(this.getTopItems(defectsMap, 100)); // Get more items first
+            const field = this.adminDashboardFilters.defectSortField;
+            const desc = this.adminDashboardFilters.defectSortDesc;
+            topDefects.sort((a, b) => {
+                const valA = a[field] || 0;
+                const valB = b[field] || 0;
+                return desc ? valB - valA : valA - valB;
+            });
+
+            // Models (Drilldown needs all models, Summary needs 4)
+            const allModels = enhanceStats(this.getTopItems(modelsMap, 100));
+            const topModels = this.adminDashboardFilters.viewMode === 'success_drilldown' ? allModels : allModels.slice(0, 4);
             const topCombos = enhanceStats(this.getTopItems(comboMap, 50));
+
+            // Tech Deep Dive
+            const techDeepDive = Object.values(techDetailMap).map(t => {
+                const topFail = Object.entries(t.failureCounts).sort((a,b) => b[1]-a[1])[0];
+                const topSuccess = Object.entries(t.successCounts).sort((a,b) => b[1]-a[1])[0];
+                return {
+                    name: t.name,
+                    mostFrequentFail: topFail ? `${topFail[0]} (${topFail[1]})` : 'Nenhum',
+                    mostFrequentSuccess: topSuccess ? `${topSuccess[0]} (${topSuccess[1]})` : 'Nenhum'
+                };
+            });
 
             const ticketsPerDay = Math.round(filteredTickets.length / rangeDays);
 
@@ -2041,7 +2086,9 @@ function app() {
                 avgDelivery,
                 avgBudget,
                 avgPickupNotify,
-                analysisPerDay: Math.round(analysisCount / rangeDays),
+                analysisCount: analysisCount, // Raw count per user request
+                repairCount: repairCount,     // Raw count consistency
+                analysisPerDay: Math.round(analysisCount / rangeDays), // Keep for legacy if needed
                 repairPerDay: Math.round(repairCount / rangeDays),
                 ticketsPerDay,
                 repairsToday,
@@ -2053,7 +2100,8 @@ function app() {
                 topDefects,
                 topModels,
                 topCombos,
-                techStats
+                techStats,
+                techDeepDive
             };
         },
 

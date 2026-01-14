@@ -282,7 +282,7 @@
                                 </select>
                             </div>
                             <div class="flex items-end">
-                                <button @click="adminDashboardFilters = { ...adminDashboardFilters }" class="w-full bg-brand-500 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-brand-600 transition-colors">
+                                <button @click="adminDashboardFilters.viewMode = 'standard'; adminDashboardFilters = { ...adminDashboardFilters }" class="w-full bg-brand-500 text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-brand-600 transition-colors">
                                     Atualizar visão
                                 </button>
                             </div>
@@ -290,10 +290,11 @@
                     </section>
 
                     <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-                        <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Taxa de sucesso</p>
+                        <div @click="adminDashboardFilters.viewMode = 'success_drilldown'" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm cursor-pointer hover:border-brand-500 hover:shadow-md transition-all group relative">
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-brand-500"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide group-hover:text-brand-600">Taxa de sucesso (Detalhar)</p>
                             <div class="mt-3 flex items-end justify-between">
-                                <span class="text-3xl font-bold text-gray-900" x-text="metrics.successRate !== null ? metrics.successRate + '%' : '-'">-</span>
+                                <span class="text-3xl font-bold text-gray-900 group-hover:text-brand-600" x-text="metrics.successRate !== null ? metrics.successRate + '%' : '-'">-</span>
                                 <span class="text-sm text-gray-500 font-semibold" x-text="metrics.filteredTickets?.length ? metrics.filteredTickets.length + ' reparos avaliados' : 'Sem dados'">Sem dados</span>
                             </div>
                             <p class="text-sm text-gray-500 mt-3">Reparos concluídos com êxito.</p>
@@ -324,20 +325,61 @@
                         </div>
                     </section>
 
-                    <section class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+                    <!-- DRILLDOWN VIEW: Success Analysis -->
+                    <div x-show="adminDashboardFilters.viewMode === 'success_drilldown'" class="space-y-8" x-transition>
+                        <h2 class="text-xl font-bold text-gray-800 border-b pb-2">Detalhamento de Taxa de Sucesso e Falhas</h2>
+
+                        <!-- Tech Analysis Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <template x-for="tech in metrics.techDeepDive" :key="tech.name">
+                                <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                                    <h4 class="font-bold text-gray-900 mb-3" x-text="tech.name"></h4>
+                                    <div class="space-y-3 text-sm">
+                                        <div class="bg-red-50 p-3 rounded-lg border border-red-100">
+                                            <p class="text-xs text-red-600 font-bold uppercase mb-1">Maior Dificuldade (Falhas)</p>
+                                            <p class="font-medium text-gray-800" x-text="tech.mostFrequentFail"></p>
+                                        </div>
+                                        <div class="bg-green-50 p-3 rounded-lg border border-green-100">
+                                            <p class="text-xs text-green-600 font-bold uppercase mb-1">Maior Sucesso</p>
+                                            <p class="font-medium text-gray-800" x-text="tech.mostFrequentSuccess"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Extended Model List -->
                         <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Entradas médias por dia</h3>
+                            <h3 class="font-bold text-gray-900 mb-4">Performance por Modelo</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <template x-for="model in metrics.topModels" :key="model.label">
+                                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                        <span class="font-bold text-gray-700 text-sm" x-text="model.label"></span>
+                                        <div class="text-right text-xs">
+                                            <div class="text-green-600 font-bold" x-text="'Sucesso: ' + (model.successRate || 0) + '% (' + (model.success || 0) + ')'"></div>
+                                            <div class="text-red-500" x-text="'Falha: ' + (model.failRate || 0) + '% (' + (model.fail || 0) + ')'"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- STANDARD VIEW SECTIONS -->
+                    <section x-show="adminDashboardFilters.viewMode === 'standard'" class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Volume Atual (Bancada)</h3>
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-gray-500">Em análise</span>
-                                    <span class="text-lg font-semibold text-gray-900" x-text="metrics.analysisPerDay + ' aparelhos'">0 aparelhos</span>
+                                    <span class="text-gray-500">Em análise (Agora)</span>
+                                    <span class="text-lg font-bold text-gray-900" x-text="metrics.analysisCount + ' aparelhos'">0 aparelhos</span>
                                 </div>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-gray-500">Em reparo</span>
-                                    <span class="text-lg font-semibold text-gray-900" x-text="metrics.repairPerDay + ' aparelhos'">0 aparelhos</span>
+                                    <span class="text-gray-500">Em reparo (Agora)</span>
+                                    <span class="text-lg font-bold text-gray-900" x-text="metrics.repairCount + ' aparelhos'">0 aparelhos</span>
                                 </div>
                                 <div class="bg-gray-100 rounded-lg px-4 py-3 text-sm text-gray-500">
-                                    Baseado em <span x-text="metrics.rangeDays">0</span> dias.
+                                    Instantâneo da bancada.
                                 </div>
                             </div>
                         </div>
@@ -378,7 +420,7 @@
                         </div>
                     </section>
 
-                    <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <section x-show="adminDashboardFilters.viewMode === 'standard'" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                         <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                             <div class="flex items-center justify-between mb-4">
                                 <h3 class="text-sm font-semibold text-gray-900">Reparos por dia/semana/mês</h3>
@@ -427,10 +469,19 @@
                         <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col h-full max-h-[600px]">
                             <div class="flex items-center justify-between mb-4 flex-shrink-0">
                                 <h3 class="text-sm font-semibold text-gray-900">Defeitos mais frequentes</h3>
-                                <div class="flex gap-4 text-xs font-bold text-gray-400 uppercase tracking-wide">
-                                    <span>Total</span>
-                                    <span class="text-green-600">Sucesso</span>
-                                    <span class="text-red-500">Falha</span>
+                                <div class="flex gap-4 text-xs font-bold text-gray-400 uppercase tracking-wide cursor-pointer select-none">
+                                    <span @click="adminDashboardFilters.defectSortField='total'; adminDashboardFilters.defectSortDesc = !adminDashboardFilters.defectSortDesc"
+                                          :class="adminDashboardFilters.defectSortField === 'total' ? 'text-black underline' : 'hover:text-gray-600'">
+                                        Total <i x-show="adminDashboardFilters.defectSortField === 'total'" class="fa-solid" :class="adminDashboardFilters.defectSortDesc ? 'fa-sort-down' : 'fa-sort-up'"></i>
+                                    </span>
+                                    <span @click="adminDashboardFilters.defectSortField='success'; adminDashboardFilters.defectSortDesc = !adminDashboardFilters.defectSortDesc"
+                                          class="text-green-600" :class="adminDashboardFilters.defectSortField === 'success' ? 'underline' : 'hover:text-green-800'">
+                                        Sucesso <i x-show="adminDashboardFilters.defectSortField === 'success'" class="fa-solid" :class="adminDashboardFilters.defectSortDesc ? 'fa-sort-down' : 'fa-sort-up'"></i>
+                                    </span>
+                                    <span @click="adminDashboardFilters.defectSortField='fail'; adminDashboardFilters.defectSortDesc = !adminDashboardFilters.defectSortDesc"
+                                          class="text-red-500" :class="adminDashboardFilters.defectSortField === 'fail' ? 'underline' : 'hover:text-red-700'">
+                                        Falha <i x-show="adminDashboardFilters.defectSortField === 'fail'" class="fa-solid" :class="adminDashboardFilters.defectSortDesc ? 'fa-sort-down' : 'fa-sort-up'"></i>
+                                    </span>
                                 </div>
                             </div>
 
