@@ -342,6 +342,7 @@ function app() {
             };
 
             const metrics = this.metrics;
+            const commonOptions = { responsive: true, maintainAspectRatio: false };
 
             // 1. Repairs Over Time
             destroy('repairsChart');
@@ -359,7 +360,7 @@ function app() {
                             borderWidth: 1
                         }]
                     },
-                    options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                    options: { ...commonOptions, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
                 });
             }
 
@@ -379,7 +380,7 @@ function app() {
                             borderWidth: 1
                         }]
                     },
-                    options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                    options: { ...commonOptions, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
                 });
             }
 
@@ -396,7 +397,7 @@ function app() {
                             backgroundColor: ['#FF6B00', '#3B82F6', '#10B981', '#F59E0B', '#EF4444']
                         }]
                     },
-                    options: { responsive: true }
+                    options: commonOptions
                 });
             }
 
@@ -426,12 +427,74 @@ function app() {
                         ]
                     },
                     options: {
-                        responsive: true,
+                        ...commonOptions,
                         scales: {
                             y: { beginAtZero: true, position: 'left' },
                             y1: { beginAtZero: true, position: 'right', max: 100, grid: { drawOnChartArea: false } }
                         }
                     }
+                });
+            }
+
+            // 5. Solution Time by Model (New)
+            destroy('solutionTimeChart');
+            const solutionCtx = document.getElementById('solutionTimeChart');
+            if (solutionCtx && metrics.slowestModelsSolution.length) {
+                this.chartInstances.solutionTimeChart = new Chart(solutionCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: metrics.slowestModelsSolution.map(m => m.label),
+                        datasets: [{
+                            label: 'Tempo Médio Solução (min)',
+                            data: metrics.slowestModelsSolution.map(m => Math.round(m.avgTime / 60000)),
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)'
+                        }]
+                    },
+                    options: { ...commonOptions, indexAxis: 'y' }
+                });
+            }
+
+            // 6. Delivery Time by Model (New)
+            destroy('deliveryTimeChart');
+            const deliveryCtx = document.getElementById('deliveryTimeChart');
+            if (deliveryCtx && metrics.slowestModelsDelivery.length) {
+                this.chartInstances.deliveryTimeChart = new Chart(deliveryCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: metrics.slowestModelsDelivery.map(m => m.label),
+                        datasets: [{
+                            label: 'Tempo Médio Entrega (horas)',
+                            data: metrics.slowestModelsDelivery.map(m => Math.round(m.avgTime / 3600000)),
+                            backgroundColor: 'rgba(16, 185, 129, 0.6)'
+                        }]
+                    },
+                    options: { ...commonOptions, indexAxis: 'y' }
+                });
+            }
+
+            // 7. Success Rate by Model (New)
+            destroy('modelSuccessChart');
+            const modelSuccessCtx = document.getElementById('modelSuccessChart');
+            if (modelSuccessCtx && metrics.topModels.length) {
+                const top5 = metrics.topModels.slice(0, 5);
+                this.chartInstances.modelSuccessChart = new Chart(modelSuccessCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: top5.map(m => m.label),
+                        datasets: [
+                            {
+                                label: 'Sucesso',
+                                data: top5.map(m => m.success),
+                                backgroundColor: '#10B981'
+                            },
+                            {
+                                label: 'Falha',
+                                data: top5.map(m => m.fail),
+                                backgroundColor: '#EF4444'
+                            }
+                        ]
+                    },
+                    options: { ...commonOptions, scales: { x: { stacked: true }, y: { stacked: true } } }
                 });
             }
         },
