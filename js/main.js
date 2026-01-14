@@ -1567,7 +1567,7 @@ function app() {
         },
 
         getEmployeeName(id) {
-            if (!id) return 'Não atribuído';
+            if (!id) return 'Todos';
             const emp = this.employees.find(e => e.id === id);
             return emp ? emp.name : 'Desconhecido';
         },
