@@ -35,3 +35,6 @@ CREATE POLICY "Acesso Total Notas" ON public.internal_notes FOR ALL USING (true)
 
 -- Permissions
 GRANT ALL ON TABLE public.internal_notes TO anon, authenticated, service_role;
+
+-- Force Schema Cache Reload
+NOTIFY pgrst, 'reload schema';

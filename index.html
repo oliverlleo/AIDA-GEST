@@ -1865,7 +1865,7 @@
                                      </div>
 
                                      <!-- Content -->
-                                     <div class="text-sm text-gray-700 whitespace-pre-wrap" x-text="note.content"></div>
+                                     <div class="text-sm text-gray-700 whitespace-pre-wrap" x-html="formatNoteContent(note.content)"></div>
 
                                      <!-- Checklist Render -->
                                      <template x-if="note.checklist_data && note.checklist_data.length > 0">
@@ -1894,8 +1894,20 @@
                                  </label>
                              </div>
 
-                             <div x-show="!generalNoteIsChecklist">
-                                 <textarea x-model="newGeneralNoteText" class="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none" rows="3" placeholder="Escreva uma nota para a equipe..."></textarea>
+                             <div x-show="!generalNoteIsChecklist" class="relative">
+                                 <!-- Mentions Dropdown -->
+                                 <div x-show="showMentionList && mentionTarget === 'general'" class="absolute bottom-full left-0 mb-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden" x-transition>
+                                     <ul class="max-h-32 overflow-y-auto">
+                                         <template x-for="emp in mentionList" :key="emp.id">
+                                             <li @click="selectMention(emp)" class="px-3 py-2 hover:bg-brand-50 cursor-pointer text-sm flex items-center space-x-2">
+                                                 <div class="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold" x-text="emp.name.charAt(0)"></div>
+                                                 <span class="font-bold text-gray-800" x-text="emp.name"></span>
+                                                 <span class="text-xs text-gray-400" x-text="'@' + emp.username"></span>
+                                             </li>
+                                         </template>
+                                     </ul>
+                                 </div>
+                                 <textarea x-model="newGeneralNoteText" @input="handleNoteInput($event, 'general')" class="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none" rows="3" placeholder="Escreva uma nota para a equipe... (@mencionar)"></textarea>
                              </div>
 
                              <div x-show="generalNoteIsChecklist" class="space-y-2 mb-2">
@@ -2743,7 +2755,7 @@
                                               :class="note.author_id === user.id ? 'bg-black text-white border-black rounded-br-none' : 'bg-white text-gray-800 border-gray-200 rounded-bl-none'">
 
                                               <!-- Content -->
-                                              <p class="text-sm whitespace-pre-wrap" x-text="note.content"></p>
+                                              <p class="text-sm whitespace-pre-wrap" x-html="formatNoteContent(note.content)"></p>
 
                                               <!-- Checklist -->
                                               <template x-if="note.checklist_data && note.checklist_data.length > 0">
@@ -2778,8 +2790,20 @@
                                  </label>
                              </div>
 
-                             <div x-show="!noteIsChecklist">
-                                 <textarea x-model="newNoteText" class="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none" rows="2" placeholder="Digite uma nota (@mencionar)..."></textarea>
+                             <div x-show="!noteIsChecklist" class="relative">
+                                 <!-- Mentions Dropdown -->
+                                 <div x-show="showMentionList && mentionTarget === 'internal'" class="absolute bottom-full left-0 mb-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden" x-transition>
+                                     <ul class="max-h-32 overflow-y-auto">
+                                         <template x-for="emp in mentionList" :key="emp.id">
+                                             <li @click="selectMention(emp)" class="px-3 py-2 hover:bg-brand-50 cursor-pointer text-sm flex items-center space-x-2">
+                                                 <div class="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold" x-text="emp.name.charAt(0)"></div>
+                                                 <span class="font-bold text-gray-800" x-text="emp.name"></span>
+                                                 <span class="text-xs text-gray-400" x-text="'@' + emp.username"></span>
+                                             </li>
+                                         </template>
+                                     </ul>
+                                 </div>
+                                 <textarea x-model="newNoteText" @input="handleNoteInput($event, 'internal')" class="w-full border rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none" rows="2" placeholder="Digite uma nota (@mencionar)..."></textarea>
                              </div>
 
                              <div x-show="noteIsChecklist" class="space-y-2 mb-2">

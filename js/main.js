@@ -156,6 +156,13 @@ function app() {
         generalNoteIsChecklist: false,
         generalNoteChecklistItems: [],
 
+        // Mention System
+        showMentionList: false,
+        mentionQuery: '',
+        mentionTarget: '', // 'internal' or 'general'
+        mentionCursorPos: 0,
+        mentionList: [],
+
         // Calendar State
         calendarView: 'week',
         currentCalendarDate: new Date(),
@@ -1506,6 +1513,70 @@ function app() {
             }
         },
 
+        // Mention Logic
+        handleNoteInput(event, target) {
+            const text = event.target.value;
+            const cursorPos = event.target.selectionStart;
+
+            // Check if we are typing a mention: look for @ before cursor
+            const lastAt = text.lastIndexOf('@', cursorPos - 1);
+
+            if (lastAt !== -1) {
+                // Check if there are spaces between @ and cursor (allow only name chars)
+                const potentialName = text.substring(lastAt + 1, cursorPos);
+                if (!/\s/.test(potentialName)) {
+                    this.showMentionList = true;
+                    this.mentionQuery = potentialName;
+                    this.mentionTarget = target; // 'internal' or 'general'
+                    this.mentionCursorPos = lastAt; // Save position of @
+                    this.mentionList = this.employees.filter(e =>
+                        e.name.toLowerCase().includes(potentialName.toLowerCase()) ||
+                        e.username.toLowerCase().includes(potentialName.toLowerCase())
+                    ).slice(0, 5);
+                    return;
+                }
+            }
+            this.showMentionList = false;
+        },
+
+        selectMention(employee) {
+            const targetText = this.mentionTarget === 'general' ? this.newGeneralNoteText : this.newNoteText;
+            const before = targetText.substring(0, this.mentionCursorPos);
+            const after = targetText.substring(this.mentionCursorPos + this.mentionQuery.length + 1);
+
+            const newText = `${before}@${employee.name} ${after}`;
+
+            if (this.mentionTarget === 'general') {
+                this.newGeneralNoteText = newText;
+            } else {
+                this.newNoteText = newText;
+            }
+
+            this.showMentionList = false;
+
+            // Refocus? Complicated in Alpine without refs, but user continues typing.
+        },
+
+        formatNoteContent(text) {
+            if (!text) return '';
+            // 1. Sanitize (Basic)
+            let safe = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+            // 2. Highlight Mentions (Orange)
+            // Match @Name (until space or end)
+            // We assume names don't have spaces for simple regex, OR we match known names.
+            // Better: Match @\w+
+            safe = safe.replace(/@(\w+(\s\w+)?)/g, '<span class="text-brand-500 font-bold">@$1</span>');
+
+            // 3. Line breaks
+            return safe.replace(/\n/g, '<br>');
+        },
+
         async sendNote(ticketId = null, isGeneral = false) {
             const text = isGeneral ? this.newGeneralNoteText : this.newNoteText;
             const isChecklist = isGeneral ? this.generalNoteIsChecklist : this.noteIsChecklist;
@@ -1551,6 +1622,7 @@ function app() {
                     this.noteChecklistItems = [];
                     if (ticketId) await this.fetchInternalNotes(ticketId);
                 }
+                this.showMentionList = false;
 
             } catch (e) {
                 this.notify("Erro ao enviar nota: " + e.message, "error");
