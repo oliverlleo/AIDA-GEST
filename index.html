@@ -88,6 +88,17 @@
             </div>
 
             <div class="flex items-center space-x-6">
+                <!-- User Info (First) -->
+                <div class="flex items-center space-x-3">
+                    <div class="text-right hidden sm:block">
+                        <p class="text-sm font-medium text-white" x-text="user?.name"></p>
+                        <p class="text-xs text-gray-400 capitalize" x-text="employeeSession ? user.roles.join(', ') : 'Administrador'"></p>
+                    </div>
+                    <div class="bg-gray-800 rounded-full w-10 h-10 flex items-center justify-center text-brand-500 font-bold border border-gray-700">
+                        <span x-text="(user?.name || 'U').charAt(0).toUpperCase()"></span>
+                    </div>
+                </div>
+
                 <!-- Notes Button -->
                 <button @click="showNotesSidebar = true; fetchGeneralNotes()" class="text-gray-400 hover:text-white transition-colors relative" title="Notas Gerais">
                     <i class="fa-solid fa-note-sticky text-xl"></i>
@@ -102,15 +113,7 @@
                           x-text="notificationsList.filter(n => !n.is_read).length"></span>
                 </button>
 
-                <div class="flex items-center space-x-3">
-                    <div class="text-right hidden sm:block">
-                        <p class="text-sm font-medium text-white" x-text="user?.name"></p>
-                        <p class="text-xs text-gray-400 capitalize" x-text="employeeSession ? user.roles.join(', ') : 'Administrador'"></p>
-                    </div>
-                    <div class="bg-gray-800 rounded-full w-10 h-10 flex items-center justify-center text-brand-500 font-bold border border-gray-700">
-                        <span x-text="(user?.name || 'U').charAt(0).toUpperCase()"></span>
-                    </div>
-                </div>
+                <!-- Logout Button (Last) -->
                 <button @click="logout()" class="text-gray-400 hover:text-brand-500 transition-colors" title="Sair">
                     <i class="fa-solid fa-power-off text-lg"></i>
                 </button>
@@ -3187,6 +3190,6 @@
     </div>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=6"></script>
+    <script src="js/main.js?v=7"></script>
 </body>
 </html>
