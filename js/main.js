@@ -1769,6 +1769,28 @@ function app() {
             return source;
         },
 
+        getKanbanCalendarTickets() {
+            // For Kanban: Show all active tickets with a deadline
+            // Excluding 'Finalizado' as per "quais aparelhos tem que se entregue"
+            return this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
+        },
+
+        scrollToTicket(ticketId) {
+            setTimeout(() => {
+                const el = document.getElementById('ticket-card-' + ticketId);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                    // Highlight effect
+                    el.classList.add('ring-4', 'ring-brand-500', 'ring-opacity-75', 'z-10');
+                    setTimeout(() => {
+                        el.classList.remove('ring-4', 'ring-brand-500', 'ring-opacity-75', 'z-10');
+                    }, 2000);
+                } else {
+                    console.warn("Ticket card not found:", ticketId);
+                }
+            }, 100); // Small delay to allow modal close / DOM update
+        },
+
         getWeekDays() {
             const curr = new Date();
             const first = curr.getDate() - curr.getDay(); // First day is the day of the month - the day of the week

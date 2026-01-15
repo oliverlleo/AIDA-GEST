@@ -1214,8 +1214,41 @@
                         </div>
                     </div>
 
+                    <!-- Weekly Calendar Bar (Kanban) -->
+                    <div class="px-6 pt-6 pb-2">
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide flex items-center">
+                                    <i class="fa-solid fa-calendar-week mr-2 text-brand-500"></i> Cronograma de Entregas
+                                </h3>
+                                <button @click="modals.calendar = true" class="text-brand-500 hover:text-brand-600 text-xs font-bold uppercase flex items-center">
+                                    Expandir Mês <i class="fa-solid fa-expand ml-1"></i>
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-7 gap-2">
+                                 <template x-for="day in getWeekDays()" :key="day">
+                                     <div class="border rounded-lg p-2 min-h-[80px] relative transition-colors"
+                                          :class="isSameDay(day, new Date()) ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100'">
+                                         <div class="text-center mb-1">
+                                             <span class="block text-[10px] font-bold uppercase text-gray-400" x-text="day.toLocaleDateString('pt-BR', {weekday: 'short'})"></span>
+                                             <span class="block text-sm font-bold text-gray-800" x-text="day.getDate()"></span>
+                                         </div>
+                                         <div class="space-y-1">
+                                             <template x-for="t in getKanbanCalendarTickets().filter(x => isSameDay(x.deadline, day))" :key="t.id">
+                                                 <div @click="scrollToTicket(t.id)" class="bg-white border border-gray-200 rounded px-1 py-0.5 text-[9px] shadow-sm truncate cursor-pointer hover:bg-black hover:text-white transition-colors group relative" :title="t.device_model">
+                                                     <span class="font-bold" x-text="'OS ' + t.os_number"></span>
+                                                     <span class="opacity-75" x-text="t.client_name.split(' ')[0]"></span>
+                                                 </div>
+                                             </template>
+                                         </div>
+                                     </div>
+                                 </template>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Kanban Columns Container -->
-                    <div class="flex-grow overflow-x-auto overflow-y-hidden p-6">
+                    <div class="flex-grow overflow-x-auto overflow-y-hidden p-6 pt-2">
                         <div class="flex h-full space-x-4 min-w-max">
 
                             <!-- Loop Columns -->
@@ -1231,7 +1264,8 @@
                                     <div class="p-2 flex-grow overflow-y-auto space-y-3 kanban-col">
                                          <template x-for="ticket in tickets.filter(t => t.status === status && matchesSearch(t))" :key="ticket.id">
                                             <div @click="viewTicketDetails(ticket)"
-                                                 class="bg-white p-4 rounded-lg shadow-sm border-l-4 cursor-pointer hover:shadow-md transition-shadow group relative"
+                                                 :id="'ticket-card-' + ticket.id"
+                                                 class="bg-white p-4 rounded-lg shadow-sm border-l-4 cursor-pointer hover:shadow-md transition-all group relative"
                                                  :class="getCardColor(ticket) + ' ' + (ticket.priority === 'Urgente' ? 'border-red-500' : 'border-gray-300')">
 
                                                 <!-- Priority Badge -->
@@ -2825,8 +2859,8 @@
                                              x-text="day.getDate()"></div>
 
                                         <div class="space-y-1 overflow-y-auto max-h-[100px] scrollbar-hide">
-                                            <template x-for="t in getCalendarTickets().filter(x => isSameDay(x.deadline, day))" :key="t.id">
-                                                 <div class="bg-gray-50 border border-gray-100 rounded px-1.5 py-1 text-[10px] shadow-sm cursor-help hover:bg-black hover:text-white transition-colors group relative truncate" :title="t.defect_reported">
+                                            <template x-for="t in (view === 'kanban' ? getKanbanCalendarTickets() : getCalendarTickets()).filter(x => isSameDay(x.deadline, day))" :key="t.id">
+                                                 <div @click="modals.calendar = false; scrollToTicket(t.id)" class="bg-gray-50 border border-gray-100 rounded px-1.5 py-1 text-[10px] shadow-sm cursor-pointer hover:bg-black hover:text-white transition-colors group relative truncate" :title="t.defect_reported">
                                                      <span class="font-bold" x-text="'OS ' + t.os_number"></span>
                                                      <span x-text="t.device_model"></span>
                                                      <!-- Tooltip -->
