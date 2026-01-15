@@ -1238,11 +1238,12 @@ function app() {
                  };
 
                  // REFACTORED: Native Fetch
-                 await this.supabaseFetch('tickets', 'POST', ticketData);
+                 const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
+                 const createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
 
                  // Log Creation
-                 const ctx = this.getLogContext(ticketData);
-                 await this.logTicketAction(ticketData.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
+                 const ctx = this.getLogContext(createdTicket);
+                 await this.logTicketAction(createdTicket.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
 
                  // --- AUTOMATION: Send WhatsApp ---
                  // Not implemented directly here to avoid blocking UI,
@@ -1843,7 +1844,8 @@ function app() {
              try {
                  // Log Action
                  const ctx = this.getLogContext(ticket);
-                 const part = ticket.parts_needed || 'peça';
+                 const rawPart = ticket.parts_needed || 'peça';
+                 const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
                  await this.logTicketAction(ticket.id, 'Confirmou Compra', `Compra da peça '${part}' para o ${ctx.device} de ${ctx.client} foi realizada.`);
 
                  // REFACTORED: Native Fetch
@@ -1860,7 +1862,8 @@ function app() {
         },
         async confirmReceived(ticket = this.selectedTicket) {
              const ctx = this.getLogContext(ticket);
-             const part = ticket.parts_needed || 'peça';
+             const rawPart = ticket.parts_needed || 'peça';
+             const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
              await this.updateStatus(ticket, 'Andamento Reparo', {
                  parts_status: 'Recebido',
                  parts_received_at: new Date().toISOString()
@@ -2143,10 +2146,25 @@ function app() {
         },
 
         // --- UTILS ---
+        escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        },
+
         getLogContext(ticket) {
-            if (!ticket) return { client: 'Cliente', device: 'Aparelho' };
-            const client = `${ticket.client_name} da OS ${ticket.os_number}`;
-            const device = ticket.device_model;
+            if (!ticket) return { client: '<b>Cliente</b>', device: '<b>Aparelho</b>' };
+
+            const safeClientName = this.escapeHtml(ticket.client_name);
+            const safeOsNumber = this.escapeHtml(ticket.os_number);
+            const safeDevice = this.escapeHtml(ticket.device_model);
+
+            const client = `<b>${safeClientName} da OS ${safeOsNumber}</b>`;
+            const device = `<b>${safeDevice}</b>`;
             return { client, device };
         },
 
