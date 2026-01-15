@@ -173,6 +173,9 @@ function app() {
         showAllCalendarTickets: false,
         selectedTechFilter: 'all', // 'all' or specific uuid
 
+        // Kanban State
+        kanbanScrollWidth: 0,
+
         // Search
         searchQuery: '',
         activeQuickFilter: null, // 'my_today', 'stale_3d'
@@ -325,6 +328,9 @@ function app() {
             this.$watch('view', (value) => {
                 if (value !== 'kanban') {
                     this.clearFilters();
+                } else {
+                    // Initialize Kanban Scroll Sync
+                    setTimeout(() => this.initKanbanScroll(), 100);
                 }
                 if (value === 'dashboard') {
                     this.fetchGlobalLogs();
@@ -2092,6 +2098,18 @@ function app() {
                     console.warn("Ticket card not found:", ticketId);
                 }
             }, 100); // Small delay to allow modal close / DOM update
+        },
+
+        initKanbanScroll() {
+            const content = document.getElementById('kanban-content');
+            if (content) {
+                this.kanbanScrollWidth = content.scrollWidth;
+                // Optional: Observer if content grows dynamically
+                const ro = new ResizeObserver(() => {
+                    this.kanbanScrollWidth = content.scrollWidth;
+                });
+                ro.observe(content);
+            }
         },
 
         getWeekDays() {
