@@ -89,7 +89,7 @@
 
             <div class="flex items-center space-x-6">
                 <!-- Notes Button -->
-                <button @click="showNotesSidebar = true" class="text-gray-400 hover:text-white transition-colors relative" title="Notas Gerais">
+                <button @click="showNotesSidebar = true; fetchGeneralNotes()" class="text-gray-400 hover:text-white transition-colors relative" title="Notas Gerais">
                     <i class="fa-solid fa-note-sticky text-xl"></i>
                     <span x-show="generalNotes.length > 0" class="absolute -top-1 -right-1 h-2 w-2 bg-brand-500 rounded-full"></span>
                 </button>
@@ -1929,7 +1929,7 @@
 
                              <div x-show="generalNoteIsChecklist" class="space-y-2 mb-2 relative">
                                  <!-- Mentions Dropdown (Duplicated for Checklist Title) -->
-                                 <div x-show="showMentionList && mentionTarget === 'general'" class="absolute top-10 left-0 mb-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden" x-transition>
+                                 <div x-show="showMentionList && mentionTarget === 'general'" class="absolute bottom-full left-0 mb-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden" x-transition>
                                      <ul class="max-h-32 overflow-y-auto">
                                          <template x-for="emp in mentionList" :key="emp.id">
                                              <li @click="selectMention(emp)" class="px-3 py-2 hover:bg-brand-50 cursor-pointer text-sm flex items-center space-x-2">
