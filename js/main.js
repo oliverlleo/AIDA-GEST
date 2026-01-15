@@ -145,6 +145,28 @@ function app() {
         modalSource: '', // 'kanban' or 'tech'
         showShareModal: false, // New
 
+        // Notes System State
+        internalNotes: [],
+        generalNotes: [],
+        showNotesSidebar: false,
+        newNoteText: '',
+        newGeneralNoteText: '',
+        noteIsChecklist: false,
+        noteChecklistItems: [], // [{text: '', ok: false}]
+        generalNoteIsChecklist: false,
+        generalNoteChecklistItems: [],
+
+        // Notes Filters & UI
+        showResolvedNotes: false,
+        noteDateFilter: '',
+
+        // Mention System
+        showMentionList: false,
+        mentionQuery: '',
+        mentionTarget: '', // 'internal' or 'general'
+        mentionCursorPos: 0,
+        mentionList: [],
+
         // Calendar State
         calendarView: 'week',
         currentCalendarDate: new Date(),
@@ -1240,6 +1262,13 @@ function app() {
             this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
             this.editingDeadlines = false; // Reset editing mode
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
+
+            // Notes
+            this.fetchInternalNotes(ticket.id);
+            this.newNoteText = '';
+            this.noteIsChecklist = false;
+            this.noteChecklistItems = [];
+
             this.modals.viewTicket = true;
         },
 
@@ -1458,6 +1487,228 @@ function app() {
             if (number.length <= 11) number = '55' + number;
 
             window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+        },
+
+        // --- INTERNAL NOTES SYSTEM ---
+
+        async fetchInternalNotes(ticketId) {
+            if (!this.user?.workspace_id) return;
+            try {
+                // Fetch notes for this ticket
+                const data = await this.supabaseFetch(
+                    `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=eq.${ticketId}&order=created_at.asc`
+                );
+                this.internalNotes = data || [];
+            } catch (e) {
+                console.error("Fetch Internal Notes Error:", e);
+            }
+        },
+
+        async fetchGeneralNotes() {
+            if (!this.user?.workspace_id) return;
+            try {
+                // Build Query
+                let query = `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&is_archived=eq.false`;
+
+                // Filter Resolved
+                if (!this.showResolvedNotes) {
+                    query += `&is_resolved=eq.false`;
+                }
+
+                // Filter Date
+                if (this.noteDateFilter) {
+                    // Start of day to End of day logic, or just simple date match if column is date.
+                    // Column is timestamptz. We need range.
+                    const start = new Date(this.noteDateFilter + 'T00:00:00').toISOString();
+                    const end = new Date(this.noteDateFilter + 'T23:59:59').toISOString();
+                    query += `&created_at=gte.${start}&created_at=lte.${end}`;
+                }
+
+                query += `&order=created_at.desc`;
+
+                const data = await this.supabaseFetch(query);
+                this.generalNotes = data || [];
+            } catch (e) {
+                console.error("Fetch General Notes Error:", e);
+            }
+        },
+
+        // Mention Logic
+        handleNoteInput(event, target) {
+            const text = event.target.value;
+            const cursorPos = event.target.selectionStart;
+
+            // Check if we are typing a mention: look for @ before cursor
+            const lastAt = text.lastIndexOf('@', cursorPos - 1);
+
+            if (lastAt !== -1) {
+                // Check if there are spaces between @ and cursor (allow only name chars)
+                const potentialName = text.substring(lastAt + 1, cursorPos);
+                if (!/\s/.test(potentialName)) {
+                    this.showMentionList = true;
+                    this.mentionQuery = potentialName;
+                    this.mentionTarget = target; // 'internal' or 'general'
+                    this.mentionCursorPos = lastAt; // Save position of @
+                    this.mentionList = this.employees.filter(e =>
+                        e.name.toLowerCase().includes(potentialName.toLowerCase()) ||
+                        e.username.toLowerCase().includes(potentialName.toLowerCase())
+                    ).slice(0, 5);
+                    return;
+                }
+            }
+            this.showMentionList = false;
+        },
+
+        selectMention(employee) {
+            const targetText = this.mentionTarget === 'general' ? this.newGeneralNoteText : this.newNoteText;
+            const before = targetText.substring(0, this.mentionCursorPos);
+            const after = targetText.substring(this.mentionCursorPos + this.mentionQuery.length + 1);
+
+            const newText = `${before}@${employee.name} ${after}`;
+
+            if (this.mentionTarget === 'general') {
+                this.newGeneralNoteText = newText;
+            } else {
+                this.newNoteText = newText;
+            }
+
+            this.showMentionList = false;
+
+            // Refocus? Complicated in Alpine without refs, but user continues typing.
+        },
+
+        formatNoteContent(text) {
+            if (!text) return '';
+            // 1. Sanitize (Basic)
+            let safe = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+            // 2. Highlight Mentions (Orange)
+            // Match @Name (until space or end)
+            // We assume names don't have spaces for simple regex, OR we match known names.
+            // Better: Match @\w+
+            safe = safe.replace(/@(\w+(\s\w+)?)/g, '<span class="text-brand-500 font-bold">@$1</span>');
+
+            // 3. Line breaks
+            return safe.replace(/\n/g, '<br>');
+        },
+
+        async sendNote(ticketId = null, isGeneral = false) {
+            const text = isGeneral ? this.newGeneralNoteText : this.newNoteText;
+            const isChecklist = isGeneral ? this.generalNoteIsChecklist : this.noteIsChecklist;
+            const checklistItems = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+
+            if (!text.trim() && (!isChecklist || checklistItems.length === 0)) return;
+
+            this.loading = true;
+            try {
+                // Parse Mentions (@Name)
+                const mentionRegex = /@(\w+)/g;
+                const matches = text.match(mentionRegex) || [];
+                const mentions = matches.map(m => m.substring(1)); // Remove @
+
+                // Prepare Checklist Data
+                const cleanChecklist = checklistItems
+                    .filter(i => i.text.trim().length > 0)
+                    .map(i => ({ item: i.text, ok: i.ok }));
+
+                const payload = {
+                    workspace_id: this.user.workspace_id,
+                    ticket_id: ticketId, // Null for general
+                    author_id: this.user.id,
+                    author_name: this.user.name,
+                    content: text,
+                    checklist_data: isChecklist ? cleanChecklist : [],
+                    mentions: mentions,
+                    is_resolved: false,
+                    created_at: new Date().toISOString()
+                };
+
+                await this.supabaseFetch('internal_notes', 'POST', payload);
+
+                // Clear Form
+                if (isGeneral) {
+                    this.newGeneralNoteText = '';
+                    this.generalNoteIsChecklist = false;
+                    this.generalNoteChecklistItems = [];
+                    await this.fetchGeneralNotes();
+                } else {
+                    this.newNoteText = '';
+                    this.noteIsChecklist = false;
+                    this.noteChecklistItems = [];
+                    if (ticketId) await this.fetchInternalNotes(ticketId);
+                }
+                this.showMentionList = false;
+
+            } catch (e) {
+                this.notify("Erro ao enviar nota: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        addNoteChecklistItem(isGeneral = false) {
+            const target = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+            target.push({ text: '', ok: false });
+        },
+
+        removeNoteChecklistItem(index, isGeneral = false) {
+            const target = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+            target.splice(index, 1);
+        },
+
+        async toggleNoteCheckStatus(note, itemIndex) {
+            // Optimistic Update
+            note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
+
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    checklist_data: note.checklist_data
+                });
+            } catch (e) {
+                console.error("Error toggling checklist:", e);
+                // Revert
+                note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
+            }
+        },
+
+        async resolveNote(note) {
+            const newStatus = !note.is_resolved;
+            note.is_resolved = newStatus; // Optimistic
+
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    is_resolved: newStatus
+                });
+
+                // If it's a general note and resolved, maybe move to archive visually?
+                // For now, we just show strict strikethrough or green check.
+            } catch (e) {
+                note.is_resolved = !newStatus;
+                this.notify("Erro ao atualizar status", "error");
+            }
+        },
+
+        async archiveNote(note) {
+            if (!confirm("Arquivar esta nota?")) return;
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    is_archived: true,
+                    archived_at: new Date().toISOString()
+                });
+                // Remove from local list
+                if (note.ticket_id) {
+                    this.internalNotes = this.internalNotes.filter(n => n.id !== note.id);
+                } else {
+                    this.generalNotes = this.generalNotes.filter(n => n.id !== note.id);
+                }
+            } catch (e) {
+                this.notify("Erro ao arquivar", "error");
+            }
         },
 
         // --- WORKFLOW ACTIONS ---
@@ -1931,8 +2182,8 @@ function app() {
                 !['Retirada Cliente', 'Finalizado'].includes(t.status)
             );
 
-            // 5. Priority Requested
-            const priorityTickets = tickets.filter(t => t.priority_requested);
+            // 5. Priority Requested (Exclude Finalized)
+            const priorityTickets = tickets.filter(t => t.priority_requested && !['Retirada Cliente', 'Finalizado'].includes(t.status));
 
             // 6. Pending Purchase
             const pendingPurchase = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status !== 'Comprado');
