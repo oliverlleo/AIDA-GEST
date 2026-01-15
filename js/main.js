@@ -156,6 +156,10 @@ function app() {
         generalNoteIsChecklist: false,
         generalNoteChecklistItems: [],
 
+        // Notes Filters & UI
+        showResolvedNotes: false,
+        noteDateFilter: '',
+
         // Mention System
         showMentionList: false,
         mentionQuery: '',
@@ -1503,10 +1507,26 @@ function app() {
         async fetchGeneralNotes() {
             if (!this.user?.workspace_id) return;
             try {
-                // Fetch global notes (ticket_id is null)
-                const data = await this.supabaseFetch(
-                    `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&is_archived=eq.false&order=created_at.desc`
-                );
+                // Build Query
+                let query = `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&is_archived=eq.false`;
+
+                // Filter Resolved
+                if (!this.showResolvedNotes) {
+                    query += `&is_resolved=eq.false`;
+                }
+
+                // Filter Date
+                if (this.noteDateFilter) {
+                    // Start of day to End of day logic, or just simple date match if column is date.
+                    // Column is timestamptz. We need range.
+                    const start = new Date(this.noteDateFilter + 'T00:00:00').toISOString();
+                    const end = new Date(this.noteDateFilter + 'T23:59:59').toISOString();
+                    query += `&created_at=gte.${start}&created_at=lte.${end}`;
+                }
+
+                query += `&order=created_at.desc`;
+
+                const data = await this.supabaseFetch(query);
                 this.generalNotes = data || [];
             } catch (e) {
                 console.error("Fetch General Notes Error:", e);
