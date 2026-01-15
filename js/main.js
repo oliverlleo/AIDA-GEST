@@ -752,6 +752,8 @@ function app() {
         // --- LOGGING ---
         async logTicketAction(ticketId, action, details = null) {
             try {
+                // Remove generic/redundant logs if strict filtering is needed
+                // Currently, we only call logTicketAction for user-initiated actions as per request
                 await this.supabaseFetch('ticket_logs', 'POST', {
                     ticket_id: ticketId,
                     action: action,
@@ -1722,12 +1724,14 @@ function app() {
         async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
             this.loading = true;
             try {
-                // Default generic log if specific action not provided
+                // ONLY log if actionLog is explicitly provided (User Action)
+                // We SKIP the generic 'Alteração de Status' log to avoid system noise
                 if (actionLog) {
                      await this.logTicketAction(ticket.id, actionLog.action, actionLog.details);
-                } else {
-                     await this.logTicketAction(ticket.id, 'Alteração de Status', `De ${ticket.status} para ${newStatus}`);
                 }
+                // else {
+                //    SILENT UPDATE: Do not log automated or generic status changes
+                // }
 
                 const updates = { status: newStatus, updated_at: new Date().toISOString(), ...additionalUpdates };
 
