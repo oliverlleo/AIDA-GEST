@@ -1252,8 +1252,14 @@
                     </div>
 
                     <!-- Kanban Columns Container -->
-                    <div class="flex-grow overflow-x-auto overflow-y-hidden p-6 pt-2">
-                        <div class="flex h-full space-x-4 min-w-max">
+                    <!-- Top Scrollbar -->
+                    <div class="overflow-x-auto px-6 pb-0 pt-2" x-ref="kanbanTop" @scroll="$refs.kanbanBottom.scrollLeft = $el.scrollLeft">
+                        <div :style="'width: ' + kanbanScrollWidth + 'px'" class="h-4"></div>
+                    </div>
+
+                    <!-- Content Container -->
+                    <div class="flex-grow overflow-x-auto overflow-y-hidden p-6 pt-0" x-ref="kanbanBottom" @scroll="$refs.kanbanTop.scrollLeft = $el.scrollLeft">
+                        <div id="kanban-content" class="flex h-full space-x-4 min-w-max pt-2">
 
                             <!-- Loop Columns -->
                             <template x-for="status in STATUS_COLUMNS" :key="status">
@@ -3181,6 +3187,6 @@
     </div>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=5"></script>
+    <script src="js/main.js?v=6"></script>
 </body>
 </html>

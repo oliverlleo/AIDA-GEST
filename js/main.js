@@ -173,6 +173,9 @@ function app() {
         showAllCalendarTickets: false,
         selectedTechFilter: 'all', // 'all' or specific uuid
 
+        // Kanban State
+        kanbanScrollWidth: 0,
+
         // Search
         searchQuery: '',
         activeQuickFilter: null, // 'my_today', 'stale_3d'
@@ -325,6 +328,9 @@ function app() {
             this.$watch('view', (value) => {
                 if (value !== 'kanban') {
                     this.clearFilters();
+                } else {
+                    // Initialize Kanban Scroll Sync
+                    setTimeout(() => this.initKanbanScroll(), 100);
                 }
                 if (value === 'dashboard') {
                     this.fetchGlobalLogs();
@@ -1879,7 +1885,7 @@ function app() {
              await this.updateStatus(ticket, 'Andamento Reparo', {
                  parts_status: 'Recebido',
                  parts_received_at: new Date().toISOString()
-             }, { action: 'Recebeu Peças', details: `Peça '${part}' recebida, ${ctx.device} de ${ctx.client} liberado para reparo.` });
+             }, { action: 'Recebeu Peças', details: `Peça ${part} foi recebida, ${ctx.device} de ${ctx.client} liberado para reparo.` });
         },
 
         async startRepair(ticket = this.selectedTicket) {
@@ -1940,7 +1946,8 @@ function app() {
              this.loading = true;
              try {
                  // Log Action
-                 await this.logTicketAction(ticket.id, 'Iniciou Testes', 'Técnico iniciou bateria de testes');
+                 const ctx = this.getLogContext(ticket);
+                 await this.logTicketAction(ticket.id, 'Iniciou Testes', `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`);
 
                  const now = new Date().toISOString();
                  // REFACTORED: Native Fetch
@@ -1964,7 +1971,8 @@ function app() {
             const ticket = this.selectedTicket;
             if (success) {
                 this.modals.outcome = false;
-                await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: 'Aparelho aprovado nos testes' });
+                const ctx = this.getLogContext(ticket);
+                await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
             } else {
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
                 if (!this.testFailureData.reason) return this.notify("Descreva o defeito apresentado", "error");
@@ -2090,6 +2098,18 @@ function app() {
                     console.warn("Ticket card not found:", ticketId);
                 }
             }, 100); // Small delay to allow modal close / DOM update
+        },
+
+        initKanbanScroll() {
+            const content = document.getElementById('kanban-content');
+            if (content) {
+                this.kanbanScrollWidth = content.scrollWidth;
+                // Optional: Observer if content grows dynamically
+                const ro = new ResizeObserver(() => {
+                    this.kanbanScrollWidth = content.scrollWidth;
+                });
+                ro.observe(content);
+            }
         },
 
         getWeekDays() {
