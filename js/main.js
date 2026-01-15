@@ -322,9 +322,12 @@ function app() {
             }, 60000);
 
             // Reset filters when changing views
-            this.$watch('view', () => {
-                if (this.view !== 'kanban') {
+            this.$watch('view', (value) => {
+                if (value !== 'kanban') {
                     this.clearFilters();
+                }
+                if (value === 'dashboard') {
+                    this.fetchGlobalLogs();
                 }
             });
 
@@ -555,6 +558,15 @@ function app() {
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
                 payload => {
                     this.fetchNotifications();
+                })
+                .subscribe();
+
+            // Ticket Logs Channel (Activity Feed)
+            supabaseClient
+                .channel('ticket_logs_channel')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
+                () => {
+                    this.fetchGlobalLogs();
                 })
                 .subscribe();
         },
