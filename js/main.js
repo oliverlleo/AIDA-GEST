@@ -145,6 +145,17 @@ function app() {
         modalSource: '', // 'kanban' or 'tech'
         showShareModal: false, // New
 
+        // Notes System State
+        internalNotes: [],
+        generalNotes: [],
+        showNotesSidebar: false,
+        newNoteText: '',
+        newGeneralNoteText: '',
+        noteIsChecklist: false,
+        noteChecklistItems: [], // [{text: '', ok: false}]
+        generalNoteIsChecklist: false,
+        generalNoteChecklistItems: [],
+
         // Calendar State
         calendarView: 'week',
         currentCalendarDate: new Date(),
@@ -1240,6 +1251,13 @@ function app() {
             this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
             this.editingDeadlines = false; // Reset editing mode
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
+
+            // Notes
+            this.fetchInternalNotes(ticket.id);
+            this.newNoteText = '';
+            this.noteIsChecklist = false;
+            this.noteChecklistItems = [];
+
             this.modals.viewTicket = true;
         },
 
@@ -1458,6 +1476,147 @@ function app() {
             if (number.length <= 11) number = '55' + number;
 
             window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+        },
+
+        // --- INTERNAL NOTES SYSTEM ---
+
+        async fetchInternalNotes(ticketId) {
+            if (!this.user?.workspace_id) return;
+            try {
+                // Fetch notes for this ticket
+                const data = await this.supabaseFetch(
+                    `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=eq.${ticketId}&order=created_at.asc`
+                );
+                this.internalNotes = data || [];
+            } catch (e) {
+                console.error("Fetch Internal Notes Error:", e);
+            }
+        },
+
+        async fetchGeneralNotes() {
+            if (!this.user?.workspace_id) return;
+            try {
+                // Fetch global notes (ticket_id is null)
+                const data = await this.supabaseFetch(
+                    `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&is_archived=eq.false&order=created_at.desc`
+                );
+                this.generalNotes = data || [];
+            } catch (e) {
+                console.error("Fetch General Notes Error:", e);
+            }
+        },
+
+        async sendNote(ticketId = null, isGeneral = false) {
+            const text = isGeneral ? this.newGeneralNoteText : this.newNoteText;
+            const isChecklist = isGeneral ? this.generalNoteIsChecklist : this.noteIsChecklist;
+            const checklistItems = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+
+            if (!text.trim() && (!isChecklist || checklistItems.length === 0)) return;
+
+            this.loading = true;
+            try {
+                // Parse Mentions (@Name)
+                const mentionRegex = /@(\w+)/g;
+                const matches = text.match(mentionRegex) || [];
+                const mentions = matches.map(m => m.substring(1)); // Remove @
+
+                // Prepare Checklist Data
+                const cleanChecklist = checklistItems
+                    .filter(i => i.text.trim().length > 0)
+                    .map(i => ({ item: i.text, ok: i.ok }));
+
+                const payload = {
+                    workspace_id: this.user.workspace_id,
+                    ticket_id: ticketId, // Null for general
+                    author_id: this.user.id,
+                    author_name: this.user.name,
+                    content: text,
+                    checklist_data: isChecklist ? cleanChecklist : [],
+                    mentions: mentions,
+                    is_resolved: false,
+                    created_at: new Date().toISOString()
+                };
+
+                await this.supabaseFetch('internal_notes', 'POST', payload);
+
+                // Clear Form
+                if (isGeneral) {
+                    this.newGeneralNoteText = '';
+                    this.generalNoteIsChecklist = false;
+                    this.generalNoteChecklistItems = [];
+                    await this.fetchGeneralNotes();
+                } else {
+                    this.newNoteText = '';
+                    this.noteIsChecklist = false;
+                    this.noteChecklistItems = [];
+                    if (ticketId) await this.fetchInternalNotes(ticketId);
+                }
+
+            } catch (e) {
+                this.notify("Erro ao enviar nota: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        addNoteChecklistItem(isGeneral = false) {
+            const target = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+            target.push({ text: '', ok: false });
+        },
+
+        removeNoteChecklistItem(index, isGeneral = false) {
+            const target = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+            target.splice(index, 1);
+        },
+
+        async toggleNoteCheckStatus(note, itemIndex) {
+            // Optimistic Update
+            note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
+
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    checklist_data: note.checklist_data
+                });
+            } catch (e) {
+                console.error("Error toggling checklist:", e);
+                // Revert
+                note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
+            }
+        },
+
+        async resolveNote(note) {
+            const newStatus = !note.is_resolved;
+            note.is_resolved = newStatus; // Optimistic
+
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    is_resolved: newStatus
+                });
+
+                // If it's a general note and resolved, maybe move to archive visually?
+                // For now, we just show strict strikethrough or green check.
+            } catch (e) {
+                note.is_resolved = !newStatus;
+                this.notify("Erro ao atualizar status", "error");
+            }
+        },
+
+        async archiveNote(note) {
+            if (!confirm("Arquivar esta nota?")) return;
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    is_archived: true,
+                    archived_at: new Date().toISOString()
+                });
+                // Remove from local list
+                if (note.ticket_id) {
+                    this.internalNotes = this.internalNotes.filter(n => n.id !== note.id);
+                } else {
+                    this.generalNotes = this.generalNotes.filter(n => n.id !== note.id);
+                }
+            } catch (e) {
+                this.notify("Erro ao arquivar", "error");
+            }
         },
 
         // --- WORKFLOW ACTIONS ---
