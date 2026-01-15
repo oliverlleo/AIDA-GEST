@@ -1238,6 +1238,10 @@ function app() {
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch('tickets', 'POST', ticketData);
 
+                 // Log Creation
+                 const ctx = this.getLogContext(ticketData);
+                 await this.logTicketAction(ticketData.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
+
                  // --- AUTOMATION: Send WhatsApp ---
                  // Not implemented directly here to avoid blocking UI,
                  // but we can trigger the link generation logic in modal later.
@@ -1315,19 +1319,21 @@ function app() {
 
                 // Log Delivery Change
                 if (oldDeadline !== newDeadline) {
+                    const ctx = this.getLogContext(this.selectedTicket);
                     await this.logTicketAction(
                         this.selectedTicket.id,
                         'Alterou Prazo',
-                        `${this.user.name} alterou o prazo de ${oldDeadline} para ${newDeadline}`
+                        `${this.user.name} alterou o prazo do ${ctx.device} de ${ctx.client} de ${oldDeadline} para ${newDeadline}`
                     );
                 }
 
                 // Log Analysis Change
                 if (oldAnalysis !== newAnalysis) {
+                    const ctx = this.getLogContext(this.selectedTicket);
                     await this.logTicketAction(
                         this.selectedTicket.id,
                         'Alterou Prazo Análise',
-                        `${this.user.name} alterou o prazo de análise de ${oldAnalysis} para ${newAnalysis}`
+                        `${this.user.name} alterou o prazo de análise do ${ctx.device} de ${ctx.client} de ${oldAnalysis} para ${newAnalysis}`
                     );
                 }
 
@@ -1739,15 +1745,24 @@ function app() {
             }
         },
 
+        async startAnalysis(ticket) {
+            const ctx = this.getLogContext(ticket);
+            await this.updateStatus(ticket, 'Analise Tecnica', {}, {
+                action: 'Iniciou Atendimento',
+                details: `${ctx.device} de ${ctx.client} enviado para análise do técnico.`
+            });
+        },
+
         async finishAnalysis() {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
             // Log Action: Finalizou Análise
+            const ctx = this.getLogContext(this.selectedTicket);
             await this.updateStatus(this.selectedTicket, 'Aprovacao', {
                 parts_needed: this.analysisForm.partsList,
                 tech_notes: this.selectedTicket.tech_notes
-            }, { action: 'Finalizou Análise', details: 'Enviado para Aprovação' });
+            }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
         },
 
         openWhatsApp(phone) {
@@ -1779,7 +1794,8 @@ function app() {
             this.loading = true;
             try {
                 // Log Action
-                await this.logTicketAction(ticket.id, 'Enviou Orçamento', 'Orçamento marcado como enviado ao cliente');
+                const ctx = this.getLogContext(ticket);
+                await this.logTicketAction(ticket.id, 'Enviou Orçamento', `Orçamento para o ${ctx.device} de ${ctx.client} foi enviado para o cliente.`);
 
                 // REFACTORED: Native Fetch
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
@@ -1810,17 +1826,21 @@ function app() {
         },
         async approveRepair(ticket = this.selectedTicket) {
             const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
-            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: 'Orçamento aprovado pelo cliente' });
+            const ctx = this.getLogContext(ticket);
+            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: `${ctx.client} aprovou o orçamento do ${ctx.device}.` });
         },
         async denyRepair(ticket = this.selectedTicket) {
-             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: 'Orçamento negado pelo cliente' });
+             const ctx = this.getLogContext(ticket);
+             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: `${ctx.client} reprovou o orçamento do ${ctx.device}.` });
         },
 
         async markPurchased(ticket = this.selectedTicket) {
              this.loading = true;
              try {
                  // Log Action
-                 await this.logTicketAction(ticket.id, 'Confirmou Compra', 'Peças marcadas como compradas');
+                 const ctx = this.getLogContext(ticket);
+                 const part = ticket.parts_needed || 'peça';
+                 await this.logTicketAction(ticket.id, 'Confirmou Compra', `Compra da peça '${part}' para o ${ctx.device} de ${ctx.client} foi realizada.`);
 
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
@@ -1835,17 +1855,20 @@ function app() {
              }
         },
         async confirmReceived(ticket = this.selectedTicket) {
+             const ctx = this.getLogContext(ticket);
+             const part = ticket.parts_needed || 'peça';
              await this.updateStatus(ticket, 'Andamento Reparo', {
                  parts_status: 'Recebido',
                  parts_received_at: new Date().toISOString()
-             }, { action: 'Recebeu Peças', details: 'Peças recebidas, iniciando reparo' });
+             }, { action: 'Recebeu Peças', details: `Peça '${part}' recebida, ${ctx.device} de ${ctx.client} liberado para reparo.` });
         },
 
         async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
              try {
                  // Log Action
-                 await this.logTicketAction(ticket.id, 'Iniciou Reparo', 'Técnico iniciou a execução do reparo');
+                 const ctx = this.getLogContext(ticket);
+                 await this.logTicketAction(ticket.id, 'Iniciou Execução', `Reparo iniciado do ${ctx.device} de ${ctx.client}.`);
 
                  const now = new Date().toISOString();
                  // REFACTORED: Native Fetch
@@ -1881,11 +1904,16 @@ function app() {
 
             // Calculate Duration
             const duration = this.getDuration(ticket.repair_start_at);
+            const ctx = this.getLogContext(ticket);
+
+            const detailMsg = success
+                ? `O reparo do ${ctx.device} de ${ctx.client} foi finalizado com sucesso.`
+                : `O ${ctx.device} de ${ctx.client} não teve reparo.`;
 
             this.modals.outcome = false;
             await this.updateStatus(ticket, nextStatus, updates, {
                 action: 'Finalizou Reparo',
-                details: `Resultado: ${success ? 'Sucesso' : 'Falha'}. Tempo de Reparo: ${duration}`
+                details: detailMsg
             });
         },
 
@@ -1949,7 +1977,8 @@ function app() {
              this.loading = true;
              try {
                  // Log Action
-                 await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', 'Cliente notificado para retirada');
+                 const ctx = this.getLogContext(ticket);
+                 await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', `O ${ctx.device} de ${ctx.client} foi disponibilizado.`);
 
                  // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
@@ -1964,16 +1993,18 @@ function app() {
              }
         },
         async confirmPickup(ticket = this.selectedTicket) {
+            const ctx = this.getLogContext(ticket);
             await this.updateStatus(ticket, 'Finalizado', {
                 delivered_at: new Date().toISOString()
-            }, { action: 'Finalizou Entrega', details: 'Entregue ao cliente' });
+            }, { action: 'Finalizou Entrega', details: `${ctx.client} retirou o ${ctx.device}.` });
         },
 
         async requestPriority(ticket) {
             this.loading = true;
             try {
                 // Log Action
-                await this.logTicketAction(ticket.id, 'Solicitou Prioridade', 'Cliente/Atendente solicitou urgência máxima');
+                const ctx = this.getLogContext(ticket);
+                await this.logTicketAction(ticket.id, 'Solicitou Prioridade', `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`);
 
                 // Update
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
@@ -2108,6 +2139,13 @@ function app() {
         },
 
         // --- UTILS ---
+        getLogContext(ticket) {
+            if (!ticket) return { client: 'Cliente', device: 'Aparelho' };
+            const client = `${ticket.client_name} da OS ${ticket.os_number}`;
+            const device = ticket.device_model;
+            return { client, device };
+        },
+
         getStatusLabel(status) {
             return this.STATUS_LABELS[status] || status;
         },

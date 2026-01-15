@@ -332,7 +332,7 @@
                                                 </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                             </div>
-                                            <button @click="updateStatus(t, 'Analise Tecnica', {}, { action: 'Iniciou Atendimento', details: 'Moveu para Análise via Dashboard' })"
+                                            <button @click="startAnalysis(t)"
                                                     class="text-xs bg-gray-800 text-white px-3 py-1.5 rounded font-bold hover:bg-black transition-colors shadow-sm">
                                                 Iniciar
                                             </button>
@@ -1338,7 +1338,7 @@
 
                                                     <!-- Aberto -->
                                                     <template x-if="ticket.status === 'Aberto'">
-                                                        <button @click="updateStatus(ticket, 'Analise Tecnica', {}, { action: 'Iniciou Atendimento', details: 'Moveu para Análise Técnica via Kanban' })" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
+                                                        <button @click="startAnalysis(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
                                                             Iniciar Análise
                                                         </button>
                                                     </template>
@@ -2452,7 +2452,7 @@
 
                         <!-- 1. Aberto -> Analise -->
                         <template x-if="selectedTicket.status === 'Aberto'">
-                            <button @click="updateStatus(selectedTicket, 'Analise Tecnica', {}, { action: 'Iniciou Atendimento', details: 'Moveu para Análise Técnica' })" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 text-sm shadow flex items-center">
+                            <button @click="startAnalysis(selectedTicket)" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 text-sm shadow flex items-center">
                                 <i class="fa-solid fa-microscope mr-2"></i> Iniciar Atendimento (Ir para Análise)
                             </button>
                         </template>
