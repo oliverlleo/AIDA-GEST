@@ -2182,8 +2182,8 @@ function app() {
                 !['Retirada Cliente', 'Finalizado'].includes(t.status)
             );
 
-            // 5. Priority Requested
-            const priorityTickets = tickets.filter(t => t.priority_requested);
+            // 5. Priority Requested (Exclude Finalized)
+            const priorityTickets = tickets.filter(t => t.priority_requested && !['Retirada Cliente', 'Finalizado'].includes(t.status));
 
             // 6. Pending Purchase
             const pendingPurchase = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status !== 'Comprado');
