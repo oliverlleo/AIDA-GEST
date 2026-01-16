@@ -232,6 +232,10 @@ function app() {
         // Modals
         modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, supplier: false },
 
+        // Outsourced State
+        showOutsourcedModal: false,
+        outsourcedData: { company_id: '', deadline: '' },
+
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
         logisticsForm: { carrier: '', tracking: '' },
@@ -257,6 +261,177 @@ function app() {
             'Teste Final': 'Testes Finais',
             'Retirada Cliente': 'Retirada de Cliente',
             'Finalizado': 'Finalizado'
+        },
+
+        // --- UTILS & HELPERS ---
+        notify(message, type = 'success') {
+            if (!this.toasts) this.toasts = [];
+            const id = Date.now();
+            this.toasts.push({ id, message, type });
+            setTimeout(() => {
+                this.toasts = this.toasts.filter(t => t.id !== id);
+            }, 3000);
+        },
+
+        hasRole(role) {
+            if (!this.user || !this.user.roles) return false;
+            if (this.user.roles.includes('admin')) return true;
+            return this.user.roles.includes(role);
+        },
+
+        escapeHtml(text) {
+             if (!text) return '';
+             return text
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        },
+
+        getLogContext(ticket) {
+            return {
+                client: this.escapeHtml(ticket.client_name),
+                device: `<b>${this.escapeHtml(ticket.device_model)}</b>`
+            };
+        },
+
+        getStatusLabel(status) {
+            return this.STATUS_LABELS[status] || status;
+        },
+
+        getPriorityColor(priority) {
+            const colors = {
+                'Baixa': 'bg-gray-100 text-gray-800',
+                'Normal': 'bg-blue-100 text-blue-800',
+                'Alta': 'bg-orange-100 text-orange-800',
+                'Urgente': 'bg-red-100 text-red-800'
+            };
+            return colors[priority] || 'bg-gray-100 text-gray-800';
+        },
+
+        getCardColor(ticket) {
+            let classes = 'bg-white border-l-4 ';
+            if (ticket.priority === 'Urgente') classes += 'border-red-500';
+            else if (ticket.priority === 'Alta') classes += 'border-orange-500';
+            else classes += 'border-transparent';
+
+            if (ticket.delayed) classes += ' ring-2 ring-red-200';
+            return classes;
+        },
+
+        getDuration(startStr) {
+            if (!startStr) return '-';
+            const start = new Date(startStr);
+            const now = new Date();
+            const diffMs = now - start;
+            if (diffMs < 0) return '-';
+
+            const diffHrs = Math.floor(diffMs / 3600000);
+            if (diffHrs < 24) return `${diffHrs}h`;
+            const diffDays = Math.floor(diffHrs / 24);
+            return `${diffDays}d`;
+        },
+
+        initTechFilter() {
+            this.selectedTechFilter = 'all';
+            if (this.user && !this.hasRole('admin') && this.hasRole('tecnico')) {
+                this.selectedTechFilter = this.user.id;
+            }
+        },
+
+        clearFilters() {
+            this.activeQuickFilter = null;
+            this.searchQuery = '';
+            this.adminDashboardFilters = {
+                dateStart: '', dateEnd: '', deviceModel: 'all', defect: 'all',
+                technician: 'all', status: 'all', quickView: 'summary',
+                viewMode: 'standard', defectSortField: 'total', defectSortDesc: true, viewType: 'data'
+            };
+        },
+
+        initKanbanScroll() {
+            const top = document.getElementById('kanbanTopScroll');
+            const bottom = document.getElementById('kanbanContainer');
+            if (top && bottom) {
+                this.kanbanScrollWidth = bottom.scrollWidth;
+                top.onscroll = () => { bottom.scrollLeft = top.scrollLeft; };
+                bottom.onscroll = () => { top.scrollLeft = bottom.scrollLeft; };
+            }
+        },
+
+        async updateStatus(ticket, newStatus, updates = {}, logEntry = null) {
+            this.loading = true;
+            try {
+                const finalUpdates = { ...updates, status: newStatus, updated_at: new Date().toISOString() };
+                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', finalUpdates);
+
+                if (logEntry) {
+                     await this.logTicketAction(ticket.id, logEntry.action, logEntry.details);
+                }
+
+                // Update local state
+                Object.assign(ticket, finalUpdates);
+
+                // Refresh to be safe/sync
+                await this.fetchTickets();
+                this.notify("Status atualizado para " + this.getStatusLabel(newStatus));
+            } catch (e) {
+                this.notify("Erro ao atualizar status: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        getDashboardOps() {
+            if (!this.tickets) return {};
+            const t = this.tickets;
+            return {
+                pendingBudgets: t.filter(x => x.status === 'Analise Tecnica'),
+                waitingBudgetResponse: t.filter(x => x.status === 'Aprovacao'),
+                pendingPickups: t.filter(x => x.status === 'Retirada Cliente'),
+                urgentAnalysis: t.filter(x => x.status === 'Aberto' && x.priority === 'Urgente'),
+                delayedDeliveries: t.filter(x => x.deadline && new Date(x.deadline) < new Date() && x.status !== 'Finalizado'),
+                priorityTickets: t.filter(x => ['Alta', 'Urgente'].includes(x.priority) && !['Finalizado', 'Retirada Cliente'].includes(x.status)),
+                pendingPurchase: t.filter(x => x.status === 'Compra Peca' && (!x.parts_status || x.parts_status !== 'Comprado')),
+                pendingReceipt: t.filter(x => x.status === 'Compra Peca' && x.parts_status === 'Comprado'),
+                pendingTech: t.filter(x => x.status === 'Andamento Reparo'),
+                pendingTracking: t.filter(x => x.delivery_method === 'carrier' && !x.tracking_code),
+                pendingDelivery: t.filter(x => x.status === 'Retirada Cliente' || (x.status === 'Finalizado' && !x.delivered_at)),
+                pendingOutsourced: t.filter(x => x.status === 'Terceirizado' || x.status === 'Analise Tercerizado')
+            };
+        },
+
+        getAdminMetrics() {
+             const tickets = this.tickets || [];
+             const finished = tickets.filter(t => t.status === 'Finalizado' || t.status === 'Retirada Cliente');
+
+             // Outsourced Stats
+             const outsourced = tickets.filter(t => t.is_outsourced);
+             const outsourcedFinished = outsourced.filter(t => ['Finalizado', 'Retirada Cliente'].includes(t.status));
+             const outSuccess = outsourcedFinished.filter(t => t.repair_successful).length;
+             const outFail = outsourcedFinished.filter(t => t.repair_successful === false).length;
+
+             // Basic Aggregations
+             const techStats = []; // Simplified
+
+             return {
+                 successRate: finished.length ? Math.round((finished.filter(t => t.repair_successful).length / finished.length) * 100) : 0,
+                 ticketsToday: 0,
+                 repairsToday: 0,
+                 techStats,
+                 topDefects: [],
+                 topModels: [],
+                 // New Outsourced Metrics
+                 outsourcedStats: {
+                     total: outsourced.length,
+                     finished: outsourcedFinished.length,
+                     successCount: outSuccess,
+                     failCount: outFail,
+                     successRate: outsourcedFinished.length ? Math.round((outSuccess / outsourcedFinished.length) * 100) : 0,
+                     failRate: outsourcedFinished.length ? Math.round((outFail / outsourcedFinished.length) * 100) : 0
+                 }
+             };
         },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
@@ -1960,6 +2135,136 @@ function app() {
             }
         },
 
+        async sendToOutsourced(ticket = null, skipModal = false) {
+             const t = ticket || this.selectedTicket;
+             if (!t) return;
+
+             if (ticket && !skipModal) {
+                 this.selectedTicket = t;
+                 this.outsourcedData = {
+                    company_id: t.outsourced_company_id || '',
+                    deadline: t.outsourced_deadline ? t.outsourced_deadline.split('T')[0] : ''
+                 };
+                 this.showOutsourcedModal = true;
+                 return;
+             }
+
+             if (!this.outsourcedData.company_id || !this.outsourcedData.deadline) {
+                 this.notify("Selecione a empresa e o prazo.", "error");
+                 return;
+             }
+
+             this.loading = true;
+             try {
+                 const ctx = this.getLogContext(t);
+                 const companyName = this.suppliers.find(s => s.id === this.outsourcedData.company_id)?.name || 'Terceiro';
+
+                 await this.updateStatus(t, 'Terceirizado', {
+                     outsourced_company_id: this.outsourcedData.company_id,
+                     outsourced_deadline: this.toUTC(this.outsourcedData.deadline),
+                     status: 'Terceirizado',
+                     is_outsourced: true
+                 }, {
+                     action: 'Enviou para Terceiro',
+                     details: `Enviado para <b>${companyName}</b>. Prazo: <b>${this.formatDate(this.outsourcedData.deadline)}</b>.`
+                 });
+
+                 this.showOutsourcedModal = false;
+                 this.outsourcedData = { company_id: '', deadline: '' };
+                 this.notify("Enviado para terceiro com sucesso.");
+             } catch (e) {
+                 console.error(e);
+                 this.notify("Erro ao enviar para terceiro.", "error");
+             } finally {
+                 this.loading = false;
+             }
+        },
+
+        async outsourcedReceived(ticket) {
+            if (!ticket) return;
+            if(!confirm("Confirmar recebimento do terceiro?")) return;
+
+            this.loading = true;
+            try {
+                 const ctx = this.getLogContext(ticket);
+                 await this.updateStatus(ticket, 'Teste Final', {
+                     // Keep info
+                 }, {
+                     action: 'Recebido do Terceiro',
+                     details: `Aparelho recebido da empresa terceirizada. Iniciando testes.`
+                 });
+                 this.notify("Recebido e movido para Testes.");
+            } catch (e) {
+                console.error(e);
+                 this.notify("Erro ao receber.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async concludeTest(success) {
+            if (!this.selectedTicket) return;
+            const t = this.selectedTicket;
+
+            if (success) {
+                await this.updateStatus(t, 'Retirada Cliente', {
+                     test_end_at: new Date().toISOString(),
+                     repair_successful: true
+                }, {
+                    action: 'Testes Aprovados',
+                    details: `Aparelho aprovado nos testes finais. Disponível para retirada.`
+                });
+                this.modals.outcome = false;
+                this.notify("Testes concluídos. Aguardando retirada.");
+            } else {
+                if (this.testFailureData.returnToOutsourced && t.is_outsourced) {
+                     if (!this.testFailureData.newDeadline) {
+                        return this.notify("Informe o novo prazo para devolver ao terceiro.", "error");
+                     }
+
+                     await this.updateStatus(t, 'Terceirizado', {
+                         outsourced_deadline: this.toUTC(this.testFailureData.newDeadline),
+                         status: 'Terceirizado'
+                     }, {
+                         action: 'Devolvido para Terceiro',
+                         details: `Teste falhou. Devolvido para terceiro. Novo prazo: ${this.formatDate(this.testFailureData.newDeadline)}.`
+                     });
+                     this.modals.outcome = false;
+                     this.notify("Devolvido para terceiro.");
+
+                } else {
+                    await this.updateStatus(t, 'Andamento Reparo', {
+                        repair_successful: false,
+                        status: 'Andamento Reparo'
+                    }, {
+                        action: 'Teste Reprovado',
+                        details: `Teste falhou. Retornado para bancada para novo reparo.`
+                    });
+                     this.modals.outcome = false;
+                     this.notify("Retornado para bancada.");
+                }
+            }
+        },
+
+        chargeSupplier(ticket) {
+            if (!ticket || !ticket.outsourced_company_id) return this.notify("Fornecedor não identificado.", "error");
+
+            const supplier = this.suppliers.find(s => s.id === ticket.outsourced_company_id);
+            if (!supplier || !supplier.phone) return this.notify("Telefone do fornecedor não encontrado.", "error");
+
+            let phone = supplier.phone.replace(/\D/g, '');
+            if (phone.length < 10) return this.notify("Número de telefone inválido.", "error");
+
+            if (phone.length <= 11 && !phone.startsWith('55')) {
+                phone = '55' + phone;
+            }
+
+            const msg = `Olá ${supplier.name}, gostaria de saber sobre o andamento do serviço no aparelho ${ticket.device_model} (OS: ${ticket.os_number}). Alguma previsão?`;
+
+            const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+            window.open(url, '_blank');
+        },
+
         async startTest(ticket) {
             const t = ticket || this.selectedTicket;
             if (!t) return;
@@ -1981,6 +2286,16 @@ function app() {
             }
 
             window.open(`https://wa.me/${number}`, '_blank');
+        },
+
+        toUTC(dateStr) {
+            if (!dateStr) return null;
+            return new Date(dateStr).toISOString();
+        },
+
+        formatDate(isoStr) {
+            if (!isoStr) return '';
+            return new Date(isoStr).toLocaleDateString('pt-BR');
         },
     }
 }
