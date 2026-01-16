@@ -2794,30 +2794,31 @@
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
                         </div>
 
-                        <!-- Technician / Outsourced Toggle -->
-                        <div class="col-span-1 md:col-span-2" x-show="trackerConfig.enable_outsourced">
-                             <label class="inline-flex items-center cursor-pointer my-2 bg-gray-100 p-2 rounded-lg border border-gray-200 w-full hover:bg-gray-200 transition-colors">
-                                <input type="checkbox" x-model="ticketForm.is_outsourced" class="sr-only peer">
-                                <div class="relative w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
-                                <span class="ml-3 text-sm font-bold text-gray-800">Este atendimento é Terceirizado?</span>
-                            </label>
-                        </div>
+                        <!-- Technician / Outsourced Combo -->
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <label class="block text-xs font-bold text-gray-500" x-text="ticketForm.is_outsourced ? 'Empresa Parceira *' : 'Técnico Responsável *'"></label>
 
-                        <div x-show="!ticketForm.is_outsourced">
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Técnico Responsável *</label>
-                            <select x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
+                                <!-- Small Inline Toggle -->
+                                <label x-show="trackerConfig.enable_outsourced" class="inline-flex items-center cursor-pointer">
+                                    <span class="mr-2 text-[10px] font-bold text-gray-400 uppercase" :class="ticketForm.is_outsourced ? 'text-purple-600' : ''">Terceirizado?</span>
+                                    <input type="checkbox" x-model="ticketForm.is_outsourced" class="sr-only peer">
+                                    <div class="relative w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
+                                </label>
+                            </div>
+
+                            <!-- Tech Select -->
+                            <select x-show="!ticketForm.is_outsourced" x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
                                 <option value="">-- Selecione um Técnico --</option>
                                 <option value="all">TODOS (Disponível para equipe)</option>
                                 <template x-for="tech in getTechnicians()" :key="tech.id">
                                     <option :value="tech.id" x-text="tech.name"></option>
                                 </template>
                             </select>
-                        </div>
 
-                        <div x-show="ticketForm.is_outsourced">
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Empresa Parceira *</label>
-                            <div class="flex space-x-2">
-                                <select x-model="ticketForm.outsourced_company_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
+                            <!-- Outsourced Select -->
+                            <div x-show="ticketForm.is_outsourced" class="flex space-x-2">
+                                <select x-model="ticketForm.outsourced_company_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all">
                                     <option value="">-- Selecione a Empresa --</option>
                                     <template x-for="comp in outsourcedCompanies" :key="comp.id">
                                         <option :value="comp.id" x-text="comp.name"></option>
