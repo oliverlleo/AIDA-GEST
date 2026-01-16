@@ -2133,7 +2133,7 @@
                                             </span>
                                             <!-- Show last failure reason if available (from test_notes usually, but let's try to grab last note) -->
                                             <div class="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded italic border border-red-100" x-show="ticket.test_notes && ticket.test_notes.length > 0">
-                                                <span class="font-bold">Defeito:</span> <span x-text="ticket.test_notes[ticket.test_notes.length-1].text"></span>
+                                                <span class="font-bold">Defeito:</span> <span x-text="(ticket.test_notes && ticket.test_notes.length > 0) ? ticket.test_notes[ticket.test_notes.length-1].text : ''"></span>
                                             </div>
                                         </div>
 
@@ -2207,7 +2207,7 @@
                                             </span>
                                             <!-- Show last failure reason if available (from test_notes usually, but let's try to grab last note) -->
                                             <div class="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded italic border border-red-100" x-show="ticket.test_notes && ticket.test_notes.length > 0">
-                                                <span class="font-bold">Defeito:</span> <span x-text="ticket.test_notes[ticket.test_notes.length-1].text"></span>
+                                                <span class="font-bold">Defeito:</span> <span x-text="(ticket.test_notes && ticket.test_notes.length > 0) ? ticket.test_notes[ticket.test_notes.length-1].text : ''"></span>
                                             </div>
                                         </div>
 
