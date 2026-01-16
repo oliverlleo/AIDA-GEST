@@ -65,6 +65,7 @@ function app() {
                 'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
             ]
         },
+        previewStatus: 'Andamento Reparo', // For Admin Preview
 
         // Data
         employees: [],
@@ -2148,6 +2149,45 @@ function app() {
                 return 'border-l-4 border-red-600 bg-red-50';
             }
             return 'bg-white';
+        },
+
+        // --- PREVIEW LOGIC (Mirrors acompanhar.html) ---
+        getPreviewDisplayedStatus() {
+            const currentStatus = this.previewStatus;
+            const visibleSteps = this.trackerConfig.visible_stages.length > 0
+                ? this.trackerConfig.visible_stages
+                : this.STATUS_COLUMNS;
+
+            // If status is visible, show it
+            if (visibleSteps.includes(currentStatus)) {
+                return currentStatus;
+            }
+
+            // If hidden, find previous visible
+            const actualIdx = this.STATUS_COLUMNS.indexOf(currentStatus);
+            if (actualIdx === -1) return currentStatus;
+
+            for (let i = actualIdx - 1; i >= 0; i--) {
+                if (visibleSteps.includes(this.STATUS_COLUMNS[i])) {
+                    return this.STATUS_COLUMNS[i];
+                }
+            }
+
+            // Fallback
+            return visibleSteps[0] || 'Aberto';
+        },
+
+        getPreviewProgressPercent() {
+            const displayed = this.getPreviewDisplayedStatus();
+            const visibleSteps = this.trackerConfig.visible_stages.length > 0
+                ? this.trackerConfig.visible_stages
+                : this.STATUS_COLUMNS;
+
+            const idx = visibleSteps.indexOf(displayed);
+            if (idx === -1) return 0;
+            if (visibleSteps.length <= 1) return 0;
+
+            return (idx / (visibleSteps.length - 1)) * 100;
         },
 
         // DASHBOARD OPERATIONAL METRICS
