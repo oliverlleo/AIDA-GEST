@@ -49,6 +49,8 @@ function app() {
         trackerConfig: {
             logo_url: '',
             logo_size: 64, // Default size in px
+            enable_logistics: false,
+            enable_outsourced: false, // Outsourced Workflow Toggle
             custom_labels: {}, // Custom overrides for stage names
             colors: {
                 background: '#FFF7ED', // orange-50
@@ -63,7 +65,7 @@ function app() {
                 status_label: '#FF6B00'
             },
             visible_stages: [
-                'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+                'Aberto', 'Terceirizado', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
                 'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
             ]
         },
@@ -71,6 +73,7 @@ function app() {
 
         // Data
         employees: [],
+        outsourcedCompanies: [], // List of third-party vendors
         tickets: [],
         techTickets: [],
         deletedTickets: [],
@@ -95,7 +98,9 @@ function app() {
             pendingTech: [],
             // Logistics
             pendingTracking: [],
-            pendingDelivery: []
+            pendingDelivery: [],
+            // Outsourced
+            pendingOutsourced: []
         },
         metrics: {
              filteredTickets: [],
@@ -145,6 +150,7 @@ function app() {
             defects: [], priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '',
+            is_outsourced: false, outsourced_company_id: '', // New fields
             checklist: [], checklist_final: [], photos: [], notes: ''
         },
         newChecklistItem: '',
@@ -158,7 +164,8 @@ function app() {
         analysisForm: { needsParts: false, partsList: '' },
         outcomeMode: '',
         showTestFailureForm: false,
-        testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '' },
+        testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '', action: '' }, // action: 'repair' or 'return'
+        outsourcedForm: { company_id: '', deadline: '', price: '' }, // For sending to outsourced
 
         // Edit Deadlines State
         editingDeadlines: false,
@@ -212,7 +219,7 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false },
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -225,11 +232,12 @@ function app() {
         // Constants
         PRIORITIES: ['Baixa', 'Normal', 'Alta', 'Urgente'],
         STATUS_COLUMNS: [
-            'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+            'Aberto', 'Terceirizado', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
             'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
         ],
         STATUS_LABELS: {
-            'Aberto': 'Aberto',
+            'Aberto': 'Aberto', 'Terceirizado': 'Terceirizado',
+            'Terceirizado': 'Terceirizado',
             'Analise Tecnica': 'Análise Técnica',
             'Aprovacao': 'Aprovação',
             'Compra Peca': 'Compra de Peças',
@@ -318,6 +326,7 @@ function app() {
                     await this.fetchTemplates();
                     await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
+                    await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
                 }
@@ -748,6 +757,7 @@ function app() {
                     await this.fetchTemplates();
                     await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
+                    await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
                 }
@@ -868,7 +878,7 @@ function app() {
                         status_label: '#FF6B00'
                     },
                     visible_stages: [
-                        'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+                        'Aberto', 'Terceirizado', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
                         'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
                     ]
                 };
@@ -1099,6 +1109,44 @@ function app() {
             }
         },
 
+        async fetchOutsourcedCompanies() {
+            if (!this.user?.workspace_id) return;
+            try {
+                const data = await this.supabaseFetch(`outsourced_companies?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
+                if (data) this.outsourcedCompanies = data;
+            } catch(e) {
+                console.error("Fetch Outsourced Companies Error:", e);
+            }
+        },
+
+        async createOutsourcedCompany(name, phone) {
+            if (!name || !name.trim()) return;
+            if (!this.user?.workspace_id) return;
+
+            try {
+                await this.supabaseFetch('outsourced_companies', 'POST', {
+                    workspace_id: this.user.workspace_id,
+                    name: name.trim(),
+                    phone: phone ? phone.trim() : null
+                });
+                await this.fetchOutsourcedCompanies();
+                this.notify("Empresa parceira cadastrada!", "success");
+            } catch(e) {
+                this.notify("Erro ao cadastrar: " + e.message, "error");
+            }
+        },
+
+        async deleteOutsourcedCompany(id) {
+            if (!confirm("Excluir esta empresa parceira?")) return;
+            try {
+                await this.supabaseFetch(`outsourced_companies?id=eq.${id}`, 'DELETE');
+                this.notify("Empresa excluída.");
+                await this.fetchOutsourcedCompanies();
+            } catch(e) {
+                this.notify("Erro ao excluir: " + e.message, "error");
+            }
+        },
+
         async createDeviceModel(name) {
             if (!name || !name.trim()) return;
             if (!this.user?.workspace_id) return;
@@ -1177,6 +1225,7 @@ function app() {
                 defects: [], priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
                 technician_id: '',
+                is_outsourced: false, outsourced_company_id: '',
                 checklist: [], checklist_final: [], photos: [], notes: ''
             };
             this.modals.ticket = true;
@@ -1282,8 +1331,10 @@ function app() {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
 
-             if (!this.ticketForm.technician_id) {
-                 return this.notify("Selecione um Técnico Responsável ou 'Todos'.", "error");
+             if (this.ticketForm.is_outsourced) {
+                 if (!this.ticketForm.outsourced_company_id) return this.notify("Selecione a empresa parceira.", "error");
+             } else {
+                 if (!this.ticketForm.technician_id) return this.notify("Selecione um Técnico Responsável ou 'Todos'.", "error");
              }
 
              if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
@@ -1317,7 +1368,9 @@ function app() {
                      deadline: this.toUTC(this.ticketForm.deadline) || null,
                      analysis_deadline: this.toUTC(this.ticketForm.analysis_deadline) || null,
                      device_condition: this.ticketForm.device_condition,
-                     technician_id: techId,
+                     technician_id: this.ticketForm.is_outsourced ? null : techId,
+                     is_outsourced: this.ticketForm.is_outsourced,
+                     outsourced_company_id: this.ticketForm.is_outsourced ? this.ticketForm.outsourced_company_id : null,
                      checklist_data: this.ticketForm.checklist,
                      checklist_final_data: this.ticketForm.checklist_final,
                      photos_urls: this.ticketForm.photos,
@@ -1987,23 +2040,47 @@ function app() {
 
         async concludeTest(success) {
             const ticket = this.selectedTicket;
+            const ctx = this.getLogContext(ticket);
+
             if (success) {
                 this.modals.outcome = false;
-                const ctx = this.getLogContext(ticket);
                 // Redirect logic based on Logistics Mode
-                const nextStatus = this.trackerConfig.enable_logistics ? 'Expedição / Logística' : 'Retirada Cliente';
                 // If standard mode, it goes to "Retirada Cliente" which matches current DB/UI logic.
-                // If logistics mode, it goes to "Expedição / Logística" (conceptually same status 'Retirada Cliente' in DB, just renamed in UI).
-                // Actually status string in DB is 'Retirada Cliente', UI maps it.
                 await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
             } else {
-                if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
+                // FAILURE LOGIC
                 if (!this.testFailureData.reason) return this.notify("Descreva o defeito apresentado", "error");
+
+                // Outsourced Flow Logic
+                if (ticket.is_outsourced) {
+                     if (!this.testFailureData.action) return this.notify("Selecione a ação (Devolver ou Reparo)", "error");
+
+                     if (this.testFailureData.action === 'return') {
+                         if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
+
+                         const count = (ticket.outsourced_return_count || 0) + 1;
+                         const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
+
+                         this.modals.outcome = false;
+                         await this.updateStatus(ticket, 'Terceirizado', {
+                             outsourced_deadline: this.toUTC(this.testFailureData.newDeadline),
+                             outsourced_return_count: count,
+                             test_start_at: null
+                         }, {
+                             action: 'Devolveu para Terceiro',
+                             details: `${ctx.device} retornado para ${companyName} (${count}ª vez). Motivo: ${this.testFailureData.reason}`
+                         });
+                         return;
+                     }
+                }
+
+                if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
 
                 const newNote = {
                     date: new Date().toISOString(),
                     text: this.testFailureData.reason,
-                    user: this.user.name
+                    user: this.user.name,
+                    context: ticket.is_outsourced && this.testFailureData.action === 'repair' ? 'Falha de Terceiro' : 'Reprova em Teste'
                 };
 
                 const existingNotes = Array.isArray(ticket.test_notes) ? ticket.test_notes : [];
@@ -2020,6 +2097,69 @@ function app() {
                 }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Defeito: ' + this.testFailureData.reason });
                 this.notify("Retornado para reparo com urgência!");
             }
+        },
+
+        // --- OUTSOURCED FUNCTIONS ---
+        getOutsourcedCompany(id) {
+             const c = this.outsourcedCompanies.find(x => x.id === id);
+             return c ? c.name : 'Desconhecido';
+        },
+        getOutsourcedPhone(id) {
+             const c = this.outsourcedCompanies.find(x => x.id === id);
+             return c ? c.phone : '';
+        },
+
+        openOutsourcedModal(ticket) {
+            this.selectedTicket = ticket;
+            this.outsourcedForm = { company_id: ticket.outsourced_company_id, deadline: '', price: '' };
+            this.modals.outsourced = true;
+        },
+
+        async sendToOutsourced() {
+             if (!this.outsourcedForm.deadline) return this.notify("Informe o prazo.", "error");
+
+             this.loading = true;
+             try {
+                 const ticket = this.selectedTicket;
+                 const ctx = this.getLogContext(ticket);
+                 const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
+
+                 await this.updateStatus(ticket, 'Terceirizado', {
+                     outsourced_deadline: this.toUTC(this.outsourcedForm.deadline)
+                 }, {
+                     action: 'Enviou Terceirizado',
+                     details: `${ctx.device} de ${ctx.client} enviado para ${companyName}. Prazo: ${new Date(this.outsourcedForm.deadline).toLocaleDateString()}.`
+                 });
+
+                 this.modals.outsourced = false;
+                 this.modals.viewTicket = false; // Close detail view if open
+             } catch(e) {
+                 this.notify("Erro: " + e.message, "error");
+                 this.loading = false;
+             }
+        },
+
+        async receiveFromOutsourced(ticket) {
+             const ctx = this.getLogContext(ticket);
+             const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
+
+             await this.updateStatus(ticket, 'Teste Final', {}, {
+                 action: 'Recebeu de Terceiro',
+                 details: `${ctx.device} de ${ctx.client} recebido da ${companyName}. Enviado para testes.`
+             });
+        },
+
+        cobrarOutsourced(ticket) {
+            const phone = this.getOutsourcedPhone(ticket.outsourced_company_id);
+            if (!phone) return this.notify("Telefone não cadastrado.", "error");
+
+            const link = this.getTrackingLink(ticket.id); // Optional context
+            const msg = `Olá, gostaria de saber sobre o andamento do aparelho ${ticket.device_model} (OS ${ticket.os_number}).`;
+
+            let number = phone.replace(/\D/g, '');
+            if (number.length <= 11) number = '55' + number;
+
+            window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
         },
 
         // --- LOGISTICS FUNCTIONS ---
@@ -2455,6 +2595,8 @@ function app() {
 
             const pendingTech = tickets.filter(t => t.status === 'Aberto');
 
+            const pendingOutsourced = tickets.filter(t => t.status === 'Terceirizado').sort((a, b) => new Date(a.outsourced_deadline) - new Date(b.outsourced_deadline));
+
             return {
                 pendingBudgets,
                 waitingBudgetResponse,
@@ -2466,7 +2608,8 @@ function app() {
                 pendingReceipt,
                 pendingTech,
                 pendingTracking,
-                pendingDelivery
+                pendingDelivery,
+                pendingOutsourced
             };
         },
 
@@ -2808,13 +2951,37 @@ function app() {
             const comboMap = {};
             const techDetailMap = {};
 
-            // Logistics Stats
+            // Logistics & Outsourced Stats
             const logisticsStats = {
                 pickup: { total: 0, success: 0, fail: 0 },
                 carrier: { total: 0, success: 0, fail: 0 }
             };
 
+            const outsourcedStats = {
+                total: 0,
+                success: 0,
+                fail: 0,
+                returns: 0
+            };
+            const internalStats = {
+                total: 0,
+                success: 0,
+                fail: 0
+            };
+
             filteredTickets.forEach(ticket => {
+                // Outsourced vs Internal
+                if (ticket.is_outsourced) {
+                    outsourcedStats.total++;
+                    if (ticket.repair_successful === true) outsourcedStats.success++;
+                    if (ticket.repair_successful === false) outsourcedStats.fail++;
+                    if (ticket.outsourced_return_count) outsourcedStats.returns += ticket.outsourced_return_count;
+                } else if (ticket.technician_id || ticket.status !== 'Aberto') {
+                    internalStats.total++;
+                    if (ticket.repair_successful === true) internalStats.success++;
+                    if (ticket.repair_successful === false) internalStats.fail++;
+                }
+
                 // Logistics Count
                 if (ticket.delivery_method === 'pickup') {
                     logisticsStats.pickup.total++;
@@ -3120,7 +3287,9 @@ function app() {
                 slowestModels, slowestDefects, slowestCombos, fastestTechs,
                 slowestModelsSolution, slowestDefectsSolution, slowestCombosSolution, fastestTechsSolution,
                 slowestModelsDelivery, slowestDefectsDelivery, slowestCombosDelivery, fastestTechsDelivery,
-                logisticsStats
+                logisticsStats,
+                outsourcedStats,
+                internalStats
             };
         },
 
