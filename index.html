@@ -180,6 +180,12 @@
                                 <i class="fa-solid fa-mobile-screen w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'tracker_settings' ? 'text-brand-500' : 'text-gray-400'"></i>
                                 <span class="ml-3 font-medium text-sm hidden md:block">Acompanhamento</span>
                             </a>
+                            <a href="#" @click.prevent="view = 'management_settings'"
+                               :class="view === 'management_settings' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-list-check w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'management_settings' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Gerenciamento</span>
+                            </a>
                             <a href="#" @click.prevent="view = 'employees'"
                                :class="view === 'employees' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group">
@@ -301,21 +307,6 @@
                                             <span class="text-xs font-mono text-gray-600" x-text="trackerConfig.colors.status_label"></span>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-
-                            <!-- Logistics Toggle -->
-                            <div class="mb-8">
-                                <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-truck-ramp-box mr-2 text-brand-500"></i> Logística e Expedição</h3>
-                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 flex items-center justify-between">
-                                    <div>
-                                        <span class="text-sm font-bold text-gray-800 block">Ativar Fluxo de Logística</span>
-                                        <span class="text-xs text-gray-500 block">Substitui "Retirada Cliente" por "Expedição" com opções de transportadora.</span>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" x-model="trackerConfig.enable_logistics" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
-                                    </label>
                                 </div>
                             </div>
 
@@ -452,6 +443,40 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: MANAGEMENT SETTINGS (NEW) -->
+                <div x-show="view === 'management_settings' && hasRole('admin')" class="p-8 h-full flex flex-col overflow-hidden" x-transition.opacity x-cloak>
+                    <header class="mb-6 flex justify-between items-center">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-800">Gerenciamento</h1>
+                            <p class="text-gray-500">Configurações globais de fluxo e operações.</p>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button @click="saveTrackerConfig()" class="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-brand-500 transition-colors shadow-lg flex items-center">
+                                <i class="fa-solid fa-save mr-2"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </header>
+
+                    <div class="w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-y-auto p-6 space-y-8">
+
+                        <!-- Logistics Toggle -->
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-truck-ramp-box mr-2 text-brand-500"></i> Logística e Expedição</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 flex items-center justify-between">
+                                <div>
+                                    <span class="text-sm font-bold text-gray-800 block">Ativar Fluxo de Logística</span>
+                                    <span class="text-xs text-gray-500 block">Substitui "Retirada Cliente" por "Expedição" com opções de transportadora.</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" x-model="trackerConfig.enable_logistics" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                </label>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 

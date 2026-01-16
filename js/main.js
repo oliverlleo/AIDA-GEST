@@ -782,7 +782,11 @@ function app() {
                 await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
                     tracker_config: this.trackerConfig
                 });
-                this.notify("Configurações de Acompanhamento salvas!");
+                if (this.view === 'management_settings') {
+                    this.notify("Configurações de Gerenciamento salvas!");
+                } else {
+                    this.notify("Configurações de Acompanhamento salvas!");
+                }
             } catch (e) {
                 this.notify("Erro ao salvar: " + e.message, "error");
             } finally {
