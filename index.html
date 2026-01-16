@@ -2126,6 +2126,17 @@
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
                                           ]">
 
+                                        <!-- Outsourced Return Tag -->
+                                        <div x-show="ticket.is_outsourced && ticket.outsourced_return_count > 0" class="mb-2">
+                                            <span class="bg-red-100 text-red-700 text-[10px] font-extrabold px-2 py-1 rounded border border-red-200 flex items-center w-fit">
+                                                <i class="fa-solid fa-rotate-left mr-1"></i> RETORNO DE TERCEIRO
+                                            </span>
+                                            <!-- Show last failure reason if available (from test_notes usually, but let's try to grab last note) -->
+                                            <div class="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded italic border border-red-100" x-show="ticket.test_notes && ticket.test_notes.length > 0">
+                                                <span class="font-bold">Defeito:</span> <span x-text="ticket.test_notes[ticket.test_notes.length-1].text"></span>
+                                            </div>
+                                        </div>
+
                                         <!-- Priority Requested Badge -->
                                         <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
                                             <i class="fa-solid fa-bell fa-shake mr-1"></i> PRIORIDADE SOLICITADA
@@ -2188,6 +2199,17 @@
                                               ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
                                           ]">
+
+                                        <!-- Outsourced Return Tag -->
+                                        <div x-show="ticket.is_outsourced && ticket.outsourced_return_count > 0" class="mb-2">
+                                            <span class="bg-red-100 text-red-700 text-[10px] font-extrabold px-2 py-1 rounded border border-red-200 flex items-center w-fit">
+                                                <i class="fa-solid fa-rotate-left mr-1"></i> RETORNO DE TERCEIRO
+                                            </span>
+                                            <!-- Show last failure reason if available (from test_notes usually, but let's try to grab last note) -->
+                                            <div class="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded italic border border-red-100" x-show="ticket.test_notes && ticket.test_notes.length > 0">
+                                                <span class="font-bold">Defeito:</span> <span x-text="ticket.test_notes[ticket.test_notes.length-1].text"></span>
+                                            </div>
+                                        </div>
 
                                         <!-- Priority Requested Badge -->
                                         <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
