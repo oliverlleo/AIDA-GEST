@@ -650,6 +650,18 @@ function app() {
                     this.workspaceName = emp.workspace_name;
                     this.companyCode = this.loginForm.company_code;
 
+                    // Apply Global Config
+                    if (emp.tracker_config) {
+                        this.trackerConfig = {
+                            ...this.trackerConfig,
+                            ...emp.tracker_config,
+                            colors: {
+                                ...this.trackerConfig.colors,
+                                ...(emp.tracker_config.colors || {})
+                            }
+                        };
+                    }
+
                     localStorage.setItem('techassist_employee', JSON.stringify(emp));
                     this.notify('Bem-vindo, ' + emp.name, 'success');
                     await this.fetchEmployees();
