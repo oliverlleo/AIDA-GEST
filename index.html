@@ -358,10 +358,9 @@
                                                  :style="`width: 50%; background-color: ${trackerConfig.colors.progress_bar}`"></div>
 
                                             <!-- Dots (Mocking Visible Stages) -->
-                                            <div class="flex justify-between relative z-10 w-full">
+                                            <div class="flex justify-between relative z-10 w-full px-1">
                                                 <template x-for="(step, index) in trackerConfig.visible_stages" :key="index">
-                                                    <!-- Simplified logic for preview: show 3-4 dots -->
-                                                    <div class="relative flex flex-col items-center group" x-show="index < 5">
+                                                    <div class="relative flex flex-col items-center group flex-1">
                                                         <div class="w-3 h-3 rounded-full border-2 transition-all z-10 bg-white"
                                                              :style="index <= Math.floor(trackerConfig.visible_stages.length / 2) ? `border-color: ${trackerConfig.colors.progress_bar}; background-color: ${trackerConfig.colors.progress_bar}` : `border-color: ${trackerConfig.colors.icon_inactive}`">
                                                         </div>

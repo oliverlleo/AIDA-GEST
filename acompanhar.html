@@ -231,7 +231,8 @@
                         }
                     }
 
-                    // Fallback: If no previous visible step exists, show the first visible one
+                    // Fallback: Default to the first visible step (likely 'Aberto')
+                    // This handles the case where multiple initial steps are hidden.
                     return visibleSteps[0] || 'Aberto';
                 },
 
