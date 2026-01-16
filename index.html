@@ -1931,9 +1931,34 @@
 
                                                     <!-- Aberto -->
                                                     <template x-if="ticket.status === 'Aberto'">
-                                                        <button @click="startAnalysis(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
-                                                            Iniciar Análise
-                                                        </button>
+                                                        <div class="w-full">
+                                                            <!-- Standard -->
+                                                            <template x-if="!trackerConfig.enable_outsourced">
+                                                                <button @click="startAnalysis(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
+                                                                    Iniciar Análise
+                                                                </button>
+                                                            </template>
+                                                            <!-- Outsourced Dropdown -->
+                                                            <template x-if="trackerConfig.enable_outsourced">
+                                                                <div x-data="{ open: false }" class="relative">
+                                                                    <button @click="open = !open" @click.outside="open = false" class="w-full bg-black text-white text-xs font-bold py-2 rounded hover:bg-gray-800 flex items-center justify-between px-3">
+                                                                        <span>Iniciar</span>
+                                                                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                                                                    </button>
+                                                                    <div x-show="open" class="absolute top-full left-0 w-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden"
+                                                                         x-transition:enter="transition ease-out duration-100"
+                                                                         x-transition:enter-start="transform opacity-0 scale-95"
+                                                                         x-transition:enter-end="transform opacity-100 scale-100">
+                                                                        <button @click="startAnalysis(ticket); open = false" class="w-full text-left px-3 py-2 hover:bg-blue-50 text-blue-700 font-bold text-xs border-b border-gray-100 flex items-center">
+                                                                            <i class="fa-solid fa-microscope mr-2 w-4"></i> Análise
+                                                                        </button>
+                                                                        <button @click="startOutsourcedFlow(ticket); open = false" class="w-full text-left px-3 py-2 hover:bg-pink-50 text-pink-700 font-bold text-xs flex items-center">
+                                                                            <i class="fa-solid fa-handshake mr-2 w-4"></i> Terceiro
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </template>
+                                                        </div>
                                                     </template>
 
                                                     <!-- Pedir Prioridade (General Action for Tech Stages) -->

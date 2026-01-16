@@ -1448,7 +1448,8 @@ function app() {
             this.modals.viewTicket = true;
         },
 
-        // ... (startEditingDeadlines, cancelEditingDeadlines, saveDeadlines, saveTicketChanges, uploadTicketPhoto, handlePhotoUpload, removePhoto, getTrackingLink, openShareModal, copyTrackingLink, sendTrackingWhatsApp, sendCarrierWhatsApp, fetchInternalNotes, fetchGeneralNotes, handleNoteInput, selectMention, formatNoteContent, sendNote, addNoteChecklistItem, removeNoteChecklistItem, toggleNoteCheckStatus, resolveNote, archiveNote - unchanged) ...
+        // --- RESTORED FUNCTIONS ---
+
         startEditingDeadlines() {
             if (!this.selectedTicket) return;
             const formatForInput = (dateStr) => {
@@ -1523,6 +1524,291 @@ function app() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        async saveTicketChanges() {
+            if (!this.selectedTicket) return;
+            this.loading = true;
+            try {
+                await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', {
+                    tech_notes: this.selectedTicket.tech_notes,
+                    parts_needed: this.selectedTicket.parts_needed,
+                    checklist_data: this.selectedTicket.checklist_data,
+                    checklist_final_data: this.selectedTicket.checklist_final_data,
+                    photos_urls: this.selectedTicket.photos_urls // In case photos were removed/added
+                });
+                this.notify("Anotações salvas.");
+                // Note: we don't necessarily need to fetchTickets if we just updated local selectedTicket
+            } catch (e) {
+                this.notify("Erro ao salvar: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async uploadTicketPhoto(file, ticketId) {
+            const path = `${this.user.workspace_id}/${ticketId}/${Date.now()}_${file.name}`;
+            const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
+
+            let token = this.session?.access_token || SUPABASE_KEY;
+            const headers = {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${token}`,
+                'x-workspace-id': this.user.workspace_id,
+                'Content-Type': file.type
+            };
+
+            const response = await fetch(url, { method: 'POST', headers, body: file });
+            if (!response.ok) throw new Error("Upload failed");
+
+            return `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
+        },
+
+        async handlePhotoUpload(event, type) {
+            const files = event.target.files;
+            if (!files.length) return;
+
+            this.loading = true;
+            try {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    // If 'new', we upload to a temp folder or just wait? No, upload immediately to storage is better
+                    // But we don't have ticket ID for new ticket.
+                    // For existing ticket ('existing'), use ticket ID.
+                    let ticketId = (type === 'existing' && this.selectedTicket) ? this.selectedTicket.id : 'temp';
+
+                    const publicUrl = await this.uploadTicketPhoto(file, ticketId);
+
+                    if (type === 'existing' && this.selectedTicket) {
+                        this.selectedTicket.photos_urls.push(publicUrl);
+                        // Save immediately
+                        await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', {
+                            photos_urls: this.selectedTicket.photos_urls
+                        });
+                    } else if (type === 'new') {
+                        this.ticketForm.photos.push(publicUrl);
+                    }
+                }
+                this.notify("Fotos enviadas!");
+            } catch (e) {
+                this.notify("Erro upload: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        removePhoto(index, type) {
+            if (type === 'existing' && this.selectedTicket) {
+                this.selectedTicket.photos_urls.splice(index, 1);
+                // Save
+                this.saveTicketChanges(); // Reuse save
+            } else if (type === 'new') {
+                this.ticketForm.photos.splice(index, 1);
+            }
+        },
+
+        getTrackingLink(ticketId) {
+            // Assuming current URL is the base
+            const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+            return `${baseUrl}acompanhar.html?id=${ticketId}`;
+        },
+
+        openShareModal() {
+            if (!this.selectedTicket) return;
+            this.showShareModal = true;
+        },
+
+        async copyTrackingLink() {
+            if (!this.selectedTicket) return;
+            const link = this.getTrackingLink(this.selectedTicket.id);
+            try {
+                await navigator.clipboard.writeText(link);
+                this.notify("Link copiado!");
+            } catch (e) {
+                this.notify("Erro ao copiar.", "error");
+            }
+        },
+
+        sendTrackingWhatsApp() {
+            if (!this.selectedTicket) return;
+            const ticket = this.selectedTicket;
+            if (!ticket.contact_info) return this.notify("Cliente sem contato.", "error");
+
+            const link = this.getTrackingLink(ticket.id);
+            const clientName = ticket.client_name.split(' ')[0];
+            const msg = `Olá ${clientName}, acompanhe o status do seu ${ticket.device_model} (OS ${ticket.os_number}) pelo link: ${link}`;
+
+            this.openWhatsApp(ticket.contact_info);
+            // Wait a moment for new tab, then try opening with text (can't do both easily without user interaction in some browsers)
+            let number = ticket.contact_info.replace(/\D/g, '');
+            if (number.length <= 11) number = '55' + number;
+            window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+        },
+
+        sendCarrierWhatsApp(ticket, carrier, code) {
+            if (!ticket.contact_info) return;
+            const clientName = ticket.client_name.split(' ')[0];
+            let msg = `Olá ${clientName}, seu aparelho ${ticket.device_model} (OS ${ticket.os_number}) foi enviado via ${carrier}.`;
+            if (code) msg += ` Código de rastreio: ${code}`;
+
+            let number = ticket.contact_info.replace(/\D/g, '');
+            if (number.length <= 11) number = '55' + number;
+            window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+        },
+
+        // --- INTERNAL NOTES ---
+        async fetchInternalNotes(ticketId) {
+            try {
+                const data = await this.supabaseFetch(`internal_notes?ticket_id=eq.${ticketId}&order=created_at.desc`);
+                if (data) this.internalNotes = data;
+            } catch(e) {
+                console.error(e);
+            }
+        },
+
+        async fetchGeneralNotes() {
+            if (!this.user?.workspace_id) return;
+            try {
+                let query = `internal_notes?workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&order=created_at.desc`;
+                if (!this.showResolvedNotes) {
+                    query += `&is_resolved=eq.false`;
+                }
+                // Date filter
+                if (this.noteDateFilter) {
+                    // Simple contains or range? Let's do >= start of day
+                    // Supabase filtering on date string might need specific format.
+                    // Let's rely on client side filter for simplicity or improved query if needed.
+                    // Actually, let's filter client side for date to avoid complex query construction here
+                }
+
+                const data = await this.supabaseFetch(query);
+                if (data) {
+                    this.generalNotes = data.filter(n => {
+                        if (this.noteDateFilter) {
+                            return n.created_at.startsWith(this.noteDateFilter);
+                        }
+                        return true;
+                    });
+                }
+            } catch(e) { console.error(e); }
+        },
+
+        handleNoteInput(event, target) {
+            this.mentionTarget = target;
+            const text = event.target.value;
+            const cursor = event.target.selectionStart;
+            this.mentionCursorPos = cursor;
+
+            // Check for @
+            const lastAt = text.lastIndexOf('@', cursor - 1);
+            if (lastAt !== -1) {
+                const query = text.substring(lastAt + 1, cursor);
+                if (!query.includes(' ')) {
+                    this.mentionQuery = query;
+                    this.showMentionList = true;
+                    this.mentionList = this.employees.filter(e =>
+                        e.name.toLowerCase().includes(query.toLowerCase()) ||
+                        e.username.toLowerCase().includes(query.toLowerCase())
+                    );
+                    return;
+                }
+            }
+            this.showMentionList = false;
+        },
+
+        selectMention(emp) {
+            const targetProp = this.mentionTarget === 'internal' ? 'newNoteText' : 'newGeneralNoteText';
+            const text = this[targetProp];
+            const lastAt = text.lastIndexOf('@', this.mentionCursorPos - 1);
+
+            const newText = text.substring(0, lastAt) + `@${emp.username} ` + text.substring(this.mentionCursorPos);
+            this[targetProp] = newText;
+            this.showMentionList = false;
+            // focus back? tricky with alpine
+        },
+
+        formatNoteContent(content) {
+            if (!content) return '';
+            // Highlight mentions
+            return this.escapeHtml(content).replace(/@(\w+)/g, '<span class="text-brand-500 font-bold">@$1</span>');
+        },
+
+        async sendNote(ticketId = null, isGeneral = false) {
+            const text = isGeneral ? this.newGeneralNoteText : this.newNoteText;
+            const isChecklist = isGeneral ? this.generalNoteIsChecklist : this.noteIsChecklist;
+            const checklistItems = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+
+            if ((!text || !text.trim()) && (!isChecklist || checklistItems.length === 0)) return;
+
+            this.loading = true;
+            try {
+                const noteData = {
+                    workspace_id: this.user.workspace_id,
+                    ticket_id: ticketId, // Null for general
+                    author_id: this.user.id,
+                    author_name: this.user.name,
+                    content: text,
+                    checklist_data: isChecklist ? checklistItems : null
+                };
+
+                await this.supabaseFetch('internal_notes', 'POST', noteData);
+
+                if (isGeneral) {
+                    this.newGeneralNoteText = '';
+                    this.generalNoteChecklistItems = [];
+                    this.generalNoteIsChecklist = false;
+                    await this.fetchGeneralNotes();
+                } else {
+                    this.newNoteText = '';
+                    this.noteChecklistItems = [];
+                    this.noteIsChecklist = false;
+                    await this.fetchInternalNotes(ticketId);
+                }
+            } catch(e) {
+                this.notify("Erro ao enviar nota: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        addNoteChecklistItem(isGeneral = false) {
+            const target = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+            target.push({ item: '', ok: false }); // Empty item to be filled
+        },
+
+        removeNoteChecklistItem(index, isGeneral = false) {
+            const target = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+            target.splice(index, 1);
+        },
+
+        async toggleNoteCheckStatus(note, index) {
+            // Update local state is handled by x-model, just save
+            // But note is in loop.
+            // note.checklist_data[index].ok is flipped.
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    checklist_data: note.checklist_data
+                });
+            } catch(e) { console.error(e); }
+        },
+
+        async resolveNote(note) {
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    is_resolved: !note.is_resolved
+                });
+                if (!note.ticket_id) this.fetchGeneralNotes();
+                else this.fetchInternalNotes(note.ticket_id);
+            } catch(e) { console.error(e); }
+        },
+
+        async archiveNote(note) {
+            if (!confirm("Arquivar esta nota?")) return;
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'DELETE');
+                if (!note.ticket_id) this.fetchGeneralNotes();
+                else this.fetchInternalNotes(note.ticket_id);
+            } catch(e) { console.error(e); }
         },
 
         // --- WORKFLOW ACTIONS ---
