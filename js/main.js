@@ -48,6 +48,8 @@ function app() {
         // Tracker Configuration (NEW)
         trackerConfig: {
             logo_url: '',
+            logo_size: 64, // Default size in px
+            custom_labels: {}, // Custom overrides for stage names
             colors: {
                 background: '#FFF7ED', // orange-50
                 card_bg: '#FFFFFF',
@@ -810,6 +812,51 @@ function app() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        handleLogoRemove() {
+            this.trackerConfig.logo_url = '';
+        },
+
+        resetTrackerStages() {
+            if (confirm("Deseja restaurar os nomes originais das etapas?")) {
+                this.trackerConfig.custom_labels = {};
+                this.notify("Nomes restaurados (Salvar para aplicar)");
+            }
+        },
+
+        resetTrackerConfig() {
+            if (confirm("Deseja redefinir toda a configuração da página de acompanhamento?")) {
+                this.trackerConfig = {
+                    logo_url: '',
+                    logo_size: 64,
+                    custom_labels: {},
+                    colors: {
+                        background: '#FFF7ED',
+                        card_bg: '#FFFFFF',
+                        header_bg: '#000000',
+                        text_primary: '#1a1a1a',
+                        text_secondary: '#6B7280',
+                        progress_bar: '#FF6B00',
+                        progress_bg: '#E5E7EB',
+                        icon_active: '#FF6B00',
+                        icon_inactive: '#D1D5DB',
+                        status_label: '#FF6B00'
+                    },
+                    visible_stages: [
+                        'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+                        'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
+                    ]
+                };
+                this.notify("Configuração redefinida (Salvar para aplicar)");
+            }
+        },
+
+        getStatusLabelForTracker(status) {
+            if (this.trackerConfig.custom_labels && this.trackerConfig.custom_labels[status]) {
+                return this.trackerConfig.custom_labels[status];
+            }
+            return this.getStatusLabel(status);
         },
 
         toggleTrackerStage(stage) {

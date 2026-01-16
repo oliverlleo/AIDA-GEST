@@ -62,11 +62,11 @@
             <!-- Dynamic Logo -->
             <div class="mb-4 flex justify-center">
                 <template x-if="config.logo_url">
-                    <img :src="config.logo_url" class="h-16 object-contain" alt="Logo">
+                    <img :src="config.logo_url" class="object-contain" :style="`height: ${config.logo_size}px`" alt="Logo">
                 </template>
                 <template x-if="!config.logo_url">
-                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full shadow-sm"
-                         :style="`background-color: ${config.colors.background}; color: ${config.colors.icon_active}`">
+                    <div class="inline-flex items-center justify-center rounded-full shadow-sm"
+                         :style="`width: ${config.logo_size}px; height: ${config.logo_size}px; background-color: ${config.colors.background}; color: ${config.colors.icon_active}`">
                         <i class="fa-solid fa-mobile-screen-button text-3xl"></i>
                     </div>
                 </template>
@@ -187,6 +187,8 @@
                 // Default Config (Overwritten by backend)
                 config: {
                     logo_url: '',
+                    logo_size: 64,
+                    custom_labels: {},
                     visible_stages: ALL_POSSIBLE_STEPS,
                     colors: {
                         background: '#FFF7ED',
@@ -280,6 +282,8 @@
                                 // Deep merge colors to avoid undefined errors if partial config
                                 this.config = {
                                     logo_url: this.ticket.tracker_config.logo_url || '',
+                                    logo_size: this.ticket.tracker_config.logo_size || 64,
+                                    custom_labels: this.ticket.tracker_config.custom_labels || {},
                                     visible_stages: this.ticket.tracker_config.visible_stages || ALL_POSSIBLE_STEPS,
                                     colors: {
                                         ...this.config.colors,
@@ -297,6 +301,11 @@
                 },
 
                 getStatusLabel(status) {
+                    // Check for custom overrides first
+                    if (this.config.custom_labels && this.config.custom_labels[status]) {
+                        return this.config.custom_labels[status];
+                    }
+
                     const labels = {
                         'Aberto': 'Aberto',
                         'Analise Tecnica': 'Em Análise Técnica',
