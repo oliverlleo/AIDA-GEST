@@ -490,6 +490,31 @@
                                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
                                 </label>
                             </div>
+
+                            <!-- Supplier List (Visible if Enabled) -->
+                            <div x-show="trackerConfig.enable_outsourced" class="mt-4 bg-gray-50 p-4 rounded-xl border border-gray-200" x-transition>
+                                <div class="flex justify-between items-center mb-4">
+                                    <h4 class="font-bold text-gray-700 text-sm">Gerenciar Parceiros/Fornecedores</h4>
+                                    <button @click="openSupplierModal()" class="text-xs bg-black text-white px-3 py-1.5 rounded font-bold hover:bg-gray-800 flex items-center">
+                                        <i class="fa-solid fa-plus mr-1"></i> Adicionar
+                                    </button>
+                                </div>
+                                <div class="space-y-2">
+                                    <template x-for="sup in suppliers" :key="sup.id">
+                                        <div class="flex justify-between items-center bg-white p-2 rounded border border-gray-200">
+                                            <div>
+                                                <div class="font-bold text-sm text-gray-800" x-text="sup.name"></div>
+                                                <div class="text-[10px] text-gray-500" x-text="sup.phone || 'Sem telefone'"></div>
+                                            </div>
+                                            <div class="flex space-x-2">
+                                                <button @click="openSupplierModal(sup)" class="text-blue-500 hover:text-blue-700 p-1"><i class="fa-solid fa-pen"></i></button>
+                                                <button @click="deleteSupplier(sup.id)" class="text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash"></i></button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="suppliers.length === 0" class="text-center text-xs text-gray-400 py-2 italic">Nenhum fornecedor cadastrado.</div>
+                                </div>
+                            </div>
                         </div>
 
                     </div>
@@ -1932,30 +1957,44 @@
                                                     <!-- Aberto -->
                                                     <template x-if="ticket.status === 'Aberto'">
                                                         <div class="w-full">
-                                                            <!-- Standard -->
-                                                            <template x-if="!trackerConfig.enable_outsourced">
-                                                                <button @click="startAnalysis(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
-                                                                    Iniciar Análise
+
+                                                            <!-- 1. Pre-defined Outsourced (Created as Outsourced) -->
+                                                            <template x-if="ticket.is_outsourced">
+                                                                <button @click="sendToOutsourced(ticket, true)" class="w-full bg-pink-600 text-white text-xs font-bold py-2 rounded hover:bg-pink-700 flex items-center justify-center shadow-sm">
+                                                                    <i class="fa-solid fa-paper-plane mr-2"></i> Enviar Terceiro
                                                                 </button>
                                                             </template>
-                                                            <!-- Outsourced Dropdown -->
-                                                            <template x-if="trackerConfig.enable_outsourced">
-                                                                <div x-data="{ open: false }" class="relative">
-                                                                    <button @click="open = !open" @click.outside="open = false" class="w-full bg-black text-white text-xs font-bold py-2 rounded hover:bg-gray-800 flex items-center justify-between px-3">
-                                                                        <span>Iniciar</span>
-                                                                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
-                                                                    </button>
-                                                                    <div x-show="open" class="absolute top-full left-0 w-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden"
-                                                                         x-transition:enter="transition ease-out duration-100"
-                                                                         x-transition:enter-start="transform opacity-0 scale-95"
-                                                                         x-transition:enter-end="transform opacity-100 scale-100">
-                                                                        <button @click="startAnalysis(ticket); open = false" class="w-full text-left px-3 py-2 hover:bg-blue-50 text-blue-700 font-bold text-xs border-b border-gray-100 flex items-center">
-                                                                            <i class="fa-solid fa-microscope mr-2 w-4"></i> Análise
+
+                                                            <!-- 2. Standard or Not yet defined -->
+                                                            <template x-if="!ticket.is_outsourced">
+                                                                <div class="w-full">
+                                                                    <!-- Standard Mode (Outsourced Disabled) -->
+                                                                    <template x-if="!trackerConfig.enable_outsourced">
+                                                                        <button @click="startAnalysis(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
+                                                                            Iniciar Análise
                                                                         </button>
-                                                                        <button @click="startOutsourcedFlow(ticket); open = false" class="w-full text-left px-3 py-2 hover:bg-pink-50 text-pink-700 font-bold text-xs flex items-center">
-                                                                            <i class="fa-solid fa-handshake mr-2 w-4"></i> Terceiro
-                                                                        </button>
-                                                                    </div>
+                                                                    </template>
+
+                                                                    <!-- Hybrid Mode (Outsourced Enabled) -->
+                                                                    <template x-if="trackerConfig.enable_outsourced">
+                                                                        <div x-data="{ open: false }" class="relative">
+                                                                            <button @click="open = !open" @click.outside="open = false" class="w-full bg-black text-white text-xs font-bold py-2 rounded hover:bg-gray-800 flex items-center justify-between px-3">
+                                                                                <span>Iniciar</span>
+                                                                                <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                                                                            </button>
+                                                                            <div x-show="open" class="absolute top-full left-0 w-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden"
+                                                                                 x-transition:enter="transition ease-out duration-100"
+                                                                                 x-transition:enter-start="transform opacity-0 scale-95"
+                                                                                 x-transition:enter-end="transform opacity-100 scale-100">
+                                                                                <button @click="startAnalysis(ticket); open = false" class="w-full text-left px-3 py-2 hover:bg-blue-50 text-blue-700 font-bold text-xs border-b border-gray-100 flex items-center">
+                                                                                    <i class="fa-solid fa-microscope mr-2 w-4"></i> Análise
+                                                                                </button>
+                                                                                <button @click="startOutsourcedFlow(ticket); open = false" class="w-full text-left px-3 py-2 hover:bg-pink-50 text-pink-700 font-bold text-xs flex items-center">
+                                                                                    <i class="fa-solid fa-handshake mr-2 w-4"></i> Terceiro
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </template>
                                                                 </div>
                                                             </template>
                                                         </div>
@@ -2692,6 +2731,28 @@
 
     <!-- MODALS -->
 
+    <!-- SUPPLIER MODAL (NEW) -->
+    <div x-show="modals.supplier" class="fixed inset-0 z-[70] flex items-center justify-center" x-cloak>
+        <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.supplier = false"></div>
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm z-10 relative">
+            <h3 class="text-lg font-bold mb-4 text-gray-800" x-text="supplierForm.id ? 'Editar Fornecedor' : 'Novo Fornecedor'"></h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Nome da Empresa</label>
+                    <input type="text" x-model="supplierForm.name" class="w-full border rounded-lg p-2.5 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">WhatsApp (com DDD)</label>
+                    <input type="text" x-model="supplierForm.phone" class="w-full border rounded-lg p-2.5 text-sm">
+                </div>
+                <div class="flex space-x-3 pt-2">
+                    <button @click="modals.supplier = false" class="flex-1 text-gray-500 font-bold text-sm hover:text-black">Cancelar</button>
+                    <button @click="saveSupplier()" class="flex-1 bg-black text-white py-2 rounded-lg font-bold hover:bg-brand-500 transition-colors">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 1. NEW EMPLOYEE MODAL -->
     <div x-show="modals.newEmployee" class="fixed inset-0 z-[60] overflow-y-auto" x-cloak>
         <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -2862,15 +2923,42 @@
                             <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho</label>
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
                         </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Técnico Responsável *</label>
-                            <select x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
+                        <div x-data="{ isOutsourced: false }">
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-xs font-bold text-gray-500" x-text="isOutsourced ? 'Parceiro / Fornecedor *' : 'Técnico Responsável *'"></label>
+                                <template x-if="trackerConfig.enable_outsourced">
+                                    <label class="flex items-center cursor-pointer space-x-2">
+                                        <span class="text-[10px] font-bold text-gray-400">Terceirizado?</span>
+                                        <div class="relative">
+                                            <input type="checkbox" x-model="isOutsourced" @change="ticketForm.is_outsourced = isOutsourced; ticketForm.technician_id = ''" class="sr-only peer">
+                                            <div class="w-8 h-4 bg-gray-300 rounded-full peer peer-checked:bg-brand-500 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all"></div>
+                                        </div>
+                                    </label>
+                                </template>
+                            </div>
+
+                            <!-- Tech Select -->
+                            <select x-show="!isOutsourced" x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
                                 <option value="">-- Selecione um Técnico --</option>
                                 <option value="all">TODOS (Disponível para equipe)</option>
                                 <template x-for="tech in getTechnicians()" :key="tech.id">
                                     <option :value="tech.id" x-text="tech.name"></option>
                                 </template>
                             </select>
+
+                            <!-- Supplier Select & Deadline -->
+                            <div x-show="isOutsourced" class="space-y-2">
+                                <select x-model="ticketForm.outsourced_company_id" class="w-full border rounded-lg p-2.5 bg-white focus:ring-brand-500">
+                                    <option value="">-- Selecione Fornecedor --</option>
+                                    <template x-for="sup in suppliers" :key="sup.id">
+                                        <option :value="sup.id" x-text="sup.name"></option>
+                                    </template>
+                                </select>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 mb-1">Prazo do Fornecedor</label>
+                                    <input type="datetime-local" x-model="ticketForm.outsourced_deadline" class="w-full border rounded-lg p-2 text-sm">
+                                </div>
+                            </div>
                         </div>
                         <div class="col-span-2" x-data="{ open: false, search: '' }">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado *</label>
@@ -3131,21 +3219,33 @@
                                     </button>
                                 </template>
 
-                                <!-- Outsourced Mode (Dropdown) -->
-                                <template x-if="trackerConfig.enable_outsourced">
-                                    <div x-data="{ open: false }" class="relative">
-                                        <button @click="open = !open" @click.outside="open = false" class="w-full bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-800 text-sm shadow flex items-center justify-between">
-                                            <span><i class="fa-solid fa-play mr-2"></i> Iniciar</span>
-                                            <i class="fa-solid fa-chevron-down"></i>
-                                        </button>
-                                        <div x-show="open" class="absolute top-full left-0 w-full mt-2 bg-white rounded-lg shadow-xl border border-gray-100 z-20 overflow-hidden" x-transition>
-                                            <button @click="startAnalysis(selectedTicket); open = false" class="w-full text-left px-4 py-3 hover:bg-blue-50 text-blue-700 font-bold text-sm border-b border-gray-50 flex items-center">
-                                                <i class="fa-solid fa-microscope mr-2 w-5"></i> Enviar para Análise
-                                            </button>
-                                            <button @click="startOutsourcedFlow(selectedTicket); open = false" class="w-full text-left px-4 py-3 hover:bg-pink-50 text-pink-700 font-bold text-sm flex items-center">
-                                                <i class="fa-solid fa-handshake mr-2 w-5"></i> Enviar para Terceirizado
-                                            </button>
-                                        </div>
+                                <!-- 1. Pre-defined Outsourced (Created as Outsourced) -->
+                                <template x-if="selectedTicket.is_outsourced">
+                                    <button @click="sendToOutsourced(selectedTicket, true)" class="w-full bg-pink-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-700 text-sm shadow flex items-center justify-center">
+                                        <i class="fa-solid fa-paper-plane mr-2"></i> Enviar para Terceiro
+                                    </button>
+                                </template>
+
+                                <!-- 2. Standard or Not yet defined -->
+                                <template x-if="!selectedTicket.is_outsourced">
+                                    <div>
+                                        <!-- Outsourced Mode (Dropdown) -->
+                                        <template x-if="trackerConfig.enable_outsourced">
+                                            <div x-data="{ open: false }" class="relative">
+                                                <button @click="open = !open" @click.outside="open = false" class="w-full bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-800 text-sm shadow flex items-center justify-between">
+                                                    <span><i class="fa-solid fa-play mr-2"></i> Iniciar</span>
+                                                    <i class="fa-solid fa-chevron-down"></i>
+                                                </button>
+                                                <div x-show="open" class="absolute top-full left-0 w-full mt-2 bg-white rounded-lg shadow-xl border border-gray-100 z-20 overflow-hidden" x-transition>
+                                                    <button @click="startAnalysis(selectedTicket); open = false" class="w-full text-left px-4 py-3 hover:bg-blue-50 text-blue-700 font-bold text-sm border-b border-gray-50 flex items-center">
+                                                        <i class="fa-solid fa-microscope mr-2 w-5"></i> Enviar para Análise
+                                                    </button>
+                                                    <button @click="startOutsourcedFlow(selectedTicket); open = false" class="w-full text-left px-4 py-3 hover:bg-pink-50 text-pink-700 font-bold text-sm flex items-center">
+                                                        <i class="fa-solid fa-handshake mr-2 w-5"></i> Enviar para Terceirizado
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </template>
                                     </div>
                                 </template>
                             </div>
@@ -3991,16 +4091,9 @@
                                 <option :value="sup.id" x-text="sup.name"></option>
                             </template>
                         </select>
-                        <button x-show="outsourcedForm.supplierId" @click="deleteSupplier(outsourcedForm.supplierId); outsourcedForm.supplierId=''" class="text-red-500 hover:text-red-700 p-2"><i class="fa-solid fa-trash"></i></button>
-                    </div>
-                </div>
-
-                <!-- Add New Supplier -->
-                <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    <p class="text-xs font-bold text-gray-500 mb-2">Ou Cadastrar Novo:</p>
-                    <div class="space-y-2">
-                        <input type="text" x-model="outsourcedForm.newSupplierName" placeholder="Nome da Empresa" class="w-full border rounded p-2 text-sm">
-                        <input type="text" x-model="outsourcedForm.newSupplierPhone" placeholder="WhatsApp (com DDD)" class="w-full border rounded p-2 text-sm">
+                        <button @click="openSupplierModal()" class="bg-black text-white px-3 rounded-lg font-bold hover:bg-gray-800" title="Cadastrar Novo">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
                     </div>
                 </div>
 

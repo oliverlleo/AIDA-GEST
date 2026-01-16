@@ -151,6 +151,7 @@ function app() {
             defects: [], priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '',
+            is_outsourced: false, outsourced_company_id: '', outsourced_deadline: '',
             checklist: [], checklist_final: [], photos: [], notes: ''
         },
         newChecklistItem: '',
@@ -173,6 +174,9 @@ function app() {
             newSupplierName: '',
             newSupplierPhone: ''
         },
+
+        // Supplier Management Form
+        supplierForm: { id: null, name: '', phone: '' },
 
         // Edit Deadlines State
         editingDeadlines: false,
@@ -226,7 +230,7 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, supplier: false },
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -848,6 +852,37 @@ function app() {
             }
         },
 
+        openSupplierModal(supplier = null) {
+            if (supplier) {
+                this.supplierForm = { id: supplier.id, name: supplier.name, phone: supplier.phone || '' };
+            } else {
+                this.supplierForm = { id: null, name: '', phone: '' };
+            }
+            this.modals.supplier = true;
+        },
+
+        async saveSupplier() {
+            if (!this.supplierForm.name) return this.notify("Nome é obrigatório", "error");
+            this.loading = true;
+            try {
+                if (this.supplierForm.id) {
+                    await this.supabaseFetch(`suppliers?id=eq.${this.supplierForm.id}`, 'PATCH', {
+                        name: this.supplierForm.name,
+                        phone: this.supplierForm.phone
+                    });
+                    this.notify("Fornecedor atualizado!");
+                } else {
+                    await this.createSupplier(this.supplierForm.name, this.supplierForm.phone);
+                }
+                this.modals.supplier = false;
+                await this.fetchSuppliers();
+            } catch (e) {
+                this.notify("Erro: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
         // --- COMPANY CONFIG ---
         async saveCompanyConfig() {
             if (!this.user?.workspace_id || !this.hasRole('admin')) return;
@@ -1371,8 +1406,12 @@ function app() {
                  return this.notify("Preencha os campos obrigatórios (*)", "error");
              }
 
-             if (!this.ticketForm.technician_id) {
+             if (!this.ticketForm.is_outsourced && !this.ticketForm.technician_id) {
                  return this.notify("Selecione um Técnico Responsável ou 'Todos'.", "error");
+             }
+
+             if (this.ticketForm.is_outsourced && !this.ticketForm.outsourced_company_id) {
+                 return this.notify("Selecione um Parceiro/Fornecedor.", "error");
              }
 
              if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
@@ -1411,7 +1450,11 @@ function app() {
                      checklist_final_data: this.ticketForm.checklist_final,
                      photos_urls: this.ticketForm.photos,
                      status: 'Aberto',
-                     created_by_name: this.user.name
+                     created_by_name: this.user.name,
+                     // Outsourced Fields
+                     is_outsourced: this.ticketForm.is_outsourced,
+                     outsourced_company_id: this.ticketForm.is_outsourced ? this.ticketForm.outsourced_company_id : null,
+                     outsourced_deadline: this.ticketForm.is_outsourced ? this.toUTC(this.ticketForm.outsourced_deadline) : null
                  };
 
                  const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
@@ -1857,17 +1900,36 @@ function app() {
             this.modals.outsourced = true;
         },
 
-        async sendToOutsourced() {
+        async sendToOutsourced(ticket = null, skipModal = false) {
+            // Logic for pre-defined tickets (already outsourced at creation)
+            if (skipModal && ticket && ticket.is_outsourced) {
+                if (!confirm(`Confirmar envio para ${this.getSupplierName(ticket.outsourced_company_id)}?`)) return;
+
+                this.loading = true;
+                try {
+                    const ctx = this.getLogContext(ticket);
+                    const supplierName = this.getSupplierName(ticket.outsourced_company_id);
+                    const deadlineStr = ticket.outsourced_deadline ? new Date(ticket.outsourced_deadline).toLocaleString() : 'S/ Prazo';
+
+                    await this.updateStatus(ticket, 'Terceirizado', {
+                        outsourced_at: new Date().toISOString()
+                    }, {
+                        action: 'Enviou Terceirizado',
+                        details: `${ctx.device} de ${ctx.client} enviado para ${supplierName}. Prazo: ${deadlineStr}.`
+                    });
+                    this.modals.viewTicket = false; // Close detail modal if open
+                } catch(e) {
+                    this.notify("Erro: " + e.message, "error");
+                } finally {
+                    this.loading = false;
+                }
+                return;
+            }
+
+            // Standard Logic (via Modal)
             if (!this.selectedTicket) return;
             const form = this.outsourcedForm;
             let supplierId = form.supplierId;
-
-            // Check if creating new
-            if (form.newSupplierName) {
-                const newSup = await this.createSupplier(form.newSupplierName, form.newSupplierPhone);
-                if (newSup) supplierId = newSup.id;
-                else return; // failed
-            }
 
             if (!supplierId) return this.notify("Selecione um fornecedor", "error");
             if (!form.deadline) return this.notify("Informe o prazo do fornecedor", "error");
@@ -1897,12 +1959,29 @@ function app() {
             }
         },
 
+        getSupplierName(id) {
+            const s = this.suppliers.find(x => x.id === id);
+            return s ? s.name : 'Terceiro';
+        },
+
         async outsourcedReceived(ticket) {
             const ctx = this.getLogContext(ticket);
             // Move to 'Teste Final'
+            // Format: [Modelo] do cliente [Nome] da os [Número] recebido do fornecedor. Enviado para teste.
+            // getLogContext returns { client: "<b>Name da OS #123</b>", device: "<b>Iphone 13</b>" }
+            // We need to construct it carefully to match request.
+            // Request: "Iphone 13 do cliente João da os 123 recebido do fornecedor. Enviado para teste"
+
+            const device = ticket.device_model;
+            const client = ticket.client_name;
+            const os = ticket.os_number;
+
+            // Using bold formatting consistent with getLogContext style but specific order
+            const details = `<b>${this.escapeHtml(device)}</b> do cliente <b>${this.escapeHtml(client)}</b> da OS <b>${this.escapeHtml(os)}</b> recebido do fornecedor. Enviado para teste.`;
+
             await this.updateStatus(ticket, 'Teste Final', {}, {
                 action: 'Recebeu do Terceiro',
-                details: `Aparelho ${ctx.device} recebido do fornecedor. Enviado para testes.`
+                details: details
             });
         },
 
