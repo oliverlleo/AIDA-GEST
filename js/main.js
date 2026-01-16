@@ -1808,7 +1808,7 @@ function app() {
         },
 
         async startBudget(ticket) {
-            await this.logTicketAction(ticket.id, 'Iniciou Orçamento', 'Visualizou para criar orçamento');
+            // await this.logTicketAction(ticket.id, 'Iniciou Orçamento', 'Visualizou para criar orçamento');
             this.viewTicketDetails(ticket);
             this.openWhatsApp(ticket.contact_info);
         },
