@@ -1808,7 +1808,7 @@ function app() {
         },
 
         async startBudget(ticket) {
-            await this.logTicketAction(ticket.id, 'Iniciou Orçamento', 'Visualizou para criar orçamento');
+            // await this.logTicketAction(ticket.id, 'Iniciou Orçamento', 'Visualizou para criar orçamento');
             this.viewTicketDetails(ticket);
             this.openWhatsApp(ticket.contact_info);
         },
@@ -1885,7 +1885,7 @@ function app() {
              await this.updateStatus(ticket, 'Andamento Reparo', {
                  parts_status: 'Recebido',
                  parts_received_at: new Date().toISOString()
-             }, { action: 'Recebeu Peças', details: `Peça ${part} foi recebida, ${ctx.device} de ${ctx.client} liberado para reparo.` });
+             }, { action: 'Recebeu Peças', details: `Peça ${part} recebida para o ${ctx.device} de ${ctx.client}. Reparo liberado.` });
         },
 
         async startRepair(ticket = this.selectedTicket) {

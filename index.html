@@ -241,6 +241,19 @@
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                <!-- Deadlines -->
+                                                <div class="flex gap-2 mt-1">
+                                                    <template x-if="t.analysis_deadline">
+                                                        <span class="text-[10px]" :class="new Date(t.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                            <i class="fa-solid fa-stopwatch mr-0.5"></i> <span x-text="new Date(t.analysis_deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                        </span>
+                                                    </template>
+                                                    <template x-if="t.deadline">
+                                                        <span class="text-[10px]" :class="new Date(t.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                            <i class="fa-regular fa-calendar-check mr-0.5"></i> <span x-text="new Date(t.deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
                                             </div>
                                             <div class="flex items-center space-x-2">
                                                 <button @click="startBudget(t)" class="text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded font-bold hover:bg-yellow-200 transition-colors">
@@ -259,7 +272,7 @@
                             <!-- Waiting Budget Response (NEW) -->
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
-                                    <h4 class="font-bold text-indigo-800 text-sm">Aguardando Resposta (Enviados)</h4>
+                                    <h4 class="font-bold text-indigo-800 text-sm">Aguardando Aprovação</h4>
                                     <span class="bg-indigo-200 text-indigo-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.waitingBudgetResponse.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
@@ -268,6 +281,19 @@
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                <!-- Deadlines -->
+                                                <div class="flex gap-2 mt-1">
+                                                    <template x-if="t.analysis_deadline">
+                                                        <span class="text-[10px]" :class="new Date(t.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                            <i class="fa-solid fa-stopwatch mr-0.5"></i> <span x-text="new Date(t.analysis_deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                        </span>
+                                                    </template>
+                                                    <template x-if="t.deadline">
+                                                        <span class="text-[10px]" :class="new Date(t.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                            <i class="fa-regular fa-calendar-check mr-0.5"></i> <span x-text="new Date(t.deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
                                             </div>
                                             <div class="flex items-center space-x-2">
                                                 <button @click="viewTicketDetails(t)" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-200 transition-colors">
@@ -286,7 +312,7 @@
                             <!-- Pickups to Notify -->
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-blue-50 px-4 py-3 border-b border-blue-100 flex justify-between items-center">
-                                    <h4 class="font-bold text-blue-800 text-sm">Avisar Retirada (Prontos)</h4>
+                                    <h4 class="font-bold text-blue-800 text-sm">Solicitar Retirada (Aparelhos Pronto)</h4>
                                     <span class="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingPickups.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
@@ -295,6 +321,14 @@
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                <!-- Deadlines -->
+                                                <div class="flex gap-2 mt-1">
+                                                    <template x-if="t.deadline">
+                                                        <span class="text-[10px]" :class="new Date(t.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                            <i class="fa-regular fa-calendar-check mr-0.5"></i> <span x-text="new Date(t.deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
                                             </div>
                                             <div class="flex items-center space-x-2">
                                                 <button @click="viewTicketDetails(t)" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-bold hover:bg-blue-200 transition-colors">
@@ -334,6 +368,19 @@
                                                     </template>
                                                 </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                <!-- Deadlines -->
+                                                <div class="flex gap-2 mt-1">
+                                                    <template x-if="t.analysis_deadline">
+                                                        <span class="text-[10px]" :class="new Date(t.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                            <i class="fa-solid fa-stopwatch mr-0.5"></i> <span x-text="new Date(t.analysis_deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                        </span>
+                                                    </template>
+                                                    <template x-if="t.deadline">
+                                                        <span class="text-[10px]" :class="new Date(t.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                            <i class="fa-regular fa-calendar-check mr-0.5"></i> <span x-text="new Date(t.deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
                                             </div>
                                             <button @click="startAnalysis(t)"
                                                     class="text-xs bg-gray-800 text-white px-3 py-1.5 rounded font-bold hover:bg-black transition-colors shadow-sm">
@@ -362,6 +409,14 @@
                                                 <div>
                                                     <div class="font-bold text-gray-800 text-sm" x-text="t.device_model"></div>
                                                     <div class="text-xs text-gray-500 truncate w-32" x-text="t.parts_needed || 'Peças não listadas'"></div>
+                                                    <!-- Deadlines -->
+                                                    <div class="flex gap-2 mt-1">
+                                                        <template x-if="t.deadline">
+                                                            <span class="text-[10px]" :class="new Date(t.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                                <i class="fa-regular fa-calendar-check mr-0.5"></i> <span x-text="new Date(t.deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                            </span>
+                                                        </template>
+                                                    </div>
                                                 </div>
                                                 <button @click="viewTicketDetails(t)" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded font-bold hover:bg-purple-200 transition-colors">
                                                     Ver
@@ -384,6 +439,14 @@
                                                 <div>
                                                     <div class="font-bold text-gray-800 text-sm" x-text="t.device_model"></div>
                                                     <div class="text-xs text-gray-500 truncate w-32" x-text="t.parts_needed || 'Peças'"></div>
+                                                    <!-- Deadlines -->
+                                                    <div class="flex gap-2 mt-1">
+                                                        <template x-if="t.deadline">
+                                                            <span class="text-[10px]" :class="new Date(t.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-400'">
+                                                                <i class="fa-regular fa-calendar-check mr-0.5"></i> <span x-text="new Date(t.deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                            </span>
+                                                        </template>
+                                                    </div>
                                                 </div>
                                                 <button @click="viewTicketDetails(t)" class="text-xs bg-teal-100 text-teal-700 px-3 py-1.5 rounded font-bold hover:bg-teal-200 transition-colors">
                                                     Ver
@@ -421,6 +484,14 @@
                                                              <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
+                                                        <!-- Deadlines -->
+                                                        <div class="flex gap-2 mb-1">
+                                                            <template x-if="t.deadline">
+                                                                <span class="text-[9px]" :class="new Date(t.deadline) < new Date() ? 'text-red-700 font-bold' : 'text-red-400'">
+                                                                    <i class="fa-regular fa-calendar-check mr-0.5"></i> <span x-text="new Date(t.deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                                </span>
+                                                            </template>
+                                                        </div>
                                                         <div class="flex justify-between items-center">
                                                             <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-red-200 text-red-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
                                                             <i class="fa-solid fa-bell fa-shake text-[10px] text-red-500"></i>
