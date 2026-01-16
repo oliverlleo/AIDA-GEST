@@ -3297,7 +3297,24 @@
                                 <div class="grid grid-cols-1 gap-2 mb-3">
                                     <p class="text-sm"><span class="font-bold text-gray-600">Serial:</span> <span x-text="selectedTicket.serial_number || '-'"></span></p>
                                     <p class="text-sm"><span class="font-bold text-gray-600">Condição:</span> <span x-text="selectedTicket.device_condition || '-'"></span></p>
-                                    <p class="text-sm"><span class="font-bold text-gray-600">Técnico:</span> <span class="bg-black text-white px-2 py-0.5 rounded text-xs" x-text="getEmployeeName(selectedTicket.technician_id)"></span></p>
+
+                                    <!-- Technician or Outsourced Display -->
+                                    <template x-if="!selectedTicket.is_outsourced">
+                                        <p class="text-sm"><span class="font-bold text-gray-600">Técnico:</span> <span class="bg-black text-white px-2 py-0.5 rounded text-xs" x-text="getEmployeeName(selectedTicket.technician_id)"></span></p>
+                                    </template>
+
+                                    <template x-if="selectedTicket.is_outsourced">
+                                        <div class="bg-purple-50 p-2 rounded border border-purple-100 mt-1">
+                                            <p class="text-[10px] font-bold text-purple-700 uppercase mb-0.5">Parceiro (Terceirizado)</p>
+                                            <p class="text-sm font-bold text-gray-800" x-text="getOutsourcedCompany(selectedTicket.outsourced_company_id)"></p>
+
+                                            <template x-if="getOutsourcedPhone(selectedTicket.outsourced_company_id)">
+                                                <button @click="openWhatsApp(getOutsourcedPhone(selectedTicket.outsourced_company_id))" class="mt-1 text-green-600 hover:text-green-800 text-xs font-bold flex items-center">
+                                                    <i class="fa-brands fa-whatsapp mr-1"></i> <span x-text="getOutsourcedPhone(selectedTicket.outsourced_company_id)"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </template>
 
                                     <!-- Editable Deadlines Container -->
                                     <div class="mt-2 p-2 bg-white rounded border border-gray-200">
