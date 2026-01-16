@@ -84,15 +84,32 @@
         <template x-if="isReady">
             <div class="mx-6 mt-2 bg-green-50 border border-green-200 rounded-xl p-6 text-center shadow-inner relative overflow-hidden">
                 <div class="absolute -right-4 -top-4 text-green-100 opacity-50 transform rotate-12">
-                    <i class="fa-solid fa-gift text-9xl"></i>
+                    <i class="fa-solid" :class="ticket.delivery_method === 'carrier' ? 'fa-truck-fast' : 'fa-gift'" class="text-9xl"></i>
                 </div>
                 <div class="relative z-10">
                     <i class="fa-solid fa-circle-check text-4xl text-green-500 mb-3 bounce"></i>
                     <h3 class="text-lg font-bold text-green-800 mb-1">Boa notícia!</h3>
-                    <p class="text-green-700 text-sm leading-relaxed">
-                        Seu aparelho está pronto e testado. <br>
-                        <span class="font-bold">Pode vir buscá-lo quando quiser!</span>
-                    </p>
+
+                    <template x-if="ticket.delivery_method === 'carrier'">
+                        <div>
+                            <p class="text-green-700 text-sm leading-relaxed mb-2">
+                                Seu aparelho foi enviado via <span class="font-bold" x-text="ticket.carrier_name || 'Transportadora'"></span>.
+                            </p>
+                            <template x-if="ticket.tracking_code">
+                                <div class="bg-white bg-opacity-60 rounded p-2 inline-block">
+                                    <span class="text-xs font-bold text-green-800 uppercase block">Código de Rastreio</span>
+                                    <span class="font-mono text-lg font-bold text-green-900" x-text="ticket.tracking_code"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <template x-if="ticket.delivery_method !== 'carrier'">
+                        <p class="text-green-700 text-sm leading-relaxed">
+                            Seu aparelho está pronto e testado. <br>
+                            <span class="font-bold">Pode vir buscá-lo quando quiser!</span>
+                        </p>
+                    </template>
                 </div>
             </div>
         </template>
@@ -318,8 +335,16 @@
                     };
 
                     // Special case for Ready logic override
-                    if (status === 'Retirada Cliente' && this.ticket && this.ticket.pickup_available) return 'Pronto para Retirada';
-                    if (status === 'Retirada Cliente' && this.ticket && !this.ticket.pickup_available) return 'Aguardando Liberação';
+                    if (status === 'Retirada Cliente' && this.ticket && this.ticket.pickup_available) {
+                        if (this.ticket.delivery_method === 'carrier') {
+                            return 'Enviado / Em Trânsito';
+                        }
+                        return 'Pronto para Retirada';
+                    }
+                    if (status === 'Retirada Cliente' && this.ticket && !this.ticket.pickup_available) {
+                        if (this.config.enable_logistics) return 'Expedição / Logística';
+                        return 'Aguardando Liberação';
+                    }
 
                     return labels[status] || status;
                 },
