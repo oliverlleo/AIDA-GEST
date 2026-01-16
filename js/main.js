@@ -92,7 +92,10 @@ function app() {
             priorityTickets: [],
             pendingPurchase: [],
             pendingReceipt: [],
-            pendingTech: []
+            pendingTech: [],
+            // Logistics
+            pendingTracking: [],
+            pendingDelivery: []
         },
         metrics: {
              filteredTickets: [],
@@ -209,7 +212,11 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false },
+
+        // Logistics State
+        logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
+        logisticsForm: { carrier: '', tracking: '' },
 
         // Notifications
         notificationsList: [],
@@ -830,6 +837,7 @@ function app() {
                 this.trackerConfig = {
                     logo_url: '',
                     logo_size: 64,
+                    enable_logistics: false,
                     custom_labels: {},
                     colors: {
                         background: '#FFF7ED',
@@ -1948,6 +1956,11 @@ function app() {
             if (success) {
                 this.modals.outcome = false;
                 const ctx = this.getLogContext(ticket);
+                // Redirect logic based on Logistics Mode
+                const nextStatus = this.trackerConfig.enable_logistics ? 'Expedição / Logística' : 'Retirada Cliente';
+                // If standard mode, it goes to "Retirada Cliente" which matches current DB/UI logic.
+                // If logistics mode, it goes to "Expedição / Logística" (conceptually same status 'Retirada Cliente' in DB, just renamed in UI).
+                // Actually status string in DB is 'Retirada Cliente', UI maps it.
                 await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
             } else {
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
@@ -1975,7 +1988,126 @@ function app() {
             }
         },
 
+        // --- LOGISTICS FUNCTIONS ---
+        openLogisticsModal(ticket) {
+            this.selectedTicket = ticket;
+            this.logisticsMode = 'initial';
+            this.logisticsForm = { carrier: '', tracking: '' };
+            this.modals.logistics = true;
+        },
+
+        async confirmLogisticsOption(type) {
+            if (type === 'pickup') {
+                // Execute standard "Disponibilizar" logic for Client Pickup
+                this.loading = true;
+                try {
+                    const ticket = this.selectedTicket;
+                    const ctx = this.getLogContext(ticket);
+
+                    await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', `O ${ctx.device} de ${ctx.client} foi disponibilizado.`);
+
+                    await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
+                        pickup_available: true,
+                        pickup_available_at: new Date().toISOString(),
+                        delivery_method: 'pickup'
+                    });
+
+                    this.notify("Disponibilizado para retirada.");
+                    this.modals.logistics = false;
+                    this.modals.viewTicket = false;
+                    await this.fetchTickets();
+
+                    // Open WhatsApp automatically as per standard flow
+                    this.sendTrackingWhatsApp();
+                } catch(e) {
+                    this.notify("Erro: " + e.message, "error");
+                } finally {
+                    this.loading = false;
+                }
+            }
+        },
+
+        async confirmCarrier() {
+            const form = this.logisticsForm;
+            // Validation: If tracking exists, carrier is mandatory.
+            if (form.tracking && !form.carrier) {
+                return this.notify("Transportadora é obrigatória se houver código de rastreio.", "error");
+            }
+            if (this.logisticsMode === 'carrier_form' && !form.carrier) {
+                 return this.notify("Informe a transportadora.", "error");
+            }
+
+            this.loading = true;
+            try {
+                const ticket = this.selectedTicket;
+                const ctx = this.getLogContext(ticket);
+                const updates = {};
+                let logMsg = '';
+
+                if (this.logisticsMode === 'add_tracking') {
+                    // Updating existing carrier delivery
+                    updates.tracking_code = form.tracking;
+                    // User requested specific text for this action:
+                    logMsg = `Código de rastreio do cliente foi adicionado e o numero do rastrio ${form.tracking}`;
+                    await this.logTicketAction(ticket.id, 'Adicionou Rastreio', logMsg);
+                } else {
+                    // Initial Carrier Setup
+                    updates.delivery_method = 'carrier';
+                    updates.carrier_name = form.carrier;
+                    updates.tracking_code = form.tracking || null;
+                    updates.pickup_available = true; // Mark as "moved forward" conceptually
+                    updates.pickup_available_at = new Date().toISOString();
+
+                    logMsg = `Aparelho ${ctx.device} de ${ctx.client} foi enviado por transportadora.`;
+                    if (form.tracking) {
+                        logMsg += ` Código de Rastreio ${form.tracking}.`;
+                    }
+                    await this.logTicketAction(ticket.id, 'Enviou Transportadora', logMsg);
+                }
+
+                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
+
+                this.notify("Informações de envio atualizadas!");
+                this.modals.logistics = false;
+                this.modals.viewTicket = false;
+                await this.fetchTickets();
+            } catch(e) {
+                this.notify("Erro ao salvar envio: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        addTrackingCode(ticket) {
+            this.selectedTicket = ticket;
+            this.logisticsMode = 'add_tracking';
+            this.logisticsForm = { carrier: ticket.carrier_name || '', tracking: '' };
+            this.modals.logistics = true;
+        },
+
+        async markDelivered(ticket) {
+            // Equivalent to "Chegou" or "Retirado (Finalizar)"
+            const ctx = this.getLogContext(ticket);
+            let action = 'Finalizou Entrega';
+            let details = `${ctx.client} retirou o ${ctx.device}.`;
+
+            if (ticket.delivery_method === 'carrier') {
+                action = 'Entrega Confirmada';
+                details = `O ${ctx.device} de ${ctx.client} chegou ao destino via transportadora.`;
+            }
+
+            await this.updateStatus(ticket, 'Finalizado', {
+                delivered_at: new Date().toISOString()
+            }, { action, details });
+        },
+
         async markAvailable(ticket = this.selectedTicket) {
+             if (this.trackerConfig.enable_logistics) {
+                 this.openLogisticsModal(ticket);
+                 return;
+             }
+
+             // Legacy Flow
              this.loading = true;
              try {
                  const ctx = this.getLogContext(ticket);
@@ -1986,6 +2118,9 @@ function app() {
                     pickup_available_at: new Date().toISOString()
                 });
                 await this.fetchTickets();
+
+                // Open WhatsApp
+                this.sendTrackingWhatsApp();
              } catch(e) {
                  this.notify("Erro: " + e.message, "error");
              } finally {
@@ -2248,6 +2383,21 @@ function app() {
 
             const pendingPickups = tickets.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available);
 
+            // Logistics specific lists
+            const pendingTracking = tickets.filter(t =>
+                t.status === 'Retirada Cliente' &&
+                t.delivery_method === 'carrier' &&
+                !t.tracking_code
+            );
+
+            const pendingDelivery = tickets.filter(t =>
+                t.status === 'Retirada Cliente' &&
+                (
+                    (t.delivery_method === 'pickup' && t.pickup_available) ||
+                    (t.delivery_method === 'carrier' && t.tracking_code)
+                )
+            );
+
             const urgentAnalysis = tickets
                 .filter(t => t.status === 'Analise Tecnica' && t.analysis_deadline)
                 .sort((a, b) => new Date(a.analysis_deadline) - new Date(b.analysis_deadline))
@@ -2276,7 +2426,9 @@ function app() {
                 priorityTickets,
                 pendingPurchase,
                 pendingReceipt,
-                pendingTech
+                pendingTech,
+                pendingTracking,
+                pendingDelivery
             };
         },
 
@@ -2618,7 +2770,25 @@ function app() {
             const comboMap = {};
             const techDetailMap = {};
 
+            // Logistics Stats
+            const logisticsStats = {
+                pickup: { total: 0, success: 0, fail: 0 },
+                carrier: { total: 0, success: 0, fail: 0 }
+            };
+
             filteredTickets.forEach(ticket => {
+                // Logistics Count
+                if (ticket.delivery_method === 'pickup') {
+                    logisticsStats.pickup.total++;
+                    if (ticket.repair_successful === true) logisticsStats.pickup.success++;
+                    if (ticket.repair_successful === false) logisticsStats.pickup.fail++;
+                }
+                if (ticket.delivery_method === 'carrier') {
+                    logisticsStats.carrier.total++;
+                    if (ticket.repair_successful === true) logisticsStats.carrier.success++;
+                    if (ticket.repair_successful === false) logisticsStats.carrier.fail++;
+                }
+
                 if (ticket.device_model) {
                     if (!modelsMap[ticket.device_model]) modelsMap[ticket.device_model] = { total: 0, success: 0, fail: 0 };
                     modelsMap[ticket.device_model].total++;
@@ -2911,7 +3081,8 @@ function app() {
                 techDeepDive,
                 slowestModels, slowestDefects, slowestCombos, fastestTechs,
                 slowestModelsSolution, slowestDefectsSolution, slowestCombosSolution, fastestTechsSolution,
-                slowestModelsDelivery, slowestDefectsDelivery, slowestCombosDelivery, fastestTechsDelivery
+                slowestModelsDelivery, slowestDefectsDelivery, slowestCombosDelivery, fastestTechsDelivery,
+                logisticsStats
             };
         },
 

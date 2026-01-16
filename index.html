@@ -304,6 +304,21 @@
                                 </div>
                             </div>
 
+                            <!-- Logistics Toggle -->
+                            <div class="mb-8">
+                                <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-truck-ramp-box mr-2 text-brand-500"></i> Logística e Expedição</h3>
+                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 flex items-center justify-between">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Ativar Fluxo de Logística</span>
+                                        <span class="text-xs text-gray-500 block">Substitui "Retirada Cliente" por "Expedição" com opções de transportadora.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" x-model="trackerConfig.enable_logistics" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
+                            </div>
+
                             <!-- Visible Stages -->
                             <div>
                                 <div class="flex justify-between items-center mb-2">
@@ -561,10 +576,10 @@
                                 </div>
                             </div>
 
-                            <!-- Pickups to Notify -->
+                            <!-- Pickups to Notify / Logistics Pending -->
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-blue-50 px-4 py-3 border-b border-blue-100 flex justify-between items-center">
-                                    <h4 class="font-bold text-blue-800 text-sm">Solicitar Retirada (Aparelhos Pronto)</h4>
+                                    <h4 class="font-bold text-blue-800 text-sm" x-text="trackerConfig.enable_logistics ? 'Logística e expedição (pendente)' : 'Solicitar Retirada (Aparelhos Pronto)'"></h4>
                                     <span class="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingPickups.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
@@ -583,8 +598,8 @@
                                                 </div>
                                             </div>
                                             <div class="flex items-center space-x-2">
-                                                <button @click="viewTicketDetails(t)" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-bold hover:bg-blue-200 transition-colors">
-                                                    Ver
+                                                <button @click="trackerConfig.enable_logistics ? openLogisticsModal(t) : viewTicketDetails(t)" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-bold hover:bg-blue-200 transition-colors">
+                                                    <span x-text="trackerConfig.enable_logistics ? 'Expedir' : 'Ver'"></span>
                                                 </button>
                                                 <button @click="openWhatsApp(t.contact_info)" class="text-green-500 hover:text-green-700 p-1" title="WhatsApp">
                                                     <i class="fa-brands fa-whatsapp text-lg"></i>
@@ -593,6 +608,60 @@
                                         </div>
                                     </template>
                                     <div x-show="!ops.pendingPickups.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
+                                </div>
+                            </div>
+
+                            <!-- NEW: Pending Tracking (Gerar Rastreio) -->
+                            <div x-show="trackerConfig.enable_logistics" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div class="bg-orange-50 px-4 py-3 border-b border-orange-100 flex justify-between items-center">
+                                    <h4 class="font-bold text-orange-800 text-sm">Gerar Rastreio</h4>
+                                    <span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingTracking.length">0</span>
+                                </div>
+                                <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                    <template x-for="t in ops.pendingTracking" :key="t.id">
+                                        <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
+                                            <div>
+                                                <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                <div class="text-[10px] text-orange-600 font-bold" x-text="'Via: ' + (t.carrier_name || 'Transportadora')"></div>
+                                            </div>
+                                            <div class="flex items-center space-x-2">
+                                                <button @click="addTrackingCode(t)" class="text-xs bg-orange-100 text-orange-700 px-3 py-1.5 rounded font-bold hover:bg-orange-200 transition-colors">
+                                                    Gerar Rastreio
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="!ops.pendingTracking.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
+                                </div>
+                            </div>
+
+                            <!-- NEW: Pending Delivery (Entregue) -->
+                            <div x-show="trackerConfig.enable_logistics" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div class="bg-green-50 px-4 py-3 border-b border-green-100 flex justify-between items-center">
+                                    <h4 class="font-bold text-green-800 text-sm">Entregue (Aguardando Confirmação)</h4>
+                                    <span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingDelivery.length">0</span>
+                                </div>
+                                <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                    <template x-for="t in ops.pendingDelivery" :key="t.id">
+                                        <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
+                                            <div>
+                                                <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                <div class="flex gap-2 mt-1">
+                                                    <span x-show="t.delivery_method === 'pickup'" class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold">Retirada Balcão</span>
+                                                    <span x-show="t.delivery_method === 'carrier'" class="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">Transportadora</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center space-x-2">
+                                                <button @click="markDelivered(t)" class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded font-bold hover:bg-green-200 transition-colors">
+                                                    <i class="fa-solid" :class="t.delivery_method === 'carrier' ? 'fa-check-double' : 'fa-handshake'"></i>
+                                                    <span x-text="t.delivery_method === 'carrier' ? 'Chegou' : 'Entregar'"></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="!ops.pendingDelivery.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
 
@@ -994,6 +1063,52 @@
                                 <span class="text-sm text-gray-500 font-semibold">Chamado → retirada</span>
                             </div>
                             <p class="text-sm text-gray-500 mt-3">Até o cliente retirar.</p>
+                        </div>
+                    </section>
+
+                    <!-- LOGISTICS METRICS (New) -->
+                    <section x-show="trackerConfig.enable_logistics" class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
+                        <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                            <i class="fa-solid fa-truck-ramp-box text-brand-500 mr-2"></i> Performance de Entrega
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Pickup Stats -->
+                            <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <p class="text-xs font-bold text-gray-500 uppercase">Retirada em Balcão</p>
+                                        <p class="text-2xl font-bold text-gray-900" x-text="metrics.logisticsStats?.pickup.total || 0"></p>
+                                    </div>
+                                    <div class="bg-white p-2 rounded-lg shadow-sm text-gray-400"><i class="fa-solid fa-person-walking-luggage"></i></div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <div class="bg-white px-3 py-2 rounded border border-green-100 text-green-700 font-bold">
+                                        <span x-text="metrics.logisticsStats?.pickup.success || 0"></span> Sucessos
+                                    </div>
+                                    <div class="bg-white px-3 py-2 rounded border border-red-100 text-red-600 font-bold">
+                                        <span x-text="metrics.logisticsStats?.pickup.fail || 0"></span> Falhas
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Carrier Stats -->
+                            <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <p class="text-xs font-bold text-gray-500 uppercase">Envio por Transportadora</p>
+                                        <p class="text-2xl font-bold text-gray-900" x-text="metrics.logisticsStats?.carrier.total || 0"></p>
+                                    </div>
+                                    <div class="bg-white p-2 rounded-lg shadow-sm text-gray-400"><i class="fa-solid fa-truck-fast"></i></div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <div class="bg-white px-3 py-2 rounded border border-green-100 text-green-700 font-bold">
+                                        <span x-text="metrics.logisticsStats?.carrier.success || 0"></span> Sucessos
+                                    </div>
+                                    <div class="bg-white px-3 py-2 rounded border border-red-100 text-red-600 font-bold">
+                                        <span x-text="metrics.logisticsStats?.carrier.fail || 0"></span> Falhas
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
@@ -1592,7 +1707,7 @@
                                 <div x-show="showFinalized || status !== 'Finalizado'" class="w-80 flex flex-col bg-gray-100 rounded-lg h-full border border-gray-200">
                                     <!-- Header -->
                                     <div class="p-3 border-b border-gray-200 bg-gray-200 rounded-t-lg flex justify-between items-center sticky top-0">
-                                         <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide" x-text="getStatusLabel(status)"></h3>
+                                        <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide" x-text="(status === 'Retirada Cliente' && trackerConfig.enable_logistics) ? 'Expedição / Logística' : getStatusLabel(status)"></h3>
                                         <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="tickets.filter(t => t.status === status).length"></span>
                                     </div>
 
@@ -3512,7 +3627,60 @@
         </div>
     </div>
 
+    <!-- 7. LOGISTICS MODAL -->
+    <div x-show="modals.logistics" class="fixed inset-0 z-[80] flex items-center justify-center" x-cloak>
+        <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.logistics = false"></div>
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md z-10 relative">
+            <h3 class="text-lg font-bold mb-4" x-text="logisticsMode === 'initial' ? 'Opções de Expedição' : (logisticsMode === 'add_tracking' ? 'Gerar Rastreio' : 'Dados do Envio')"></h3>
+
+            <!-- INITIAL MODE: Choice -->
+            <div x-show="logisticsMode === 'initial'">
+                <p class="text-gray-600 mb-4">Como o aparelho será entregue?</p>
+                <div class="space-y-3">
+                    <button @click="confirmLogisticsOption('pickup')" class="w-full bg-white border-2 border-gray-200 p-4 rounded-xl flex items-center justify-between hover:border-brand-500 hover:text-brand-600 transition-all group text-left">
+                        <div>
+                            <span class="font-bold block text-gray-800 group-hover:text-brand-600">Cliente vai retirar</span>
+                            <span class="text-xs text-gray-500">Avisar cliente e aguardar no balcão.</span>
+                        </div>
+                        <i class="fa-solid fa-person-walking-luggage text-2xl text-gray-300 group-hover:text-brand-500"></i>
+                    </button>
+
+                    <button @click="logisticsMode = 'carrier_form'" class="w-full bg-white border-2 border-gray-200 p-4 rounded-xl flex items-center justify-between hover:border-blue-500 hover:text-blue-600 transition-all group text-left">
+                        <div>
+                            <span class="font-bold block text-gray-800 group-hover:text-blue-600">Enviado por Transportadora</span>
+                            <span class="text-xs text-gray-500">Correios, Motoboy, Loggi, etc.</span>
+                        </div>
+                        <i class="fa-solid fa-truck-fast text-2xl text-gray-300 group-hover:text-blue-500"></i>
+                    </button>
+                </div>
+                <div class="mt-4 text-center">
+                     <button @click="modals.logistics = false" class="text-sm text-gray-400 hover:text-gray-600">Cancelar</button>
+                </div>
+            </div>
+
+            <!-- CARRIER FORM MODE -->
+            <div x-show="logisticsMode === 'carrier_form' || logisticsMode === 'add_tracking'">
+                <div class="mb-4" x-show="logisticsMode === 'carrier_form'">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Transportadora</label>
+                    <input type="text" x-model="logisticsForm.carrier" class="w-full border rounded-lg p-2.5 text-sm" placeholder="Ex: Correios">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Código de Rastreio</label>
+                    <input type="text" x-model="logisticsForm.tracking" class="w-full border rounded-lg p-2.5 text-sm" placeholder="Ex: AA123456789BR">
+                    <p class="text-[10px] text-gray-400 mt-1">Se preencher o rastreio, a transportadora é obrigatória.</p>
+                </div>
+
+                <div class="flex space-x-3">
+                    <button @click="modals.logistics = false" class="flex-1 text-gray-500 font-bold text-sm hover:text-black">Cancelar</button>
+                    <button @click="confirmCarrier()" class="flex-1 bg-black text-white py-3 rounded-lg font-bold hover:bg-brand-500">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JS MAIN -->
-    <script src="js/main.js?v=8"></script>
+    <script src="js/main.js?v=9"></script>
 </body>
 </html>
