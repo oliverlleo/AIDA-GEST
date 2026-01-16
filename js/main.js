@@ -1370,7 +1370,7 @@ function app() {
                      device_condition: this.ticketForm.device_condition,
                      technician_id: this.ticketForm.is_outsourced ? null : techId,
                      is_outsourced: this.ticketForm.is_outsourced,
-                     outsourced_company_id: (this.ticketForm.is_outsourced && this.ticketForm.outsourced_company_id) ? this.ticketForm.outsourced_company_id : null,
+                     outsourced_company_id: (this.ticketForm.is_outsourced && this.ticketForm.outsourced_company_id && this.ticketForm.outsourced_company_id !== '') ? this.ticketForm.outsourced_company_id : null,
                      checklist_data: this.ticketForm.checklist,
                      checklist_final_data: this.ticketForm.checklist_final,
                      photos_urls: this.ticketForm.photos,
