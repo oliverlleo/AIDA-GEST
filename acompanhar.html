@@ -30,12 +30,15 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="bg-orange-50 text-gray-900 font-sans min-h-screen flex items-center justify-center p-4" x-data="tracker()">
+<body class="text-gray-900 font-sans min-h-screen flex items-center justify-center p-4 transition-colors duration-500"
+      x-data="tracker()"
+      :style="`background-color: ${config.colors.background}`">
 
     <!-- Loading State -->
     <div x-show="loading" class="text-center" x-transition>
-        <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-brand-500 mx-auto mb-4"></div>
-        <p class="text-brand-600 font-bold animate-pulse">Buscando seu aparelho...</p>
+        <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-brand-500 mx-auto mb-4"
+             :style="`border-top-color: ${config.colors.progress_bar}`"></div>
+        <p class="font-bold animate-pulse" :style="`color: ${config.colors.status_label}`">Buscando seu aparelho...</p>
     </div>
 
     <!-- Error State -->
@@ -43,22 +46,34 @@
         <i class="fa-solid fa-circle-exclamation text-4xl text-red-500 mb-4"></i>
         <h2 class="text-xl font-bold text-gray-800 mb-2">Ops! Algo deu errado.</h2>
         <p class="text-gray-500 mb-6" x-text="error"></p>
-        <a href="#" @click.prevent="window.location.reload()" class="text-brand-600 font-bold hover:underline">Tentar novamente</a>
+        <a href="#" @click.prevent="window.location.reload()" class="font-bold hover:underline" :style="`color: ${config.colors.status_label}`">Tentar novamente</a>
     </div>
 
     <!-- Main Content -->
-    <div x-show="!loading && !error && ticket" class="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden relative" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+    <div x-show="!loading && !error && ticket" class="w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-300"
+         :style="`background-color: ${config.colors.card_bg}`"
+         x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
 
         <!-- Top Decoration -->
-        <div class="bg-black h-2 w-full"></div>
+        <div class="h-2 w-full transition-colors" :style="`background-color: ${config.colors.header_bg}`"></div>
 
         <!-- Header -->
         <div class="p-8 pb-4 text-center">
-            <div class="inline-flex items-center justify-center bg-brand-100 w-16 h-16 rounded-full mb-4 shadow-sm text-brand-600">
-                <i class="fa-solid fa-mobile-screen-button text-3xl"></i>
+            <!-- Dynamic Logo -->
+            <div class="mb-4 flex justify-center">
+                <template x-if="config.logo_url">
+                    <img :src="config.logo_url" class="h-16 object-contain" alt="Logo">
+                </template>
+                <template x-if="!config.logo_url">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full shadow-sm"
+                         :style="`background-color: ${config.colors.background}; color: ${config.colors.icon_active}`">
+                        <i class="fa-solid fa-mobile-screen-button text-3xl"></i>
+                    </div>
+                </template>
             </div>
-            <h1 class="text-2xl font-bold text-gray-900 mb-1" x-text="ticket.device_model"></h1>
-            <div class="flex items-center justify-center space-x-2 text-sm text-gray-500">
+
+            <h1 class="text-2xl font-bold mb-1 transition-colors" :style="`color: ${config.colors.text_primary}`" x-text="ticket.device_model"></h1>
+            <div class="flex items-center justify-center space-x-2 text-sm transition-colors" :style="`color: ${config.colors.text_secondary}`">
                 <span class="bg-gray-100 px-2 py-1 rounded font-mono font-bold tracking-wider" x-text="'OS #' + ticket.os_number"></span>
                 <span>&bull;</span>
                 <span x-text="new Date(ticket.created_at).toLocaleDateString('pt-BR')"></span>
@@ -84,16 +99,17 @@
 
         <!-- Timeline Section -->
         <div class="p-8">
-            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-10 text-center">Status do Serviço</h2>
+            <h2 class="text-xs font-bold uppercase tracking-widest mb-10 text-center" :style="`color: ${config.colors.text_secondary}`">Status do Serviço</h2>
 
             <!-- Progress Bar Container -->
             <div class="relative mb-8 px-2">
                 <!-- Background Line -->
-                <div class="absolute top-1/2 left-0 w-full h-1 bg-gray-200 rounded-full -translate-y-1/2 z-0"></div>
+                <div class="absolute top-1/2 left-0 w-full h-1 rounded-full -translate-y-1/2 z-0 transition-colors"
+                     :style="`background-color: ${config.colors.progress_bg}`"></div>
 
                 <!-- Active Progress Line -->
-                <div class="absolute top-1/2 left-0 h-1 bg-brand-500 rounded-full -translate-y-1/2 z-0 transition-all duration-1000 ease-out"
-                     :style="'width: ' + getProgressPercent() + '%'"></div>
+                <div class="absolute top-1/2 left-0 h-1 rounded-full -translate-y-1/2 z-0 transition-all duration-1000 ease-out"
+                     :style="`width: ${getProgressPercent()}%; background-color: ${config.colors.progress_bar}`"></div>
 
                 <!-- Steps (Dots) -->
                 <div class="flex justify-between relative z-10 w-full">
@@ -101,12 +117,12 @@
                         <div class="relative flex flex-col items-center group">
                              <!-- Dot -->
                             <div class="w-4 h-4 rounded-full border-2 transition-all duration-500 ease-in-out z-10 bg-white"
-                                 :class="index <= currentStepIndex ? 'border-brand-500 bg-brand-500 scale-125' : 'border-gray-300'">
+                                 :style="index <= currentStepIndex ? `border-color: ${config.colors.progress_bar}; background-color: ${config.colors.progress_bar}` : `border-color: ${config.colors.icon_inactive}`">
                             </div>
 
                             <!-- Animated Icon (Only for current step) -->
                             <template x-if="index === currentStepIndex && !isReady">
-                                <div class="absolute -top-8 text-brand-600 animate-bounce">
+                                <div class="absolute -top-8 animate-bounce" :style="`color: ${config.colors.icon_active}`">
                                     <i class="fa-solid fa-screwdriver-wrench"></i>
                                 </div>
                             </template>
@@ -124,10 +140,13 @@
 
             <!-- Current Status Text -->
             <div class="text-center mb-8">
-                <p class="text-sm text-gray-400 font-medium uppercase mb-1">Fase Atual</p>
-                <div class="text-xl font-bold text-brand-600 transition-all" x-text="getStatusLabel(ticket.status)"></div>
+                <p class="text-sm font-medium uppercase mb-1" :style="`color: ${config.colors.text_secondary}`">Fase Atual</p>
+                <div class="text-xl font-bold transition-all"
+                     :style="`color: ${config.colors.status_label}`"
+                     x-text="getStatusLabel(displayedStatus)"></div>
+
                 <template x-if="ticket.deadline && !isReady && ticket.status !== 'Finalizado'">
-                    <p class="text-xs text-gray-500 mt-2 bg-gray-50 inline-block px-3 py-1 rounded-full">
+                    <p class="text-xs mt-2 inline-block px-3 py-1 rounded-full bg-gray-50" :style="`color: ${config.colors.text_secondary}`">
                         <i class="fa-regular fa-clock mr-1"></i>
                         Previsão de conclusão: <span class="font-bold" x-text="new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
                     </p>
@@ -141,13 +160,12 @@
                      <i class="fa-brands fa-whatsapp text-xl"></i>
                      <span>Precisa de ajuda?</span>
                  </a>
-                 <!-- ID removed for cleaner UI -->
              </div>
         </div>
 
         <!-- Footer -->
-        <div class="bg-gray-50 p-4 text-center border-t border-gray-100">
-            <p class="text-xs text-gray-400 font-medium">CentralOSt &copy; 2024</p>
+        <div class="p-4 text-center border-t border-gray-100 bg-gray-50">
+            <p class="text-xs font-medium" :style="`color: ${config.colors.text_secondary}`">CentralOSt &copy; 2024</p>
         </div>
     </div>
 
@@ -155,17 +173,72 @@
         const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
 
+        const ALL_POSSIBLE_STEPS = [
+            'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+            'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
+        ];
+
         function tracker() {
             return {
                 loading: true,
                 error: null,
                 ticket: null,
-                // STATUS_COLUMNS from main system
-                steps: ['Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca', 'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'],
+
+                // Default Config (Overwritten by backend)
+                config: {
+                    logo_url: '',
+                    visible_stages: ALL_POSSIBLE_STEPS,
+                    colors: {
+                        background: '#FFF7ED',
+                        card_bg: '#FFFFFF',
+                        header_bg: '#000000',
+                        text_primary: '#1a1a1a',
+                        text_secondary: '#6B7280',
+                        progress_bar: '#FF6B00',
+                        progress_bg: '#E5E7EB',
+                        icon_active: '#FF6B00',
+                        icon_inactive: '#D1D5DB',
+                        status_label: '#FF6B00'
+                    }
+                },
+
+                // Computed: Active Steps List
+                get steps() {
+                    return this.config.visible_stages.length > 0 ? this.config.visible_stages : ALL_POSSIBLE_STEPS;
+                },
+
+                // Computed: Calculated Status to Display
+                get displayedStatus() {
+                    if (!this.ticket) return 'Aberto';
+
+                    const currentStatus = this.ticket.status;
+                    const visibleSteps = this.steps;
+
+                    // If status is visible, show it
+                    if (visibleSteps.includes(currentStatus)) {
+                        return currentStatus;
+                    }
+
+                    // If status is hidden (e.g. 'Analise Tecnica' is hidden, but ticket is there)
+                    // Find the actual index in the full list
+                    const actualIdx = ALL_POSSIBLE_STEPS.indexOf(currentStatus);
+                    if (actualIdx === -1) return currentStatus; // Unknown status
+
+                    // Loop backwards to find the nearest visible previous step
+                    for (let i = actualIdx - 1; i >= 0; i--) {
+                        if (visibleSteps.includes(ALL_POSSIBLE_STEPS[i])) {
+                            return ALL_POSSIBLE_STEPS[i];
+                        }
+                    }
+
+                    // Fallback: Default to the first visible step (likely 'Aberto')
+                    // This handles the case where multiple initial steps are hidden.
+                    return visibleSteps[0] || 'Aberto';
+                },
 
                 get currentStepIndex() {
                     if (!this.ticket) return 0;
-                    return this.steps.indexOf(this.ticket.status);
+                    return this.steps.indexOf(this.displayedStatus);
                 },
 
                 get isReady() {
@@ -183,13 +256,11 @@
                     }
 
                     try {
-                        // Native Fetch to avoiding loading the heavy supabase-js lib if possible,
-                        // but we included it just in case. Let's use native fetch for speed.
                         const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_client_ticket_details`, {
                             method: 'POST',
                             headers: {
                                 'apikey': SUPABASE_KEY,
-                                'Authorization': `Bearer ${SUPABASE_KEY}`, // Anon key
+                                'Authorization': `Bearer ${SUPABASE_KEY}`,
                                 'Content-Type': 'application/json'
                             },
                             body: JSON.stringify({ p_ticket_id: id })
@@ -203,6 +274,19 @@
                             this.error = "Chamado não encontrado ou acesso restrito.";
                         } else {
                             this.ticket = data[0];
+
+                            // Merge Configuration if available
+                            if (this.ticket.tracker_config) {
+                                // Deep merge colors to avoid undefined errors if partial config
+                                this.config = {
+                                    logo_url: this.ticket.tracker_config.logo_url || '',
+                                    visible_stages: this.ticket.tracker_config.visible_stages || ALL_POSSIBLE_STEPS,
+                                    colors: {
+                                        ...this.config.colors,
+                                        ...(this.ticket.tracker_config.colors || {})
+                                    }
+                                };
+                            }
                         }
                     } catch (e) {
                         console.error(e);
@@ -223,9 +307,10 @@
                         'Retirada Cliente': 'Pronto para Retirada',
                         'Finalizado': 'Finalizado'
                     };
-                    // Special case for Ready
-                    if (status === 'Retirada Cliente' && this.ticket.pickup_available) return 'Pronto para Retirada';
-                    if (status === 'Retirada Cliente' && !this.ticket.pickup_available) return 'Aguardando Liberação';
+
+                    // Special case for Ready logic override
+                    if (status === 'Retirada Cliente' && this.ticket && this.ticket.pickup_available) return 'Pronto para Retirada';
+                    if (status === 'Retirada Cliente' && this.ticket && !this.ticket.pickup_available) return 'Aguardando Liberação';
 
                     return labels[status] || status;
                 },
@@ -237,11 +322,15 @@
                 },
 
                 getWhatsAppLink() {
-                    if (!this.ticket || !this.ticket.whatsapp_number) return '#';
-                    let num = this.ticket.whatsapp_number.replace(/\D/g, '');
-                    if (num.length <= 11) num = '55' + num;
+                    // Use workspace WA number if available, else fallback
+                    let number = this.ticket?.whatsapp_number || '';
+
+                    if (!number) return '#';
+
+                    number = number.replace(/\D/g, '');
+                    if (number.length <= 11) number = '55' + number;
                     const text = `Olá, estou acompanhando a OS ${this.ticket.os_number} e gostaria de tirar uma dúvida.`;
-                    return `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+                    return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
                 }
             }
         }

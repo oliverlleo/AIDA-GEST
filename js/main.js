@@ -26,7 +26,7 @@ function app() {
         user: null,
         workspaceName: '',
         companyCode: '',
-        whatsappNumber: '', // New Field
+        whatsappNumber: '',
         registrationSuccess: false,
         newCompanyCode: '',
         view: 'dashboard',
@@ -38,8 +38,34 @@ function app() {
             defect: 'all',
             technician: 'all',
             status: 'all',
-            quickView: 'summary'
+            quickView: 'summary',
+            viewMode: 'standard',
+            defectSortField: 'total',
+            defectSortDesc: true,
+            viewType: 'data'
         },
+
+        // Tracker Configuration (NEW)
+        trackerConfig: {
+            logo_url: '',
+            colors: {
+                background: '#FFF7ED', // orange-50
+                card_bg: '#FFFFFF',
+                header_bg: '#000000',
+                text_primary: '#1a1a1a',
+                text_secondary: '#6B7280', // gray-500
+                progress_bar: '#FF6B00',
+                progress_bg: '#E5E7EB', // gray-200
+                icon_active: '#FF6B00',
+                icon_inactive: '#D1D5DB', // gray-300
+                status_label: '#FF6B00'
+            },
+            visible_stages: [
+                'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+                'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
+            ]
+        },
+        previewStatus: 'Andamento Reparo', // For Admin Preview
 
         // Data
         employees: [],
@@ -47,12 +73,60 @@ function app() {
         techTickets: [],
         deletedTickets: [],
         deletedEmployees: [],
-        deviceModels: [], // New state
+        deviceModels: [],
         defectOptions: [],
         checklistTemplates: [],
         checklistTemplatesEntry: [],
         checklistTemplatesFinal: [],
         notifications: [],
+
+        // Dashboard Data
+        ops: {
+            pendingBudgets: [],
+            waitingBudgetResponse: [],
+            pendingPickups: [],
+            urgentAnalysis: [],
+            delayedDeliveries: [],
+            priorityTickets: [],
+            pendingPurchase: [],
+            pendingReceipt: [],
+            pendingTech: []
+        },
+        metrics: {
+             filteredTickets: [],
+             techDeepDive: [],
+             topModels: [],
+             topDefects: [],
+             topCombos: [],
+             slowestModels: [],
+             slowestDefects: [],
+             slowestCombos: [],
+             fastestTechs: [],
+             slowestModelsSolution: [],
+             slowestDefectsSolution: [],
+             slowestCombosSolution: [],
+             fastestTechsSolution: [],
+             slowestModelsDelivery: [],
+             slowestDefectsDelivery: [],
+             slowestCombosDelivery: [],
+             fastestTechsDelivery: [],
+             techStats: [],
+             successRate: 0,
+             avgRepair: 0,
+             avgSolution: 0,
+             avgDelivery: 0,
+             avgBudget: 0,
+             avgPickupNotify: 0,
+             analysisCount: 0,
+             repairCount: 0,
+             ticketsPerDay: 0,
+             repairsToday: 0,
+             repairsWeek: 0,
+             repairsMonth: 0,
+             ticketsToday: 0,
+             ticketsWeek: 0,
+             ticketsMonth: 0
+        },
 
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
@@ -65,7 +139,7 @@ function app() {
             client_name: '', os_number: '', model: '', serial: '',
             defects: [], priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
-            technician_id: '', // New field
+            technician_id: '',
             checklist: [], checklist_final: [], photos: [], notes: ''
         },
         newChecklistItem: '',
@@ -77,7 +151,7 @@ function app() {
 
         // UI State for Actions
         analysisForm: { needsParts: false, partsList: '' },
-        outcomeMode: '', // 'repair' or 'test'
+        outcomeMode: '',
         showTestFailureForm: false,
         testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '' },
 
@@ -88,18 +162,45 @@ function app() {
         // Selected Ticket
         selectedTicket: null,
         ticketLogs: [],
-        logViewMode: 'timeline', // 'timeline' or 'detailed'
-        modalSource: '', // 'kanban' or 'tech'
-        showShareModal: false, // New
+        dashboardLogs: [],
+        logViewMode: 'timeline',
+        modalSource: '',
+        showShareModal: false,
+
+        // Notes System State
+        internalNotes: [],
+        generalNotes: [],
+        showNotesSidebar: false,
+        newNoteText: '',
+        newGeneralNoteText: '',
+        noteIsChecklist: false,
+        noteChecklistItems: [],
+        generalNoteIsChecklist: false,
+        generalNoteChecklistItems: [],
+
+        // Notes Filters & UI
+        showResolvedNotes: false,
+        noteDateFilter: '',
+
+        // Mention System
+        showMentionList: false,
+        mentionQuery: '',
+        mentionTarget: '',
+        mentionCursorPos: 0,
+        mentionList: [],
 
         // Calendar State
         calendarView: 'week',
         currentCalendarDate: new Date(),
         showAllCalendarTickets: false,
-        selectedTechFilter: 'all', // 'all' or specific uuid
+        selectedTechFilter: 'all',
+
+        // Kanban State
+        kanbanScrollWidth: 0,
 
         // Search
         searchQuery: '',
+        activeQuickFilter: null,
         showFinalized: true,
 
         // Time
@@ -130,12 +231,10 @@ function app() {
         },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
-        // Bypasses supabase-js lock management to avoid AbortError on tab wake
         async supabaseFetch(endpoint, method = 'GET', body = null) {
             const isRpc = endpoint.startsWith('rpc/');
             const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
 
-            // Determine Auth Token
             let token = SUPABASE_KEY;
             if (this.session && this.session.access_token) {
                 token = this.session.access_token;
@@ -145,11 +244,9 @@ function app() {
                 'apikey': SUPABASE_KEY,
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
-                // Preferences for minimal response or representation
                 'Prefer': method === 'GET' ? undefined : 'return=representation'
             };
 
-            // --- SECURITY FIX: INJECT WORKSPACE ID FOR RLS ---
             if (this.user && this.user.workspace_id) {
                 headers['x-workspace-id'] = this.user.workspace_id;
             }
@@ -167,7 +264,6 @@ function app() {
                 throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
             }
 
-            // For void responses (204)
             if (response.status === 204) return null;
 
             return await response.json();
@@ -184,28 +280,23 @@ function app() {
             }
 
             try {
-                // Initial Session Check
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session) {
                     this.session = session;
                     await this.loadAdminData();
                 } else {
-                    // Try Employee Session from LocalStorage
                     const storedEmp = localStorage.getItem('techassist_employee');
                     if (storedEmp) {
                         try {
                             this.employeeSession = JSON.parse(storedEmp);
-
-                            // Normalize ID if loaded from old storage format
                             if (this.employeeSession.employee_id && !this.employeeSession.id) {
                                 this.employeeSession.id = this.employeeSession.employee_id;
                             }
-
                             this.user = this.employeeSession;
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
                             await this.fetchEmployees();
-                            this.initTechFilter(); // Initialize filter on restore
+                            this.initTechFilter();
                         } catch (e) {
                             localStorage.removeItem('techassist_employee');
                         }
@@ -213,11 +304,12 @@ function app() {
                 }
 
                 if (this.user) {
-                    this.initTechFilter(); // Ensure filter is set for Admin session restore too
+                    this.initTechFilter();
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
+                    this.fetchGlobalLogs();
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -239,13 +331,210 @@ function app() {
                 this.currentTime = new Date();
             }, 1000);
 
-            // Notification Poller (Every 1 min for testing, maybe 5 in prod)
             setInterval(() => {
                 this.checkTimeBasedAlerts();
             }, 60000);
 
-            // Removed visibilitychange listener to prevent lock conflicts.
-            // Data is kept fresh via Realtime subscriptions.
+            this.$watch('view', (value) => {
+                if (value !== 'kanban') {
+                    this.clearFilters();
+                } else {
+                    setTimeout(() => this.initKanbanScroll(), 100);
+                }
+                if (value === 'dashboard') {
+                    this.fetchGlobalLogs();
+                }
+            });
+
+            this.$watch('adminDashboardFilters', () => {
+                this.calculateMetrics();
+                if (this.adminDashboardFilters.viewType === 'chart') {
+                    setTimeout(() => this.renderCharts(), 50);
+                }
+            });
+        },
+
+        calculateMetrics() {
+            this.ops = this.getDashboardOps();
+            this.metrics = this.getAdminMetrics();
+        },
+
+        toggleAdminView() {
+            this.adminDashboardFilters.viewType = this.adminDashboardFilters.viewType === 'data' ? 'chart' : 'data';
+            this.calculateMetrics();
+            if (this.adminDashboardFilters.viewType === 'chart') {
+                setTimeout(() => this.renderCharts(), 50);
+            }
+        },
+
+        chartInstances: {},
+
+        renderCharts() {
+            if (typeof Chart === 'undefined') return;
+
+            const destroy = (id) => {
+                if (this.chartInstances[id]) {
+                    this.chartInstances[id].destroy();
+                    delete this.chartInstances[id];
+                }
+            };
+
+            const metrics = this.metrics;
+            const commonOptions = { responsive: true, maintainAspectRatio: false };
+
+            // 1. Repairs Over Time
+            destroy('repairsChart');
+            const repairsCtx = document.getElementById('repairsChart');
+            if (repairsCtx) {
+                this.chartInstances.repairsChart = new Chart(repairsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Hoje', 'Semana', 'Mês'],
+                        datasets: [{
+                            label: 'Reparos Finalizados',
+                            data: [metrics.repairsToday, metrics.repairsWeek, metrics.repairsMonth],
+                            backgroundColor: 'rgba(255, 107, 0, 0.6)',
+                            borderColor: 'rgba(255, 107, 0, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { ...commonOptions, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                });
+            }
+
+            // 2. Tickets Created Over Time
+            destroy('ticketsChart');
+            const ticketsCtx = document.getElementById('ticketsChart');
+            if (ticketsCtx) {
+                this.chartInstances.ticketsChart = new Chart(ticketsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Hoje', 'Semana', 'Mês'],
+                        datasets: [{
+                            label: 'Chamados Criados',
+                            data: [metrics.ticketsToday, metrics.ticketsWeek, metrics.ticketsMonth],
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { ...commonOptions, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                });
+            }
+
+            // 3. Top Defects
+            destroy('defectsChart');
+            const defectsCtx = document.getElementById('defectsChart');
+            if (defectsCtx && metrics.topDefects.length) {
+                this.chartInstances.defectsChart = new Chart(defectsCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: metrics.topDefects.slice(0, 5).map(d => d.label),
+                        datasets: [{
+                            data: metrics.topDefects.slice(0, 5).map(d => d.total),
+                            backgroundColor: ['#FF6B00', '#3B82F6', '#10B981', '#F59E0B', '#EF4444']
+                        }]
+                    },
+                    options: commonOptions
+                });
+            }
+
+            // 4. Tech Efficiency
+            destroy('techChart');
+            const techCtx = document.getElementById('techChart');
+            if (techCtx && metrics.techStats.length) {
+                this.chartInstances.techChart = new Chart(techCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: metrics.techStats.map(t => t.name),
+                        datasets: [
+                            {
+                                label: 'Volume Total',
+                                data: metrics.techStats.map(t => t.total),
+                                backgroundColor: 'rgba(156, 163, 175, 0.5)',
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Taxa Sucesso (%)',
+                                data: metrics.techStats.map(t => t.successRate),
+                                type: 'line',
+                                borderColor: '#10B981',
+                                tension: 0.1,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            y: { beginAtZero: true, position: 'left' },
+                            y1: { beginAtZero: true, position: 'right', max: 100, grid: { drawOnChartArea: false } }
+                        }
+                    }
+                });
+            }
+
+            // 5. Solution Time by Model (New)
+            destroy('solutionTimeChart');
+            const solutionCtx = document.getElementById('solutionTimeChart');
+            if (solutionCtx && metrics.slowestModelsSolution.length) {
+                this.chartInstances.solutionTimeChart = new Chart(solutionCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: metrics.slowestModelsSolution.map(m => m.label),
+                        datasets: [{
+                            label: 'Tempo Médio Solução (min)',
+                            data: metrics.slowestModelsSolution.map(m => Math.round(m.avgTime / 60000)),
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)'
+                        }]
+                    },
+                    options: { ...commonOptions, indexAxis: 'y' }
+                });
+            }
+
+            // 6. Delivery Time by Model (New)
+            destroy('deliveryTimeChart');
+            const deliveryCtx = document.getElementById('deliveryTimeChart');
+            if (deliveryCtx && metrics.slowestModelsDelivery.length) {
+                this.chartInstances.deliveryTimeChart = new Chart(deliveryCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: metrics.slowestModelsDelivery.map(m => m.label),
+                        datasets: [{
+                            label: 'Tempo Médio Entrega (horas)',
+                            data: metrics.slowestModelsDelivery.map(m => Math.round(m.avgTime / 3600000)),
+                            backgroundColor: 'rgba(16, 185, 129, 0.6)'
+                        }]
+                    },
+                    options: { ...commonOptions, indexAxis: 'y' }
+                });
+            }
+
+            // 7. Success Rate by Model (New)
+            destroy('modelSuccessChart');
+            const modelSuccessCtx = document.getElementById('modelSuccessChart');
+            if (modelSuccessCtx && metrics.topModels.length) {
+                const top5 = metrics.topModels.slice(0, 5);
+                this.chartInstances.modelSuccessChart = new Chart(modelSuccessCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: top5.map(m => m.label),
+                        datasets: [
+                            {
+                                label: 'Sucesso',
+                                data: top5.map(m => m.success),
+                                backgroundColor: '#10B981'
+                            },
+                            {
+                                label: 'Falha',
+                                data: top5.map(m => m.fail),
+                                backgroundColor: '#EF4444'
+                            }
+                        ]
+                    },
+                    options: { ...commonOptions, scales: { x: { stacked: true }, y: { stacked: true } } }
+                });
+            }
         },
 
         setupRealtime() {
@@ -266,12 +555,19 @@ function app() {
                 })
                 .subscribe();
 
-            // Notification Channel
             supabaseClient
                 .channel('notifications_channel')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
                 payload => {
                     this.fetchNotifications();
+                })
+                .subscribe();
+
+            supabaseClient
+                .channel('ticket_logs_channel')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
+                () => {
+                    this.fetchGlobalLogs();
                 })
                 .subscribe();
         },
@@ -309,7 +605,6 @@ function app() {
                  if (!this.registerForm.companyName) return this.notify('Digite o nome da empresa.', 'error');
                  const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
 
-                 // REFACTORED: Use Native Fetch for RPC
                  const wsId = await this.supabaseFetch('rpc/create_owner_workspace_and_profile', 'POST', {
                         p_name: this.registerForm.companyName,
                         p_company_code: generatedCode
@@ -329,7 +624,6 @@ function app() {
         async loginEmployee() {
             this.loading = true;
             try {
-                // REFACTORED: Use Native Fetch for RPC
                 const data = await this.supabaseFetch('rpc/employee_login', 'POST', {
                         p_company_code: this.loginForm.company_code,
                         p_username: this.loginForm.username,
@@ -338,27 +632,25 @@ function app() {
 
                 if (data && data.length > 0) {
                     const emp = data[0];
-
-                    // Normalize ID (RPC returns employee_id)
                     if (emp.employee_id && !emp.id) {
                         emp.id = emp.employee_id;
                     }
 
                     this.employeeSession = emp;
                     this.user = emp;
-                    this.workspaceName = emp.workspace_name; // Note: RPC might not return workspace_name directly, check this too
-                    this.companyCode = this.loginForm.company_code; // Save from form input as RPC takes it but returns ID
+                    this.workspaceName = emp.workspace_name;
+                    this.companyCode = this.loginForm.company_code;
 
                     localStorage.setItem('techassist_employee', JSON.stringify(emp));
                     this.notify('Bem-vindo, ' + emp.name, 'success');
                     await this.fetchEmployees();
-                    this.initTechFilter(); // Initialize filter before fetching
+                    this.initTechFilter();
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
+                    this.fetchGlobalLogs();
 
-                    // Redirect Technician directly to Bench
                     if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
                         this.view = 'tech_orders';
                     }
@@ -391,20 +683,18 @@ function app() {
             if (!this.session) return;
             const user = this.session.user;
 
-            // REFACTORED: Native Fetch
             try {
-                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
+                // Modified select to include tracker_config
+                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number,tracker_config)&id=eq.${user.id}`);
                 let profile = profileData && profileData.length > 0 ? profileData[0] : null;
 
-                // Handle missing profile case (equivalent to PGRST116)
                 if (!profile) {
                     const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code,whatsapp_number&owner_id=eq.${user.id}`);
                     const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
 
                     if (workspace) {
                         await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
-                        // Re-fetch
-                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
+                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number,tracker_config)&id=eq.${user.id}`);
                         profile = newProfileData[0];
                     } else {
                         this.view = 'setup_required';
@@ -417,12 +707,27 @@ function app() {
                     this.workspaceName = profile.workspaces?.name;
                     this.companyCode = profile.workspaces?.company_code;
                     this.whatsappNumber = profile.workspaces?.whatsapp_number || '';
+
+                    // Populate Tracker Config
+                    if (profile.workspaces?.tracker_config) {
+                        // Merge with defaults to ensure all fields exist
+                        this.trackerConfig = {
+                            ...this.trackerConfig,
+                            ...profile.workspaces.tracker_config,
+                            colors: {
+                                ...this.trackerConfig.colors,
+                                ...(profile.workspaces.tracker_config.colors || {})
+                            }
+                        };
+                    }
+
                     await this.fetchEmployees();
-                    this.initTechFilter(); // Admin defaults to 'all'
+                    this.initTechFilter();
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
+                    this.fetchGlobalLogs();
                     this.setupRealtime();
                 }
             } catch (err) {
@@ -431,15 +736,11 @@ function app() {
         },
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
-
-            // REFACTORED: Native Fetch for ALL employee fetches
             try {
                 let data;
                 if (this.session) {
-                     // Table Select (Standard Admin View - Exclude Deleted)
                      data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
                 } else {
-                     // RPC Call (Already excludes deleted in SQL)
                      data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
                 }
                 if (data) this.employees = data;
@@ -464,6 +765,69 @@ function app() {
             }
         },
 
+        // --- TRACKER CONFIG ACTIONS (NEW) ---
+        async saveTrackerConfig() {
+            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
+            this.loading = true;
+            try {
+                await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
+                    tracker_config: this.trackerConfig
+                });
+                this.notify("Configurações de Acompanhamento salvas!");
+            } catch (e) {
+                this.notify("Erro ao salvar: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async handleLogoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            this.loading = true;
+            try {
+                const path = `${this.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
+                const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
+
+                let token = this.session?.access_token || SUPABASE_KEY;
+                const headers = {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${token}`,
+                    'x-workspace-id': this.user.workspace_id,
+                    'Content-Type': file.type
+                };
+
+                const response = await fetch(url, { method: 'POST', headers, body: file });
+                if (!response.ok) throw new Error("Falha no upload");
+
+                // Construct Public URL
+                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
+                this.trackerConfig.logo_url = publicUrl;
+                this.notify("Logo carregado!");
+            } catch(e) {
+                this.notify("Erro upload: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        toggleTrackerStage(stage) {
+            const idx = this.trackerConfig.visible_stages.indexOf(stage);
+            if (idx > -1) {
+                // Don't remove if it's the last one or strict logic (e.g. keep 'Aberto'?)
+                // Allow removing any for flexibility, but maybe warn if empty?
+                this.trackerConfig.visible_stages.splice(idx, 1);
+            } else {
+                // Add back in correct order
+                this.trackerConfig.visible_stages.push(stage);
+                // Sort according to standard order
+                this.trackerConfig.visible_stages.sort((a, b) => {
+                    return this.STATUS_COLUMNS.indexOf(a) - this.STATUS_COLUMNS.indexOf(b);
+                });
+            }
+        },
+
         // --- LOGGING ---
         async logTicketAction(ticketId, action, details = null) {
             try {
@@ -473,13 +837,13 @@ function app() {
                     details: details,
                     user_name: this.user.name
                 });
+                if (this.view === 'dashboard') this.fetchGlobalLogs();
             } catch (e) {
                 console.error("Log failed:", e);
             }
         },
 
         async fetchTicketLogs(ticketId) {
-            // Only admins can see logs
             if (!this.hasRole('admin')) return [];
             try {
                 const logs = await this.supabaseFetch(`ticket_logs?ticket_id=eq.${ticketId}&order=created_at.desc`);
@@ -490,16 +854,20 @@ function app() {
             }
         },
 
+        async fetchGlobalLogs() {
+            if (!this.user?.workspace_id) return;
+            try {
+                const logs = await this.supabaseFetch(`ticket_logs?select=*,tickets(os_number,client_name,device_model)&order=created_at.desc&limit=10`);
+                this.dashboardLogs = logs || [];
+            } catch (e) {
+                console.error("Fetch global logs failed:", e);
+            }
+        },
+
         // --- NOTIFICATIONS ---
         async fetchNotifications() {
             if (!this.user) return;
             try {
-                // Filter by Recipient (User ID OR Role)
-                // Since Supabase REST doesn't support complex OR in a simple query easily without RPC,
-                // we'll fetch recently created ones and filter in JS for simplicity/speed or use a slightly wider net.
-                // Better: Fetch where recipient_user_id = me OR recipient_role IN (my_roles)
-                // We'll use a PostgREST filter string carefully.
-
                 let query = `notifications?select=*,tickets(os_number,device_model)&order=created_at.desc&limit=50`;
                 const data = await this.supabaseFetch(query);
 
@@ -508,9 +876,7 @@ function app() {
                     const userId = this.user.id;
 
                     this.notificationsList = data.filter(n => {
-                        // If assigned to specific user
                         if (n.recipient_user_id) return n.recipient_user_id === userId;
-                        // If assigned to role
                         if (n.recipient_role) return myRoles.includes(n.recipient_role);
                         return false;
                     });
@@ -521,7 +887,6 @@ function app() {
         },
 
         async createNotification(data) {
-            // data: { ticket_id, recipient_role/user_id, type, message }
             try {
                 await this.supabaseFetch('notifications', 'POST', data);
             } catch(e) { console.error("Create Notif Error:", e); }
@@ -529,7 +894,6 @@ function app() {
 
         async markNotificationRead(id) {
             try {
-                // Optimistic UI update
                 const n = this.notificationsList.find(x => x.id === id);
                 if (n) n.is_read = true;
 
@@ -542,9 +906,6 @@ function app() {
             if (unreadIds.length === 0) return;
 
             this.notificationsList.forEach(n => n.is_read = true);
-            // Batch update might need loop or RPC, keeping it simple: loop for now (not efficient but rare action)
-            // Or better: update where id in list.
-            // PostgREST: id=in.(...ids)
             await this.supabaseFetch(`notifications?id=in.(${unreadIds.join(',')})`, 'PATCH', { is_read: true, read_at: new Date().toISOString() });
         },
 
@@ -554,32 +915,13 @@ function app() {
             const now = new Date();
             const oneHour = 60 * 60 * 1000;
 
-            // 1. Deadline < 1h (Tech/Admin)
-            // We need to avoid creating duplicates. We can check if we created one recently in local state?
-            // Or query DB? Querying DB is safer.
-            // For now, let's implement the logic triggers.
-
-            // Logic: Filter tickets matching criteria
-            // If match, try to insert. RLS/DB constraints or "SELECT before INSERT" needed to avoid spam.
-            // Simplified for this task: We won't implement the full deduplication backend here to save complexity,
-            // but we will mark tickets as 'alerted' in local state if we were a full backend.
-            // Since we are client-side, multiple clients might trigger this.
-            // Ideally this runs on a server.
-            // WORKAROUND: We will rely on real-time triggers for now, and skipping the heavy Poller insertion
-            // to avoid "Notification Bomb" unless specifically requested to handle concurrency.
-            // User requested "Início de Turno", "Gargalo".
-            // I will implement "Deadline" logic only if I am Admin (to act as the 'server').
-
             if (this.hasRole('admin')) {
-                // Admin checks for everyone
                 this.tickets.forEach(t => {
                     if (t.deadline && !['Finalizado', 'Retirada Cliente'].includes(t.status)) {
                         const deadline = new Date(t.deadline);
                         const diff = deadline - now;
                         if (diff > 0 && diff < oneHour) {
-                            // Gargalo: < 1h.
-                            // Ensure we haven't alerted. (Requires tracking).
-                            // Skipping auto-insert to prevent spam loop in this environment.
+                            // Gargalo logic
                         }
                     }
                 });
@@ -590,7 +932,7 @@ function app() {
             this.loading = true;
             try {
                 this.ticketLogs = await this.fetchTicketLogs(ticket.id);
-                this.logViewMode = 'timeline'; // Reset to default view
+                this.logViewMode = 'timeline';
                 this.modals.logs = true;
             } finally {
                 this.loading = false;
@@ -603,8 +945,6 @@ function app() {
             if (!this.user?.workspace_id) return;
 
             try {
-                // REFACTORED: Native Fetch
-                // Soft Delete Filter: deleted_at=is.null
                 const data = await this.supabaseFetch(
                     `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`
                 );
@@ -612,26 +952,19 @@ function app() {
                 if (data) {
                     this.tickets = data;
 
-                    // Apply Tech Filter to Minha Bancada
                     let filteredTechTickets = data;
                     let effectiveFilter = this.selectedTechFilter;
 
                     const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
 
-                    // SAFETY: If pure technician, FORCE filter to self regardless of state
                     if (isTechOnly && this.user) {
                         effectiveFilter = this.user.id;
                         this.selectedTechFilter = this.user.id;
                     }
 
-                    // Apply Filter
                     if (effectiveFilter && effectiveFilter !== 'all') {
-                        // Use loose equality (==) to handle potential UUID type mismatches
-                        // Allow seeing tickets assigned to SELF OR 'Everyone' (null)
                         filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter || t.technician_id == null);
                     } else if (isTechOnly) {
-                         // FAIL CLOSED: If user is Tech Only and filter is missing/invalid, SHOW NOTHING.
-                         // Do NOT allow falling through to the full list.
                          console.warn("Tech View Security: Filter missing, hiding all tickets.");
                          filteredTechTickets = [];
                     }
@@ -639,27 +972,23 @@ function app() {
                     this.techTickets = filteredTechTickets.filter(t =>
                         ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                     ).sort((a, b) => {
-                        // Priority Requested (Top of list)
                         if (a.priority_requested && !b.priority_requested) return -1;
                         if (!a.priority_requested && b.priority_requested) return 1;
 
-                        // Standard Priority
                         const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                         const pDiff = pOrder[a.priority] - pOrder[b.priority];
                         if (pDiff !== 0) return pDiff;
 
-                        // Deadline
                         return new Date(a.deadline || 0) - new Date(b.deadline || 0);
                     });
+
+                    this.calculateMetrics();
                 }
             } catch (err) {
                  console.warn("Fetch exception:", err);
-                 // Retry logic for abort/fetch errors
                  if (retryCount < 2) {
                      setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
                  } else {
-                     // On final failure, empty lists to avoid stale state if desired, or keep old data.
-                     // Choosing to keep old data to be less disruptive, but could clear.
                      console.error("Final ticket fetch failure");
                  }
             }
@@ -668,11 +997,9 @@ function app() {
         async fetchTemplates() {
              if (!this.user?.workspace_id) return;
              try {
-                 // REFACTORED: Native Fetch
                  const data = await this.supabaseFetch('checklist_templates?select=*');
                  if (data) {
-                     this.checklistTemplates = data; // Keep raw
-                     // Filter by type
+                     this.checklistTemplates = data;
                      this.checklistTemplatesEntry = data.filter(t => !t.type || t.type === 'entry');
                      this.checklistTemplatesFinal = data.filter(t => t.type === 'final');
                  }
@@ -705,7 +1032,6 @@ function app() {
             if (!name || !name.trim()) return;
             if (!this.user?.workspace_id) return;
 
-            // Check duplicate
             if (this.deviceModels.some(m => m.name.toLowerCase() === name.trim().toLowerCase())) {
                 return this.notify("Modelo já existe.", "error");
             }
@@ -717,7 +1043,7 @@ function app() {
                 });
                 await this.fetchDeviceModels();
                 this.notify("Modelo cadastrado!", "success");
-                return true; // Return success
+                return true;
             } catch(e) {
                 this.notify("Erro ao salvar modelo: " + e.message, "error");
                 return false;
@@ -753,7 +1079,6 @@ function app() {
                 await this.supabaseFetch(`device_models?id=eq.${id}`, 'DELETE');
                 this.notify("Modelo excluído.");
                 await this.fetchDeviceModels();
-                // Clear selection if deleted
                 if (this.ticketForm.model && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
                     this.ticketForm.model = '';
                 }
@@ -776,7 +1101,7 @@ function app() {
 
         openNewTicketModal() {
             this.ticketForm = {
-                id: crypto.randomUUID(), // Generate ID upfront for uploads
+                id: crypto.randomUUID(),
                 client_name: '', os_number: '', model: '', serial: '',
                 defects: [], priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
@@ -800,7 +1125,6 @@ function app() {
             if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
 
             try {
-                // REFACTORED: Native Fetch
                 await this.supabaseFetch('checklist_templates', 'POST', {
                     workspace_id: this.user.workspace_id,
                     name: this.newTemplateName,
@@ -821,7 +1145,6 @@ function app() {
             if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
 
             try {
-                // REFACTORED: Native Fetch
                 await this.supabaseFetch(`checklist_templates?id=eq.${this.selectedTemplateId}`, 'DELETE');
 
                 this.notify("Modelo excluído.");
@@ -852,7 +1175,6 @@ function app() {
             if (this.ticketForm.checklist_final.length === 0) return this.notify("Adicione itens", "error");
 
             try {
-                // Saving as 'final' type
                 await this.supabaseFetch('checklist_templates', 'POST', {
                     workspace_id: this.user.workspace_id,
                     name: this.newTemplateNameFinal,
@@ -868,7 +1190,6 @@ function app() {
             }
         },
         async deleteTemplateFinal() {
-            // Re-use logic or separate if needed. Using selectedTemplateIdFinal
             if (!this.selectedTemplateIdFinal) return;
             if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
             try {
@@ -894,12 +1215,10 @@ function app() {
                  return this.notify("Selecione um Técnico Responsável ou 'Todos'.", "error");
              }
 
-             // Validation: Strict Model (Must exist in list)
              if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
                  return this.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
              }
 
-             // VALIDATION: Analysis Deadline vs Delivery Deadline
              if (this.ticketForm.deadline && this.ticketForm.analysis_deadline) {
                  const deadline = new Date(this.ticketForm.deadline);
                  const analysis = new Date(this.ticketForm.analysis_deadline);
@@ -927,7 +1246,7 @@ function app() {
                      deadline: this.toUTC(this.ticketForm.deadline) || null,
                      analysis_deadline: this.toUTC(this.ticketForm.analysis_deadline) || null,
                      device_condition: this.ticketForm.device_condition,
-                     technician_id: techId, // 'all' becomes null
+                     technician_id: techId,
                      checklist_data: this.ticketForm.checklist,
                      checklist_final_data: this.ticketForm.checklist_final,
                      photos_urls: this.ticketForm.photos,
@@ -935,12 +1254,11 @@ function app() {
                      created_by_name: this.user.name
                  };
 
-                 // REFACTORED: Native Fetch
-                 await this.supabaseFetch('tickets', 'POST', ticketData);
+                 const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
+                 const createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
 
-                 // --- AUTOMATION: Send WhatsApp ---
-                 // Not implemented directly here to avoid blocking UI,
-                 // but we can trigger the link generation logic in modal later.
+                 const ctx = this.getLogContext(createdTicket);
+                 await this.logTicketAction(createdTicket.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
 
                  this.notify("Chamado criado!");
                  this.modals.ticket = false;
@@ -958,16 +1276,20 @@ function app() {
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
             if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
             if (!Array.isArray(this.selectedTicket.photos_urls)) this.selectedTicket.photos_urls = [];
-            // Reset UI states
             this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
-            this.editingDeadlines = false; // Reset editing mode
+            this.editingDeadlines = false;
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
+
+            this.fetchInternalNotes(ticket.id);
+            this.newNoteText = '';
+            this.noteIsChecklist = false;
+            this.noteChecklistItems = [];
+
             this.modals.viewTicket = true;
         },
 
         startEditingDeadlines() {
             if (!this.selectedTicket) return;
-            // Format dates for datetime-local input (YYYY-MM-DDThh:mm)
             const formatForInput = (dateStr) => {
                 if (!dateStr) return '';
                 const d = new Date(dateStr);
@@ -988,7 +1310,6 @@ function app() {
         async saveDeadlines() {
             if (!this.selectedTicket) return;
 
-            // Validation
             if (this.editDeadlineForm.deadline && this.editDeadlineForm.analysis_deadline) {
                 const deadline = new Date(this.editDeadlineForm.deadline);
                 const analysis = new Date(this.editDeadlineForm.analysis_deadline);
@@ -999,32 +1320,30 @@ function app() {
 
             this.loading = true;
             try {
-                // Determine changes for logging
                 const oldDeadline = this.selectedTicket.deadline ? new Date(this.selectedTicket.deadline).toLocaleString() : 'Não definido';
                 const newDeadline = this.editDeadlineForm.deadline ? new Date(this.editDeadlineForm.deadline).toLocaleString() : 'Não definido';
 
                 const oldAnalysis = this.selectedTicket.analysis_deadline ? new Date(this.selectedTicket.analysis_deadline).toLocaleString() : 'Não definido';
                 const newAnalysis = this.editDeadlineForm.analysis_deadline ? new Date(this.editDeadlineForm.analysis_deadline).toLocaleString() : 'Não definido';
 
-                // Log Delivery Change
                 if (oldDeadline !== newDeadline) {
+                    const ctx = this.getLogContext(this.selectedTicket);
                     await this.logTicketAction(
                         this.selectedTicket.id,
                         'Alterou Prazo',
-                        `${this.user.name} alterou o prazo de ${oldDeadline} para ${newDeadline}`
+                        `${this.user.name} alterou o prazo do ${ctx.device} de ${ctx.client} de ${oldDeadline} para ${newDeadline}`
                     );
                 }
 
-                // Log Analysis Change
                 if (oldAnalysis !== newAnalysis) {
+                    const ctx = this.getLogContext(this.selectedTicket);
                     await this.logTicketAction(
                         this.selectedTicket.id,
                         'Alterou Prazo Análise',
-                        `${this.user.name} alterou o prazo de análise de ${oldAnalysis} para ${newAnalysis}`
+                        `${this.user.name} alterou o prazo de análise do ${ctx.device} de ${ctx.client} de ${oldAnalysis} para ${newAnalysis}`
                     );
                 }
 
-                // Update
                 const updates = {
                     deadline: this.toUTC(this.editDeadlineForm.deadline) || null,
                     analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
@@ -1032,13 +1351,12 @@ function app() {
 
                 await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', updates);
 
-                // Refresh local state immediately for UI
                 this.selectedTicket.deadline = updates.deadline;
                 this.selectedTicket.analysis_deadline = updates.analysis_deadline;
 
                 this.notify("Prazos atualizados!");
                 this.editingDeadlines = false;
-                await this.fetchTickets(); // Full refresh
+                await this.fetchTickets();
             } catch (e) {
                 this.notify("Erro ao salvar prazos: " + e.message, "error");
             } finally {
@@ -1046,7 +1364,6 @@ function app() {
             }
         },
 
-        // REFACTORED: Native Fetch Implementation
         async saveTicketChanges() {
              if (!this.selectedTicket) return;
              this.loading = true;
@@ -1076,7 +1393,6 @@ function app() {
             const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
 
             try {
-                // Determine Auth Token
                 let token = SUPABASE_KEY;
                 if (this.session && this.session.access_token) {
                     token = this.session.access_token;
@@ -1100,8 +1416,6 @@ function app() {
                     throw new Error(err.message || 'Upload falhou');
                 }
 
-                // Public URL
-                // Format: {SUPABASE_URL}/storage/v1/object/public/ticket_photos/{path}
                 const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
                 return publicUrl;
 
@@ -1150,7 +1464,6 @@ function app() {
 
         // --- SHARE TICKET ---
         getTrackingLink(ticketId) {
-            // Assumes the file is in the same directory
             const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '') + 'acompanhar.html';
             return `${baseUrl}?id=${ticketId}`;
         },
@@ -1175,11 +1488,207 @@ function app() {
             const link = this.getTrackingLink(this.selectedTicket.id);
             const msg = `Olá ${this.selectedTicket.client_name}, acompanhe o progresso do seu reparo em tempo real aqui: ${link}`;
 
-            // Re-use existing openWhatsApp logic but with message
             let number = this.selectedTicket.contact_info.replace(/\D/g, '');
             if (number.length <= 11) number = '55' + number;
 
             window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+        },
+
+        // --- INTERNAL NOTES SYSTEM ---
+
+        async fetchInternalNotes(ticketId) {
+            if (!this.user?.workspace_id) return;
+            try {
+                const data = await this.supabaseFetch(
+                    `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=eq.${ticketId}&order=created_at.asc`
+                );
+                this.internalNotes = data || [];
+            } catch (e) {
+                console.error("Fetch Internal Notes Error:", e);
+            }
+        },
+
+        async fetchGeneralNotes() {
+            if (!this.user?.workspace_id) return;
+            try {
+                let query = `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&is_archived=eq.false`;
+
+                if (!this.showResolvedNotes) {
+                    query += `&is_resolved=eq.false`;
+                }
+
+                if (this.noteDateFilter) {
+                    const start = new Date(this.noteDateFilter + 'T00:00:00').toISOString();
+                    const end = new Date(this.noteDateFilter + 'T23:59:59').toISOString();
+                    query += `&created_at=gte.${start}&created_at=lte.${end}`;
+                }
+
+                query += `&order=created_at.desc`;
+
+                const data = await this.supabaseFetch(query);
+                this.generalNotes = data || [];
+            } catch (e) {
+                console.error("Fetch General Notes Error:", e);
+            }
+        },
+
+        // Mention Logic
+        handleNoteInput(event, target) {
+            const text = event.target.value;
+            const cursorPos = event.target.selectionStart;
+
+            const lastAt = text.lastIndexOf('@', cursorPos - 1);
+
+            if (lastAt !== -1) {
+                const potentialName = text.substring(lastAt + 1, cursorPos);
+                if (!/\s/.test(potentialName)) {
+                    this.showMentionList = true;
+                    this.mentionQuery = potentialName;
+                    this.mentionTarget = target;
+                    this.mentionCursorPos = lastAt;
+                    this.mentionList = this.employees.filter(e =>
+                        e.name.toLowerCase().includes(potentialName.toLowerCase()) ||
+                        e.username.toLowerCase().includes(potentialName.toLowerCase())
+                    ).slice(0, 5);
+                    return;
+                }
+            }
+            this.showMentionList = false;
+        },
+
+        selectMention(employee) {
+            const targetText = this.mentionTarget === 'general' ? this.newGeneralNoteText : this.newNoteText;
+            const before = targetText.substring(0, this.mentionCursorPos);
+            const after = targetText.substring(this.mentionCursorPos + this.mentionQuery.length + 1);
+
+            const newText = `${before}@${employee.name} ${after}`;
+
+            if (this.mentionTarget === 'general') {
+                this.newGeneralNoteText = newText;
+            } else {
+                this.newNoteText = newText;
+            }
+
+            this.showMentionList = false;
+        },
+
+        formatNoteContent(text) {
+            if (!text) return '';
+            let safe = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+            safe = safe.replace(/@(\w+(\s\w+)?)/g, '<span class="text-brand-500 font-bold">@$1</span>');
+
+            return safe.replace(/\n/g, '<br>');
+        },
+
+        async sendNote(ticketId = null, isGeneral = false) {
+            const text = isGeneral ? this.newGeneralNoteText : this.newNoteText;
+            const isChecklist = isGeneral ? this.generalNoteIsChecklist : this.noteIsChecklist;
+            const checklistItems = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+
+            if (!text.trim() && (!isChecklist || checklistItems.length === 0)) return;
+
+            this.loading = true;
+            try {
+                const mentionRegex = /@(\w+)/g;
+                const matches = text.match(mentionRegex) || [];
+                const mentions = matches.map(m => m.substring(1));
+
+                const cleanChecklist = checklistItems
+                    .filter(i => i.text.trim().length > 0)
+                    .map(i => ({ item: i.text, ok: i.ok }));
+
+                const payload = {
+                    workspace_id: this.user.workspace_id,
+                    ticket_id: ticketId,
+                    author_id: this.user.id,
+                    author_name: this.user.name,
+                    content: text,
+                    checklist_data: isChecklist ? cleanChecklist : [],
+                    mentions: mentions,
+                    is_resolved: false,
+                    created_at: new Date().toISOString()
+                };
+
+                await this.supabaseFetch('internal_notes', 'POST', payload);
+
+                if (isGeneral) {
+                    this.newGeneralNoteText = '';
+                    this.generalNoteIsChecklist = false;
+                    this.generalNoteChecklistItems = [];
+                    await this.fetchGeneralNotes();
+                } else {
+                    this.newNoteText = '';
+                    this.noteIsChecklist = false;
+                    this.noteChecklistItems = [];
+                    if (ticketId) await this.fetchInternalNotes(ticketId);
+                }
+                this.showMentionList = false;
+
+            } catch (e) {
+                this.notify("Erro ao enviar nota: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        addNoteChecklistItem(isGeneral = false) {
+            const target = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+            target.push({ text: '', ok: false });
+        },
+
+        removeNoteChecklistItem(index, isGeneral = false) {
+            const target = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
+            target.splice(index, 1);
+        },
+
+        async toggleNoteCheckStatus(note, itemIndex) {
+            note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
+
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    checklist_data: note.checklist_data
+                });
+            } catch (e) {
+                console.error("Error toggling checklist:", e);
+                note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
+            }
+        },
+
+        async resolveNote(note) {
+            const newStatus = !note.is_resolved;
+            note.is_resolved = newStatus;
+
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    is_resolved: newStatus
+                });
+            } catch (e) {
+                note.is_resolved = !newStatus;
+                this.notify("Erro ao atualizar status", "error");
+            }
+        },
+
+        async archiveNote(note) {
+            if (!confirm("Arquivar esta nota?")) return;
+            try {
+                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
+                    is_archived: true,
+                    archived_at: new Date().toISOString()
+                });
+                if (note.ticket_id) {
+                    this.internalNotes = this.internalNotes.filter(n => n.id !== note.id);
+                } else {
+                    this.generalNotes = this.generalNotes.filter(n => n.id !== note.id);
+                }
+            } catch (e) {
+                this.notify("Erro ao arquivar", "error");
+            }
         },
 
         // --- WORKFLOW ACTIONS ---
@@ -1187,16 +1696,12 @@ function app() {
         async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
             this.loading = true;
             try {
-                // Default generic log if specific action not provided
                 if (actionLog) {
                      await this.logTicketAction(ticket.id, actionLog.action, actionLog.details);
-                } else {
-                     await this.logTicketAction(ticket.id, 'Alteração de Status', `De ${ticket.status} para ${newStatus}`);
                 }
 
                 const updates = { status: newStatus, updated_at: new Date().toISOString(), ...additionalUpdates };
 
-                // REFACTORED: Native Fetch - Update Ticket
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
 
                 this.notify("Status atualizado");
@@ -1210,29 +1715,32 @@ function app() {
             }
         },
 
+        async startAnalysis(ticket) {
+            const ctx = this.getLogContext(ticket);
+            await this.updateStatus(ticket, 'Analise Tecnica', {}, {
+                action: 'Iniciou Atendimento',
+                details: `${ctx.device} de ${ctx.client} enviado para análise do técnico.`
+            });
+        },
+
         async finishAnalysis() {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
-            // Log Action: Finalizou Análise
+            const ctx = this.getLogContext(this.selectedTicket);
             await this.updateStatus(this.selectedTicket, 'Aprovacao', {
                 parts_needed: this.analysisForm.partsList,
                 tech_notes: this.selectedTicket.tech_notes
-            }, { action: 'Finalizou Análise', details: 'Enviado para Aprovação' });
+            }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
         },
 
         openWhatsApp(phone) {
             if (!phone) return this.notify("Telefone não cadastrado.", "error");
 
-            // Remove non-digits
             let number = phone.replace(/\D/g, '');
 
-            // Basic validation/formatting
             if (number.length < 10) return this.notify("Número inválido para WhatsApp.", "error");
 
-            // Prepend 55 if likely missing (assuming BR numbers usually start with DDD)
-            // If it already starts with 55 and is long enough, leave it.
-            // But simple heuristic: if length is 10 or 11 (DDD+Number), add 55.
             if (number.length <= 11) {
                 number = '55' + number;
             }
@@ -1241,7 +1749,6 @@ function app() {
         },
 
         async startBudget(ticket) {
-            await this.logTicketAction(ticket.id, 'Iniciou Orçamento', 'Visualizou para criar orçamento');
             this.viewTicketDetails(ticket);
             this.openWhatsApp(ticket.contact_info);
         },
@@ -1249,21 +1756,17 @@ function app() {
         async sendBudget(ticket = this.selectedTicket) {
             this.loading = true;
             try {
-                // Log Action
-                await this.logTicketAction(ticket.id, 'Enviou Orçamento', 'Orçamento marcado como enviado ao cliente');
+                const ctx = this.getLogContext(ticket);
+                await this.logTicketAction(ticket.id, 'Enviou Orçamento', `Orçamento para o ${ctx.device} de ${ctx.client} foi enviado para o cliente.`);
 
-                // REFACTORED: Native Fetch
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     budget_status: 'Enviado',
                     budget_sent_at: new Date().toISOString()
                 });
 
-                // AUTOMATION: Generate Tracking Link
                 const link = this.getTrackingLink(ticket.id);
                 const msg = `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`;
 
-                // Trigger WA open (User has to click send)
-                // We notify user to check the popup
                 let number = ticket.contact_info.replace(/\D/g, '');
                 if (number.length <= 11) number = '55' + number;
                 window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -1281,19 +1784,22 @@ function app() {
         },
         async approveRepair(ticket = this.selectedTicket) {
             const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
-            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: 'Orçamento aprovado pelo cliente' });
+            const ctx = this.getLogContext(ticket);
+            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: `${ctx.client} aprovou o orçamento do ${ctx.device}.` });
         },
         async denyRepair(ticket = this.selectedTicket) {
-             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: 'Orçamento negado pelo cliente' });
+             const ctx = this.getLogContext(ticket);
+             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: `${ctx.client} reprovou o orçamento do ${ctx.device}.` });
         },
 
         async markPurchased(ticket = this.selectedTicket) {
              this.loading = true;
              try {
-                 // Log Action
-                 await this.logTicketAction(ticket.id, 'Confirmou Compra', 'Peças marcadas como compradas');
+                 const ctx = this.getLogContext(ticket);
+                 const rawPart = ticket.parts_needed || 'peça';
+                 const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
+                 await this.logTicketAction(ticket.id, 'Confirmou Compra', `Compra da peça '${part}' para o ${ctx.device} de ${ctx.client} foi realizada.`);
 
-                 // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     parts_status: 'Comprado',
                     parts_purchased_at: new Date().toISOString()
@@ -1306,20 +1812,22 @@ function app() {
              }
         },
         async confirmReceived(ticket = this.selectedTicket) {
+             const ctx = this.getLogContext(ticket);
+             const rawPart = ticket.parts_needed || 'peça';
+             const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
              await this.updateStatus(ticket, 'Andamento Reparo', {
                  parts_status: 'Recebido',
                  parts_received_at: new Date().toISOString()
-             }, { action: 'Recebeu Peças', details: 'Peças recebidas, iniciando reparo' });
+             }, { action: 'Recebeu Peças', details: `Peça ${part} recebida para o ${ctx.device} de ${ctx.client}. Reparo liberado.` });
         },
 
         async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
              try {
-                 // Log Action
-                 await this.logTicketAction(ticket.id, 'Iniciou Reparo', 'Técnico iniciou a execução do reparo');
+                 const ctx = this.getLogContext(ticket);
+                 await this.logTicketAction(ticket.id, 'Iniciou Execução', `Reparo iniciado do ${ctx.device} de ${ctx.client}.`);
 
                  const now = new Date().toISOString();
-                 // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     repair_start_at: now
                 });
@@ -1352,22 +1860,26 @@ function app() {
 
             // Calculate Duration
             const duration = this.getDuration(ticket.repair_start_at);
+            const ctx = this.getLogContext(ticket);
+
+            const detailMsg = success
+                ? `O reparo do ${ctx.device} de ${ctx.client} foi finalizado com sucesso.`
+                : `O ${ctx.device} de ${ctx.client} não teve reparo.`;
 
             this.modals.outcome = false;
             await this.updateStatus(ticket, nextStatus, updates, {
                 action: 'Finalizou Reparo',
-                details: `Resultado: ${success ? 'Sucesso' : 'Falha'}. Tempo de Reparo: ${duration}`
+                details: detailMsg
             });
         },
 
         async startTest(ticket = this.selectedTicket) {
              this.loading = true;
              try {
-                 // Log Action
-                 await this.logTicketAction(ticket.id, 'Iniciou Testes', 'Técnico iniciou bateria de testes');
+                 const ctx = this.getLogContext(ticket);
+                 await this.logTicketAction(ticket.id, 'Iniciou Testes', `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`);
 
                  const now = new Date().toISOString();
-                 // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     test_start_at: now
                 });
@@ -1388,12 +1900,12 @@ function app() {
             const ticket = this.selectedTicket;
             if (success) {
                 this.modals.outcome = false;
-                await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: 'Aparelho aprovado nos testes' });
+                const ctx = this.getLogContext(ticket);
+                await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
             } else {
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
                 if (!this.testFailureData.reason) return this.notify("Descreva o defeito apresentado", "error");
 
-                // Prepare new note
                 const newNote = {
                     date: new Date().toISOString(),
                     text: this.testFailureData.reason,
@@ -1407,7 +1919,7 @@ function app() {
                 await this.updateStatus(ticket, 'Andamento Reparo', {
                     deadline: this.toUTC(this.testFailureData.newDeadline),
                     priority: this.testFailureData.newPriority,
-                    repair_start_at: null, // Reset timer
+                    repair_start_at: null,
                     test_start_at: null,
                     status: 'Andamento Reparo',
                     test_notes: updatedNotes
@@ -1419,10 +1931,9 @@ function app() {
         async markAvailable(ticket = this.selectedTicket) {
              this.loading = true;
              try {
-                 // Log Action
-                 await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', 'Cliente notificado para retirada');
+                 const ctx = this.getLogContext(ticket);
+                 await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', `O ${ctx.device} de ${ctx.client} foi disponibilizado.`);
 
-                 // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     pickup_available: true,
                     pickup_available_at: new Date().toISOString()
@@ -1435,18 +1946,18 @@ function app() {
              }
         },
         async confirmPickup(ticket = this.selectedTicket) {
+            const ctx = this.getLogContext(ticket);
             await this.updateStatus(ticket, 'Finalizado', {
                 delivered_at: new Date().toISOString()
-            }, { action: 'Finalizou Entrega', details: 'Entregue ao cliente' });
+            }, { action: 'Finalizou Entrega', details: `${ctx.client} retirou o ${ctx.device}.` });
         },
 
         async requestPriority(ticket) {
             this.loading = true;
             try {
-                // Log Action
-                await this.logTicketAction(ticket.id, 'Solicitou Prioridade', 'Cliente/Atendente solicitou urgência máxima');
+                const ctx = this.getLogContext(ticket);
+                await this.logTicketAction(ticket.id, 'Solicitou Prioridade', `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`);
 
-                // Update
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     priority_requested: true
                 });
@@ -1462,38 +1973,57 @@ function app() {
 
         // --- CALENDAR HELPERS ---
         getCalendarTickets() {
-            // Filter tickets based on toggle
             let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
 
-            // Determine Effective Filter
             let effectiveFilter = this.selectedTechFilter;
             if (!this.hasRole('admin') && this.hasRole('tecnico')) {
                 effectiveFilter = this.user.id;
             }
 
-            // Apply Technician Filter (Strict)
             if (effectiveFilter !== 'all' && effectiveFilter) {
                 source = source.filter(t => t.technician_id === effectiveFilter);
             }
 
             if (!this.showAllCalendarTickets) {
-                // Only assigned to me (conceptually - for now we use "created_by" or just all if we assume single shop,
-                // but user asked "atribuidos ao tecnico".
-                // Since we don't have a distinct "assigned_to" field in the schema yet,
-                // I will filter by the Technical Statuses that would appear on "Minha Bancada" OR if created by me?
-                // The user said "todos atribuidos ao tecnico".
-                // In the current system, "Minha Bancada" shows ALL tickets in Analise/Reparo.
-                // So I will stick to that logic + maybe "Testes"?
-                // Let's filter by statuses relevant to a technician.
                 const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
                 source = source.filter(t => techStatuses.includes(t.status));
             }
             return source;
         },
 
+        getKanbanCalendarTickets() {
+            return this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
+        },
+
+        scrollToTicket(ticketId) {
+            setTimeout(() => {
+                const el = document.getElementById('ticket-card-' + ticketId);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                    el.classList.add('ring-4', 'ring-brand-500', 'ring-opacity-75', 'z-10');
+                    setTimeout(() => {
+                        el.classList.remove('ring-4', 'ring-brand-500', 'ring-opacity-75', 'z-10');
+                    }, 2000);
+                } else {
+                    console.warn("Ticket card not found:", ticketId);
+                }
+            }, 100);
+        },
+
+        initKanbanScroll() {
+            const content = document.getElementById('kanban-content');
+            if (content) {
+                this.kanbanScrollWidth = content.scrollWidth;
+                const ro = new ResizeObserver(() => {
+                    this.kanbanScrollWidth = content.scrollWidth;
+                });
+                ro.observe(content);
+            }
+        },
+
         getWeekDays() {
             const curr = new Date();
-            const first = curr.getDate() - curr.getDay(); // First day is the day of the month - the day of the week
+            const first = curr.getDate() - curr.getDay();
             const days = [];
             for (let i = 0; i < 7; i++) {
                 let next = new Date(curr.getTime());
@@ -1509,7 +2039,6 @@ function app() {
             const date = new Date(year, month, 1);
             const days = [];
 
-            // Pad empty days at start
             for(let i=0; i<date.getDay(); i++) {
                 days.push(null);
             }
@@ -1557,20 +2086,30 @@ function app() {
         },
 
         // --- UTILS ---
-        getStatusLabel(status) {
-            return this.STATUS_LABELS[status] || status;
+        escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         },
 
-        matchesSearch(ticket) {
-            if (!this.searchQuery) return true;
-            const q = this.searchQuery.toLowerCase();
-            return (
-                (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
-                (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
-                (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
-                (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
-                (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
-            );
+        getLogContext(ticket) {
+            if (!ticket) return { client: '<b>Cliente</b>', device: '<b>Aparelho</b>' };
+
+            const safeClientName = this.escapeHtml(ticket.client_name);
+            const safeOsNumber = this.escapeHtml(ticket.os_number);
+            const safeDevice = this.escapeHtml(ticket.device_model);
+
+            const client = `<b>${safeClientName} da OS ${safeOsNumber}</b>`;
+            const device = `<b>${safeDevice}</b>`;
+            return { client, device };
+        },
+
+        getStatusLabel(status) {
+            return this.STATUS_LABELS[status] || status;
         },
 
         getTechnicians() {
@@ -1584,7 +2123,6 @@ function app() {
         },
 
         initTechFilter() {
-            // Debugging
             console.log("Initializing Tech Filter. User:", this.user);
 
             if (this.hasRole('admin')) {
@@ -1611,6 +2149,134 @@ function app() {
                 return 'border-l-4 border-red-600 bg-red-50';
             }
             return 'bg-white';
+        },
+
+        // --- PREVIEW LOGIC (Mirrors acompanhar.html) ---
+        getPreviewDisplayedStatus() {
+            const currentStatus = this.previewStatus;
+            const visibleSteps = this.trackerConfig.visible_stages.length > 0
+                ? this.trackerConfig.visible_stages
+                : this.STATUS_COLUMNS;
+
+            // If status is visible, show it
+            if (visibleSteps.includes(currentStatus)) {
+                return currentStatus;
+            }
+
+            // If hidden, find previous visible
+            const actualIdx = this.STATUS_COLUMNS.indexOf(currentStatus);
+            if (actualIdx === -1) return currentStatus;
+
+            for (let i = actualIdx - 1; i >= 0; i--) {
+                if (visibleSteps.includes(this.STATUS_COLUMNS[i])) {
+                    return this.STATUS_COLUMNS[i];
+                }
+            }
+
+            // Fallback
+            return visibleSteps[0] || 'Aberto';
+        },
+
+        getPreviewProgressPercent() {
+            const displayed = this.getPreviewDisplayedStatus();
+            const visibleSteps = this.trackerConfig.visible_stages.length > 0
+                ? this.trackerConfig.visible_stages
+                : this.STATUS_COLUMNS;
+
+            const idx = visibleSteps.indexOf(displayed);
+            if (idx === -1) return 0;
+            if (visibleSteps.length <= 1) return 0;
+
+            return (idx / (visibleSteps.length - 1)) * 100;
+        },
+
+        // DASHBOARD OPERATIONAL METRICS
+        getDashboardOps() {
+            const now = new Date();
+            const tickets = this.tickets || [];
+
+            const pendingBudgets = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status !== 'Enviado');
+
+            const waitingBudgetResponse = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status === 'Enviado');
+
+            const pendingPickups = tickets.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available);
+
+            const urgentAnalysis = tickets
+                .filter(t => t.status === 'Analise Tecnica' && t.analysis_deadline)
+                .sort((a, b) => new Date(a.analysis_deadline) - new Date(b.analysis_deadline))
+                .slice(0, 5);
+
+            const delayedDeliveries = tickets.filter(t =>
+                t.deadline &&
+                new Date(t.deadline) < now &&
+                !['Retirada Cliente', 'Finalizado'].includes(t.status)
+            );
+
+            const priorityTickets = tickets.filter(t => t.priority_requested && !['Retirada Cliente', 'Finalizado'].includes(t.status));
+
+            const pendingPurchase = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status !== 'Comprado');
+
+            const pendingReceipt = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status === 'Comprado');
+
+            const pendingTech = tickets.filter(t => t.status === 'Aberto');
+
+            return {
+                pendingBudgets,
+                waitingBudgetResponse,
+                pendingPickups,
+                urgentAnalysis,
+                delayedDeliveries,
+                priorityTickets,
+                pendingPurchase,
+                pendingReceipt,
+                pendingTech
+            };
+        },
+
+        applyQuickFilter(type) {
+            this.searchQuery = '';
+            this.view = 'kanban';
+            const now = new Date();
+
+            this.activeQuickFilter = type;
+        },
+
+        clearFilters() {
+            this.searchQuery = '';
+            this.activeQuickFilter = null;
+        },
+
+        matchesSearch(ticket) {
+            if (this.activeQuickFilter === 'my_today') {
+                const oneDay = 24 * 60 * 60 * 1000;
+                const isToday = new Date(ticket.created_at) > new Date(Date.now() - oneDay);
+                const isMine = ticket.created_by_name === this.user.name;
+                if (!isToday || !isMine) return false;
+            }
+            if (this.activeQuickFilter === 'stale_3d') {
+                const threeDays = 3 * 24 * 60 * 60 * 1000;
+                const isStale = new Date(ticket.updated_at) < new Date(Date.now() - threeDays);
+                const isOpen = ticket.status !== 'Finalizado';
+                if (!isStale || !isOpen) return false;
+            }
+            if (this.activeQuickFilter === 'priority') {
+                if (!ticket.priority_requested) return false;
+            }
+            if (this.activeQuickFilter === 'delayed') {
+                const now = new Date();
+                const isDelayed = ticket.deadline && new Date(ticket.deadline) < now && !['Retirada Cliente', 'Finalizado'].includes(ticket.status);
+                if (!isDelayed) return false;
+            }
+
+            if (!this.searchQuery) return true;
+            const q = this.searchQuery.toLowerCase();
+            return (
+                (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
+                (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
+                (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
+                (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
+                (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
+            );
         },
 
         getOverdueTime(deadline) {
@@ -1650,7 +2316,6 @@ function app() {
             if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
             this.loading = true;
             try {
-                // REFACTORED: Native Fetch for RPC
                 await this.supabaseFetch('rpc/create_employee', 'POST', {
                     p_workspace_id: this.user.workspace_id,
                     p_name: this.employeeForm.name,
@@ -1675,7 +2340,7 @@ function app() {
                 id: emp.id,
                 name: emp.name,
                 username: emp.username,
-                password: emp.plain_password || '', // Show plain password if available
+                password: emp.plain_password || '',
                 roles: emp.roles || []
             };
             this.modals.editEmployee = true;
@@ -1687,12 +2352,11 @@ function app() {
 
             this.loading = true;
             try {
-                // REFACTORED: Native Fetch for RPC
                 await this.supabaseFetch('rpc/update_employee', 'POST', {
                     p_id: this.employeeForm.id,
                     p_name: this.employeeForm.name,
                     p_username: this.employeeForm.username,
-                    p_password: this.employeeForm.password, // Optional: if empty, handled by SQL to ignore
+                    p_password: this.employeeForm.password,
                     p_roles: this.employeeForm.roles
                 });
 
@@ -1710,7 +2374,6 @@ function app() {
         async deleteEmployee(id) {
             if (!confirm('Tem certeza que deseja mover este funcionário para a Lixeira?')) return;
             try {
-                // Soft Delete
                 await this.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
                     deleted_at: new Date().toISOString()
                 });
@@ -1744,13 +2407,11 @@ function app() {
             if (!this.user?.workspace_id || !this.hasRole('admin')) return;
             this.loading = true;
             try {
-                // Fetch Deleted Tickets
                 const tickets = await this.supabaseFetch(
                     `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
                 );
                 this.deletedTickets = tickets || [];
 
-                // Fetch Deleted Employees
                 const emps = await this.supabaseFetch(
                     `employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
                 );
@@ -1764,7 +2425,6 @@ function app() {
         },
 
         async restoreItem(type, id) {
-            // type: 'ticket' or 'employee'
             if (!confirm("Deseja restaurar este item?")) return;
             this.loading = true;
             try {
@@ -1774,7 +2434,6 @@ function app() {
                 });
                 this.notify("Item restaurado!");
 
-                // Refresh lists
                 await this.fetchDeletedItems();
                 if (type === 'ticket') await this.fetchTickets();
                 if (type === 'employee') await this.fetchEmployees();
@@ -1855,9 +2514,9 @@ function app() {
 
         getTopItems(items, limit = 4) {
             return Object.entries(items)
-                .sort((a, b) => b[1] - a[1])
+                .sort((a, b) => b[1].total - a[1].total)
                 .slice(0, limit)
-                .map(([label, value]) => ({ label, value }));
+                .map(([label, stats]) => ({ label, ...stats }));
         },
 
         getAdminMetrics() {
@@ -1885,10 +2544,9 @@ function app() {
             const avgSolution = solutionDurations.length ? solutionDurations.reduce((a, b) => a + b, 0) / solutionDurations.length : null;
 
             const deliveryDurations = filteredTickets
-                .filter(t => t.status === 'Finalizado' && t.created_at && (t.delivered_at || t.updated_at))
+                .filter(t => t.status === 'Finalizado' && t.created_at && t.delivered_at)
                 .map(t => {
-                    const deliveredAt = t.delivered_at || t.updated_at;
-                    return new Date(deliveredAt) - new Date(t.created_at);
+                    return new Date(t.delivered_at) - new Date(t.created_at);
                 })
                 .filter(ms => ms > 0);
             const avgDelivery = deliveryDurations.length ? deliveryDurations.reduce((a, b) => a + b, 0) / deliveryDurations.length : null;
@@ -1911,23 +2569,206 @@ function app() {
             const defectsMap = {};
             const modelsMap = {};
             const comboMap = {};
+            const techDetailMap = {};
+
             filteredTickets.forEach(ticket => {
                 if (ticket.device_model) {
-                    modelsMap[ticket.device_model] = (modelsMap[ticket.device_model] || 0) + 1;
+                    if (!modelsMap[ticket.device_model]) modelsMap[ticket.device_model] = { total: 0, success: 0, fail: 0 };
+                    modelsMap[ticket.device_model].total++;
+                    if (ticket.repair_successful === true) modelsMap[ticket.device_model].success++;
+                    if (ticket.repair_successful === false) modelsMap[ticket.device_model].fail++;
                 }
-                const defects = this.toArray(ticket.defects);
+
+                const defects = this.getDefectList(ticket.defect_reported);
                 defects.forEach(defect => {
-                    defectsMap[defect] = (defectsMap[defect] || 0) + 1;
+                    if (!defectsMap[defect]) defectsMap[defect] = { total: 0, success: 0, fail: 0 };
+                    defectsMap[defect].total++;
+                    if (ticket.repair_successful === true) defectsMap[defect].success++;
+                    if (ticket.repair_successful === false) defectsMap[defect].fail++;
+
                     if (ticket.device_model) {
                         const comboKey = `${ticket.device_model} · ${defect}`;
-                        comboMap[comboKey] = (comboMap[comboKey] || 0) + 1;
+                        if (!comboMap[comboKey]) comboMap[comboKey] = { total: 0, success: 0, fail: 0 };
+                        comboMap[comboKey].total++;
+                         if (ticket.repair_successful === true) comboMap[comboKey].success++;
+                        if (ticket.repair_successful === false) comboMap[comboKey].fail++;
+                    }
+
+                    if (ticket.technician_id) {
+                        if (!techDetailMap[ticket.technician_id]) {
+                            techDetailMap[ticket.technician_id] = {
+                                name: this.getEmployeeName(ticket.technician_id),
+                                failureCounts: {},
+                                successCounts: {}
+                            };
+                        }
+                        const techStats = techDetailMap[ticket.technician_id];
+                        if (ticket.repair_successful === false) {
+                            const key = `${ticket.device_model} - ${defect}`;
+                            techStats.failureCounts[key] = (techStats.failureCounts[key] || 0) + 1;
+                        }
+                        if (ticket.repair_successful === true) {
+                            const key = `${ticket.device_model} - ${defect}`;
+                            techStats.successCounts[key] = (techStats.successCounts[key] || 0) + 1;
+                        }
                     }
                 });
             });
 
-            const topDefects = this.getTopItems(defectsMap, 4);
-            const topModels = this.getTopItems(modelsMap, 4);
-            const topCombos = this.getTopItems(comboMap, 4);
+            const enhanceStats = (list) => list.map(item => {
+                const total = item.total || 0;
+                const success = item.success || 0;
+                const fail = item.fail || 0;
+                return {
+                    ...item,
+                    total: total,
+                    success: success,
+                    fail: fail,
+                    successRate: total > 0 ? Math.round((success / total) * 100) : 0,
+                    failRate: total > 0 ? Math.round((fail / total) * 100) : 0
+                };
+            });
+
+            let topDefects = enhanceStats(this.getTopItems(defectsMap, 100));
+            const field = this.adminDashboardFilters.defectSortField;
+            const desc = this.adminDashboardFilters.defectSortDesc;
+            topDefects.sort((a, b) => {
+                const valA = a[field] || 0;
+                const valB = b[field] || 0;
+                return desc ? valB - valA : valA - valB;
+            });
+
+            const allModels = enhanceStats(this.getTopItems(modelsMap, 100));
+            const topModels = this.adminDashboardFilters.viewMode === 'success_drilldown' ? allModels : allModels.slice(0, 4);
+            const topCombos = enhanceStats(this.getTopItems(comboMap, 50));
+
+            const techDeepDive = Object.values(techDetailMap).map(t => {
+                const topFail = Object.entries(t.failureCounts).sort((a,b) => b[1]-a[1])[0];
+                const topSuccess = Object.entries(t.successCounts).sort((a,b) => b[1]-a[1])[0];
+                return {
+                    name: t.name,
+                    mostFrequentFail: topFail ? `${topFail[0]} (${topFail[1]})` : 'Nenhum',
+                    mostFrequentSuccess: topSuccess ? `${topSuccess[0]} (${topSuccess[1]})` : 'Nenhum'
+                };
+            });
+
+            const metricsMap = {
+                repair: { model: {}, defect: {}, combo: {}, tech: {} },
+                solution: { model: {}, defect: {}, combo: {}, tech: {} },
+                delivery: { model: {}, defect: {}, combo: {}, tech: {} }
+            };
+
+            const accTime = (category, type, key, duration, techId) => {
+                const target = metricsMap[category][type];
+                if (!target[key]) target[key] = { totalTime: 0, count: 0 };
+                target[key].totalTime += duration;
+                target[key].count++;
+            };
+
+            const initTech = (category, techId) => {
+                const target = metricsMap[category].tech;
+                if (!target[techId]) target[techId] = { totalTime: 0, count: 0, successCount: 0, totalTickets: 0 };
+                return target[techId];
+            };
+
+            filteredTickets.forEach(t => {
+                const defectList = this.getDefectList(t.defect_reported);
+                const techId = t.technician_id;
+
+                if (t.repair_start_at && t.repair_end_at) {
+                    const duration = new Date(t.repair_end_at) - new Date(t.repair_start_at);
+                    if (duration > 0) {
+                        accTime('repair', 'model', t.device_model, duration);
+                        defectList.forEach(d => {
+                            accTime('repair', 'defect', d, duration);
+                            accTime('repair', 'combo', `${t.device_model} - ${d}`, duration);
+                        });
+                        if (techId) {
+                            initTech('repair', techId).totalTime += duration;
+                            initTech('repair', techId).count++;
+                        }
+                    }
+                }
+
+                if (t.created_at) {
+                    const readyAt = t.pickup_available_at || t.repair_end_at;
+                    if (readyAt) {
+                        const duration = new Date(readyAt) - new Date(t.created_at);
+                        if (duration > 0) {
+                            accTime('solution', 'model', t.device_model, duration);
+                            defectList.forEach(d => {
+                                accTime('solution', 'defect', d, duration);
+                                accTime('solution', 'combo', `${t.device_model} - ${d}`, duration);
+                            });
+                            if (techId) {
+                                initTech('solution', techId).totalTime += duration;
+                                initTech('solution', techId).count++;
+                            }
+                        }
+                    }
+                }
+
+                if (t.created_at && t.delivered_at) {
+                    const duration = new Date(t.delivered_at) - new Date(t.created_at);
+                    if (duration > 0) {
+                        accTime('delivery', 'model', t.device_model, duration);
+                        defectList.forEach(d => {
+                            accTime('delivery', 'defect', d, duration);
+                            accTime('delivery', 'combo', `${t.device_model} - ${d}`, duration);
+                        });
+                        if (techId) {
+                            initTech('delivery', techId).totalTime += duration;
+                            initTech('delivery', techId).count++;
+                        }
+                    }
+                }
+
+                if (techId) {
+                    ['repair', 'solution', 'delivery'].forEach(cat => {
+                        const stats = initTech(cat, techId);
+                        stats.totalTickets++;
+                        if (t.repair_successful) stats.successCount++;
+                    });
+                }
+            });
+
+            const processTimes = (map, limit, sortDesc = true) => {
+                return Object.entries(map)
+                    .map(([label, stats]) => ({
+                        label,
+                        avgTime: stats.count ? stats.totalTime / stats.count : 0,
+                        count: stats.count
+                    }))
+                    .sort((a, b) => sortDesc ? b.avgTime - a.avgTime : a.avgTime - b.avgTime)
+                    .slice(0, limit);
+            };
+
+            const processTechs = (map) => {
+                return Object.entries(map)
+                    .map(([id, stats]) => ({
+                        name: this.getEmployeeName(id),
+                        avgTime: stats.count ? stats.totalTime / stats.count : 0,
+                        successRate: stats.totalTickets ? Math.round((stats.successCount / stats.totalTickets) * 100) : 0,
+                        count: stats.count
+                    }))
+                    .filter(t => t.avgTime > 0)
+                    .sort((a, b) => a.avgTime - b.avgTime);
+            };
+
+            const slowestModels = processTimes(metricsMap.repair.model, 5, true);
+            const slowestDefects = processTimes(metricsMap.repair.defect, 5, true);
+            const slowestCombos = processTimes(metricsMap.repair.combo, 5, true);
+            const fastestTechs = processTechs(metricsMap.repair.tech);
+
+            const slowestModelsSolution = processTimes(metricsMap.solution.model, 5, true);
+            const slowestDefectsSolution = processTimes(metricsMap.solution.defect, 5, true);
+            const slowestCombosSolution = processTimes(metricsMap.solution.combo, 5, true);
+            const fastestTechsSolution = processTechs(metricsMap.solution.tech);
+
+            const slowestModelsDelivery = processTimes(metricsMap.delivery.model, 5, true);
+            const slowestDefectsDelivery = processTimes(metricsMap.delivery.defect, 5, true);
+            const slowestCombosDelivery = processTimes(metricsMap.delivery.combo, 5, true);
+            const fastestTechsDelivery = processTechs(metricsMap.delivery.tech);
 
             const ticketsPerDay = Math.round(filteredTickets.length / rangeDays);
 
@@ -1960,15 +2801,23 @@ function app() {
                 return timestamp && timestamp >= oneMonthAgo;
             }).length;
 
+            const ticketsToday = filteredTickets.filter(t => new Date(t.created_at) >= oneDayAgo).length;
+            const ticketsWeek = filteredTickets.filter(t => new Date(t.created_at) >= oneWeekAgo).length;
+            const ticketsMonth = filteredTickets.filter(t => new Date(t.created_at) >= oneMonthAgo).length;
+
             const techMap = {};
             filteredTickets.forEach(ticket => {
                 const techId = ticket.technician_id || 'unassigned';
                 if (!techMap[techId]) {
-                    techMap[techId] = { total: 0, success: 0 };
+                    techMap[techId] = { totalAssigned: 0, completedCount: 0, successCount: 0 };
                 }
-                techMap[techId].total += 1;
-                if (ticket.repair_successful) {
-                    techMap[techId].success += 1;
+                techMap[techId].totalAssigned += 1;
+
+                if (ticket.repair_successful !== null && ticket.repair_successful !== undefined) {
+                    techMap[techId].completedCount += 1;
+                    if (ticket.repair_successful) {
+                        techMap[techId].successCount += 1;
+                    }
                 }
             });
 
@@ -1976,14 +2825,17 @@ function app() {
                 .map(([techId, data]) => {
                     const tech = this.employees.find(emp => emp.id == techId);
                     const name = tech ? tech.name : techId === 'unassigned' ? 'Sem técnico' : 'Técnico';
+                    const rate = data.completedCount > 0 ? Math.round((data.successCount / data.completedCount) * 100) : 0;
+
                     return {
                         id: techId,
                         name,
-                        total: data.total,
-                        successRate: data.total ? Math.round((data.success / data.total) * 100) : null
+                        total: data.totalAssigned,
+                        completed: data.completedCount,
+                        successRate: rate
                     };
                 })
-                .sort((a, b) => b.total - a.total);
+                .sort((a, b) => b.completed - a.completed);
 
             return {
                 filteredTickets,
@@ -1994,16 +2846,25 @@ function app() {
                 avgDelivery,
                 avgBudget,
                 avgPickupNotify,
+                analysisCount: analysisCount,
+                repairCount: repairCount,
                 analysisPerDay: Math.round(analysisCount / rangeDays),
                 repairPerDay: Math.round(repairCount / rangeDays),
                 ticketsPerDay,
                 repairsToday,
                 repairsWeek,
                 repairsMonth,
+                ticketsToday,
+                ticketsWeek,
+                ticketsMonth,
                 topDefects,
                 topModels,
                 topCombos,
-                techStats
+                techStats,
+                techDeepDive,
+                slowestModels, slowestDefects, slowestCombos, fastestTechs,
+                slowestModelsSolution, slowestDefectsSolution, slowestCombosSolution, fastestTechsSolution,
+                slowestModelsDelivery, slowestDefectsDelivery, slowestCombosDelivery, fastestTechsDelivery
             };
         },
 
