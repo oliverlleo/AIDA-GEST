@@ -656,7 +656,7 @@
                                             <div class="flex items-center space-x-2">
                                                 <button @click="markDelivered(t)" class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded font-bold hover:bg-green-200 transition-colors">
                                                     <i class="fa-solid" :class="t.delivery_method === 'carrier' ? 'fa-check-double' : 'fa-handshake'"></i>
-                                                    <span x-text="t.delivery_method === 'carrier' ? 'Chegou' : 'Entregar'"></span>
+                                                    <span x-text="t.delivery_method === 'carrier' ? 'Chegou' : 'Retirado'"></span>
                                                 </button>
                                             </div>
                                         </div>
@@ -1844,7 +1844,7 @@
                                                         </div>
                                                     </template>
 
-                                                    <!-- Retirada -->
+                                                    <!-- Retirada / Expedição -->
                                                     <template x-if="ticket.status === 'Retirada Cliente'">
                                                         <div>
                                                             <template x-if="!ticket.pickup_available">
@@ -1852,10 +1852,37 @@
                                                                     Disponibilizar
                                                                 </button>
                                                             </template>
+
                                                             <template x-if="ticket.pickup_available">
-                                                                <button @click="confirmPickup(ticket)" class="w-full bg-gray-800 text-white text-xs font-bold py-2 rounded hover:bg-black">
-                                                                    Entregar (Finalizar)
-                                                                </button>
+                                                                <div class="flex flex-col">
+                                                                    <!-- Badge -->
+                                                                    <div class="w-full text-[10px] font-bold py-1 mb-1 rounded text-center truncate uppercase"
+                                                                         :class="ticket.delivery_method === 'carrier' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'"
+                                                                         x-text="ticket.delivery_method === 'carrier' ? (ticket.carrier_name || 'Transportadora') : 'Cliente'">
+                                                                    </div>
+
+                                                                    <!-- Buttons -->
+                                                                    <!-- Case 1: Carrier + No Tracking -->
+                                                                    <template x-if="ticket.delivery_method === 'carrier' && !ticket.tracking_code">
+                                                                         <button @click="addTrackingCode(ticket)" class="w-full bg-orange-100 text-orange-700 text-xs font-bold py-2 rounded hover:bg-orange-200">
+                                                                            Gerar Rastreio
+                                                                        </button>
+                                                                    </template>
+
+                                                                    <!-- Case 2: Carrier + Tracking (Ready) -->
+                                                                    <template x-if="ticket.delivery_method === 'carrier' && ticket.tracking_code">
+                                                                         <button @click="markDelivered(ticket)" class="w-full bg-green-50 text-green-600 text-xs font-bold py-2 rounded hover:bg-green-100">
+                                                                            <i class="fa-solid fa-check-double mr-1"></i> Chegou
+                                                                        </button>
+                                                                    </template>
+
+                                                                    <!-- Case 3: Pickup (Ready) -->
+                                                                    <template x-if="ticket.delivery_method !== 'carrier'">
+                                                                         <button @click="markDelivered(ticket)" class="w-full bg-green-50 text-green-600 text-xs font-bold py-2 rounded hover:bg-green-100">
+                                                                            <i class="fa-solid fa-handshake mr-1"></i> Retirado
+                                                                        </button>
+                                                                    </template>
+                                                                </div>
                                                             </template>
                                                         </div>
                                                     </template>
@@ -3023,17 +3050,50 @@
                                         class="px-4 py-2 rounded font-bold text-sm transition-colors"
                                         :class="selectedTicket.pickup_available ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'">
                                     <i class="fa-solid fa-bell mr-2"></i>
-                                    <span x-text="selectedTicket.pickup_available ? 'Cliente Avisado' : 'Disponível p/ Retirada'"></span>
+                                    <span x-text="selectedTicket.pickup_available ? 'Disponível (Ok)' : 'Disponibilizar'"></span>
                                 </button>
 
                                 <div class="h-8 w-px bg-gray-300 mx-2"></div>
 
-                                <button @click="confirmPickup()"
-                                        :disabled="!selectedTicket.pickup_available"
-                                        class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                        :class="!selectedTicket.pickup_available ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-800 text-white hover:bg-black'">
-                                    <i class="fa-solid fa-handshake mr-1"></i> Retirado (Finalizar)
-                                </button>
+                                <!-- Final Action Column -->
+                                <div class="flex flex-col w-48 space-y-1">
+                                    <!-- Badge (Only if available) -->
+                                    <template x-if="selectedTicket.pickup_available">
+                                        <div class="w-full text-[10px] font-bold py-0.5 rounded text-center truncate uppercase"
+                                             :class="selectedTicket.delivery_method === 'carrier' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'"
+                                             x-text="selectedTicket.delivery_method === 'carrier' ? (selectedTicket.carrier_name || 'Transportadora') : 'Cliente'">
+                                        </div>
+                                    </template>
+
+                                    <!-- Buttons -->
+                                    <!-- Case Carrier No Tracking -->
+                                    <template x-if="selectedTicket.pickup_available && selectedTicket.delivery_method === 'carrier' && !selectedTicket.tracking_code">
+                                        <button @click="addTrackingCode(selectedTicket)" class="w-full px-4 py-2 rounded font-bold text-sm bg-orange-100 text-orange-800 hover:bg-orange-200">
+                                            Gerar Rastreio
+                                        </button>
+                                    </template>
+
+                                    <!-- Case Carrier Ready -->
+                                    <template x-if="selectedTicket.pickup_available && selectedTicket.delivery_method === 'carrier' && selectedTicket.tracking_code">
+                                        <button @click="markDelivered(selectedTicket)" class="w-full px-4 py-2 rounded font-bold text-sm bg-green-600 text-white hover:bg-green-700">
+                                            <i class="fa-solid fa-check-double mr-1"></i> Chegou
+                                        </button>
+                                    </template>
+
+                                    <!-- Case Pickup -->
+                                    <template x-if="selectedTicket.pickup_available && selectedTicket.delivery_method !== 'carrier'">
+                                        <button @click="markDelivered(selectedTicket)" class="w-full px-4 py-2 rounded font-bold text-sm bg-gray-800 text-white hover:bg-black">
+                                            <i class="fa-solid fa-handshake mr-1"></i> Retirado
+                                        </button>
+                                    </template>
+
+                                    <!-- Disabled State -->
+                                    <template x-if="!selectedTicket.pickup_available">
+                                         <button disabled class="w-full px-4 py-2 rounded font-bold text-sm bg-gray-200 text-gray-400 cursor-not-allowed">
+                                            <i class="fa-solid fa-lock mr-1"></i> Finalizar
+                                        </button>
+                                    </template>
+                                </div>
                             </div>
                         </template>
 

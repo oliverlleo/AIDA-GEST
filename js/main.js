@@ -1549,6 +1549,24 @@ function app() {
             window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
         },
 
+        sendCarrierWhatsApp(ticket, carrier, trackingCode) {
+            if (!ticket || !ticket.contact_info) return;
+
+            const link = this.getTrackingLink(ticket.id);
+            let msg = `Olá ${ticket.client_name}, boa notícia! Seu aparelho ${ticket.device_model} (OS ${ticket.os_number}) foi enviado pela transportadora ${carrier}.`;
+
+            if (trackingCode) {
+                msg += ` Código de rastreio: ${trackingCode}.`;
+            }
+
+            msg += ` Acompanhe o status aqui: ${link}`;
+
+            let number = ticket.contact_info.replace(/\D/g, '');
+            if (number.length <= 11) number = '55' + number;
+
+            window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+        },
+
         // --- INTERNAL NOTES SYSTEM ---
 
         async fetchInternalNotes(ticketId) {
@@ -2063,6 +2081,9 @@ function app() {
                         logMsg += ` Código de Rastreio ${form.tracking}.`;
                     }
                     await this.logTicketAction(ticket.id, 'Enviou Transportadora', logMsg);
+
+                    // Send specific WhatsApp for Carrier
+                    this.sendCarrierWhatsApp(ticket, form.carrier, form.tracking);
                 }
 
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
@@ -2089,11 +2110,12 @@ function app() {
             // Equivalent to "Chegou" or "Retirado (Finalizar)"
             const ctx = this.getLogContext(ticket);
             let action = 'Finalizou Entrega';
-            let details = `${ctx.client} retirou o ${ctx.device}.`;
+            let details = `${ctx.device} de ${ctx.client} foi retirado.`;
 
             if (ticket.delivery_method === 'carrier') {
                 action = 'Entrega Confirmada';
-                details = `O ${ctx.device} de ${ctx.client} chegou ao destino via transportadora.`;
+                // Specific text requested: "[Model] do [Client] da OS [Number] chegou ao seu destino."
+                details = `${ctx.device} do ${ctx.client} chegou ao seu destino.`;
             }
 
             await this.updateStatus(ticket, 'Finalizado', {
