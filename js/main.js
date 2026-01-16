@@ -73,8 +73,7 @@ function app() {
 
         // Data
         employees: [],
-        outsourcedCompanies: [], // List of third-party vendors (kept for backward compatibility if needed)
-        terceirizadosList: [], // Nova lista de terceirizados
+        outsourcedCompanies: [], // List of third-party vendors
         tickets: [],
         techTickets: [],
         deletedTickets: [],
@@ -327,7 +326,7 @@ function app() {
                     await this.fetchTemplates();
                     await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
-                    await this.fetchTerceirizados(); // Use new table
+                    await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
                 }
@@ -758,7 +757,7 @@ function app() {
                     await this.fetchTemplates();
                     await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
-                    await this.fetchTerceirizados(); // Use new table
+                    await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
                 }
@@ -1110,22 +1109,14 @@ function app() {
             }
         },
 
-        async fetchTerceirizados() {
+        async fetchOutsourcedCompanies() {
             if (!this.user?.workspace_id) return;
             try {
-                const data = await this.supabaseFetch(`terceirizados?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) {
-                    this.terceirizadosList = data;
-                    this.outsourcedCompanies = data; // Map to old variable to keep compatibility with existing references in code
-                }
+                const data = await this.supabaseFetch(`outsourced_companies?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
+                if (data) this.outsourcedCompanies = data;
             } catch(e) {
-                console.error("Fetch Terceirizados Error:", e);
+                console.error("Fetch Outsourced Companies Error:", e);
             }
-        },
-
-        // Alias for backward compatibility if needed, but we use fetchTerceirizados primarily
-        async fetchOutsourcedCompanies() {
-            await this.fetchTerceirizados();
         },
 
         async createOutsourcedCompany(name, phone) {
@@ -1133,12 +1124,12 @@ function app() {
             if (!this.user?.workspace_id) return;
 
             try {
-                await this.supabaseFetch('terceirizados', 'POST', {
+                await this.supabaseFetch('outsourced_companies', 'POST', {
                     workspace_id: this.user.workspace_id,
                     name: name.trim(),
                     phone: phone ? phone.trim() : null
                 });
-                await this.fetchTerceirizados();
+                await this.fetchOutsourcedCompanies();
                 this.notify("Empresa parceira cadastrada!", "success");
             } catch(e) {
                 this.notify("Erro ao cadastrar: " + e.message, "error");
@@ -1148,9 +1139,9 @@ function app() {
         async deleteOutsourcedCompany(id) {
             if (!confirm("Excluir esta empresa parceira?")) return;
             try {
-                await this.supabaseFetch(`terceirizados?id=eq.${id}`, 'DELETE');
+                await this.supabaseFetch(`outsourced_companies?id=eq.${id}`, 'DELETE');
                 this.notify("Empresa excluída.");
-                await this.fetchTerceirizados();
+                await this.fetchOutsourcedCompanies();
             } catch(e) {
                 this.notify("Erro ao excluir: " + e.message, "error");
             }
@@ -2110,11 +2101,11 @@ function app() {
 
         // --- OUTSOURCED FUNCTIONS ---
         getOutsourcedCompany(id) {
-             const c = this.terceirizadosList.find(x => x.id === id);
+             const c = this.outsourcedCompanies.find(x => x.id === id);
              return c ? c.name : 'Desconhecido';
         },
         getOutsourcedPhone(id) {
-             const c = this.terceirizadosList.find(x => x.id === id);
+             const c = this.outsourcedCompanies.find(x => x.id === id);
              return c ? c.phone : '';
         },
 
