@@ -1430,7 +1430,7 @@ function app() {
 
              try {
                  let techId = this.ticketForm.technician_id;
-                 if (techId === 'all') techId = null;
+                 if (techId === 'all' || techId === '') techId = null;
 
                  const ticketData = {
                      id: this.ticketForm.id,
@@ -1453,8 +1453,8 @@ function app() {
                      created_by_name: this.user.name,
                      // Outsourced Fields
                      is_outsourced: this.ticketForm.is_outsourced,
-                     outsourced_company_id: this.ticketForm.is_outsourced ? this.ticketForm.outsourced_company_id : null,
-                     outsourced_deadline: this.ticketForm.is_outsourced ? this.toUTC(this.ticketForm.outsourced_deadline) : null
+                     outsourced_company_id: (this.ticketForm.is_outsourced && this.ticketForm.outsourced_company_id) ? this.ticketForm.outsourced_company_id : null
+                     // Deadline NOT set at creation
                  };
 
                  const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
@@ -1896,8 +1896,21 @@ function app() {
 
         startOutsourcedFlow(ticket) {
             this.selectedTicket = ticket;
-            this.outsourcedForm = { supplierId: '', deadline: '', newSupplierName: '', newSupplierPhone: '' };
+            // Pre-fill if already outsourced
+            this.outsourcedForm = {
+                supplierId: ticket.outsourced_company_id || '',
+                deadline: ticket.outsourced_deadline ? this.formatDateForInput(ticket.outsourced_deadline) : '',
+                newSupplierName: '',
+                newSupplierPhone: ''
+            };
             this.modals.outsourced = true;
+        },
+
+        formatDateForInput(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            const pad = (n) => n < 10 ? '0' + n : n;
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
         },
 
         async sendToOutsourced(ticket = null, skipModal = false) {

@@ -1960,7 +1960,7 @@
 
                                                             <!-- 1. Pre-defined Outsourced (Created as Outsourced) -->
                                                             <template x-if="ticket.is_outsourced">
-                                                                <button @click="sendToOutsourced(ticket, true)" class="w-full bg-pink-600 text-white text-xs font-bold py-2 rounded hover:bg-pink-700 flex items-center justify-center shadow-sm">
+                                                        <button @click="startOutsourcedFlow(ticket)" class="w-full bg-pink-600 text-white text-xs font-bold py-2 rounded hover:bg-pink-700 flex items-center justify-center shadow-sm">
                                                                     <i class="fa-solid fa-paper-plane mr-2"></i> Enviar Terceiro
                                                                 </button>
                                                             </template>
@@ -2954,10 +2954,6 @@
                                         <option :value="sup.id" x-text="sup.name"></option>
                                     </template>
                                 </select>
-                                <div>
-                                    <label class="block text-[10px] font-bold text-gray-400 mb-1">Prazo do Fornecedor</label>
-                                    <input type="datetime-local" x-model="ticketForm.outsourced_deadline" class="w-full border rounded-lg p-2 text-sm">
-                                </div>
                             </div>
                         </div>
                         <div class="col-span-2" x-data="{ open: false, search: '' }">
@@ -3221,7 +3217,7 @@
 
                                 <!-- 1. Pre-defined Outsourced (Created as Outsourced) -->
                                 <template x-if="selectedTicket.is_outsourced">
-                                    <button @click="sendToOutsourced(selectedTicket, true)" class="w-full bg-pink-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-700 text-sm shadow flex items-center justify-center">
+                                    <button @click="startOutsourcedFlow(selectedTicket)" class="w-full bg-pink-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-700 text-sm shadow flex items-center justify-center">
                                         <i class="fa-solid fa-paper-plane mr-2"></i> Enviar para Terceiro
                                     </button>
                                 </template>
