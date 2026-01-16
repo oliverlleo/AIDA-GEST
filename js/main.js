@@ -1885,7 +1885,7 @@ function app() {
              await this.updateStatus(ticket, 'Andamento Reparo', {
                  parts_status: 'Recebido',
                  parts_received_at: new Date().toISOString()
-             }, { action: 'Recebeu Peças', details: `Peça ${part} foi recebida, ${ctx.device} de ${ctx.client} e foi liberado para realizar o reparo.` });
+             }, { action: 'Recebeu Peças', details: `Peça ${part} recebida para o ${ctx.device} de ${ctx.client}. Reparo liberado.` });
         },
 
         async startRepair(ticket = this.selectedTicket) {
