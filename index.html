@@ -502,7 +502,7 @@
                                 </div>
 
                                 <ul class="space-y-2">
-                                    <template x-for="comp in outsourcedCompanies" :key="comp.id">
+                                    <template x-for="comp in terceirizadosList" :key="comp.id">
                                         <li class="bg-white p-3 rounded border border-gray-200 flex justify-between items-center">
                                             <div>
                                                 <div class="font-bold text-sm text-gray-800" x-text="comp.name"></div>
@@ -511,7 +511,7 @@
                                             <button @click="deleteOutsourcedCompany(comp.id)" class="text-red-500 hover:text-red-700 p-2"><i class="fa-solid fa-trash"></i></button>
                                         </li>
                                     </template>
-                                     <div x-show="outsourcedCompanies.length === 0" class="text-center text-gray-400 text-xs italic py-2">Nenhuma empresa cadastrada.</div>
+                                     <div x-show="terceirizadosList.length === 0" class="text-center text-gray-400 text-xs italic py-2">Nenhuma empresa cadastrada.</div>
                                 </ul>
                             </div>
                         </div>
@@ -2842,7 +2842,7 @@
                             <div x-show="ticketForm.is_outsourced" class="flex space-x-2">
                                 <select x-model="ticketForm.outsourced_company_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all">
                                     <option value="">-- Selecione a Empresa --</option>
-                                    <template x-for="comp in outsourcedCompanies" :key="comp.id">
+                                    <template x-for="comp in terceirizadosList" :key="comp.id">
                                         <option :value="comp.id" x-text="comp.name"></option>
                                     </template>
                                 </select>
