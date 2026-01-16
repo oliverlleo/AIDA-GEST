@@ -26,7 +26,7 @@ function app() {
         user: null,
         workspaceName: '',
         companyCode: '',
-        whatsappNumber: '', // New Field
+        whatsappNumber: '',
         registrationSuccess: false,
         newCompanyCode: '',
         view: 'dashboard',
@@ -39,10 +39,31 @@ function app() {
             technician: 'all',
             status: 'all',
             quickView: 'summary',
-            viewMode: 'standard', // 'standard' or 'success_drilldown'
-            defectSortField: 'total', // total, success, fail
+            viewMode: 'standard',
+            defectSortField: 'total',
             defectSortDesc: true,
             viewType: 'data'
+        },
+
+        // Tracker Configuration (NEW)
+        trackerConfig: {
+            logo_url: '',
+            colors: {
+                background: '#FFF7ED', // orange-50
+                card_bg: '#FFFFFF',
+                header_bg: '#000000',
+                text_primary: '#1a1a1a',
+                text_secondary: '#6B7280', // gray-500
+                progress_bar: '#FF6B00',
+                progress_bg: '#E5E7EB', // gray-200
+                icon_active: '#FF6B00',
+                icon_inactive: '#D1D5DB', // gray-300
+                status_label: '#FF6B00'
+            },
+            visible_stages: [
+                'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+                'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
+            ]
         },
 
         // Data
@@ -51,7 +72,7 @@ function app() {
         techTickets: [],
         deletedTickets: [],
         deletedEmployees: [],
-        deviceModels: [], // New state
+        deviceModels: [],
         defectOptions: [],
         checklistTemplates: [],
         checklistTemplatesEntry: [],
@@ -117,7 +138,7 @@ function app() {
             client_name: '', os_number: '', model: '', serial: '',
             defects: [], priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
-            technician_id: '', // New field
+            technician_id: '',
             checklist: [], checklist_final: [], photos: [], notes: ''
         },
         newChecklistItem: '',
@@ -129,7 +150,7 @@ function app() {
 
         // UI State for Actions
         analysisForm: { needsParts: false, partsList: '' },
-        outcomeMode: '', // 'repair' or 'test'
+        outcomeMode: '',
         showTestFailureForm: false,
         testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '' },
 
@@ -140,10 +161,10 @@ function app() {
         // Selected Ticket
         selectedTicket: null,
         ticketLogs: [],
-        dashboardLogs: [], // Global logs for dashboard
-        logViewMode: 'timeline', // 'timeline' or 'detailed'
-        modalSource: '', // 'kanban' or 'tech'
-        showShareModal: false, // New
+        dashboardLogs: [],
+        logViewMode: 'timeline',
+        modalSource: '',
+        showShareModal: false,
 
         // Notes System State
         internalNotes: [],
@@ -152,7 +173,7 @@ function app() {
         newNoteText: '',
         newGeneralNoteText: '',
         noteIsChecklist: false,
-        noteChecklistItems: [], // [{text: '', ok: false}]
+        noteChecklistItems: [],
         generalNoteIsChecklist: false,
         generalNoteChecklistItems: [],
 
@@ -163,7 +184,7 @@ function app() {
         // Mention System
         showMentionList: false,
         mentionQuery: '',
-        mentionTarget: '', // 'internal' or 'general'
+        mentionTarget: '',
         mentionCursorPos: 0,
         mentionList: [],
 
@@ -171,14 +192,14 @@ function app() {
         calendarView: 'week',
         currentCalendarDate: new Date(),
         showAllCalendarTickets: false,
-        selectedTechFilter: 'all', // 'all' or specific uuid
+        selectedTechFilter: 'all',
 
         // Kanban State
         kanbanScrollWidth: 0,
 
         // Search
         searchQuery: '',
-        activeQuickFilter: null, // 'my_today', 'stale_3d'
+        activeQuickFilter: null,
         showFinalized: true,
 
         // Time
@@ -209,12 +230,10 @@ function app() {
         },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
-        // Bypasses supabase-js lock management to avoid AbortError on tab wake
         async supabaseFetch(endpoint, method = 'GET', body = null) {
             const isRpc = endpoint.startsWith('rpc/');
             const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
 
-            // Determine Auth Token
             let token = SUPABASE_KEY;
             if (this.session && this.session.access_token) {
                 token = this.session.access_token;
@@ -224,11 +243,9 @@ function app() {
                 'apikey': SUPABASE_KEY,
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
-                // Preferences for minimal response or representation
                 'Prefer': method === 'GET' ? undefined : 'return=representation'
             };
 
-            // --- SECURITY FIX: INJECT WORKSPACE ID FOR RLS ---
             if (this.user && this.user.workspace_id) {
                 headers['x-workspace-id'] = this.user.workspace_id;
             }
@@ -246,7 +263,6 @@ function app() {
                 throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
             }
 
-            // For void responses (204)
             if (response.status === 204) return null;
 
             return await response.json();
@@ -263,28 +279,23 @@ function app() {
             }
 
             try {
-                // Initial Session Check
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session) {
                     this.session = session;
                     await this.loadAdminData();
                 } else {
-                    // Try Employee Session from LocalStorage
                     const storedEmp = localStorage.getItem('techassist_employee');
                     if (storedEmp) {
                         try {
                             this.employeeSession = JSON.parse(storedEmp);
-
-                            // Normalize ID if loaded from old storage format
                             if (this.employeeSession.employee_id && !this.employeeSession.id) {
                                 this.employeeSession.id = this.employeeSession.employee_id;
                             }
-
                             this.user = this.employeeSession;
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
                             await this.fetchEmployees();
-                            this.initTechFilter(); // Initialize filter on restore
+                            this.initTechFilter();
                         } catch (e) {
                             localStorage.removeItem('techassist_employee');
                         }
@@ -292,10 +303,10 @@ function app() {
                 }
 
                 if (this.user) {
-                    this.initTechFilter(); // Ensure filter is set for Admin session restore too
+                    this.initTechFilter();
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
@@ -319,17 +330,14 @@ function app() {
                 this.currentTime = new Date();
             }, 1000);
 
-            // Notification Poller (Every 1 min for testing, maybe 5 in prod)
             setInterval(() => {
                 this.checkTimeBasedAlerts();
             }, 60000);
 
-            // Reset filters when changing views
             this.$watch('view', (value) => {
                 if (value !== 'kanban') {
                     this.clearFilters();
                 } else {
-                    // Initialize Kanban Scroll Sync
                     setTimeout(() => this.initKanbanScroll(), 100);
                 }
                 if (value === 'dashboard') {
@@ -337,24 +345,12 @@ function app() {
                 }
             });
 
-            // Watch for filter changes to update metrics and render charts if needed
             this.$watch('adminDashboardFilters', () => {
                 this.calculateMetrics();
                 if (this.adminDashboardFilters.viewType === 'chart') {
                     setTimeout(() => this.renderCharts(), 50);
                 }
             });
-
-            // Watch for filter changes to update metrics and render charts if needed
-            this.$watch('adminDashboardFilters', () => {
-                this.calculateMetrics();
-                if (this.adminDashboardFilters.viewType === 'chart') {
-                    setTimeout(() => this.renderCharts(), 50);
-                }
-            });
-
-            // Removed visibilitychange listener to prevent lock conflicts.
-            // Data is kept fresh via Realtime subscriptions.
         },
 
         calculateMetrics() {
@@ -558,7 +554,6 @@ function app() {
                 })
                 .subscribe();
 
-            // Notification Channel
             supabaseClient
                 .channel('notifications_channel')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
@@ -567,7 +562,6 @@ function app() {
                 })
                 .subscribe();
 
-            // Ticket Logs Channel (Activity Feed)
             supabaseClient
                 .channel('ticket_logs_channel')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
@@ -610,7 +604,6 @@ function app() {
                  if (!this.registerForm.companyName) return this.notify('Digite o nome da empresa.', 'error');
                  const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
 
-                 // REFACTORED: Use Native Fetch for RPC
                  const wsId = await this.supabaseFetch('rpc/create_owner_workspace_and_profile', 'POST', {
                         p_name: this.registerForm.companyName,
                         p_company_code: generatedCode
@@ -630,7 +623,6 @@ function app() {
         async loginEmployee() {
             this.loading = true;
             try {
-                // REFACTORED: Use Native Fetch for RPC
                 const data = await this.supabaseFetch('rpc/employee_login', 'POST', {
                         p_company_code: this.loginForm.company_code,
                         p_username: this.loginForm.username,
@@ -639,28 +631,25 @@ function app() {
 
                 if (data && data.length > 0) {
                     const emp = data[0];
-
-                    // Normalize ID (RPC returns employee_id)
                     if (emp.employee_id && !emp.id) {
                         emp.id = emp.employee_id;
                     }
 
                     this.employeeSession = emp;
                     this.user = emp;
-                    this.workspaceName = emp.workspace_name; // Note: RPC might not return workspace_name directly, check this too
-                    this.companyCode = this.loginForm.company_code; // Save from form input as RPC takes it but returns ID
+                    this.workspaceName = emp.workspace_name;
+                    this.companyCode = this.loginForm.company_code;
 
                     localStorage.setItem('techassist_employee', JSON.stringify(emp));
                     this.notify('Bem-vindo, ' + emp.name, 'success');
                     await this.fetchEmployees();
-                    this.initTechFilter(); // Initialize filter before fetching
+                    this.initTechFilter();
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
                     this.fetchGlobalLogs();
 
-                    // Redirect Technician directly to Bench
                     if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
                         this.view = 'tech_orders';
                     }
@@ -693,20 +682,18 @@ function app() {
             if (!this.session) return;
             const user = this.session.user;
 
-            // REFACTORED: Native Fetch
             try {
-                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
+                // Modified select to include tracker_config
+                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number,tracker_config)&id=eq.${user.id}`);
                 let profile = profileData && profileData.length > 0 ? profileData[0] : null;
 
-                // Handle missing profile case (equivalent to PGRST116)
                 if (!profile) {
                     const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code,whatsapp_number&owner_id=eq.${user.id}`);
                     const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
 
                     if (workspace) {
                         await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
-                        // Re-fetch
-                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
+                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number,tracker_config)&id=eq.${user.id}`);
                         profile = newProfileData[0];
                     } else {
                         this.view = 'setup_required';
@@ -719,11 +706,25 @@ function app() {
                     this.workspaceName = profile.workspaces?.name;
                     this.companyCode = profile.workspaces?.company_code;
                     this.whatsappNumber = profile.workspaces?.whatsapp_number || '';
+
+                    // Populate Tracker Config
+                    if (profile.workspaces?.tracker_config) {
+                        // Merge with defaults to ensure all fields exist
+                        this.trackerConfig = {
+                            ...this.trackerConfig,
+                            ...profile.workspaces.tracker_config,
+                            colors: {
+                                ...this.trackerConfig.colors,
+                                ...(profile.workspaces.tracker_config.colors || {})
+                            }
+                        };
+                    }
+
                     await this.fetchEmployees();
-                    this.initTechFilter(); // Admin defaults to 'all'
+                    this.initTechFilter();
                     await this.fetchTickets();
                     await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
+                    await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
@@ -734,15 +735,11 @@ function app() {
         },
         async fetchEmployees() {
             if (!this.user?.workspace_id) return;
-
-            // REFACTORED: Native Fetch for ALL employee fetches
             try {
                 let data;
                 if (this.session) {
-                     // Table Select (Standard Admin View - Exclude Deleted)
                      data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
                 } else {
-                     // RPC Call (Already excludes deleted in SQL)
                      data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
                 }
                 if (data) this.employees = data;
@@ -767,18 +764,78 @@ function app() {
             }
         },
 
+        // --- TRACKER CONFIG ACTIONS (NEW) ---
+        async saveTrackerConfig() {
+            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
+            this.loading = true;
+            try {
+                await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
+                    tracker_config: this.trackerConfig
+                });
+                this.notify("Configurações de Acompanhamento salvas!");
+            } catch (e) {
+                this.notify("Erro ao salvar: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async handleLogoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            this.loading = true;
+            try {
+                const path = `${this.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
+                const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
+
+                let token = this.session?.access_token || SUPABASE_KEY;
+                const headers = {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${token}`,
+                    'x-workspace-id': this.user.workspace_id,
+                    'Content-Type': file.type
+                };
+
+                const response = await fetch(url, { method: 'POST', headers, body: file });
+                if (!response.ok) throw new Error("Falha no upload");
+
+                // Construct Public URL
+                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
+                this.trackerConfig.logo_url = publicUrl;
+                this.notify("Logo carregado!");
+            } catch(e) {
+                this.notify("Erro upload: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        toggleTrackerStage(stage) {
+            const idx = this.trackerConfig.visible_stages.indexOf(stage);
+            if (idx > -1) {
+                // Don't remove if it's the last one or strict logic (e.g. keep 'Aberto'?)
+                // Allow removing any for flexibility, but maybe warn if empty?
+                this.trackerConfig.visible_stages.splice(idx, 1);
+            } else {
+                // Add back in correct order
+                this.trackerConfig.visible_stages.push(stage);
+                // Sort according to standard order
+                this.trackerConfig.visible_stages.sort((a, b) => {
+                    return this.STATUS_COLUMNS.indexOf(a) - this.STATUS_COLUMNS.indexOf(b);
+                });
+            }
+        },
+
         // --- LOGGING ---
         async logTicketAction(ticketId, action, details = null) {
             try {
-                // Remove generic/redundant logs if strict filtering is needed
-                // Currently, we only call logTicketAction for user-initiated actions as per request
                 await this.supabaseFetch('ticket_logs', 'POST', {
                     ticket_id: ticketId,
                     action: action,
                     details: details,
                     user_name: this.user.name
                 });
-                // Refresh dashboard logs if on dashboard
                 if (this.view === 'dashboard') this.fetchGlobalLogs();
             } catch (e) {
                 console.error("Log failed:", e);
@@ -786,7 +843,6 @@ function app() {
         },
 
         async fetchTicketLogs(ticketId) {
-            // Only admins can see logs
             if (!this.hasRole('admin')) return [];
             try {
                 const logs = await this.supabaseFetch(`ticket_logs?ticket_id=eq.${ticketId}&order=created_at.desc`);
@@ -800,7 +856,6 @@ function app() {
         async fetchGlobalLogs() {
             if (!this.user?.workspace_id) return;
             try {
-                // Join with tickets to get OS number, client name and device model
                 const logs = await this.supabaseFetch(`ticket_logs?select=*,tickets(os_number,client_name,device_model)&order=created_at.desc&limit=10`);
                 this.dashboardLogs = logs || [];
             } catch (e) {
@@ -812,12 +867,6 @@ function app() {
         async fetchNotifications() {
             if (!this.user) return;
             try {
-                // Filter by Recipient (User ID OR Role)
-                // Since Supabase REST doesn't support complex OR in a simple query easily without RPC,
-                // we'll fetch recently created ones and filter in JS for simplicity/speed or use a slightly wider net.
-                // Better: Fetch where recipient_user_id = me OR recipient_role IN (my_roles)
-                // We'll use a PostgREST filter string carefully.
-
                 let query = `notifications?select=*,tickets(os_number,device_model)&order=created_at.desc&limit=50`;
                 const data = await this.supabaseFetch(query);
 
@@ -826,9 +875,7 @@ function app() {
                     const userId = this.user.id;
 
                     this.notificationsList = data.filter(n => {
-                        // If assigned to specific user
                         if (n.recipient_user_id) return n.recipient_user_id === userId;
-                        // If assigned to role
                         if (n.recipient_role) return myRoles.includes(n.recipient_role);
                         return false;
                     });
@@ -839,7 +886,6 @@ function app() {
         },
 
         async createNotification(data) {
-            // data: { ticket_id, recipient_role/user_id, type, message }
             try {
                 await this.supabaseFetch('notifications', 'POST', data);
             } catch(e) { console.error("Create Notif Error:", e); }
@@ -847,7 +893,6 @@ function app() {
 
         async markNotificationRead(id) {
             try {
-                // Optimistic UI update
                 const n = this.notificationsList.find(x => x.id === id);
                 if (n) n.is_read = true;
 
@@ -860,9 +905,6 @@ function app() {
             if (unreadIds.length === 0) return;
 
             this.notificationsList.forEach(n => n.is_read = true);
-            // Batch update might need loop or RPC, keeping it simple: loop for now (not efficient but rare action)
-            // Or better: update where id in list.
-            // PostgREST: id=in.(...ids)
             await this.supabaseFetch(`notifications?id=in.(${unreadIds.join(',')})`, 'PATCH', { is_read: true, read_at: new Date().toISOString() });
         },
 
@@ -872,32 +914,13 @@ function app() {
             const now = new Date();
             const oneHour = 60 * 60 * 1000;
 
-            // 1. Deadline < 1h (Tech/Admin)
-            // We need to avoid creating duplicates. We can check if we created one recently in local state?
-            // Or query DB? Querying DB is safer.
-            // For now, let's implement the logic triggers.
-
-            // Logic: Filter tickets matching criteria
-            // If match, try to insert. RLS/DB constraints or "SELECT before INSERT" needed to avoid spam.
-            // Simplified for this task: We won't implement the full deduplication backend here to save complexity,
-            // but we will mark tickets as 'alerted' in local state if we were a full backend.
-            // Since we are client-side, multiple clients might trigger this.
-            // Ideally this runs on a server.
-            // WORKAROUND: We will rely on real-time triggers for now, and skipping the heavy Poller insertion
-            // to avoid "Notification Bomb" unless specifically requested to handle concurrency.
-            // User requested "Início de Turno", "Gargalo".
-            // I will implement "Deadline" logic only if I am Admin (to act as the 'server').
-
             if (this.hasRole('admin')) {
-                // Admin checks for everyone
                 this.tickets.forEach(t => {
                     if (t.deadline && !['Finalizado', 'Retirada Cliente'].includes(t.status)) {
                         const deadline = new Date(t.deadline);
                         const diff = deadline - now;
                         if (diff > 0 && diff < oneHour) {
-                            // Gargalo: < 1h.
-                            // Ensure we haven't alerted. (Requires tracking).
-                            // Skipping auto-insert to prevent spam loop in this environment.
+                            // Gargalo logic
                         }
                     }
                 });
@@ -908,7 +931,7 @@ function app() {
             this.loading = true;
             try {
                 this.ticketLogs = await this.fetchTicketLogs(ticket.id);
-                this.logViewMode = 'timeline'; // Reset to default view
+                this.logViewMode = 'timeline';
                 this.modals.logs = true;
             } finally {
                 this.loading = false;
@@ -921,8 +944,6 @@ function app() {
             if (!this.user?.workspace_id) return;
 
             try {
-                // REFACTORED: Native Fetch
-                // Soft Delete Filter: deleted_at=is.null
                 const data = await this.supabaseFetch(
                     `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`
                 );
@@ -930,26 +951,19 @@ function app() {
                 if (data) {
                     this.tickets = data;
 
-                    // Apply Tech Filter to Minha Bancada
                     let filteredTechTickets = data;
                     let effectiveFilter = this.selectedTechFilter;
 
                     const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
 
-                    // SAFETY: If pure technician, FORCE filter to self regardless of state
                     if (isTechOnly && this.user) {
                         effectiveFilter = this.user.id;
                         this.selectedTechFilter = this.user.id;
                     }
 
-                    // Apply Filter
                     if (effectiveFilter && effectiveFilter !== 'all') {
-                        // Use loose equality (==) to handle potential UUID type mismatches
-                        // Allow seeing tickets assigned to SELF OR 'Everyone' (null)
                         filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter || t.technician_id == null);
                     } else if (isTechOnly) {
-                         // FAIL CLOSED: If user is Tech Only and filter is missing/invalid, SHOW NOTHING.
-                         // Do NOT allow falling through to the full list.
                          console.warn("Tech View Security: Filter missing, hiding all tickets.");
                          filteredTechTickets = [];
                     }
@@ -957,16 +971,13 @@ function app() {
                     this.techTickets = filteredTechTickets.filter(t =>
                         ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                     ).sort((a, b) => {
-                        // Priority Requested (Top of list)
                         if (a.priority_requested && !b.priority_requested) return -1;
                         if (!a.priority_requested && b.priority_requested) return 1;
 
-                        // Standard Priority
                         const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                         const pDiff = pOrder[a.priority] - pOrder[b.priority];
                         if (pDiff !== 0) return pDiff;
 
-                        // Deadline
                         return new Date(a.deadline || 0) - new Date(b.deadline || 0);
                     });
 
@@ -974,12 +985,9 @@ function app() {
                 }
             } catch (err) {
                  console.warn("Fetch exception:", err);
-                 // Retry logic for abort/fetch errors
                  if (retryCount < 2) {
                      setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
                  } else {
-                     // On final failure, empty lists to avoid stale state if desired, or keep old data.
-                     // Choosing to keep old data to be less disruptive, but could clear.
                      console.error("Final ticket fetch failure");
                  }
             }
@@ -988,11 +996,9 @@ function app() {
         async fetchTemplates() {
              if (!this.user?.workspace_id) return;
              try {
-                 // REFACTORED: Native Fetch
                  const data = await this.supabaseFetch('checklist_templates?select=*');
                  if (data) {
-                     this.checklistTemplates = data; // Keep raw
-                     // Filter by type
+                     this.checklistTemplates = data;
                      this.checklistTemplatesEntry = data.filter(t => !t.type || t.type === 'entry');
                      this.checklistTemplatesFinal = data.filter(t => t.type === 'final');
                  }
@@ -1025,7 +1031,6 @@ function app() {
             if (!name || !name.trim()) return;
             if (!this.user?.workspace_id) return;
 
-            // Check duplicate
             if (this.deviceModels.some(m => m.name.toLowerCase() === name.trim().toLowerCase())) {
                 return this.notify("Modelo já existe.", "error");
             }
@@ -1037,7 +1042,7 @@ function app() {
                 });
                 await this.fetchDeviceModels();
                 this.notify("Modelo cadastrado!", "success");
-                return true; // Return success
+                return true;
             } catch(e) {
                 this.notify("Erro ao salvar modelo: " + e.message, "error");
                 return false;
@@ -1073,7 +1078,6 @@ function app() {
                 await this.supabaseFetch(`device_models?id=eq.${id}`, 'DELETE');
                 this.notify("Modelo excluído.");
                 await this.fetchDeviceModels();
-                // Clear selection if deleted
                 if (this.ticketForm.model && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
                     this.ticketForm.model = '';
                 }
@@ -1096,7 +1100,7 @@ function app() {
 
         openNewTicketModal() {
             this.ticketForm = {
-                id: crypto.randomUUID(), // Generate ID upfront for uploads
+                id: crypto.randomUUID(),
                 client_name: '', os_number: '', model: '', serial: '',
                 defects: [], priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
@@ -1120,7 +1124,6 @@ function app() {
             if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
 
             try {
-                // REFACTORED: Native Fetch
                 await this.supabaseFetch('checklist_templates', 'POST', {
                     workspace_id: this.user.workspace_id,
                     name: this.newTemplateName,
@@ -1141,7 +1144,6 @@ function app() {
             if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
 
             try {
-                // REFACTORED: Native Fetch
                 await this.supabaseFetch(`checklist_templates?id=eq.${this.selectedTemplateId}`, 'DELETE');
 
                 this.notify("Modelo excluído.");
@@ -1172,7 +1174,6 @@ function app() {
             if (this.ticketForm.checklist_final.length === 0) return this.notify("Adicione itens", "error");
 
             try {
-                // Saving as 'final' type
                 await this.supabaseFetch('checklist_templates', 'POST', {
                     workspace_id: this.user.workspace_id,
                     name: this.newTemplateNameFinal,
@@ -1188,7 +1189,6 @@ function app() {
             }
         },
         async deleteTemplateFinal() {
-            // Re-use logic or separate if needed. Using selectedTemplateIdFinal
             if (!this.selectedTemplateIdFinal) return;
             if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
             try {
@@ -1214,12 +1214,10 @@ function app() {
                  return this.notify("Selecione um Técnico Responsável ou 'Todos'.", "error");
              }
 
-             // Validation: Strict Model (Must exist in list)
              if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
                  return this.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
              }
 
-             // VALIDATION: Analysis Deadline vs Delivery Deadline
              if (this.ticketForm.deadline && this.ticketForm.analysis_deadline) {
                  const deadline = new Date(this.ticketForm.deadline);
                  const analysis = new Date(this.ticketForm.analysis_deadline);
@@ -1247,7 +1245,7 @@ function app() {
                      deadline: this.toUTC(this.ticketForm.deadline) || null,
                      analysis_deadline: this.toUTC(this.ticketForm.analysis_deadline) || null,
                      device_condition: this.ticketForm.device_condition,
-                     technician_id: techId, // 'all' becomes null
+                     technician_id: techId,
                      checklist_data: this.ticketForm.checklist,
                      checklist_final_data: this.ticketForm.checklist_final,
                      photos_urls: this.ticketForm.photos,
@@ -1255,17 +1253,11 @@ function app() {
                      created_by_name: this.user.name
                  };
 
-                 // REFACTORED: Native Fetch
                  const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
                  const createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
 
-                 // Log Creation
                  const ctx = this.getLogContext(createdTicket);
                  await this.logTicketAction(createdTicket.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
-
-                 // --- AUTOMATION: Send WhatsApp ---
-                 // Not implemented directly here to avoid blocking UI,
-                 // but we can trigger the link generation logic in modal later.
 
                  this.notify("Chamado criado!");
                  this.modals.ticket = false;
@@ -1283,12 +1275,10 @@ function app() {
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
             if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
             if (!Array.isArray(this.selectedTicket.photos_urls)) this.selectedTicket.photos_urls = [];
-            // Reset UI states
             this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
-            this.editingDeadlines = false; // Reset editing mode
+            this.editingDeadlines = false;
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
 
-            // Notes
             this.fetchInternalNotes(ticket.id);
             this.newNoteText = '';
             this.noteIsChecklist = false;
@@ -1299,7 +1289,6 @@ function app() {
 
         startEditingDeadlines() {
             if (!this.selectedTicket) return;
-            // Format dates for datetime-local input (YYYY-MM-DDThh:mm)
             const formatForInput = (dateStr) => {
                 if (!dateStr) return '';
                 const d = new Date(dateStr);
@@ -1320,7 +1309,6 @@ function app() {
         async saveDeadlines() {
             if (!this.selectedTicket) return;
 
-            // Validation
             if (this.editDeadlineForm.deadline && this.editDeadlineForm.analysis_deadline) {
                 const deadline = new Date(this.editDeadlineForm.deadline);
                 const analysis = new Date(this.editDeadlineForm.analysis_deadline);
@@ -1331,14 +1319,12 @@ function app() {
 
             this.loading = true;
             try {
-                // Determine changes for logging
                 const oldDeadline = this.selectedTicket.deadline ? new Date(this.selectedTicket.deadline).toLocaleString() : 'Não definido';
                 const newDeadline = this.editDeadlineForm.deadline ? new Date(this.editDeadlineForm.deadline).toLocaleString() : 'Não definido';
 
                 const oldAnalysis = this.selectedTicket.analysis_deadline ? new Date(this.selectedTicket.analysis_deadline).toLocaleString() : 'Não definido';
                 const newAnalysis = this.editDeadlineForm.analysis_deadline ? new Date(this.editDeadlineForm.analysis_deadline).toLocaleString() : 'Não definido';
 
-                // Log Delivery Change
                 if (oldDeadline !== newDeadline) {
                     const ctx = this.getLogContext(this.selectedTicket);
                     await this.logTicketAction(
@@ -1348,7 +1334,6 @@ function app() {
                     );
                 }
 
-                // Log Analysis Change
                 if (oldAnalysis !== newAnalysis) {
                     const ctx = this.getLogContext(this.selectedTicket);
                     await this.logTicketAction(
@@ -1358,7 +1343,6 @@ function app() {
                     );
                 }
 
-                // Update
                 const updates = {
                     deadline: this.toUTC(this.editDeadlineForm.deadline) || null,
                     analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
@@ -1366,13 +1350,12 @@ function app() {
 
                 await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', updates);
 
-                // Refresh local state immediately for UI
                 this.selectedTicket.deadline = updates.deadline;
                 this.selectedTicket.analysis_deadline = updates.analysis_deadline;
 
                 this.notify("Prazos atualizados!");
                 this.editingDeadlines = false;
-                await this.fetchTickets(); // Full refresh
+                await this.fetchTickets();
             } catch (e) {
                 this.notify("Erro ao salvar prazos: " + e.message, "error");
             } finally {
@@ -1380,7 +1363,6 @@ function app() {
             }
         },
 
-        // REFACTORED: Native Fetch Implementation
         async saveTicketChanges() {
              if (!this.selectedTicket) return;
              this.loading = true;
@@ -1410,7 +1392,6 @@ function app() {
             const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
 
             try {
-                // Determine Auth Token
                 let token = SUPABASE_KEY;
                 if (this.session && this.session.access_token) {
                     token = this.session.access_token;
@@ -1434,8 +1415,6 @@ function app() {
                     throw new Error(err.message || 'Upload falhou');
                 }
 
-                // Public URL
-                // Format: {SUPABASE_URL}/storage/v1/object/public/ticket_photos/{path}
                 const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
                 return publicUrl;
 
@@ -1484,7 +1463,6 @@ function app() {
 
         // --- SHARE TICKET ---
         getTrackingLink(ticketId) {
-            // Assumes the file is in the same directory
             const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '') + 'acompanhar.html';
             return `${baseUrl}?id=${ticketId}`;
         },
@@ -1509,7 +1487,6 @@ function app() {
             const link = this.getTrackingLink(this.selectedTicket.id);
             const msg = `Olá ${this.selectedTicket.client_name}, acompanhe o progresso do seu reparo em tempo real aqui: ${link}`;
 
-            // Re-use existing openWhatsApp logic but with message
             let number = this.selectedTicket.contact_info.replace(/\D/g, '');
             if (number.length <= 11) number = '55' + number;
 
@@ -1521,7 +1498,6 @@ function app() {
         async fetchInternalNotes(ticketId) {
             if (!this.user?.workspace_id) return;
             try {
-                // Fetch notes for this ticket
                 const data = await this.supabaseFetch(
                     `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=eq.${ticketId}&order=created_at.asc`
                 );
@@ -1534,18 +1510,13 @@ function app() {
         async fetchGeneralNotes() {
             if (!this.user?.workspace_id) return;
             try {
-                // Build Query
                 let query = `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&is_archived=eq.false`;
 
-                // Filter Resolved
                 if (!this.showResolvedNotes) {
                     query += `&is_resolved=eq.false`;
                 }
 
-                // Filter Date
                 if (this.noteDateFilter) {
-                    // Start of day to End of day logic, or just simple date match if column is date.
-                    // Column is timestamptz. We need range.
                     const start = new Date(this.noteDateFilter + 'T00:00:00').toISOString();
                     const end = new Date(this.noteDateFilter + 'T23:59:59').toISOString();
                     query += `&created_at=gte.${start}&created_at=lte.${end}`;
@@ -1565,17 +1536,15 @@ function app() {
             const text = event.target.value;
             const cursorPos = event.target.selectionStart;
 
-            // Check if we are typing a mention: look for @ before cursor
             const lastAt = text.lastIndexOf('@', cursorPos - 1);
 
             if (lastAt !== -1) {
-                // Check if there are spaces between @ and cursor (allow only name chars)
                 const potentialName = text.substring(lastAt + 1, cursorPos);
                 if (!/\s/.test(potentialName)) {
                     this.showMentionList = true;
                     this.mentionQuery = potentialName;
-                    this.mentionTarget = target; // 'internal' or 'general'
-                    this.mentionCursorPos = lastAt; // Save position of @
+                    this.mentionTarget = target;
+                    this.mentionCursorPos = lastAt;
                     this.mentionList = this.employees.filter(e =>
                         e.name.toLowerCase().includes(potentialName.toLowerCase()) ||
                         e.username.toLowerCase().includes(potentialName.toLowerCase())
@@ -1600,13 +1569,10 @@ function app() {
             }
 
             this.showMentionList = false;
-
-            // Refocus? Complicated in Alpine without refs, but user continues typing.
         },
 
         formatNoteContent(text) {
             if (!text) return '';
-            // 1. Sanitize (Basic)
             let safe = text
                 .replace(/&/g, "&amp;")
                 .replace(/</g, "&lt;")
@@ -1614,13 +1580,8 @@ function app() {
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
 
-            // 2. Highlight Mentions (Orange)
-            // Match @Name (until space or end)
-            // We assume names don't have spaces for simple regex, OR we match known names.
-            // Better: Match @\w+
             safe = safe.replace(/@(\w+(\s\w+)?)/g, '<span class="text-brand-500 font-bold">@$1</span>');
 
-            // 3. Line breaks
             return safe.replace(/\n/g, '<br>');
         },
 
@@ -1633,19 +1594,17 @@ function app() {
 
             this.loading = true;
             try {
-                // Parse Mentions (@Name)
                 const mentionRegex = /@(\w+)/g;
                 const matches = text.match(mentionRegex) || [];
-                const mentions = matches.map(m => m.substring(1)); // Remove @
+                const mentions = matches.map(m => m.substring(1));
 
-                // Prepare Checklist Data
                 const cleanChecklist = checklistItems
                     .filter(i => i.text.trim().length > 0)
                     .map(i => ({ item: i.text, ok: i.ok }));
 
                 const payload = {
                     workspace_id: this.user.workspace_id,
-                    ticket_id: ticketId, // Null for general
+                    ticket_id: ticketId,
                     author_id: this.user.id,
                     author_name: this.user.name,
                     content: text,
@@ -1657,7 +1616,6 @@ function app() {
 
                 await this.supabaseFetch('internal_notes', 'POST', payload);
 
-                // Clear Form
                 if (isGeneral) {
                     this.newGeneralNoteText = '';
                     this.generalNoteIsChecklist = false;
@@ -1689,7 +1647,6 @@ function app() {
         },
 
         async toggleNoteCheckStatus(note, itemIndex) {
-            // Optimistic Update
             note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
 
             try {
@@ -1698,22 +1655,18 @@ function app() {
                 });
             } catch (e) {
                 console.error("Error toggling checklist:", e);
-                // Revert
                 note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
             }
         },
 
         async resolveNote(note) {
             const newStatus = !note.is_resolved;
-            note.is_resolved = newStatus; // Optimistic
+            note.is_resolved = newStatus;
 
             try {
                 await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
                     is_resolved: newStatus
                 });
-
-                // If it's a general note and resolved, maybe move to archive visually?
-                // For now, we just show strict strikethrough or green check.
             } catch (e) {
                 note.is_resolved = !newStatus;
                 this.notify("Erro ao atualizar status", "error");
@@ -1727,7 +1680,6 @@ function app() {
                     is_archived: true,
                     archived_at: new Date().toISOString()
                 });
-                // Remove from local list
                 if (note.ticket_id) {
                     this.internalNotes = this.internalNotes.filter(n => n.id !== note.id);
                 } else {
@@ -1743,18 +1695,12 @@ function app() {
         async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
             this.loading = true;
             try {
-                // ONLY log if actionLog is explicitly provided (User Action)
-                // We SKIP the generic 'Alteração de Status' log to avoid system noise
                 if (actionLog) {
                      await this.logTicketAction(ticket.id, actionLog.action, actionLog.details);
                 }
-                // else {
-                //    SILENT UPDATE: Do not log automated or generic status changes
-                // }
 
                 const updates = { status: newStatus, updated_at: new Date().toISOString(), ...additionalUpdates };
 
-                // REFACTORED: Native Fetch - Update Ticket
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
 
                 this.notify("Status atualizado");
@@ -1780,7 +1726,6 @@ function app() {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
-            // Log Action: Finalizou Análise
             const ctx = this.getLogContext(this.selectedTicket);
             await this.updateStatus(this.selectedTicket, 'Aprovacao', {
                 parts_needed: this.analysisForm.partsList,
@@ -1791,15 +1736,10 @@ function app() {
         openWhatsApp(phone) {
             if (!phone) return this.notify("Telefone não cadastrado.", "error");
 
-            // Remove non-digits
             let number = phone.replace(/\D/g, '');
 
-            // Basic validation/formatting
             if (number.length < 10) return this.notify("Número inválido para WhatsApp.", "error");
 
-            // Prepend 55 if likely missing (assuming BR numbers usually start with DDD)
-            // If it already starts with 55 and is long enough, leave it.
-            // But simple heuristic: if length is 10 or 11 (DDD+Number), add 55.
             if (number.length <= 11) {
                 number = '55' + number;
             }
@@ -1808,7 +1748,6 @@ function app() {
         },
 
         async startBudget(ticket) {
-            // await this.logTicketAction(ticket.id, 'Iniciou Orçamento', 'Visualizou para criar orçamento');
             this.viewTicketDetails(ticket);
             this.openWhatsApp(ticket.contact_info);
         },
@@ -1816,22 +1755,17 @@ function app() {
         async sendBudget(ticket = this.selectedTicket) {
             this.loading = true;
             try {
-                // Log Action
                 const ctx = this.getLogContext(ticket);
                 await this.logTicketAction(ticket.id, 'Enviou Orçamento', `Orçamento para o ${ctx.device} de ${ctx.client} foi enviado para o cliente.`);
 
-                // REFACTORED: Native Fetch
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     budget_status: 'Enviado',
                     budget_sent_at: new Date().toISOString()
                 });
 
-                // AUTOMATION: Generate Tracking Link
                 const link = this.getTrackingLink(ticket.id);
                 const msg = `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`;
 
-                // Trigger WA open (User has to click send)
-                // We notify user to check the popup
                 let number = ticket.contact_info.replace(/\D/g, '');
                 if (number.length <= 11) number = '55' + number;
                 window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -1860,13 +1794,11 @@ function app() {
         async markPurchased(ticket = this.selectedTicket) {
              this.loading = true;
              try {
-                 // Log Action
                  const ctx = this.getLogContext(ticket);
                  const rawPart = ticket.parts_needed || 'peça';
                  const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
                  await this.logTicketAction(ticket.id, 'Confirmou Compra', `Compra da peça '${part}' para o ${ctx.device} de ${ctx.client} foi realizada.`);
 
-                 // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     parts_status: 'Comprado',
                     parts_purchased_at: new Date().toISOString()
@@ -1891,12 +1823,10 @@ function app() {
         async startRepair(ticket = this.selectedTicket) {
              this.loading = true;
              try {
-                 // Log Action
                  const ctx = this.getLogContext(ticket);
                  await this.logTicketAction(ticket.id, 'Iniciou Execução', `Reparo iniciado do ${ctx.device} de ${ctx.client}.`);
 
                  const now = new Date().toISOString();
-                 // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     repair_start_at: now
                 });
@@ -1945,12 +1875,10 @@ function app() {
         async startTest(ticket = this.selectedTicket) {
              this.loading = true;
              try {
-                 // Log Action
                  const ctx = this.getLogContext(ticket);
                  await this.logTicketAction(ticket.id, 'Iniciou Testes', `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`);
 
                  const now = new Date().toISOString();
-                 // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     test_start_at: now
                 });
@@ -1977,7 +1905,6 @@ function app() {
                 if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
                 if (!this.testFailureData.reason) return this.notify("Descreva o defeito apresentado", "error");
 
-                // Prepare new note
                 const newNote = {
                     date: new Date().toISOString(),
                     text: this.testFailureData.reason,
@@ -1991,7 +1918,7 @@ function app() {
                 await this.updateStatus(ticket, 'Andamento Reparo', {
                     deadline: this.toUTC(this.testFailureData.newDeadline),
                     priority: this.testFailureData.newPriority,
-                    repair_start_at: null, // Reset timer
+                    repair_start_at: null,
                     test_start_at: null,
                     status: 'Andamento Reparo',
                     test_notes: updatedNotes
@@ -2003,11 +1930,9 @@ function app() {
         async markAvailable(ticket = this.selectedTicket) {
              this.loading = true;
              try {
-                 // Log Action
                  const ctx = this.getLogContext(ticket);
                  await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', `O ${ctx.device} de ${ctx.client} foi disponibilizado.`);
 
-                 // REFACTORED: Native Fetch
                  await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     pickup_available: true,
                     pickup_available_at: new Date().toISOString()
@@ -2029,11 +1954,9 @@ function app() {
         async requestPriority(ticket) {
             this.loading = true;
             try {
-                // Log Action
                 const ctx = this.getLogContext(ticket);
                 await this.logTicketAction(ticket.id, 'Solicitou Prioridade', `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`);
 
-                // Update
                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     priority_requested: true
                 });
@@ -2049,29 +1972,18 @@ function app() {
 
         // --- CALENDAR HELPERS ---
         getCalendarTickets() {
-            // Filter tickets based on toggle
             let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
 
-            // Determine Effective Filter
             let effectiveFilter = this.selectedTechFilter;
             if (!this.hasRole('admin') && this.hasRole('tecnico')) {
                 effectiveFilter = this.user.id;
             }
 
-            // Apply Technician Filter (Strict)
             if (effectiveFilter !== 'all' && effectiveFilter) {
                 source = source.filter(t => t.technician_id === effectiveFilter);
             }
 
             if (!this.showAllCalendarTickets) {
-                // Only assigned to me (conceptually - for now we use "created_by" or just all if we assume single shop,
-                // but user asked "atribuidos ao tecnico".
-                // Since we don't have a distinct "assigned_to" field in the schema yet,
-                // I will filter by the Technical Statuses that would appear on "Minha Bancada" OR if created by me?
-                // The user said "todos atribuidos ao tecnico".
-                // In the current system, "Minha Bancada" shows ALL tickets in Analise/Reparo.
-                // So I will stick to that logic + maybe "Testes"?
-                // Let's filter by statuses relevant to a technician.
                 const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
                 source = source.filter(t => techStatuses.includes(t.status));
             }
@@ -2079,8 +1991,6 @@ function app() {
         },
 
         getKanbanCalendarTickets() {
-            // For Kanban: Show all active tickets with a deadline
-            // Excluding 'Finalizado' as per "quais aparelhos tem que se entregue"
             return this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
         },
 
@@ -2089,7 +1999,6 @@ function app() {
                 const el = document.getElementById('ticket-card-' + ticketId);
                 if (el) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-                    // Highlight effect
                     el.classList.add('ring-4', 'ring-brand-500', 'ring-opacity-75', 'z-10');
                     setTimeout(() => {
                         el.classList.remove('ring-4', 'ring-brand-500', 'ring-opacity-75', 'z-10');
@@ -2097,14 +2006,13 @@ function app() {
                 } else {
                     console.warn("Ticket card not found:", ticketId);
                 }
-            }, 100); // Small delay to allow modal close / DOM update
+            }, 100);
         },
 
         initKanbanScroll() {
             const content = document.getElementById('kanban-content');
             if (content) {
                 this.kanbanScrollWidth = content.scrollWidth;
-                // Optional: Observer if content grows dynamically
                 const ro = new ResizeObserver(() => {
                     this.kanbanScrollWidth = content.scrollWidth;
                 });
@@ -2114,7 +2022,7 @@ function app() {
 
         getWeekDays() {
             const curr = new Date();
-            const first = curr.getDate() - curr.getDay(); // First day is the day of the month - the day of the week
+            const first = curr.getDate() - curr.getDay();
             const days = [];
             for (let i = 0; i < 7; i++) {
                 let next = new Date(curr.getTime());
@@ -2130,7 +2038,6 @@ function app() {
             const date = new Date(year, month, 1);
             const days = [];
 
-            // Pad empty days at start
             for(let i=0; i<date.getDay(); i++) {
                 days.push(null);
             }
@@ -2215,7 +2122,6 @@ function app() {
         },
 
         initTechFilter() {
-            // Debugging
             console.log("Initializing Tech Filter. User:", this.user);
 
             if (this.hasRole('admin')) {
@@ -2249,41 +2155,29 @@ function app() {
             const now = new Date();
             const tickets = this.tickets || [];
 
-            // 1. Pending Budgets (Approved status but budget not sent)
-            // Correction: Status 'Aprovacao' means "Waiting for Approval".
-            // If budget_status is NOT 'Enviado', it needs action.
             const pendingBudgets = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status !== 'Enviado');
 
-            // 1.5 Waiting Budget Response (Budget Sent, but not yet Approved/Denied)
-            // Ticket is in 'Aprovacao' status AND budget_status IS 'Enviado'
             const waitingBudgetResponse = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status === 'Enviado');
 
-            // 2. Pending Pickups (Client Retrieval status but not notified)
             const pendingPickups = tickets.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available);
 
-            // 3. Urgent Analysis (Deadline approaching in 24h or passed, and still in Analysis)
             const urgentAnalysis = tickets
                 .filter(t => t.status === 'Analise Tecnica' && t.analysis_deadline)
                 .sort((a, b) => new Date(a.analysis_deadline) - new Date(b.analysis_deadline))
                 .slice(0, 5);
 
-            // 4. Delayed Deliveries (Deadline passed, not finalized/pickup)
             const delayedDeliveries = tickets.filter(t =>
                 t.deadline &&
                 new Date(t.deadline) < now &&
                 !['Retirada Cliente', 'Finalizado'].includes(t.status)
             );
 
-            // 5. Priority Requested (Exclude Finalized)
             const priorityTickets = tickets.filter(t => t.priority_requested && !['Retirada Cliente', 'Finalizado'].includes(t.status));
 
-            // 6. Pending Purchase
             const pendingPurchase = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status !== 'Comprado');
 
-            // 7. Pending Receipt
             const pendingReceipt = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status === 'Comprado');
 
-            // 8. Pending Tech Start (Status 'Aberto')
             const pendingTech = tickets.filter(t => t.status === 'Aberto');
 
             return {
@@ -2300,23 +2194,11 @@ function app() {
         },
 
         applyQuickFilter(type) {
-            this.searchQuery = ''; // Clear search
+            this.searchQuery = '';
             this.view = 'kanban';
             const now = new Date();
 
-            // We need a mechanism to filter the Kanban.
-            // Currently `matchesSearch` handles filtering. We can extend it or prepopulate search.
-            // Or just set a temporary filter state?
-            // Let's use `searchQuery` for simplicity if possible, or add a dedicated filter logic.
-            // Since `matchesSearch` checks string inclusion, advanced date filtering is hard with just that.
-            // Let's add `advancedFilter` object to state.
-
-            // NOTE: Since I cannot modify state structure easily without big diffs,
-            // I will use a simple hack: Show a notification and let the user know this feature
-            // requires a filter implementation update, OR implement a basic version.
-
-            // Implementing `advancedFilter` logic in `matchesSearch`:
-            this.activeQuickFilter = type; // Need to add this to state
+            this.activeQuickFilter = type;
         },
 
         clearFilters() {
@@ -2325,7 +2207,6 @@ function app() {
         },
 
         matchesSearch(ticket) {
-            // Quick Filter Logic
             if (this.activeQuickFilter === 'my_today') {
                 const oneDay = 24 * 60 * 60 * 1000;
                 const isToday = new Date(ticket.created_at) > new Date(Date.now() - oneDay);
@@ -2395,7 +2276,6 @@ function app() {
             if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
             this.loading = true;
             try {
-                // REFACTORED: Native Fetch for RPC
                 await this.supabaseFetch('rpc/create_employee', 'POST', {
                     p_workspace_id: this.user.workspace_id,
                     p_name: this.employeeForm.name,
@@ -2420,7 +2300,7 @@ function app() {
                 id: emp.id,
                 name: emp.name,
                 username: emp.username,
-                password: emp.plain_password || '', // Show plain password if available
+                password: emp.plain_password || '',
                 roles: emp.roles || []
             };
             this.modals.editEmployee = true;
@@ -2432,12 +2312,11 @@ function app() {
 
             this.loading = true;
             try {
-                // REFACTORED: Native Fetch for RPC
                 await this.supabaseFetch('rpc/update_employee', 'POST', {
                     p_id: this.employeeForm.id,
                     p_name: this.employeeForm.name,
                     p_username: this.employeeForm.username,
-                    p_password: this.employeeForm.password, // Optional: if empty, handled by SQL to ignore
+                    p_password: this.employeeForm.password,
                     p_roles: this.employeeForm.roles
                 });
 
@@ -2455,7 +2334,6 @@ function app() {
         async deleteEmployee(id) {
             if (!confirm('Tem certeza que deseja mover este funcionário para a Lixeira?')) return;
             try {
-                // Soft Delete
                 await this.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
                     deleted_at: new Date().toISOString()
                 });
@@ -2489,13 +2367,11 @@ function app() {
             if (!this.user?.workspace_id || !this.hasRole('admin')) return;
             this.loading = true;
             try {
-                // Fetch Deleted Tickets
                 const tickets = await this.supabaseFetch(
                     `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
                 );
                 this.deletedTickets = tickets || [];
 
-                // Fetch Deleted Employees
                 const emps = await this.supabaseFetch(
                     `employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
                 );
@@ -2509,7 +2385,6 @@ function app() {
         },
 
         async restoreItem(type, id) {
-            // type: 'ticket' or 'employee'
             if (!confirm("Deseja restaurar este item?")) return;
             this.loading = true;
             try {
@@ -2519,7 +2394,6 @@ function app() {
                 });
                 this.notify("Item restaurado!");
 
-                // Refresh lists
                 await this.fetchDeletedItems();
                 if (type === 'ticket') await this.fetchTickets();
                 if (type === 'employee') await this.fetchEmployees();
@@ -2598,20 +2472,9 @@ function app() {
             return diff;
         },
 
-        getDefectList(defectReported) {
-            if (!defectReported) return [];
-            if (Array.isArray(defectReported)) {
-                return defectReported.map(defect => defect.trim()).filter(Boolean);
-            }
-            return String(defectReported)
-                .split(',')
-                .map(defect => defect.trim())
-                .filter(Boolean);
-        },
-
         getTopItems(items, limit = 4) {
             return Object.entries(items)
-                .sort((a, b) => b[1].total - a[1].total) // Sort by object.total property
+                .sort((a, b) => b[1].total - a[1].total)
                 .slice(0, limit)
                 .map(([label, stats]) => ({ label, ...stats }));
         },
@@ -2666,10 +2529,9 @@ function app() {
             const defectsMap = {};
             const modelsMap = {};
             const comboMap = {};
-            const techDetailMap = {}; // { techId: { name, failures: {}, successes: {} } }
+            const techDetailMap = {};
 
             filteredTickets.forEach(ticket => {
-                // Models Logic
                 if (ticket.device_model) {
                     if (!modelsMap[ticket.device_model]) modelsMap[ticket.device_model] = { total: 0, success: 0, fail: 0 };
                     modelsMap[ticket.device_model].total++;
@@ -2677,16 +2539,13 @@ function app() {
                     if (ticket.repair_successful === false) modelsMap[ticket.device_model].fail++;
                 }
 
-                // Defects Logic
                 const defects = this.getDefectList(ticket.defect_reported);
                 defects.forEach(defect => {
-                    // Top Defects
                     if (!defectsMap[defect]) defectsMap[defect] = { total: 0, success: 0, fail: 0 };
                     defectsMap[defect].total++;
                     if (ticket.repair_successful === true) defectsMap[defect].success++;
                     if (ticket.repair_successful === false) defectsMap[defect].fail++;
 
-                    // Combo Logic
                     if (ticket.device_model) {
                         const comboKey = `${ticket.device_model} · ${defect}`;
                         if (!comboMap[comboKey]) comboMap[comboKey] = { total: 0, success: 0, fail: 0 };
@@ -2695,7 +2554,6 @@ function app() {
                         if (ticket.repair_successful === false) comboMap[comboKey].fail++;
                     }
 
-                    // Tech Detail Logic
                     if (ticket.technician_id) {
                         if (!techDetailMap[ticket.technician_id]) {
                             techDetailMap[ticket.technician_id] = {
@@ -2717,7 +2575,6 @@ function app() {
                 });
             });
 
-            // Helper to calculate percentages with robust checks
             const enhanceStats = (list) => list.map(item => {
                 const total = item.total || 0;
                 const success = item.success || 0;
@@ -2732,8 +2589,7 @@ function app() {
                 };
             });
 
-            // Sorting for Defects
-            let topDefects = enhanceStats(this.getTopItems(defectsMap, 100)); // Get more items first
+            let topDefects = enhanceStats(this.getTopItems(defectsMap, 100));
             const field = this.adminDashboardFilters.defectSortField;
             const desc = this.adminDashboardFilters.defectSortDesc;
             topDefects.sort((a, b) => {
@@ -2742,12 +2598,10 @@ function app() {
                 return desc ? valB - valA : valA - valB;
             });
 
-            // Models (Drilldown needs all models, Summary needs 4)
             const allModels = enhanceStats(this.getTopItems(modelsMap, 100));
             const topModels = this.adminDashboardFilters.viewMode === 'success_drilldown' ? allModels : allModels.slice(0, 4);
             const topCombos = enhanceStats(this.getTopItems(comboMap, 50));
 
-            // Tech Deep Dive
             const techDeepDive = Object.values(techDetailMap).map(t => {
                 const topFail = Object.entries(t.failureCounts).sort((a,b) => b[1]-a[1])[0];
                 const topSuccess = Object.entries(t.successCounts).sort((a,b) => b[1]-a[1])[0];
@@ -2758,14 +2612,12 @@ function app() {
                 };
             });
 
-            // TIME DRILLDOWN LOGIC (Repair, Solution, Delivery)
             const metricsMap = {
                 repair: { model: {}, defect: {}, combo: {}, tech: {} },
                 solution: { model: {}, defect: {}, combo: {}, tech: {} },
                 delivery: { model: {}, defect: {}, combo: {}, tech: {} }
             };
 
-            // Helper to accumulate times
             const accTime = (category, type, key, duration, techId) => {
                 const target = metricsMap[category][type];
                 if (!target[key]) target[key] = { totalTime: 0, count: 0 };
@@ -2773,7 +2625,6 @@ function app() {
                 target[key].count++;
             };
 
-            // Helper to init tech stats if missing (for success rate tracking)
             const initTech = (category, techId) => {
                 const target = metricsMap[category].tech;
                 if (!target[techId]) target[techId] = { totalTime: 0, count: 0, successCount: 0, totalTickets: 0 };
@@ -2784,7 +2635,6 @@ function app() {
                 const defectList = this.getDefectList(t.defect_reported);
                 const techId = t.technician_id;
 
-                // 1. REPAIR TIME
                 if (t.repair_start_at && t.repair_end_at) {
                     const duration = new Date(t.repair_end_at) - new Date(t.repair_start_at);
                     if (duration > 0) {
@@ -2800,7 +2650,6 @@ function app() {
                     }
                 }
 
-                // 2. SOLUTION TIME (Created -> Pickup Available OR Repair End)
                 if (t.created_at) {
                     const readyAt = t.pickup_available_at || t.repair_end_at;
                     if (readyAt) {
@@ -2819,7 +2668,6 @@ function app() {
                     }
                 }
 
-                // 3. DELIVERY TIME (Created -> Delivered)
                 if (t.created_at && t.delivered_at) {
                     const duration = new Date(t.delivered_at) - new Date(t.created_at);
                     if (duration > 0) {
@@ -2835,7 +2683,6 @@ function app() {
                     }
                 }
 
-                // Tech Success Rate (Shared logic, but tracked per category context if needed, currently global per category)
                 if (techId) {
                     ['repair', 'solution', 'delivery'].forEach(cat => {
                         const stats = initTech(cat, techId);
@@ -2868,19 +2715,16 @@ function app() {
                     .sort((a, b) => a.avgTime - b.avgTime);
             };
 
-            // Repair Lists
             const slowestModels = processTimes(metricsMap.repair.model, 5, true);
             const slowestDefects = processTimes(metricsMap.repair.defect, 5, true);
             const slowestCombos = processTimes(metricsMap.repair.combo, 5, true);
             const fastestTechs = processTechs(metricsMap.repair.tech);
 
-            // Solution Lists
             const slowestModelsSolution = processTimes(metricsMap.solution.model, 5, true);
             const slowestDefectsSolution = processTimes(metricsMap.solution.defect, 5, true);
             const slowestCombosSolution = processTimes(metricsMap.solution.combo, 5, true);
             const fastestTechsSolution = processTechs(metricsMap.solution.tech);
 
-            // Delivery Lists
             const slowestModelsDelivery = processTimes(metricsMap.delivery.model, 5, true);
             const slowestDefectsDelivery = processTimes(metricsMap.delivery.defect, 5, true);
             const slowestCombosDelivery = processTimes(metricsMap.delivery.combo, 5, true);
@@ -2917,7 +2761,6 @@ function app() {
                 return timestamp && timestamp >= oneMonthAgo;
             }).length;
 
-            // Tickets Created Breakdown (New Feature)
             const ticketsToday = filteredTickets.filter(t => new Date(t.created_at) >= oneDayAgo).length;
             const ticketsWeek = filteredTickets.filter(t => new Date(t.created_at) >= oneWeekAgo).length;
             const ticketsMonth = filteredTickets.filter(t => new Date(t.created_at) >= oneMonthAgo).length;
@@ -2930,7 +2773,6 @@ function app() {
                 }
                 techMap[techId].totalAssigned += 1;
 
-                // Completed: repair_successful is NOT null
                 if (ticket.repair_successful !== null && ticket.repair_successful !== undefined) {
                     techMap[techId].completedCount += 1;
                     if (ticket.repair_successful) {
@@ -2953,7 +2795,7 @@ function app() {
                         successRate: rate
                     };
                 })
-                .sort((a, b) => b.completed - a.completed); // Sort by completed volume
+                .sort((a, b) => b.completed - a.completed);
 
             return {
                 filteredTickets,
@@ -2964,9 +2806,9 @@ function app() {
                 avgDelivery,
                 avgBudget,
                 avgPickupNotify,
-                analysisCount: analysisCount, // Raw count per user request
-                repairCount: repairCount,     // Raw count consistency
-                analysisPerDay: Math.round(analysisCount / rangeDays), // Keep for legacy if needed
+                analysisCount: analysisCount,
+                repairCount: repairCount,
+                analysisPerDay: Math.round(analysisCount / rangeDays),
                 repairPerDay: Math.round(repairCount / rangeDays),
                 ticketsPerDay,
                 repairsToday,
