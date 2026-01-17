@@ -1869,18 +1869,6 @@
                                                 <h4 class="font-bold text-gray-800 text-sm mb-1 leading-tight" x-text="ticket.device_model"></h4>
                                                 <p class="text-xs text-gray-500 truncate mb-2" x-text="ticket.client_name"></p>
 
-                                                <!-- Outsourced Actions (Kanban Card) -->
-                                                <template x-if="ticket.status === 'Terceirizado'">
-                                                    <div class="mt-2 pt-2 border-t border-purple-100 flex gap-2" @click.stop>
-                                                        <button @click="cobrarOutsourced(ticket)" class="flex-1 flex items-center justify-center gap-1 text-[10px] text-green-600 border border-green-200 bg-green-50 px-2 py-1.5 rounded hover:bg-green-100 font-bold transition-colors">
-                                                            <i class="fa-brands fa-whatsapp"></i> Cobrar
-                                                        </button>
-                                                        <button @click="receiveFromOutsourced(ticket)" class="flex-1 text-[10px] bg-purple-600 text-white px-2 py-1.5 rounded hover:bg-purple-700 font-bold transition-colors shadow-sm">
-                                                            Recebido
-                                                        </button>
-                                                    </div>
-                                                </template>
-
                                                 <!-- Footer -->
                                                 <div class="mt-3 pt-2 border-t border-gray-50 space-y-1">
                                                     <!-- Deadlines Section -->
@@ -1922,6 +1910,18 @@
 
                                                 <!-- Quick Actions Footer -->
                                                 <div class="mt-3 pt-3 border-t border-gray-100 grid gap-2" @click.stop>
+
+                                                    <!-- Outsourced Actions (Kanban Card) -->
+                                                    <template x-if="ticket.status === 'Terceirizado'">
+                                                        <div class="grid gap-2 grid-cols-2">
+                                                            <button @click="cobrarOutsourced(ticket)" class="flex items-center justify-center gap-1 text-[10px] text-green-600 border border-green-200 bg-green-50 px-2 py-1.5 rounded hover:bg-green-100 font-bold transition-colors">
+                                                                <i class="fa-brands fa-whatsapp"></i> Cobrar
+                                                            </button>
+                                                            <button @click="receiveFromOutsourced(ticket)" class="text-[10px] bg-purple-600 text-white px-2 py-1.5 rounded hover:bg-purple-700 font-bold transition-colors shadow-sm">
+                                                                Recebido
+                                                            </button>
+                                                        </div>
+                                                    </template>
 
                                                     <!-- Aberto -->
                                                     <template x-if="ticket.status === 'Aberto'">
