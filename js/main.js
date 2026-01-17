@@ -801,9 +801,15 @@ function app() {
             if (!this.user?.workspace_id || !this.hasRole('admin')) return;
             this.loading = true;
             try {
-                await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
+                const res = await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
                     tracker_config: this.trackerConfig
                 });
+
+                // Check if update actually happened
+                if (Array.isArray(res) && res.length === 0) {
+                    throw new Error("Permissão negada ou workspace não encontrado.");
+                }
+
                 if (this.view === 'management_settings') {
                     this.notify("Configurações de Gerenciamento salvas!");
                 } else {

@@ -2133,7 +2133,7 @@
                                             </span>
                                             <!-- Show last failure reason if available (from test_notes usually, but let's try to grab last note) -->
                                             <div class="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded italic border border-red-100" x-show="ticket.test_notes && ticket.test_notes.length > 0">
-                                                <span class="font-bold">Defeito:</span> <span x-text="ticket.test_notes[ticket.test_notes.length-1].text"></span>
+                                                <span class="font-bold">Defeito:</span> <span x-text="(ticket.test_notes && ticket.test_notes.length > 0) ? ticket.test_notes[ticket.test_notes.length-1].text : ''"></span>
                                             </div>
                                         </div>
 
@@ -2207,7 +2207,7 @@
                                             </span>
                                             <!-- Show last failure reason if available (from test_notes usually, but let's try to grab last note) -->
                                             <div class="mt-1 text-[10px] text-red-600 bg-red-50 p-1 rounded italic border border-red-100" x-show="ticket.test_notes && ticket.test_notes.length > 0">
-                                                <span class="font-bold">Defeito:</span> <span x-text="ticket.test_notes[ticket.test_notes.length-1].text"></span>
+                                                <span class="font-bold">Defeito:</span> <span x-text="(ticket.test_notes && ticket.test_notes.length > 0) ? ticket.test_notes[ticket.test_notes.length-1].text : ''"></span>
                                             </div>
                                         </div>
 
@@ -3297,7 +3297,24 @@
                                 <div class="grid grid-cols-1 gap-2 mb-3">
                                     <p class="text-sm"><span class="font-bold text-gray-600">Serial:</span> <span x-text="selectedTicket.serial_number || '-'"></span></p>
                                     <p class="text-sm"><span class="font-bold text-gray-600">Condição:</span> <span x-text="selectedTicket.device_condition || '-'"></span></p>
-                                    <p class="text-sm"><span class="font-bold text-gray-600">Técnico:</span> <span class="bg-black text-white px-2 py-0.5 rounded text-xs" x-text="getEmployeeName(selectedTicket.technician_id)"></span></p>
+
+                                    <!-- Technician or Outsourced Display -->
+                                    <template x-if="selectedTicket && !selectedTicket.is_outsourced">
+                                        <p class="text-sm"><span class="font-bold text-gray-600">Técnico:</span> <span class="bg-black text-white px-2 py-0.5 rounded text-xs" x-text="getEmployeeName(selectedTicket.technician_id)"></span></p>
+                                    </template>
+
+                                    <template x-if="selectedTicket && selectedTicket.is_outsourced">
+                                        <div class="bg-purple-50 p-2 rounded border border-purple-100 mt-1">
+                                            <p class="text-[10px] font-bold text-purple-700 uppercase mb-0.5">Parceiro (Terceirizado)</p>
+                                            <p class="text-sm font-bold text-gray-800" x-text="getOutsourcedCompany(selectedTicket.outsourced_company_id)"></p>
+
+                                            <template x-if="getOutsourcedPhone(selectedTicket.outsourced_company_id)">
+                                                <button @click="openWhatsApp(getOutsourcedPhone(selectedTicket.outsourced_company_id))" class="mt-1 text-green-600 hover:text-green-800 text-xs font-bold flex items-center">
+                                                    <i class="fa-brands fa-whatsapp mr-1"></i> <span x-text="getOutsourcedPhone(selectedTicket.outsourced_company_id)"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </template>
 
                                     <!-- Editable Deadlines Container -->
                                     <div class="mt-2 p-2 bg-white rounded border border-gray-200">
@@ -3841,10 +3858,10 @@
                 </div>
 
                 <div x-show="showTestFailureForm" class="bg-red-50 p-4 rounded border border-red-200" x-transition>
-                    <template x-if="!selectedTicket.is_outsourced">
+                    <template x-if="selectedTicket && !selectedTicket.is_outsourced">
                         <p class="text-xs font-bold text-red-800 mb-2">Retornar para Bancada</p>
                     </template>
-                    <template x-if="selectedTicket.is_outsourced">
+                    <template x-if="selectedTicket && selectedTicket.is_outsourced">
                         <div class="mb-3">
                             <p class="text-xs font-bold text-red-800 mb-2">Aparelho Terceirizado Falhou</p>
                             <div class="flex space-x-2">
@@ -3865,7 +3882,7 @@
                             <label class="block text-xs font-bold text-gray-500">Novo Prazo</label>
                             <input type="datetime-local" x-model="testFailureData.newDeadline" class="w-full border rounded p-2 text-sm">
                         </div>
-                        <div x-show="!selectedTicket.is_outsourced || testFailureData.action === 'repair'">
+                        <div x-show="selectedTicket && (!selectedTicket.is_outsourced || testFailureData.action === 'repair')">
                             <label class="block text-xs font-bold text-gray-500">Nova Prioridade</label>
                             <select x-model="testFailureData.newPriority" class="w-full border rounded p-2 text-sm">
                                 <template x-for="p in PRIORITIES"><option :value="p" x-text="p"></option></template>
