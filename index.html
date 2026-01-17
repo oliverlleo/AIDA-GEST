@@ -962,19 +962,33 @@
                                         </div>
                                     </template>
 
-                                    <!-- Analysis Expiring (Keep existing) -->
+                                    <!-- Analysis Expiring -->
                                     <template x-if="ops.urgentAnalysis.length">
-                                        <div>
-                                            <div class="text-[10px] font-bold text-gray-400 uppercase mb-1 mt-3">Análise expirando</div>
+                                        <div class="mb-2">
+                                            <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200">
+                                                <span>ANÁLISE EXPIRANDO (<span x-text="ops.urgentAnalysis.length"></span>)</span>
+                                                <i class="fa-solid fa-stopwatch text-[10px]"></i>
+                                            </div>
                                             <div class="space-y-1">
                                                 <template x-for="t in ops.urgentAnalysis" :key="t.id">
-                                                    <div @click="viewTicketDetails(t)" class="border border-gray-200 p-2 rounded hover:bg-gray-50 cursor-pointer">
-                                                        <div class="flex justify-between text-xs mb-1">
-                                                            <span class="font-bold text-gray-700" x-text="'OS ' + t.os_number"></span>
-                                                            <span class="text-red-600 font-bold" x-text="getOverdueTime(t.analysis_deadline)"></span>
+                                                    <div @click="viewTicketDetails(t)" class="bg-red-50 border-l-2 border-red-500 p-2 cursor-pointer hover:bg-red-100 transition-colors rounded-r group relative">
+                                                        <div class="flex justify-between items-center text-xs mb-0.5">
+                                                             <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
+                                                             <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
-                                                        <div class="text-[9px] font-bold text-gray-400 uppercase">Prazo de Análise</div>
+                                                        <!-- Deadlines -->
+                                                        <div class="flex gap-2 mb-1">
+                                                            <template x-if="t.analysis_deadline">
+                                                                <span class="text-[9px]" :class="new Date(t.analysis_deadline) < new Date() ? 'text-red-700 font-bold' : 'text-red-400'">
+                                                                    <i class="fa-solid fa-stopwatch mr-0.5"></i> <span x-text="new Date(t.analysis_deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
+                                                                </span>
+                                                            </template>
+                                                        </div>
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-red-200 text-red-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
+                                                            <span class="text-[9px] font-bold text-red-600" x-text="getOverdueTime(t.analysis_deadline)"></span>
+                                                        </div>
                                                     </div>
                                                 </template>
                                             </div>
