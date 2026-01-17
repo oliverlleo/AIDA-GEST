@@ -2131,10 +2131,12 @@ function app() {
                  const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
 
                  await this.updateStatus(ticket, 'Terceirizado', {
-                     outsourced_deadline: this.toUTC(this.outsourcedForm.deadline)
+                     outsourced_deadline: this.toUTC(this.outsourcedForm.deadline),
+                     // If moving from Aberto, ensure analysis logic is skipped or marked as handled externally
+                     status: 'Terceirizado'
                  }, {
                      action: 'Enviou Terceirizado',
-                     details: `${ctx.device} de ${ctx.client} enviado para ${companyName}. Prazo: ${new Date(this.outsourcedForm.deadline).toLocaleDateString()}.`
+                     details: `${ctx.device} de ${ctx.client} enviado para ${companyName}. Prazo: ${new Date(this.outsourcedForm.deadline).toLocaleDateString('pt-BR')}.`
                  });
 
                  this.modals.outsourced = false;
@@ -2149,7 +2151,9 @@ function app() {
              const ctx = this.getLogContext(ticket);
              const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
 
-             await this.updateStatus(ticket, 'Teste Final', {}, {
+             await this.updateStatus(ticket, 'Teste Final', {
+                 test_start_at: null // Reset test status to ensure "Start Test" appears
+             }, {
                  action: 'Recebeu de Terceiro',
                  details: `${ctx.device} de ${ctx.client} recebido da ${companyName}. Enviado para testes.`
              });
@@ -2159,11 +2163,14 @@ function app() {
             const phone = this.getOutsourcedPhone(ticket.outsourced_company_id);
             if (!phone) return this.notify("Telefone não cadastrado.", "error");
 
-            const link = this.getTrackingLink(ticket.id); // Optional context
-            const msg = `Olá, gostaria de saber sobre o andamento do aparelho ${ticket.device_model} (OS ${ticket.os_number}).`;
+            // Context requested by user
+            const msg = `Olá, gostaria de saber sobre o andamento do aparelho ${ticket.device_model} (OS ${ticket.os_number}) enviado para vocês.`;
 
             let number = phone.replace(/\D/g, '');
-            if (number.length <= 11) number = '55' + number;
+            // Ensure 55 prefix if not present (assuming BR number logic generally)
+            if (!number.startsWith('55') && number.length >= 10) {
+                number = '55' + number;
+            }
 
             window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
         },
@@ -2469,8 +2476,15 @@ function app() {
             const safeOsNumber = this.escapeHtml(ticket.os_number);
             const safeDevice = this.escapeHtml(ticket.device_model);
 
-            const client = `<b>${safeClientName} da OS ${safeOsNumber}</b>`;
+            let client = `<b>${safeClientName} da OS ${safeOsNumber}</b>`;
             const device = `<b>${safeDevice}</b>`;
+
+            // Add outsourced context if applicable as requested by user
+            if (ticket.is_outsourced && ticket.outsourced_company_id) {
+                const company = this.escapeHtml(this.getOutsourcedCompany(ticket.outsourced_company_id));
+                client += ` (Terceirizado: <b>${company}</b>)`;
+            }
+
             return { client, device };
         },
 
