@@ -3299,11 +3299,11 @@
                                     <p class="text-sm"><span class="font-bold text-gray-600">Condição:</span> <span x-text="selectedTicket.device_condition || '-'"></span></p>
 
                                     <!-- Technician or Outsourced Display -->
-                                    <template x-if="!selectedTicket.is_outsourced">
+                                    <template x-if="selectedTicket && !selectedTicket.is_outsourced">
                                         <p class="text-sm"><span class="font-bold text-gray-600">Técnico:</span> <span class="bg-black text-white px-2 py-0.5 rounded text-xs" x-text="getEmployeeName(selectedTicket.technician_id)"></span></p>
                                     </template>
 
-                                    <template x-if="selectedTicket.is_outsourced">
+                                    <template x-if="selectedTicket && selectedTicket.is_outsourced">
                                         <div class="bg-purple-50 p-2 rounded border border-purple-100 mt-1">
                                             <p class="text-[10px] font-bold text-purple-700 uppercase mb-0.5">Parceiro (Terceirizado)</p>
                                             <p class="text-sm font-bold text-gray-800" x-text="getOutsourcedCompany(selectedTicket.outsourced_company_id)"></p>
@@ -3858,10 +3858,10 @@
                 </div>
 
                 <div x-show="showTestFailureForm" class="bg-red-50 p-4 rounded border border-red-200" x-transition>
-                    <template x-if="!selectedTicket.is_outsourced">
+                    <template x-if="selectedTicket && !selectedTicket.is_outsourced">
                         <p class="text-xs font-bold text-red-800 mb-2">Retornar para Bancada</p>
                     </template>
-                    <template x-if="selectedTicket.is_outsourced">
+                    <template x-if="selectedTicket && selectedTicket.is_outsourced">
                         <div class="mb-3">
                             <p class="text-xs font-bold text-red-800 mb-2">Aparelho Terceirizado Falhou</p>
                             <div class="flex space-x-2">
@@ -3882,7 +3882,7 @@
                             <label class="block text-xs font-bold text-gray-500">Novo Prazo</label>
                             <input type="datetime-local" x-model="testFailureData.newDeadline" class="w-full border rounded p-2 text-sm">
                         </div>
-                        <div x-show="!selectedTicket.is_outsourced || testFailureData.action === 'repair'">
+                        <div x-show="selectedTicket && (!selectedTicket.is_outsourced || testFailureData.action === 'repair')">
                             <label class="block text-xs font-bold text-gray-500">Nova Prioridade</label>
                             <select x-model="testFailureData.newPriority" class="w-full border rounded p-2 text-sm">
                                 <template x-for="p in PRIORITIES"><option :value="p" x-text="p"></option></template>
