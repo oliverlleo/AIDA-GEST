@@ -2067,11 +2067,21 @@ function app() {
                          const count = (ticket.outsourced_return_count || 0) + 1;
                          const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
 
+                         // Add note to history
+                         const newNote = {
+                             date: new Date().toISOString(),
+                             text: this.testFailureData.reason,
+                             user: this.user.name,
+                             context: `Retorno ${count}x`
+                         };
+                         const updatedNotes = [...(ticket.outsourced_notes || []), newNote];
+
                          this.modals.outcome = false;
                          await this.updateStatus(ticket, 'Terceirizado', {
                              outsourced_deadline: this.toUTC(this.testFailureData.newDeadline),
                              outsourced_return_count: count,
-                             test_start_at: null
+                             test_start_at: null,
+                             outsourced_notes: updatedNotes
                          }, {
                              action: 'Devolveu para Terceiro',
                              details: `${ctx.device} retornado para ${companyName} (${count}ª vez). Motivo: ${this.testFailureData.reason}`
@@ -2148,14 +2158,25 @@ function app() {
         },
 
         async receiveFromOutsourced(ticket) {
-             const ctx = this.getLogContext(ticket);
+             // For this specific action, we don't want the (Terceirizado: X) suffix in the context
+             // because the log message already says "recebido da X".
+             const safeClientName = this.escapeHtml(ticket.client_name);
+             const safeOsNumber = this.escapeHtml(ticket.os_number);
+             const safeDevice = this.escapeHtml(ticket.device_model);
+
+             // Custom context without duplication
+             const cleanContext = {
+                 client: `<b>${safeClientName} da OS ${safeOsNumber}</b>`,
+                 device: `<b>${safeDevice}</b>`
+             };
+
              const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
 
              await this.updateStatus(ticket, 'Teste Final', {
                  test_start_at: null // Reset test status to ensure "Start Test" appears
              }, {
                  action: 'Recebeu de Terceiro',
-                 details: `${ctx.device} de ${ctx.client} recebido da ${companyName}. Enviado para testes.`
+                 details: `${cleanContext.device} de ${cleanContext.client} recebido da ${companyName}. Enviado para testes.`
              });
         },
 
