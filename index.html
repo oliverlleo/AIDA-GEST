@@ -560,11 +560,12 @@
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                         <!-- Col 1: Client Communication (2/3) -->
-                        <div class="lg:col-span-2 space-y-6">
-                            <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <div class="lg:col-span-2">
+                            <h3 class="text-lg font-bold text-gray-800 flex items-center mb-6">
                                 <i class="fa-solid fa-comments text-brand-500 mr-2"></i> Pendências com Cliente
                             </h3>
 
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Budgets to Send -->
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-yellow-50 px-4 py-3 border-b border-yellow-100 flex justify-between items-center">
@@ -733,6 +734,7 @@
                                     <div x-show="!ops.pendingDelivery.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
+                            </div> <!-- End Grid for Client Pendencies -->
 
                             <!-- Tech Pendencies (Aberto) -->
                             <h3 class="text-lg font-bold text-gray-800 flex items-center pt-2">
@@ -1851,16 +1853,65 @@
 
                             <!-- Loop Columns -->
                             <template x-for="status in STATUS_COLUMNS" :key="status">
-                                <div x-show="(showFinalized || status !== 'Finalizado') && (status !== 'Terceirizado' || trackerConfig.enable_outsourced)" class="w-80 flex flex-col bg-gray-100 rounded-lg h-full border border-gray-200">
+                                <div x-show="(showFinalized || status !== 'Finalizado') && (status !== 'Terceirizado' || trackerConfig.enable_outsourced)"
+                                     class="w-80 flex flex-col bg-gray-100 rounded-lg h-full border border-gray-200"
+                                     x-data="{ filter: initColumnFilter(status) }">
+
                                     <!-- Header -->
-                                    <div class="p-3 border-b border-gray-200 bg-gray-200 rounded-t-lg flex justify-between items-center sticky top-0">
+                                    <div class="p-3 border-b border-gray-200 bg-gray-200 rounded-t-lg flex justify-between items-center sticky top-0 z-20 relative">
                                         <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide" x-text="(status === 'Retirada Cliente' && trackerConfig.enable_logistics) ? 'Expedição / Logística' : getStatusLabel(status)"></h3>
-                                        <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="tickets.filter(t => t.status === status).length"></span>
+
+                                        <div class="flex items-center gap-2">
+                                            <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getSortedAndFilteredTickets(status).length"></span>
+
+                                            <!-- Filter Button -->
+                                            <button @click="filter.showMenu = !filter.showMenu" class="text-gray-500 hover:text-brand-500 transition-colors relative">
+                                                <i class="fa-solid fa-filter" :class="(filter.search || filter.dateStart || filter.sort !== 'default') ? 'text-brand-500' : ''"></i>
+                                                <div x-show="filter.search || filter.dateStart || filter.sort !== 'default'" class="absolute -top-1 -right-1 w-2 h-2 bg-brand-500 rounded-full"></div>
+                                            </button>
+
+                                            <!-- Filter Popover -->
+                                            <div x-show="filter.showMenu" @click.outside="filter.showMenu = false"
+                                                 class="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 z-50 p-4"
+                                                 x-transition>
+
+                                                <div class="flex justify-between items-center mb-3">
+                                                    <span class="text-xs font-bold text-gray-500 uppercase">Filtrar & Ordenar</span>
+                                                    <button @click="filter.search=''; filter.dateStart=''; filter.dateEnd=''; filter.sort='default'" class="text-[10px] text-red-500 hover:underline">Limpar</button>
+                                                </div>
+
+                                                <!-- Sort -->
+                                                <div class="mb-4">
+                                                    <label class="block text-[10px] font-bold text-gray-400 mb-1">Ordenação</label>
+                                                    <select x-model="filter.sort" class="w-full text-xs border rounded p-1.5 bg-gray-50 focus:ring-brand-500">
+                                                        <option value="default">Padrão (Prazos)</option>
+                                                        <option value="priority">Prioridade</option>
+                                                        <option value="os">Número OS</option>
+                                                        <option value="model">Modelo</option>
+                                                    </select>
+                                                </div>
+
+                                                <!-- Search -->
+                                                <div class="mb-3">
+                                                    <label class="block text-[10px] font-bold text-gray-400 mb-1">Buscar (Nome, OS, Modelo)</label>
+                                                    <input type="text" x-model="filter.search" class="w-full text-xs border rounded p-1.5 focus:ring-brand-500" placeholder="Digite para buscar...">
+                                                </div>
+
+                                                <!-- Date Range -->
+                                                <div class="mb-2">
+                                                    <label class="block text-[10px] font-bold text-gray-400 mb-1">Data de Entrada</label>
+                                                    <div class="flex gap-1">
+                                                        <input type="date" x-model="filter.dateStart" class="w-1/2 text-[10px] border rounded p-1">
+                                                        <input type="date" x-model="filter.dateEnd" class="w-1/2 text-[10px] border rounded p-1">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <!-- Cards Area -->
                                     <div class="p-2 flex-grow overflow-y-auto space-y-3 kanban-col">
-                                         <template x-for="ticket in tickets.filter(t => t.status === status && matchesSearch(t))" :key="ticket.id">
+                                         <template x-for="ticket in getSortedAndFilteredTickets(status)" :key="ticket.id">
                                             <div @click="viewTicketDetails(ticket)"
                                                  :id="'ticket-card-' + ticket.id"
                                                  class="bg-white p-4 rounded-lg shadow-sm border-l-4 cursor-pointer hover:shadow-md transition-all group relative"
