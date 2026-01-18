@@ -209,9 +209,10 @@ function app() {
 
         // Kanban State
         kanbanScrollWidth: 0,
+        columnFilters: {}, // { 'Aberto': { sort: 'default', search: '', dateStart: '', dateEnd: '' } }
 
         // Search
-        searchQuery: '',
+        searchQuery: '', // Global search
         activeQuickFilter: null,
         showFinalized: true,
 
@@ -2665,6 +2666,97 @@ function app() {
         clearFilters() {
             this.searchQuery = '';
             this.activeQuickFilter = null;
+            this.columnFilters = {};
+        },
+
+        // Helper to initialize filters for a column if not exists
+        initColumnFilter(status) {
+            if (!this.columnFilters[status]) {
+                this.columnFilters[status] = {
+                    sort: 'default', // default, priority, os, model
+                    search: '',
+                    dateStart: '',
+                    dateEnd: '',
+                    showMenu: false
+                };
+            }
+            return this.columnFilters[status];
+        },
+
+        getSortedAndFilteredTickets(status) {
+            // 1. Base Filter (Status & Global Search)
+            let list = this.tickets.filter(t => t.status === status && this.matchesSearch(t));
+
+            // 2. Column Specific Filter
+            const filter = this.columnFilters[status];
+            if (filter) {
+                if (filter.search) {
+                    const q = filter.search.toLowerCase();
+                    list = list.filter(t =>
+                        (t.client_name && t.client_name.toLowerCase().includes(q)) ||
+                        (t.os_number && t.os_number.toLowerCase().includes(q)) ||
+                        (t.device_model && t.device_model.toLowerCase().includes(q)) ||
+                        (t.serial_number && t.serial_number.toLowerCase().includes(q))
+                    );
+                }
+                if (filter.dateStart) {
+                    const start = new Date(filter.dateStart);
+                    list = list.filter(t => new Date(t.created_at) >= start);
+                }
+                if (filter.dateEnd) {
+                    const end = new Date(filter.dateEnd);
+                    end.setHours(23, 59, 59);
+                    list = list.filter(t => new Date(t.created_at) <= end);
+                }
+            }
+
+            // 3. Sorting
+            // Default Sort Rules
+            // Rule 1 (Aberto/Analise): Analysis Deadline ASC -> Deadline ASC
+            // Rule 2 (Others): Deadline ASC -> Created ASC
+
+            const sortMode = filter ? filter.sort : 'default';
+
+            list.sort((a, b) => {
+                if (sortMode === 'priority') {
+                    const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
+                    return pOrder[a.priority] - pOrder[b.priority];
+                }
+                if (sortMode === 'os') {
+                    return a.os_number.localeCompare(b.os_number, undefined, { numeric: true });
+                }
+                if (sortMode === 'model') {
+                    return a.device_model.localeCompare(b.device_model);
+                }
+
+                // Default Sort
+                if (status === 'Aberto' || status === 'Analise Tecnica') {
+                    // Primary: Analysis Deadline
+                    if (a.analysis_deadline && !b.analysis_deadline) return -1;
+                    if (!a.analysis_deadline && b.analysis_deadline) return 1;
+                    if (a.analysis_deadline && b.analysis_deadline) {
+                        const diff = new Date(a.analysis_deadline) - new Date(b.analysis_deadline);
+                        if (diff !== 0) return diff;
+                    }
+                    // Secondary: Delivery Deadline
+                    if (a.deadline && !b.deadline) return -1;
+                    if (!a.deadline && b.deadline) return 1;
+                    if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+
+                    return 0;
+                } else {
+                    // Others: Deadline -> Created
+                    if (a.deadline && !b.deadline) return -1;
+                    if (!a.deadline && b.deadline) return 1;
+                    if (a.deadline && b.deadline) {
+                        const diff = new Date(a.deadline) - new Date(b.deadline);
+                        if (diff !== 0) return diff;
+                    }
+                    return new Date(a.created_at) - new Date(b.created_at);
+                }
+            });
+
+            return list;
         },
 
         matchesSearch(ticket) {
