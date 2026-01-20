@@ -97,6 +97,12 @@ function app() {
         searchDebounceTimer: null,
         realtimeDebounceTimer: null,
 
+        // Dashboard Metrics Optimization State
+        metricsCache: { key: '', timestamp: 0 },
+        metricsInFlight: null,
+        metricsLastRun: 0,
+        metricsThrottleTimer: null,
+
         // Dashboard Data
         ops: {
             pendingBudgets: [],
@@ -400,10 +406,76 @@ function app() {
             });
         },
 
+        // --- CENTRALIZED DASHBOARD METRICS REQUEST ---
+        async requestDashboardMetrics({ reason, force = false }) {
+            if (this.view !== 'dashboard' || !this.user?.workspace_id) return;
+
+            const now = Date.now();
+            const f = this.adminDashboardFilters;
+            // Create a cache key based on Workspace + All Filters
+            // We use JSON.stringify to ensure uniqueness for object values
+            const currentKey = `${this.user.workspace_id}|${f.dateStart}|${f.dateEnd}|${f.technician}|${f.status}|${f.defect}|${f.deviceModel}|${this.searchQuery}`;
+
+            console.log(`[Dashboard] Request: ${reason} (Force: ${force})`);
+
+            // 1. Throttling (Applied mostly for Realtime/Automatic calls)
+            // Force (User Interaction) bypasses throttle check but updates lastRun
+            const throttleInterval = 1500; // 1.5 seconds
+            if (!force && reason === 'realtime') {
+                const timeSinceLast = now - this.metricsLastRun;
+                if (timeSinceLast < throttleInterval) {
+                    console.log(`[Dashboard] Throttled. Scheduling in ${throttleInterval - timeSinceLast}ms`);
+
+                    if (this.metricsThrottleTimer) clearTimeout(this.metricsThrottleTimer);
+                    this.metricsThrottleTimer = setTimeout(() => {
+                        this.requestDashboardMetrics({ reason: 'throttle_flush', force: true });
+                    }, throttleInterval - timeSinceLast);
+                    return;
+                }
+            }
+
+            // 2. Cache Check (Short Term Memory)
+            const cacheTTL = 10000; // 10 seconds
+            if (!force && this.metricsCache.key === currentKey && (now - this.metricsCache.timestamp < cacheTTL)) {
+                console.log(`[Dashboard] Cache Hit (${((now - this.metricsCache.timestamp) / 1000).toFixed(1)}s old)`);
+                return;
+            }
+
+            // 3. In-Flight Deduplication
+            if (this.metricsInFlight) {
+                console.log(`[Dashboard] In-Flight. Reusing existing promise.`);
+                return this.metricsInFlight;
+            }
+
+            // 4. Execution
+            this.metricsInFlight = (async () => {
+                try {
+                    this.metricsLastRun = Date.now();
+                    console.log(`[Dashboard] Fetching RPC...`);
+                    await this.fetchDashboardMetricsRPC();
+
+                    // Update Cache
+                    this.metricsCache = {
+                        key: currentKey,
+                        timestamp: Date.now()
+                    };
+                } catch (e) {
+                    console.error("[Dashboard] Error fetching metrics:", e);
+                } finally {
+                    this.metricsInFlight = null;
+                }
+            })();
+
+            return this.metricsInFlight;
+        },
+
         async calculateMetrics() {
-            // Updated to use RPC
             this.ops = this.getDashboardOps();
-            await this.fetchDashboardMetricsRPC();
+            // User interaction or View change usually implies we want fresh data,
+            // but requestDashboardMetrics handles cache check.
+            // We pass force: false to allow cache usage if filters haven't changed in <5s,
+            // UNLESS it's a filter change which naturally changes the key.
+            await this.requestDashboardMetrics({ reason: 'calculateMetrics', force: false });
         },
 
         async fetchDashboardMetricsRPC() {
@@ -813,6 +885,11 @@ function app() {
                     await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
+
+                    // Initial Dashboard Load
+                    if (this.view === 'dashboard') {
+                        this.requestDashboardMetrics({ reason: 'init', force: true });
+                    }
                 }
             } catch (err) {
                 console.error("Load Admin Error:", err);
@@ -1090,14 +1167,37 @@ function app() {
                 this.selectedTicket = { ...this.selectedTicket, ...payload.new };
             }
 
-            // 2. Debounced Refresh for Lists & Metrics
+            // --- DASHBOARD REALTIME (Throttled & Relevant Only) ---
+            if (this.view === 'dashboard') {
+                const relevantFields = [
+                    'status', 'delivered_at', 'repair_start_at', 'repair_end_at',
+                    'budget_sent_at', 'pickup_available_at', 'technician_id',
+                    'defect_reported', 'device_model', 'created_at', 'deleted_at'
+                ];
+
+                let isRelevant = false;
+                if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+                    isRelevant = true;
+                } else if (payload.eventType === 'UPDATE') {
+                    const oldR = payload.old || {};
+                    const newR = payload.new || {};
+                    isRelevant = relevantFields.some(field => oldR[field] !== newR[field]);
+                }
+
+                if (isRelevant) {
+                    // Invalidate Cache Immediately
+                    this.metricsCache = { key: '', timestamp: 0 };
+                    // Trigger Request (Internal throttle will handle rate limiting)
+                    this.requestDashboardMetrics({ reason: 'realtime' });
+                }
+            }
+
+            // 2. Debounced Refresh for Lists (Keep existing 2s debounce for List/Kanban)
             if (this.realtimeDebounceTimer) clearTimeout(this.realtimeDebounceTimer);
 
             this.realtimeDebounceTimer = setTimeout(async () => {
-                // Dashboard Metrics Refresh
-                if (this.view === 'dashboard') {
-                    this.calculateMetrics();
-                }
+                // NOTE: Dashboard Metrics are handled above via Throttle.
+                // We ONLY handle List/Kanban refresh here.
 
                 // List Refresh Strategy
                 if (payload.eventType === 'INSERT') {
