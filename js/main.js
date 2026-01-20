@@ -86,6 +86,17 @@ function app() {
         checklistTemplatesFinal: [],
         notifications: [],
 
+        // Pagination State
+        ticketPagination: {
+            page: 0,
+            limit: 50,
+            hasMore: true,
+            isLoading: false,
+            total: 0
+        },
+        searchDebounceTimer: null,
+        realtimeDebounceTimer: null,
+
         // Dashboard Data
         ops: {
             pendingBudgets: [],
@@ -136,7 +147,10 @@ function app() {
              repairsMonth: 0,
              ticketsToday: 0,
              ticketsWeek: 0,
-             ticketsMonth: 0
+             ticketsMonth: 0,
+             logisticsStats: { pickup: {}, carrier: {} },
+             outsourcedStats: {},
+             internalStats: {}
         },
 
         // Forms
@@ -356,27 +370,69 @@ function app() {
             }, 60000);
 
             this.$watch('view', (value) => {
-                if (value !== 'kanban') {
-                    this.clearFilters();
-                } else {
+                if (value === 'kanban') {
+                    // Reset to Kanban mode (Active only)
+                    this.fetchTickets();
                     setTimeout(() => this.initKanbanScroll(), 100);
-                }
-                if (value === 'dashboard') {
+                } else if (value === 'dashboard') {
+                    // Dashboard/History mode
+                    this.fetchTickets();
                     this.fetchGlobalLogs();
+                    this.calculateMetrics();
+                } else {
+                    // Other views (e.g. tech_orders)
+                    this.clearFilters();
+                    this.fetchTickets();
                 }
             });
 
+            this.$watch('searchQuery', () => {
+                this.handleSearchInput();
+            });
+
             this.$watch('adminDashboardFilters', () => {
+                // If filters change, reload dashboard metrics AND list
                 this.calculateMetrics();
+                this.fetchTickets();
                 if (this.adminDashboardFilters.viewType === 'chart') {
                     setTimeout(() => this.renderCharts(), 50);
                 }
             });
         },
 
-        calculateMetrics() {
+        async calculateMetrics() {
+            // Updated to use RPC
             this.ops = this.getDashboardOps();
-            this.metrics = this.getAdminMetrics();
+            await this.fetchDashboardMetricsRPC();
+        },
+
+        async fetchDashboardMetricsRPC() {
+            if (!this.user?.workspace_id) return;
+
+            const f = this.adminDashboardFilters;
+            const params = {
+                p_date_start: f.dateStart || null,
+                p_date_end: f.dateEnd || null,
+                p_technician_id: f.technician === 'all' ? null : f.technician,
+                p_status: f.status === 'all' ? null : f.status,
+                p_defect: f.defect === 'all' ? null : f.defect,
+                p_device_model: f.deviceModel === 'all' ? null : f.deviceModel,
+                p_search: this.searchQuery || null
+            };
+
+            try {
+                const data = await this.supabaseFetch('rpc/get_dashboard_kpis', 'POST', params);
+                if (data) {
+                    // Merge RPC data into metrics, preserving structure if needed
+                    this.metrics = { ...this.metrics, ...data };
+                    // RPC doesn't return filteredTickets list, so we keep it from the fetchTickets list if needed,
+                    // or let fetchTickets handle the list display separately.
+                    // For the "Charts", data is now populated.
+                }
+            } catch (e) {
+                console.error("Dashboard RPC Error:", e);
+                this.notify("Erro ao carregar métricas.", "error");
+            }
         },
 
         toggleAdminView() {
@@ -567,12 +623,7 @@ function app() {
             supabaseClient
                 .channel('tickets_channel')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
-                payload => {
-                   this.fetchTickets();
-                   if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
-                       this.selectedTicket = { ...this.selectedTicket, ...payload.new };
-                   }
-                })
+                (payload) => this.handleRealtimeUpdate(payload))
                 .subscribe();
 
             supabaseClient
@@ -1033,61 +1084,167 @@ function app() {
 
         // --- TICKET LOGIC ---
 
-        async fetchTickets(retryCount = 0) {
+        handleRealtimeUpdate(payload) {
+            // 1. Immediate update for focused ticket
+            if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
+                this.selectedTicket = { ...this.selectedTicket, ...payload.new };
+            }
+
+            // 2. Debounced Refresh for Lists & Metrics
+            if (this.realtimeDebounceTimer) clearTimeout(this.realtimeDebounceTimer);
+
+            this.realtimeDebounceTimer = setTimeout(async () => {
+                // Dashboard Metrics Refresh
+                if (this.view === 'dashboard') {
+                    this.calculateMetrics();
+                }
+
+                // List Refresh Strategy
+                if (payload.eventType === 'INSERT') {
+                    if (this.ticketPagination.page === 0) {
+                        await this.fetchTickets();
+                    } else {
+                        this.notify("Novos chamados disponíveis.", "info");
+                    }
+                } else if (payload.eventType === 'UPDATE') {
+                    // Optimistic Local Update first (if possible) could be done here,
+                    // but simple re-fetch of current page is safer for consistency.
+                    // If we are on Page 0, re-fetch.
+                    if (this.ticketPagination.page === 0) {
+                        // Optimistic update for simple status changes to avoid flicker?
+                        // For now, fetchTickets preserves consistency.
+                        await this.fetchTickets();
+                    } else {
+                        // Just update the item in array if exists
+                        const idx = this.tickets.findIndex(t => t.id === payload.new.id);
+                        if (idx > -1) {
+                            // If deleted, remove
+                            if (payload.new.deleted_at) {
+                                this.tickets.splice(idx, 1);
+                            } else {
+                                this.tickets[idx] = { ...this.tickets[idx], ...payload.new };
+                            }
+                        }
+                    }
+                }
+            }, 2000); // 2 second debounce to batch rapid updates
+        },
+
+        handleSearchInput() {
+            if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+            this.searchDebounceTimer = setTimeout(() => {
+                this.ticketPagination.page = 0; // Reset to first page
+                this.fetchTickets();
+                if (this.view === 'dashboard') this.calculateMetrics(); // Update charts too
+            }, 500); // 500ms debounce
+        },
+
+        async loadMoreTickets() {
+            if (!this.ticketPagination.hasMore || this.ticketPagination.isLoading) return;
+            this.fetchTickets(true);
+        },
+
+        async fetchTickets(loadMore = false) {
             if (!this.user?.workspace_id) return;
 
+            this.ticketPagination.isLoading = true;
+
+            if (loadMore) {
+                this.ticketPagination.page++;
+            } else {
+                this.ticketPagination.page = 0;
+                this.ticketPagination.hasMore = true;
+                if (!loadMore) this.tickets = [];
+            }
+
             try {
-                const data = await this.supabaseFetch(
-                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`
-                );
+                // Base Endpoint with Workspace Filter
+                let endpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null`;
+
+                // SEARCH
+                if (this.searchQuery) {
+                    const q = this.searchQuery;
+                    const qSafe = encodeURIComponent(`*${q}*`);
+                    endpoint += `&or=(client_name.ilike.${qSafe},os_number.ilike.${qSafe},device_model.ilike.${qSafe},serial_number.ilike.${qSafe},contact_info.ilike.${qSafe})`;
+                }
+
+                // VIEW SPECIFIC LOGIC
+                if (this.view === 'kanban' && !this.searchQuery) {
+                    // Kanban: Active Only
+                    // Definition: Not Delivered (delivered_at IS NULL)
+                    endpoint += `&delivered_at=is.null`;
+                    endpoint += `&order=created_at.desc`;
+                    endpoint += `&limit=200`; // Hard limit for DOM safety
+                } else if (this.view === 'tech_orders') {
+                    // Tech View
+                    if (this.user?.id) {
+                         endpoint += `&or=(technician_id.eq.${this.user.id},technician_id.is.null)`;
+                    }
+                    endpoint += `&status=in.(Analise Tecnica,Andamento Reparo)`;
+                    endpoint += `&order=created_at.asc`;
+                } else {
+                    // Dashboard/History/List: Apply Filters & Pagination
+                    const f = this.adminDashboardFilters;
+
+                    if (f.dateStart) endpoint += `&created_at=gte.${f.dateStart}T00:00:00`;
+                    if (f.dateEnd) endpoint += `&created_at=lte.${f.dateEnd}T23:59:59`;
+                    if (f.technician !== 'all') endpoint += `&technician_id=eq.${f.technician}`;
+                    if (f.status !== 'all') endpoint += `&status=eq.${f.status}`;
+                    if (f.defect !== 'all') endpoint += `&defect_reported=ilike.*${encodeURIComponent(f.defect)}*`;
+                    if (f.deviceModel !== 'all') endpoint += `&device_model=eq.${encodeURIComponent(f.deviceModel)}`;
+
+                    endpoint += `&order=created_at.desc`;
+
+                    // PAGINATION
+                    const limit = this.ticketPagination.limit;
+                    const offset = this.ticketPagination.page * limit;
+                    endpoint += `&limit=${limit}&offset=${offset}`;
+                }
+
+                const data = await this.supabaseFetch(endpoint);
 
                 if (data) {
-                    this.tickets = data;
-
-                    let filteredTechTickets = data;
-                    let effectiveFilter = this.selectedTechFilter;
-
-                    const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
-
-                    if (isTechOnly && this.user) {
-                        effectiveFilter = this.user.id;
-                        this.selectedTechFilter = this.user.id;
+                    if (loadMore) {
+                        this.tickets = [...this.tickets, ...data];
+                    } else {
+                        this.tickets = data;
                     }
 
-                    if (effectiveFilter && effectiveFilter !== 'all') {
-                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter || t.technician_id == null);
-                    } else if (isTechOnly) {
-                         console.warn("Tech View Security: Filter missing, hiding all tickets.");
-                         filteredTechTickets = [];
+                    // Check if we reached the end (for pagination)
+                    if (data.length < this.ticketPagination.limit) {
+                        this.ticketPagination.hasMore = false;
                     }
 
-                    const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
-                    if (this.trackerConfig.test_flow === 'technician') {
-                        techStatuses.push('Teste Final');
+                    // POPULATE TECH TICKETS (Client Side Filter for safety/convenience)
+                    if (this.view === 'tech_orders') {
+                        this.techTickets = this.tickets;
+                    } else {
+                        // For other views, we maintain client-side derivation for consistency
+                        let relevantTickets = this.tickets;
+                        const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
+                        if (isTechOnly && this.user) {
+                            relevantTickets = relevantTickets.filter(t => t.technician_id == this.user.id || t.technician_id == null);
+                        }
+
+                        this.techTickets = relevantTickets.filter(t =>
+                            ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
+                        ).sort((a, b) => {
+                            if (a.priority_requested && !b.priority_requested) return -1;
+                            if (!a.priority_requested && b.priority_requested) return 1;
+                            const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
+                            const pDiff = pOrder[a.priority] - pOrder[b.priority];
+                            if (pDiff !== 0) return pDiff;
+                            return new Date(a.deadline || 0) - new Date(b.deadline || 0);
+                        });
                     }
 
-                    this.techTickets = filteredTechTickets.filter(t =>
-                        techStatuses.includes(t.status)
-                    ).sort((a, b) => {
-                        if (a.priority_requested && !b.priority_requested) return -1;
-                        if (!a.priority_requested && b.priority_requested) return 1;
-
-                        const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
-                        const pDiff = pOrder[a.priority] - pOrder[b.priority];
-                        if (pDiff !== 0) return pDiff;
-
-                        return new Date(a.deadline || 0) - new Date(b.deadline || 0);
-                    });
-
-                    this.calculateMetrics();
+                    this.ops = this.getDashboardOps();
                 }
             } catch (err) {
                  console.warn("Fetch exception:", err);
-                 if (retryCount < 2) {
-                     setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
-                 } else {
-                     console.error("Final ticket fetch failure");
-                 }
+                 this.notify("Erro ao buscar chamados.", "error");
+            } finally {
+                 this.ticketPagination.isLoading = false;
             }
         },
 
@@ -2665,17 +2822,20 @@ function app() {
         },
 
         applyQuickFilter(type) {
+            // Quick filters might need server support or just local filter on the 'Active' set?
+            // If they are complicated, we might want to do them on server.
+            // For now, let's keep them local if they operate on the Kanban set.
             this.searchQuery = '';
             this.view = 'kanban';
-            const now = new Date();
-
             this.activeQuickFilter = type;
+            // Force re-render of Kanban
         },
 
         clearFilters() {
             this.searchQuery = '';
             this.activeQuickFilter = null;
             this.columnFilters = {};
+            this.fetchTickets();
         },
 
         // Helper to initialize filters for a column if not exists
@@ -2693,10 +2853,16 @@ function app() {
         },
 
         getSortedAndFilteredTickets(status) {
-            // 1. Base Filter (Status & Global Search)
-            let list = this.tickets.filter(t => t.status === status && this.matchesSearch(t));
+            // NOTE: matchesSearch is now mostly handled by server-side query if search is global.
+            // But if we have local results, we still filter them for quick consistency.
+            let list = this.tickets.filter(t => t.status === status);
 
-            // 2. Column Specific Filter
+            // Quick Filters (Local)
+            if (this.activeQuickFilter) {
+                list = list.filter(t => this.matchesQuickFilter(t));
+            }
+
+            // 2. Column Specific Filter (Local)
             const filter = this.columnFilters[status];
             if (filter) {
                 if (filter.search) {
@@ -2721,9 +2887,6 @@ function app() {
 
             // 3. Sorting
             // Default Sort Rules
-            // Rule 1 (Aberto/Analise): Analysis Deadline ASC -> Deadline ASC
-            // Rule 2 (Others): Deadline ASC -> Created ASC
-
             const sortMode = filter ? filter.sort : 'default';
 
             list.sort((a, b) => {
@@ -2769,6 +2932,18 @@ function app() {
         },
 
         matchesSearch(ticket) {
+            if (!this.searchQuery) return true;
+            const q = this.searchQuery.toLowerCase();
+            return (
+                (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
+                (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
+                (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
+                (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
+                (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
+            );
+        },
+
+        matchesQuickFilter(ticket) {
             if (this.activeQuickFilter === 'my_today') {
                 const oneDay = 24 * 60 * 60 * 1000;
                 const isToday = new Date(ticket.created_at) > new Date(Date.now() - oneDay);
@@ -2789,16 +2964,7 @@ function app() {
                 const isDelayed = ticket.deadline && new Date(ticket.deadline) < now && !['Retirada Cliente', 'Finalizado'].includes(ticket.status);
                 if (!isDelayed) return false;
             }
-
-            if (!this.searchQuery) return true;
-            const q = this.searchQuery.toLowerCase();
-            return (
-                (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
-                (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
-                (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
-                (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
-                (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
-            );
+            return true;
         },
 
         getOverdueTime(deadline) {
