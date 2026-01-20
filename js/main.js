@@ -482,8 +482,8 @@ function app() {
 
             this.dashboardMetricsPromise = (async () => {
                 try {
-                    // Update OPS (local calculation)
-                    this.ops = this.getDashboardOps();
+                    // Update OPS (RPC)
+                    await this.fetchOperationalAlerts();
 
                     const data = await this.supabaseFetch('rpc/get_dashboard_kpis', 'POST', params);
                     if (data) {
@@ -1409,7 +1409,9 @@ function app() {
                         });
                     }
 
-                    this.ops = this.getDashboardOps();
+                    if (!loadMore) {
+                        await this.fetchOperationalAlerts();
+                    }
                 }
             } catch (err) {
                  console.warn("Fetch exception:", err);
@@ -2929,67 +2931,19 @@ function app() {
             return (idx / (visibleSteps.length - 1)) * 100;
         },
 
-        // DASHBOARD OPERATIONAL METRICS
-        getDashboardOps() {
-            const now = new Date();
-            const tickets = this.tickets || [];
-
-            const pendingBudgets = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status !== 'Enviado');
-
-            const waitingBudgetResponse = tickets.filter(t => t.status === 'Aprovacao' && t.budget_status === 'Enviado');
-
-            const pendingPickups = tickets.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available);
-
-            // Logistics specific lists
-            const pendingTracking = tickets.filter(t =>
-                t.status === 'Retirada Cliente' &&
-                t.delivery_method === 'carrier' &&
-                !t.tracking_code
-            );
-
-            const pendingDelivery = tickets.filter(t =>
-                t.status === 'Retirada Cliente' &&
-                (
-                    (t.delivery_method === 'pickup' && t.pickup_available) ||
-                    (t.delivery_method === 'carrier' && t.tracking_code)
-                )
-            );
-
-            const urgentAnalysis = tickets
-                .filter(t => t.status === 'Analise Tecnica' && t.analysis_deadline)
-                .sort((a, b) => new Date(a.analysis_deadline) - new Date(b.analysis_deadline))
-                .slice(0, 5);
-
-            const delayedDeliveries = tickets.filter(t =>
-                t.deadline &&
-                new Date(t.deadline) < now &&
-                !['Retirada Cliente', 'Finalizado'].includes(t.status)
-            );
-
-            const priorityTickets = tickets.filter(t => t.priority_requested && !['Retirada Cliente', 'Finalizado'].includes(t.status));
-
-            const pendingPurchase = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status !== 'Comprado');
-
-            const pendingReceipt = tickets.filter(t => t.status === 'Compra Peca' && t.parts_status === 'Comprado');
-
-            const pendingTech = tickets.filter(t => t.status === 'Aberto');
-
-            const pendingOutsourced = tickets.filter(t => t.status === 'Terceirizado').sort((a, b) => new Date(a.outsourced_deadline) - new Date(b.outsourced_deadline));
-
-            return {
-                pendingBudgets,
-                waitingBudgetResponse,
-                pendingPickups,
-                urgentAnalysis,
-                delayedDeliveries,
-                priorityTickets,
-                pendingPurchase,
-                pendingReceipt,
-                pendingTech,
-                pendingTracking,
-                pendingDelivery,
-                pendingOutsourced
-            };
+        // DASHBOARD OPERATIONAL METRICS (RPC)
+        async fetchOperationalAlerts() {
+            if (!this.user?.workspace_id) return;
+            try {
+                const data = await this.supabaseFetch('rpc/get_operational_alerts', 'POST', {
+                    p_workspace_id: this.user.workspace_id
+                });
+                if (data) {
+                    this.ops = data;
+                }
+            } catch (e) {
+                console.error("Fetch Alerts Error:", e);
+            }
         },
 
         applyQuickFilter(type) {
