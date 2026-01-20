@@ -2927,6 +2927,18 @@ function app() {
             return list;
         },
 
+        matchesSearch(ticket) {
+            if (!this.searchQuery) return true;
+            const q = this.searchQuery.toLowerCase();
+            return (
+                (ticket.client_name && ticket.client_name.toLowerCase().includes(q)) ||
+                (ticket.os_number && ticket.os_number.toLowerCase().includes(q)) ||
+                (ticket.device_model && ticket.device_model.toLowerCase().includes(q)) ||
+                (ticket.serial_number && ticket.serial_number.toLowerCase().includes(q)) ||
+                (ticket.contact_info && ticket.contact_info.toLowerCase().includes(q))
+            );
+        },
+
         matchesQuickFilter(ticket) {
             if (this.activeQuickFilter === 'my_today') {
                 const oneDay = 24 * 60 * 60 * 1000;
