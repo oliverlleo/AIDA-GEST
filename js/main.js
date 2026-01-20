@@ -710,7 +710,11 @@ function app() {
                 .channel('tickets_channel')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
                 (payload) => this.handleRealtimeUpdate(payload))
-                .subscribe();
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('[RT] subscribed', 'tickets_channel');
+                    }
+                });
 
             supabaseClient
                 .channel('notifications_channel')
@@ -1218,6 +1222,8 @@ function app() {
         },
 
         handleRealtimeUpdate(payload) {
+            console.log('[RT] event', payload);
+
             // 1. Immediate update for focused ticket
             if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
                 this.selectedTicket = { ...this.selectedTicket, ...payload.new };
