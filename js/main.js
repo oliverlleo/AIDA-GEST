@@ -425,10 +425,16 @@ function app() {
             if (!force && reason === 'realtime') {
                 const timeSinceLast = now - this.metricsLastRun;
                 if (timeSinceLast < throttleInterval) {
-                    console.log(`[Dashboard] Throttled. Scheduling in ${throttleInterval - timeSinceLast}ms`);
+                    // Optimization: If a flush is already scheduled, don't reschedule it.
+                    // This coalesces multiple rapid events into a single trailing call.
+                    if (this.metricsThrottleTimer) {
+                        console.log(`[Dashboard] Throttled. Flush already pending.`);
+                        return;
+                    }
 
-                    if (this.metricsThrottleTimer) clearTimeout(this.metricsThrottleTimer);
+                    console.log(`[Dashboard] Throttled. Scheduling flush in ${throttleInterval - timeSinceLast}ms`);
                     this.metricsThrottleTimer = setTimeout(() => {
+                        this.metricsThrottleTimer = null; // Clear timer reference
                         this.requestDashboardMetrics({ reason: 'throttle_flush', force: true });
                     }, throttleInterval - timeSinceLast);
                     return;
