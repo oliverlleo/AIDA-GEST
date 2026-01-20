@@ -244,6 +244,7 @@ function app() {
         // Search
         searchQuery: '', // Global search
         activeQuickFilter: null,
+        showFinalized: false,
 
         // Time
         currentTime: new Date(),
