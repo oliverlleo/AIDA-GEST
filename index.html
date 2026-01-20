@@ -1699,6 +1699,14 @@
                                                 </div>
                                             </div>
                                         </template>
+
+                                        <!-- Load More Button for Finalized Column -->
+                                        <div x-show="status === 'Finalizado' && showFinalized && finalizedPagination.hasMore" class="pt-2 pb-4 text-center">
+                                            <button @click="loadMoreFinalized()" class="bg-white border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-50 shadow-sm w-full">
+                                                <span x-show="!finalizedPagination.isLoading">Carregar mais...</span>
+                                                <span x-show="finalizedPagination.isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i> Carregando</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </template>
                                 <template x-if="!metrics.techStats?.length">
@@ -1856,11 +1864,11 @@
                                     <span class="hidden sm:inline">Limpar Filtro</span>
                                 </button>
 
-                                <button @click="showFinalized = !showFinalized"
+                                <button @click="toggleShowFinalized()"
                                         class="text-xs px-3 py-2 rounded font-bold border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
                                         :class="showFinalized ? 'bg-gray-100 text-brand-600 border-brand-200' : ''">
                                     <i class="fa-solid" :class="showFinalized ? 'fa-eye' : 'fa-eye-slash'"></i>
-                                    <span x-text="showFinalized ? 'Ocultar Finalizados' : 'Mostrar Finalizados'" class="ml-1 hidden sm:inline"></span>
+                                    <span x-text="showFinalized ? 'Ocultar finalizadas' : 'Mostrar finalizadas'" class="ml-1 hidden sm:inline"></span>
                                 </button>
                                 <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
                                     <i class="fa-solid fa-plus mr-1"></i> Novo
