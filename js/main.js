@@ -229,7 +229,6 @@ function app() {
         calendarView: 'week',
         currentCalendarDate: new Date(),
         showAllCalendarTickets: false,
-        selectedTechFilter: 'all',
 
         // Kanban State
         kanbanScrollWidth: 0,
@@ -1344,7 +1343,12 @@ function app() {
                     endpoint += `&limit=200`; // Hard limit for DOM safety
                 } else if (this.view === 'tech_orders') {
                     // Tech View
-                    if (this.user?.id) {
+                    if (this.hasRole('admin')) {
+                        const techId = this.adminDashboardFilters.technician;
+                        if (techId && techId !== 'all') {
+                            endpoint += `&technician_id=eq.${techId}`;
+                        }
+                    } else if (this.user?.id) {
                          endpoint += `&or=(technician_id.eq.${this.user.id},technician_id.is.null)`;
                     }
                     endpoint += `&status=in.(Analise Tecnica,Andamento Reparo)`;
@@ -2703,7 +2707,7 @@ function app() {
         getCalendarTickets() {
             let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
 
-            let effectiveFilter = this.selectedTechFilter;
+            let effectiveFilter = this.adminDashboardFilters.technician;
             if (!this.hasRole('admin') && this.hasRole('tecnico')) {
                 effectiveFilter = this.user.id;
             }
@@ -2861,12 +2865,12 @@ function app() {
             console.log("Initializing Tech Filter. User:", this.user);
 
             if (this.hasRole('admin')) {
-                this.selectedTechFilter = 'all';
+                this.adminDashboardFilters.technician = 'all';
             } else if (this.hasRole('tecnico') && this.user && this.user.id) {
-                this.selectedTechFilter = this.user.id;
-                console.log("Filter set to self (Tech):", this.selectedTechFilter);
+                this.adminDashboardFilters.technician = this.user.id;
+                console.log("Filter set to self (Tech):", this.adminDashboardFilters.technician);
             } else {
-                this.selectedTechFilter = 'all';
+                this.adminDashboardFilters.technician = 'all';
             }
         },
 
