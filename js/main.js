@@ -21,6 +21,7 @@ function app() {
     return {
         // State
         loading: false,
+        loadedToken: null, // Guard for double-init
         session: null,
         employeeSession: null,
         user: null,
@@ -306,6 +307,12 @@ function app() {
             supabaseClient.auth.onAuthStateChange(async (_event, session) => {
                 this.session = session;
                 if (session) {
+                    // Guard: If we are already loaded for this user and workspace, ignore
+                    // This handles INITIAL_SESSION firing after init() has already loaded data
+                    if (this.loadedToken && this.user && this.loadedToken === `${session.user.id}:${this.user.workspace_id}`) {
+                        console.log("[Auth] skipping listener event (already loaded)");
+                        return;
+                    }
                     await this.loadAdminData();
                 } else if (!this.employeeSession) {
                     this.user = null;
@@ -675,62 +682,93 @@ function app() {
             if (!this.session) return;
             const user = this.session.user;
 
-            // REFACTORED: Native Fetch
-            try {
-                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
-                let profile = profileData && profileData.length > 0 ? profileData[0] : null;
+            // Guard: Double-init check (Token Strategy)
+            if (this.loadedToken && this.user && this.loadedToken === `${user.id}:${this.user.workspace_id}`) {
+                console.log("[Dashboard] skip duplicate/cached reason=load_admin_token");
+                return;
+            }
 
-                // Handle missing profile case (equivalent to PGRST116)
-                if (!profile) {
-                    const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code,whatsapp_number&owner_id=eq.${user.id}`);
-                    const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
+            // Guard: In-flight promise reuse
+            if (this._loadAdminPromise) {
+                 return this._loadAdminPromise;
+            }
 
-                    if (workspace) {
-                        await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
-                        // Re-fetch
-                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
-                        profile = newProfileData[0];
-                    } else {
-                        this.view = 'setup_required';
-                        return;
+            this._loadAdminPromise = (async () => {
+                // REFACTORED: Native Fetch
+                try {
+                    const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
+                    let profile = profileData && profileData.length > 0 ? profileData[0] : null;
+
+                    // Handle missing profile case (equivalent to PGRST116)
+                    if (!profile) {
+                        const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code,whatsapp_number&owner_id=eq.${user.id}`);
+                        const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
+
+                        if (workspace) {
+                            await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
+                            // Re-fetch
+                            const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number)&id=eq.${user.id}`);
+                            profile = newProfileData[0];
+                        } else {
+                            this.view = 'setup_required';
+                            return;
+                        }
                     }
-                }
 
-                if (profile) {
-                    this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
-                    this.workspaceName = profile.workspaces?.name;
-                    this.companyCode = profile.workspaces?.company_code;
-                    this.whatsappNumber = profile.workspaces?.whatsapp_number || '';
-                    await this.fetchEmployees();
-                    this.initTechFilter(); // Admin defaults to 'all'
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels(); // New fetch
-                    await this.fetchDefectOptions();
-                    this.fetchGlobalLogs();
-                    this.setupRealtime();
+                    if (profile) {
+                        this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
+                        this.workspaceName = profile.workspaces?.name;
+                        this.companyCode = profile.workspaces?.company_code;
+                        this.whatsappNumber = profile.workspaces?.whatsapp_number || '';
+                        await this.fetchEmployees();
+                        this.initTechFilter(); // Admin defaults to 'all'
+                        await this.fetchTickets();
+                        await this.fetchTemplates();
+                        await this.fetchDeviceModels(); // New fetch
+                        await this.fetchDefectOptions();
+                        this.fetchGlobalLogs();
+                        this.setupRealtime();
+
+                        // Set Token on Success
+                        this.loadedToken = `${user.id}:${profile.workspace_id}`;
+                    }
+                } catch (err) {
+                    console.error("Load Admin Error:", err);
+                    throw err;
                 }
-            } catch (err) {
-                console.error("Load Admin Error:", err);
+            })();
+
+            try {
+                await this._loadAdminPromise;
+            } catch (e) {
+                // Already logged
+            } finally {
+                this._loadAdminPromise = null;
             }
         },
         async fetchEmployees() {
-            if (!this.user?.workspace_id) return;
+            if (this._fetchEmployeesPromise) return this._fetchEmployeesPromise;
 
-            // REFACTORED: Native Fetch for ALL employee fetches
-            try {
-                let data;
-                if (this.session) {
-                     // Table Select (Standard Admin View - Exclude Deleted)
-                     data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
-                } else {
-                     // RPC Call (Already excludes deleted in SQL)
-                     data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
+            this._fetchEmployeesPromise = (async () => {
+                if (!this.user?.workspace_id) return;
+
+                // REFACTORED: Native Fetch for ALL employee fetches
+                try {
+                    let data;
+                    if (this.session) {
+                         // Table Select (Standard Admin View - Exclude Deleted)
+                         data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
+                    } else {
+                         // RPC Call (Already excludes deleted in SQL)
+                         data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
+                    }
+                    if (data) this.employees = data;
+                } catch (e) {
+                     console.error("Fetch Employees Error:", e);
                 }
-                if (data) this.employees = data;
-            } catch (e) {
-                 console.error("Fetch Employees Error:", e);
-            }
+            })();
+
+            try { await this._fetchEmployeesPromise; } finally { this._fetchEmployeesPromise = null; }
         },
 
         // --- COMPANY CONFIG ---
@@ -898,107 +936,135 @@ function app() {
         // --- TICKET LOGIC ---
 
         async fetchTickets(retryCount = 0) {
-            if (!this.user?.workspace_id) return;
+            if (this._fetchTicketsPromise) return this._fetchTicketsPromise;
+
+            this._fetchTicketsPromise = (async () => {
+                if (!this.user?.workspace_id) return;
+
+                try {
+                    // REFACTORED: Native Fetch
+                    // Soft Delete Filter: deleted_at=is.null
+                    const data = await this.supabaseFetch(
+                        `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`
+                    );
+
+                    if (data) {
+                        this.tickets = data;
+
+                        // Apply Tech Filter to Minha Bancada
+                        let filteredTechTickets = data;
+                        let effectiveFilter = this.selectedTechFilter;
+
+                        const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
+
+                        // SAFETY: If pure technician, FORCE filter to self regardless of state
+                        if (isTechOnly && this.user) {
+                            effectiveFilter = this.user.id;
+                            this.selectedTechFilter = this.user.id;
+                        }
+
+                        // Apply Filter
+                        if (effectiveFilter && effectiveFilter !== 'all') {
+                            // Use loose equality (==) to handle potential UUID type mismatches
+                            // Allow seeing tickets assigned to SELF OR 'Everyone' (null)
+                            filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter || t.technician_id == null);
+                        } else if (isTechOnly) {
+                             // FAIL CLOSED: If user is Tech Only and filter is missing/invalid, SHOW NOTHING.
+                             // Do NOT allow falling through to the full list.
+                             console.warn("Tech View Security: Filter missing, hiding all tickets.");
+                             filteredTechTickets = [];
+                        }
+
+                        this.techTickets = filteredTechTickets.filter(t =>
+                            ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
+                        ).sort((a, b) => {
+                            // Priority Requested (Top of list)
+                            if (a.priority_requested && !b.priority_requested) return -1;
+                            if (!a.priority_requested && b.priority_requested) return 1;
+
+                            // Standard Priority
+                            const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
+                            const pDiff = pOrder[a.priority] - pOrder[b.priority];
+                            if (pDiff !== 0) return pDiff;
+
+                            // Deadline
+                            return new Date(a.deadline || 0) - new Date(b.deadline || 0);
+                        });
+
+                        this.calculateMetrics();
+                    }
+                } catch (err) {
+                     console.warn("Fetch exception:", err);
+                     // Retry logic for abort/fetch errors
+                     if (retryCount < 2) {
+                         setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
+                     } else {
+                         // On final failure, empty lists to avoid stale state if desired, or keep old data.
+                         // Choosing to keep old data to be less disruptive, but could clear.
+                         console.error("Final ticket fetch failure");
+                     }
+                }
+            })();
 
             try {
-                // REFACTORED: Native Fetch
-                // Soft Delete Filter: deleted_at=is.null
-                const data = await this.supabaseFetch(
-                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`
-                );
-
-                if (data) {
-                    this.tickets = data;
-
-                    // Apply Tech Filter to Minha Bancada
-                    let filteredTechTickets = data;
-                    let effectiveFilter = this.selectedTechFilter;
-
-                    const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
-
-                    // SAFETY: If pure technician, FORCE filter to self regardless of state
-                    if (isTechOnly && this.user) {
-                        effectiveFilter = this.user.id;
-                        this.selectedTechFilter = this.user.id;
-                    }
-
-                    // Apply Filter
-                    if (effectiveFilter && effectiveFilter !== 'all') {
-                        // Use loose equality (==) to handle potential UUID type mismatches
-                        // Allow seeing tickets assigned to SELF OR 'Everyone' (null)
-                        filteredTechTickets = filteredTechTickets.filter(t => t.technician_id == effectiveFilter || t.technician_id == null);
-                    } else if (isTechOnly) {
-                         // FAIL CLOSED: If user is Tech Only and filter is missing/invalid, SHOW NOTHING.
-                         // Do NOT allow falling through to the full list.
-                         console.warn("Tech View Security: Filter missing, hiding all tickets.");
-                         filteredTechTickets = [];
-                    }
-
-                    this.techTickets = filteredTechTickets.filter(t =>
-                        ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
-                    ).sort((a, b) => {
-                        // Priority Requested (Top of list)
-                        if (a.priority_requested && !b.priority_requested) return -1;
-                        if (!a.priority_requested && b.priority_requested) return 1;
-
-                        // Standard Priority
-                        const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
-                        const pDiff = pOrder[a.priority] - pOrder[b.priority];
-                        if (pDiff !== 0) return pDiff;
-
-                        // Deadline
-                        return new Date(a.deadline || 0) - new Date(b.deadline || 0);
-                    });
-
-                    this.calculateMetrics();
-                }
-            } catch (err) {
-                 console.warn("Fetch exception:", err);
-                 // Retry logic for abort/fetch errors
-                 if (retryCount < 2) {
-                     setTimeout(() => this.fetchTickets(retryCount + 1), 1000);
-                 } else {
-                     // On final failure, empty lists to avoid stale state if desired, or keep old data.
-                     // Choosing to keep old data to be less disruptive, but could clear.
-                     console.error("Final ticket fetch failure");
-                 }
+                await this._fetchTicketsPromise;
+            } finally {
+                this._fetchTicketsPromise = null;
             }
         },
 
         async fetchTemplates() {
-             if (!this.user?.workspace_id) return;
-             try {
-                 // REFACTORED: Native Fetch
-                 const data = await this.supabaseFetch('checklist_templates?select=*');
-                 if (data) {
-                     this.checklistTemplates = data; // Keep raw
-                     // Filter by type
-                     this.checklistTemplatesEntry = data.filter(t => !t.type || t.type === 'entry');
-                     this.checklistTemplatesFinal = data.filter(t => t.type === 'final');
+             if (this._fetchTemplatesPromise) return this._fetchTemplatesPromise;
+
+             this._fetchTemplatesPromise = (async () => {
+                 if (!this.user?.workspace_id) return;
+                 try {
+                     // REFACTORED: Native Fetch
+                     const data = await this.supabaseFetch('checklist_templates?select=*');
+                     if (data) {
+                         this.checklistTemplates = data; // Keep raw
+                         // Filter by type
+                         this.checklistTemplatesEntry = data.filter(t => !t.type || t.type === 'entry');
+                         this.checklistTemplatesFinal = data.filter(t => t.type === 'final');
+                     }
+                 } catch (e) {
+                     console.error("Fetch Templates Error:", e);
                  }
-             } catch (e) {
-                 console.error("Fetch Templates Error:", e);
-             }
+             })();
+
+             try { await this._fetchTemplatesPromise; } finally { this._fetchTemplatesPromise = null; }
         },
 
         // --- DEVICE MODELS ---
         async fetchDeviceModels() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`device_models?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) this.deviceModels = data;
-            } catch(e) {
-                console.error("Fetch Models Error:", e);
-            }
+            if (this._fetchDeviceModelsPromise) return this._fetchDeviceModelsPromise;
+
+            this._fetchDeviceModelsPromise = (async () => {
+                if (!this.user?.workspace_id) return;
+                try {
+                    const data = await this.supabaseFetch(`device_models?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
+                    if (data) this.deviceModels = data;
+                } catch(e) {
+                    console.error("Fetch Models Error:", e);
+                }
+            })();
+
+            try { await this._fetchDeviceModelsPromise; } finally { this._fetchDeviceModelsPromise = null; }
         },
         async fetchDefectOptions() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`defect_options?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) this.defectOptions = data;
-            } catch(e) {
-                console.error("Fetch Defect Options Error:", e);
-            }
+            if (this._fetchDefectOptionsPromise) return this._fetchDefectOptionsPromise;
+
+            this._fetchDefectOptionsPromise = (async () => {
+                if (!this.user?.workspace_id) return;
+                try {
+                    const data = await this.supabaseFetch(`defect_options?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
+                    if (data) this.defectOptions = data;
+                } catch(e) {
+                    console.error("Fetch Defect Options Error:", e);
+                }
+            })();
+
+            try { await this._fetchDefectOptionsPromise; } finally { this._fetchDefectOptionsPromise = null; }
         },
 
         async createDeviceModel(name) {
