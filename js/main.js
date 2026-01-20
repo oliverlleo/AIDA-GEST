@@ -102,6 +102,7 @@ function app() {
         metricsInFlight: null,
         metricsLastRun: 0,
         metricsThrottleTimer: null,
+        rt: {}, // Realtime Singleton Storage
 
         // Dashboard Data
         ops: {
@@ -408,57 +409,60 @@ function app() {
         },
 
         // --- CENTRALIZED DASHBOARD METRICS REQUEST ---
+        scheduleDashboardRefresh(reason) {
+            // Invalidate Cache Immediately to ensure next run fetches fresh data
+            this.metricsCache.timestamp = 0;
+
+            // Throttle Logic
+            const now = Date.now();
+            const throttleInterval = 1500;
+            const timeSinceLast = now - this.metricsLastRun;
+
+            if (timeSinceLast < throttleInterval) {
+                if (this.metricsThrottleTimer) {
+                    // Flush already pending
+                    return;
+                }
+                const delay = throttleInterval - timeSinceLast;
+                console.log(`[Dashboard] Throttled. Scheduling flush in ${delay}ms`);
+
+                this.metricsThrottleTimer = setTimeout(() => {
+                    this.metricsThrottleTimer = null;
+                    this.requestDashboardMetrics({ reason: 'throttle_flush', force: true });
+                }, delay);
+            } else {
+                // Execute immediately
+                this.requestDashboardMetrics({ reason: reason, force: true });
+            }
+        },
+
         async requestDashboardMetrics({ reason, force = false }) {
             if (this.view !== 'dashboard' || !this.user?.workspace_id) return;
 
             const now = Date.now();
             const f = this.adminDashboardFilters;
-            // Create a cache key based on Workspace + All Filters
-            // We use JSON.stringify to ensure uniqueness for object values
             const currentKey = `${this.user.workspace_id}|${f.dateStart}|${f.dateEnd}|${f.technician}|${f.status}|${f.defect}|${f.deviceModel}|${this.searchQuery}`;
 
-            console.log(`[Dashboard] Request: ${reason} (Force: ${force})`);
+            console.log(`[Dashboard] RPC call reason=${reason} (Force: ${force})`);
 
-            // 1. Throttling (Applied mostly for Realtime/Automatic calls)
-            // Force (User Interaction) bypasses throttle check but updates lastRun
-            const throttleInterval = 1500; // 1.5 seconds
-            if (!force && reason === 'realtime') {
-                const timeSinceLast = now - this.metricsLastRun;
-                if (timeSinceLast < throttleInterval) {
-                    // Optimization: If a flush is already scheduled, don't reschedule it.
-                    // This coalesces multiple rapid events into a single trailing call.
-                    if (this.metricsThrottleTimer) {
-                        console.log(`[Dashboard] Throttled. Flush already pending.`);
-                        return;
-                    }
-
-                    console.log(`[Dashboard] Throttled. Scheduling flush in ${throttleInterval - timeSinceLast}ms`);
-                    this.metricsThrottleTimer = setTimeout(() => {
-                        this.metricsThrottleTimer = null; // Clear timer reference
-                        this.requestDashboardMetrics({ reason: 'throttle_flush', force: true });
-                    }, throttleInterval - timeSinceLast);
-                    return;
-                }
-            }
-
-            // 2. Cache Check (Short Term Memory)
-            const cacheTTL = 10000; // 10 seconds
+            // Cache Check (Skipped if force=true, usually from interactions or throttled events)
+            const cacheTTL = 10000;
             if (!force && this.metricsCache.key === currentKey && (now - this.metricsCache.timestamp < cacheTTL)) {
                 console.log(`[Dashboard] Cache Hit (${((now - this.metricsCache.timestamp) / 1000).toFixed(1)}s old)`);
                 return;
             }
 
-            // 3. In-Flight Deduplication
+            // In-Flight Deduplication
             if (this.metricsInFlight) {
                 console.log(`[Dashboard] In-Flight. Reusing existing promise.`);
                 return this.metricsInFlight;
             }
 
-            // 4. Execution
+            // Execution
             this.metricsInFlight = (async () => {
                 try {
                     this.metricsLastRun = Date.now();
-                    console.log(`[Dashboard] Fetching RPC...`);
+                    // console.log(`[Dashboard] Fetching RPC...`);
                     await this.fetchDashboardMetricsRPC();
 
                     // Update Cache
@@ -693,42 +697,50 @@ function app() {
             if (!this.user?.workspace_id || !supabaseClient) return;
             console.log('[RT] init', this.user.workspace_id);
 
-            const existing = supabaseClient.getChannels().find(c => c.topic === 'tickets_channel');
-            if (existing && existing.state === 'joined') return;
-            if (existing) supabaseClient.removeChannel(existing);
+            // Helper to cleanup and create channels
+            const setupChannel = (name, table, event, handler) => {
+                // Cleanup existing if any (re-init scenario)
+                if (this.rt[name]) {
+                    console.log(`[RT] Removing existing channel: ${name}`);
+                    supabaseClient.removeChannel(this.rt[name]);
+                    delete this.rt[name];
+                }
 
-            supabaseClient
-                .channel('tickets_channel')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
-                (payload) => {
-                    console.log('[RT] event tickets', payload);
-                    this.handleRealtimeUpdate(payload);
-                })
-                .subscribe((status) => {
-                    console.log('[RT] status tickets_channel', status);
-                });
+                // Check global Supabase registry just in case (topic mismatch fix)
+                const existing = supabaseClient.getChannels().find(c => c.topic === `realtime:${name}` || c.topic === name);
+                if (existing) {
+                    console.log(`[RT] Found detached channel ${name}, removing.`);
+                    supabaseClient.removeChannel(existing);
+                }
 
-            supabaseClient
-                .channel('notifications_channel')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
-                payload => {
-                    console.log('[RT] event notifications', payload);
-                    this.fetchNotifications();
-                })
-                .subscribe((status) => {
-                    console.log('[RT] status notifications_channel', status);
-                });
+                // Create new
+                this.rt[name] = supabaseClient
+                    .channel(name)
+                    .on('postgres_changes', { event: event, schema: 'public', table: table }, handler)
+                    .subscribe((status) => {
+                        console.log(`[RT] status ${name}:`, status);
+                    });
+            };
 
-            supabaseClient
-                .channel('ticket_logs_channel')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
-                (payload) => {
-                    console.log('[RT] event ticket_logs', payload);
-                    this.fetchGlobalLogs();
-                })
-                .subscribe((status) => {
-                    console.log('[RT] status ticket_logs_channel', status);
-                });
+            // 1. Tickets
+            setupChannel('tickets_channel', 'tickets', '*', (payload) => {
+                this.handleRealtimeUpdate(payload);
+            });
+
+            // 2. Notifications
+            setupChannel('notifications_channel', 'notifications', 'INSERT', (payload) => {
+                console.log('[RT] event notifications', payload);
+                if (payload.new && (payload.new.recipient_user_id === this.user.id || (this.user.roles && this.user.roles.includes(payload.new.recipient_role)))) {
+                     this.fetchNotifications();
+                }
+            });
+
+            // 3. Global Logs
+            setupChannel('ticket_logs_channel', 'ticket_logs', 'INSERT', (payload) => {
+                console.log('[RT] event ticket_logs', payload);
+                // Basic check for workspace relevance if column exists, otherwise fetchGlobalLogs handles filter
+                this.fetchGlobalLogs();
+            });
         },
 
         // --- AUTH ---
@@ -1179,6 +1191,12 @@ function app() {
         // --- TICKET LOGIC ---
 
         handleRealtimeUpdate(payload) {
+            // Validate Workspace Match
+            const record = payload.new || payload.old;
+            if (record && record.workspace_id && record.workspace_id !== this.user.workspace_id) {
+                return; // Ignore events from other workspaces
+            }
+
             // 1. Immediate update for focused ticket
             if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
                 this.selectedTicket = { ...this.selectedTicket, ...payload.new };
@@ -1187,25 +1205,39 @@ function app() {
             // --- DASHBOARD REALTIME (Throttled & Relevant Only) ---
             if (this.view === 'dashboard') {
                 const relevantFields = [
-                    'status', 'delivered_at', 'repair_start_at', 'repair_end_at',
-                    'budget_sent_at', 'pickup_available_at', 'technician_id',
-                    'defect', 'device_model', 'created_at', 'deleted_at'
-                ];
+                    'status', 'delivered_at', 'deleted_at', 'created_at',
+                    'repair_start_at', 'repair_end_at', 'budget_sent_at',
+                    'pickup_available_at', 'technician_id', 'defect_reported', 'device_model'
+                ]; // defect_reported is the DB column name, mapped to defect in some UIs
 
                 let isRelevant = false;
+                let changes = [];
+
                 if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
                     isRelevant = true;
+                    changes.push(payload.eventType);
                 } else if (payload.eventType === 'UPDATE') {
                     const oldR = payload.old || {};
                     const newR = payload.new || {};
-                    isRelevant = relevantFields.some(field => oldR[field] !== newR[field]);
+
+                    // Supabase sends only changed fields in 'new' sometimes, but usually full object.
+                    // 'old' only contains ID unless Replica Identity is Full.
+                    // Assuming we might not have full 'old' context, we rely on what we have.
+                    // Ideally, checking available fields.
+
+                    changes = relevantFields.filter(field => {
+                        // Loose equality to handle null vs undefined or type diffs
+                        // If field is missing in oldR (common in Supabase default replica), we might over-trigger, which is safer.
+                        return newR[field] != oldR[field];
+                    });
+
+                    if (changes.length > 0) isRelevant = true;
                 }
 
+                console.log(`[RT] event tickets ${payload.eventType} relevant=${isRelevant} fields=[${changes.join(',')}]`);
+
                 if (isRelevant) {
-                    // Invalidate Cache Immediately
-                    this.metricsCache = { key: '', timestamp: 0 };
-                    // Trigger Request (Internal throttle will handle rate limiting)
-                    this.requestDashboardMetrics({ reason: 'realtime' });
+                    this.scheduleDashboardRefresh('realtime');
                 }
             }
 
