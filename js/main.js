@@ -691,6 +691,7 @@ function app() {
 
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
+            console.log('[RT] init', this.user.workspace_id);
 
             const existing = supabaseClient.getChannels().find(c => c.topic === 'tickets_channel');
             if (existing && existing.state === 'joined') return;
@@ -704,7 +705,7 @@ function app() {
                     this.handleRealtimeUpdate(payload);
                 })
                 .subscribe((status) => {
-                    if (status === 'SUBSCRIBED') console.log('[RT] subscribed tickets_channel');
+                    console.log('[RT] status tickets_channel', status);
                 });
 
             supabaseClient
@@ -715,7 +716,7 @@ function app() {
                     this.fetchNotifications();
                 })
                 .subscribe((status) => {
-                    if (status === 'SUBSCRIBED') console.log('[RT] subscribed notifications_channel');
+                    console.log('[RT] status notifications_channel', status);
                 });
 
             supabaseClient
@@ -726,7 +727,7 @@ function app() {
                     this.fetchGlobalLogs();
                 })
                 .subscribe((status) => {
-                    if (status === 'SUBSCRIBED') console.log('[RT] subscribed ticket_logs_channel');
+                    console.log('[RT] status ticket_logs_channel', status);
                 });
         },
 
