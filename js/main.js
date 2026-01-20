@@ -384,7 +384,8 @@ function app() {
                     // Dashboard/History mode
                     this.fetchTickets();
                     this.fetchGlobalLogs();
-                    this.calculateMetrics();
+                    // Use centralized request (ops are updated by fetchTickets)
+                    this.requestDashboardMetrics({ reason: 'watcher_view' });
                 } else {
                     // Other views (e.g. tech_orders)
                     this.clearFilters();
@@ -398,7 +399,7 @@ function app() {
 
             this.$watch('adminDashboardFilters', () => {
                 // If filters change, reload dashboard metrics AND list
-                this.calculateMetrics();
+                this.requestDashboardMetrics({ reason: 'watcher_filters' });
                 this.fetchTickets();
                 if (this.adminDashboardFilters.viewType === 'chart') {
                     setTimeout(() => this.renderCharts(), 50);
@@ -469,13 +470,10 @@ function app() {
             return this.metricsInFlight;
         },
 
+        // Wrapper for backward compatibility (e.g. HTML bindings)
         async calculateMetrics() {
             this.ops = this.getDashboardOps();
-            // User interaction or View change usually implies we want fresh data,
-            // but requestDashboardMetrics handles cache check.
-            // We pass force: false to allow cache usage if filters haven't changed in <5s,
-            // UNLESS it's a filter change which naturally changes the key.
-            await this.requestDashboardMetrics({ reason: 'calculateMetrics', force: false });
+            await this.requestDashboardMetrics({ reason: 'calculateMetrics' });
         },
 
         async fetchDashboardMetricsRPC() {
@@ -509,7 +507,7 @@ function app() {
 
         toggleAdminView() {
             this.adminDashboardFilters.viewType = this.adminDashboardFilters.viewType === 'data' ? 'chart' : 'data';
-            this.calculateMetrics();
+            this.requestDashboardMetrics({ reason: 'view_toggle' });
             if (this.adminDashboardFilters.viewType === 'chart') {
                 setTimeout(() => this.renderCharts(), 50);
             }
@@ -1173,7 +1171,7 @@ function app() {
                 const relevantFields = [
                     'status', 'delivered_at', 'repair_start_at', 'repair_end_at',
                     'budget_sent_at', 'pickup_available_at', 'technician_id',
-                    'defect_reported', 'device_model', 'created_at', 'deleted_at'
+                    'defect', 'device_model', 'created_at', 'deleted_at'
                 ];
 
                 let isRelevant = false;
@@ -1236,7 +1234,7 @@ function app() {
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
                 this.fetchTickets();
-                if (this.view === 'dashboard') this.calculateMetrics(); // Update charts too
+                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'search_input' }); // Update charts too
             }, 500); // 500ms debounce
         },
 
