@@ -45,7 +45,7 @@
         .kanban-col:hover::-webkit-scrollbar-thumb { background: #A0AEC0; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-900 antialiased" x-data="app()" x-effect="calculateMetrics()">
+<body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
 
     <!-- Loading Overlay -->
     <div x-show="loading" class="fixed inset-0 bg-white z-[99] flex items-center justify-center bg-opacity-90 transition-opacity" x-transition.opacity>
@@ -2211,7 +2211,7 @@
                                  <div class="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
                                      <i class="fa-solid fa-filter text-gray-400 text-xs"></i>
                                  <template x-if="hasRole('admin')">
-                                     <select x-model="selectedTechFilter" @change="fetchTickets()" class="text-sm font-bold text-gray-700 bg-transparent border-none focus:ring-0 cursor-pointer">
+                                     <select x-model="adminDashboardFilters.technician" class="text-sm font-bold text-gray-700 bg-transparent border-none focus:ring-0 cursor-pointer">
                                          <option value="all">Todos os Técnicos</option>
                                          <template x-for="tech in getTechnicians()" :key="tech.id">
                                              <option :value="tech.id" x-text="tech.name"></option>

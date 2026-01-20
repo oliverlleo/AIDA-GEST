@@ -153,6 +153,15 @@ function app() {
              internalStats: {}
         },
 
+        // --- DASHBOARD OPTIMIZATION STATE ---
+        dashboardMetricsPromise: null,
+        lastDashboardParams: null,
+        lastDashboardCallTime: 0,
+        dashboardThrottleTimer: null,
+        pendingRealtimeRefresh: false,
+        loadedToken: null,
+        initInFlight: false,
+
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
         adminForm: { email: '', password: '' },
@@ -220,7 +229,6 @@ function app() {
         calendarView: 'week',
         currentCalendarDate: new Date(),
         showAllCalendarTickets: false,
-        selectedTechFilter: 'all',
 
         // Kanban State
         kanbanScrollWidth: 0,
@@ -303,6 +311,9 @@ function app() {
         },
 
         async init() {
+            if (this.initInFlight) return;
+            this.initInFlight = true;
+
             console.log("App initializing...");
             this.loading = true;
 
@@ -345,11 +356,13 @@ function app() {
                     await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
+                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'init' });
                 }
             } catch (err) {
                 console.error("Init Error:", err);
             } finally {
                 this.loading = false;
+                this.initInFlight = false;
             }
 
             supabaseClient.auth.onAuthStateChange(async (_event, session) => {
@@ -392,23 +405,41 @@ function app() {
 
             this.$watch('adminDashboardFilters', () => {
                 // If filters change, reload dashboard metrics AND list
-                this.calculateMetrics();
+                this.requestDashboardMetrics({ reason: 'filters' });
                 this.fetchTickets();
-                if (this.adminDashboardFilters.viewType === 'chart') {
-                    setTimeout(() => this.renderCharts(), 50);
-                }
             });
         },
 
-        async calculateMetrics() {
-            // Updated to use RPC
-            this.ops = this.getDashboardOps();
-            await this.fetchDashboardMetricsRPC();
-        },
-
-        async fetchDashboardMetricsRPC() {
+        // --- OPTIMIZED DASHBOARD REQUEST ---
+        async requestDashboardMetrics({ reason = 'init' } = {}) {
             if (!this.user?.workspace_id) return;
 
+            const now = Date.now();
+
+            // 1. Throttle for Realtime (1500ms)
+            if (reason === 'realtime') {
+                const timeSinceLast = now - this.lastDashboardCallTime;
+                const THROTTLE_MS = 1500;
+
+                if (timeSinceLast < THROTTLE_MS) {
+                    if (this.dashboardThrottleTimer) return; // Already scheduled
+                    const delay = THROTTLE_MS - timeSinceLast;
+                    console.log(`[Dashboard][Realtime] throttled (wait ${delay} ms)`);
+                    this.dashboardThrottleTimer = setTimeout(() => {
+                        this.dashboardThrottleTimer = null;
+                        this.requestDashboardMetrics({ reason: 'realtime' });
+                    }, delay);
+                    return;
+                }
+            }
+
+            // Clear any pending throttle if we are executing now
+            if (this.dashboardThrottleTimer) {
+                clearTimeout(this.dashboardThrottleTimer);
+                this.dashboardThrottleTimer = null;
+            }
+
+            // 2. Prepare Params
             const f = this.adminDashboardFilters;
             const params = {
                 p_date_start: f.dateStart || null,
@@ -419,25 +450,92 @@ function app() {
                 p_device_model: f.deviceModel === 'all' ? null : f.deviceModel,
                 p_search: this.searchQuery || null
             };
+            // Generate key including workspace_id to ensure uniqueness across users
+            const paramString = JSON.stringify({ ...params, ws: this.user.workspace_id });
 
-            try {
-                const data = await this.supabaseFetch('rpc/get_dashboard_kpis', 'POST', params);
-                if (data) {
-                    // Merge RPC data into metrics, preserving structure if needed
-                    this.metrics = { ...this.metrics, ...data };
-                    // RPC doesn't return filteredTickets list, so we keep it from the fetchTickets list if needed,
-                    // or let fetchTickets handle the list display separately.
-                    // For the "Charts", data is now populated.
+            // 3. Deduplication (In-flight)
+            if (this.dashboardMetricsPromise) {
+                // If a realtime request comes in while we are loading, mark it pending so we refresh AGAIN after.
+                if (reason === 'realtime') {
+                    console.log('[Dashboard][Realtime] joining in-flight (marking pending refresh)');
+                    this.pendingRealtimeRefresh = true;
+                } else {
+                    console.log(`[Dashboard] Waiting for in-flight request (${reason})`);
                 }
-            } catch (e) {
-                console.error("Dashboard RPC Error:", e);
-                this.notify("Erro ao carregar métricas.", "error");
+
+                return this.dashboardMetricsPromise;
             }
+
+            // 4. Cache / Skip Duplicate calls
+            // - If reason is realtime: ALWAYS fetch (unless throttled above)
+            // - If not realtime: Check params match AND strict cache TTL (e.g. 5s) to avoid unnecessary re-fetches
+            const CACHE_TTL = 5000;
+            const isCacheValid = (now - this.lastDashboardCallTime) < CACHE_TTL;
+
+            if (reason !== 'realtime' && this.lastDashboardParams === paramString && isCacheValid) {
+                console.log(`[Dashboard] skip duplicate/cached reason=${reason}`);
+                return;
+            }
+
+            // 5. Execute
+            console.log(`[Dashboard] RPC call reason=${reason} key=${paramString.slice(0, 20)}...`);
+
+            this.dashboardMetricsPromise = (async () => {
+                try {
+                    // Update OPS (local calculation)
+                    this.ops = this.getDashboardOps();
+
+                    const data = await this.supabaseFetch('rpc/get_dashboard_kpis', 'POST', params);
+                    if (data) {
+                        this.metrics = { ...this.metrics, ...data };
+                        this.lastDashboardParams = paramString;
+                        this.lastDashboardCallTime = Date.now();
+
+                        // Refresh Charts if visible
+                        if (this.adminDashboardFilters.viewType === 'chart') {
+                            setTimeout(() => this.renderCharts(), 50);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Dashboard RPC Error:", e);
+                    this.notify("Erro ao carregar métricas.", "error");
+                } finally {
+                    this.dashboardMetricsPromise = null;
+
+                    // If a realtime update came in while we were busy, trigger a new fetch now
+                    if (this.pendingRealtimeRefresh) {
+                        this.pendingRealtimeRefresh = false;
+                        // Trigger immediate check (will be subject to throttle logic inside if applicable)
+                        // If reason is 'realtime', it respects throttling.
+                        // We assume lastDashboardCallTime was JUST updated above (if success).
+                        // So a direct call might be throttled.
+                        // However, if we just updated, maybe we don't *need* to fetch again?
+                        // Actually, if an event happened *during* the fetch, the data we just got *might* be stale.
+                        // But the throttle will block it anyway if < 1.5s.
+                        // So this effectively queues it for "in 1.5s".
+                        this.requestDashboardMetrics({ reason: 'realtime' });
+                    }
+                }
+            })();
+
+            return this.dashboardMetricsPromise;
+        },
+
+        // Explicitly invalidate cache to force a fresh fetch on next request
+        invalidateDashboardCache(reason) {
+            this.lastDashboardCallTime = 0;
+            this.lastDashboardParams = null;
+            console.log('[Dashboard] cache invalidated reason=' + reason);
+        },
+
+        // Backward compatibility / Alias if needed
+        async calculateMetrics() {
+            await this.requestDashboardMetrics({ reason: 'legacy_call' });
         },
 
         toggleAdminView() {
             this.adminDashboardFilters.viewType = this.adminDashboardFilters.viewType === 'data' ? 'chart' : 'data';
-            this.calculateMetrics();
+            this.requestDashboardMetrics({ reason: 'view_toggle' });
             if (this.adminDashboardFilters.viewType === 'chart') {
                 setTimeout(() => this.renderCharts(), 50);
             }
@@ -616,31 +714,43 @@ function app() {
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
 
-            const existing = supabaseClient.getChannels().find(c => c.topic === 'tickets_channel');
-            if (existing && existing.state === 'joined') return;
-            if (existing) supabaseClient.removeChannel(existing);
+            const channels = [
+                {
+                    topic: 'tickets_channel',
+                    setup: (c) => c.on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, (payload) => this.handleRealtimeUpdate(payload))
+                },
+                {
+                    topic: 'notifications_channel',
+                    setup: (c) => c.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => this.fetchNotifications())
+                },
+                {
+                    topic: 'ticket_logs_channel',
+                    setup: (c) => c.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' }, () => this.fetchGlobalLogs())
+                }
+            ];
 
-            supabaseClient
-                .channel('tickets_channel')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
-                (payload) => this.handleRealtimeUpdate(payload))
-                .subscribe();
+            channels.forEach(({ topic, setup }) => {
+                const existing = supabaseClient.getChannels().find(c => c.topic === topic);
 
-            supabaseClient
-                .channel('notifications_channel')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
-                payload => {
-                    this.fetchNotifications();
-                })
-                .subscribe();
+                if (existing) {
+                    if (['joined', 'joining', 'subscribed'].includes(existing.state)) {
+                        console.log(`[RT] channel reused (${topic}) state=${existing.state}`);
+                        return;
+                    } else {
+                        console.log(`[RT] channel recreating (${topic}) was=${existing.state}`);
+                        supabaseClient.removeChannel(existing);
+                    }
+                }
 
-            supabaseClient
-                .channel('ticket_logs_channel')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
-                () => {
-                    this.fetchGlobalLogs();
-                })
-                .subscribe();
+                const channel = supabaseClient.channel(topic);
+                setup(channel).subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log(`[RT] subscribed (${topic})`);
+                    } else if (status === 'CHANNEL_ERROR') {
+                        console.error(`[RT] error (${topic})`);
+                    }
+                });
+            });
         },
 
         // --- AUTH ---
@@ -739,6 +849,7 @@ function app() {
                     }
 
                     this.setupRealtime();
+                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'login_employee' });
                 } else {
                      this.notify('Credenciais inválidas.', 'error');
                 }
@@ -765,6 +876,14 @@ function app() {
         async loadAdminData() {
             if (!this.session) return;
             const user = this.session.user;
+            const key = user.id;
+
+            if (this.loadedToken === key) {
+                console.log('[Auth] Skipping loadAdminData - already loaded for', key);
+                return;
+            }
+
+            console.log('[Auth] loadAdminData start...', key);
 
             try {
                 // Modified select to include tracker_config
@@ -813,6 +932,9 @@ function app() {
                     await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
+                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'load_admin' });
+
+                    this.loadedToken = key;
                 }
             } catch (err) {
                 console.error("Load Admin Error:", err);
@@ -1084,21 +1206,72 @@ function app() {
 
         // --- TICKET LOGIC ---
 
+        isRelevantUpdate(payload) {
+            if (!payload) return false;
+            const { eventType, new: newRec, old: oldRec } = payload;
+
+            // 1. Workspace Security Check
+            if (newRec && newRec.workspace_id && this.user && this.user.workspace_id) {
+                if (newRec.workspace_id !== this.user.workspace_id) {
+                    // console.log('[Dashboard][Realtime] ignored (wrong workspace)');
+                    return false;
+                }
+            }
+
+            // 2. Event Type Check
+            if (eventType === 'INSERT' || eventType === 'DELETE') {
+                return true;
+            }
+
+            // 3. Update Relevance Check
+            if (eventType === 'UPDATE') {
+                const fields = [
+                    'status',
+                    'delivered_at',
+                    'repair_start_at',
+                    'repair_end_at',
+                    'budget_sent_at',
+                    'pickup_available_at',
+                    'technician_id',
+                    'defect_reported', // Maps to 'defect' concept
+                    'device_model',
+                    'created_at',
+                    'deleted_at'
+                ];
+
+                // Check value changes strictly
+                for (const f of fields) {
+                    const oldVal = oldRec ? oldRec[f] : undefined;
+                    const newVal = newRec ? newRec[f] : undefined;
+                    if (newVal != oldVal) return true;
+                }
+            }
+
+            console.log('[Dashboard][Realtime] ignored (not relevant)');
+            return false;
+        },
+
         handleRealtimeUpdate(payload) {
+            console.log('[RT] event', payload);
+
             // 1. Immediate update for focused ticket
             if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
                 this.selectedTicket = { ...this.selectedTicket, ...payload.new };
             }
 
-            // 2. Debounced Refresh for Lists & Metrics
+            // 2. Optimized Dashboard Refresh (Throttle + Relevance Check)
+            if (this.view === 'dashboard') {
+                if (this.isRelevantUpdate(payload)) {
+                    console.log('[Dashboard][Realtime] relevant event -> scheduling refresh');
+                    this.invalidateDashboardCache('realtime_event');
+                    this.requestDashboardMetrics({ reason: 'realtime' });
+                }
+            }
+
+            // 3. Debounced List Refresh (Keep debounce for LIST only to avoid flicker)
             if (this.realtimeDebounceTimer) clearTimeout(this.realtimeDebounceTimer);
 
             this.realtimeDebounceTimer = setTimeout(async () => {
-                // Dashboard Metrics Refresh
-                if (this.view === 'dashboard') {
-                    this.calculateMetrics();
-                }
-
                 // List Refresh Strategy
                 if (payload.eventType === 'INSERT') {
                     if (this.ticketPagination.page === 0) {
@@ -1107,18 +1280,11 @@ function app() {
                         this.notify("Novos chamados disponíveis.", "info");
                     }
                 } else if (payload.eventType === 'UPDATE') {
-                    // Optimistic Local Update first (if possible) could be done here,
-                    // but simple re-fetch of current page is safer for consistency.
-                    // If we are on Page 0, re-fetch.
                     if (this.ticketPagination.page === 0) {
-                        // Optimistic update for simple status changes to avoid flicker?
-                        // For now, fetchTickets preserves consistency.
                         await this.fetchTickets();
                     } else {
-                        // Just update the item in array if exists
                         const idx = this.tickets.findIndex(t => t.id === payload.new.id);
                         if (idx > -1) {
-                            // If deleted, remove
                             if (payload.new.deleted_at) {
                                 this.tickets.splice(idx, 1);
                             } else {
@@ -1127,7 +1293,7 @@ function app() {
                         }
                     }
                 }
-            }, 2000); // 2 second debounce to batch rapid updates
+            }, 2000);
         },
 
         handleSearchInput() {
@@ -1135,7 +1301,7 @@ function app() {
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
                 this.fetchTickets();
-                if (this.view === 'dashboard') this.calculateMetrics(); // Update charts too
+                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'search' });
             }, 500); // 500ms debounce
         },
 
@@ -1177,7 +1343,12 @@ function app() {
                     endpoint += `&limit=200`; // Hard limit for DOM safety
                 } else if (this.view === 'tech_orders') {
                     // Tech View
-                    if (this.user?.id) {
+                    if (this.hasRole('admin')) {
+                        const techId = this.adminDashboardFilters.technician;
+                        if (techId && techId !== 'all') {
+                            endpoint += `&technician_id=eq.${techId}`;
+                        }
+                    } else if (this.user?.id) {
                          endpoint += `&or=(technician_id.eq.${this.user.id},technician_id.is.null)`;
                     }
                     endpoint += `&status=in.(Analise Tecnica,Andamento Reparo)`;
@@ -2536,7 +2707,7 @@ function app() {
         getCalendarTickets() {
             let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
 
-            let effectiveFilter = this.selectedTechFilter;
+            let effectiveFilter = this.adminDashboardFilters.technician;
             if (!this.hasRole('admin') && this.hasRole('tecnico')) {
                 effectiveFilter = this.user.id;
             }
@@ -2694,12 +2865,12 @@ function app() {
             console.log("Initializing Tech Filter. User:", this.user);
 
             if (this.hasRole('admin')) {
-                this.selectedTechFilter = 'all';
+                this.adminDashboardFilters.technician = 'all';
             } else if (this.hasRole('tecnico') && this.user && this.user.id) {
-                this.selectedTechFilter = this.user.id;
-                console.log("Filter set to self (Tech):", this.selectedTechFilter);
+                this.adminDashboardFilters.technician = this.user.id;
+                console.log("Filter set to self (Tech):", this.adminDashboardFilters.technician);
             } else {
-                this.selectedTechFilter = 'all';
+                this.adminDashboardFilters.technician = 'all';
             }
         },
 
