@@ -163,6 +163,19 @@
                         </div>
                     </template>
 
+                    <!-- Tester Section -->
+                    <template x-if="(hasRole('admin') || hasRole('tester')) && trackerConfig.test_flow === 'tester'">
+                        <div class="mb-6 md:px-4">
+                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 hidden md:block">Qualidade</p>
+                            <a href="#" @click.prevent="view = 'tester_bench'"
+                               :class="view === 'tester_bench' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group">
+                                <i class="fa-solid fa-vial w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'tester_bench' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Bancada de Teste</span>
+                            </a>
+                        </div>
+                    </template>
+
                     <!-- Admin Section (Renamed to Configuração) -->
                     <template x-if="hasRole('admin')">
                         <div class="mb-6 md:px-4">
@@ -520,6 +533,54 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Test Workflow -->
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-vial mr-2 text-brand-500"></i> Fluxo de Testes</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <p class="text-xs text-gray-500 mb-4">Defina como a etapa de "Teste Final" será gerenciada na sua operação.</p>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <!-- Option 1: Kanban (Default) -->
+                                    <div @click="trackerConfig.test_flow = 'kanban'"
+                                         class="cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center text-center transition-all hover:border-brand-300"
+                                         :class="trackerConfig.test_flow === 'kanban' ? 'border-brand-500 bg-white shadow-md' : 'border-gray-200 bg-transparent opacity-60 hover:opacity-100'">
+                                        <div class="mb-2 text-2xl" :class="trackerConfig.test_flow === 'kanban' ? 'text-brand-500' : 'text-gray-400'"><i class="fa-solid fa-table-columns"></i></div>
+                                        <h4 class="font-bold text-sm text-gray-800">Padrão (Quadro)</h4>
+                                        <p class="text-[10px] text-gray-500 mt-1">Coluna "Teste Final" permanece no quadro geral de chamados.</p>
+                                    </div>
+
+                                    <!-- Option 2: Technician -->
+                                    <div @click="trackerConfig.test_flow = 'technician'"
+                                         class="cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center text-center transition-all hover:border-brand-300"
+                                         :class="trackerConfig.test_flow === 'technician' ? 'border-brand-500 bg-white shadow-md' : 'border-gray-200 bg-transparent opacity-60 hover:opacity-100'">
+                                        <div class="mb-2 text-2xl" :class="trackerConfig.test_flow === 'technician' ? 'text-brand-500' : 'text-gray-400'"><i class="fa-solid fa-microchip"></i></div>
+                                        <h4 class="font-bold text-sm text-gray-800">Técnico (Bancada)</h4>
+                                        <p class="text-[10px] text-gray-500 mt-1">O próprio técnico realiza o teste na sua tela "Minha Bancada".</p>
+                                    </div>
+
+                                    <!-- Option 3: Tester (Quality Team) -->
+                                    <div @click="trackerConfig.test_flow = 'tester'"
+                                         class="cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center text-center transition-all hover:border-brand-300"
+                                         :class="trackerConfig.test_flow === 'tester' ? 'border-brand-500 bg-white shadow-md' : 'border-gray-200 bg-transparent opacity-60 hover:opacity-100'">
+                                        <div class="mb-2 text-2xl" :class="trackerConfig.test_flow === 'tester' ? 'text-brand-500' : 'text-gray-400'"><i class="fa-solid fa-users-viewfinder"></i></div>
+                                        <h4 class="font-bold text-sm text-gray-800">Equipe de Qualidade</h4>
+                                        <p class="text-[10px] text-gray-500 mt-1">Aba exclusiva para funcionários com cargo "Tester".</p>
+                                    </div>
+                                </div>
+
+                                <!-- Warning for Tester Mode -->
+                                <div x-show="trackerConfig.test_flow === 'tester'" class="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-3 flex items-start" x-transition>
+                                    <i class="fa-solid fa-triangle-exclamation text-yellow-500 mt-0.5 mr-2"></i>
+                                    <div>
+                                        <p class="text-xs font-bold text-yellow-800">Atenção!</p>
+                                        <p class="text-xs text-yellow-700">Ao ativar esta opção, lembre-se de ir em <b>Configuração > Funcionários</b> e atribuir o cargo <b>"Tester"</b> aos responsáveis.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
 
                     </div>
                 </div>
@@ -1853,7 +1914,7 @@
 
                             <!-- Loop Columns -->
                             <template x-for="status in STATUS_COLUMNS" :key="status">
-                                <div x-show="(showFinalized || status !== 'Finalizado') && (status !== 'Terceirizado' || trackerConfig.enable_outsourced)"
+                                <div x-show="(showFinalized || status !== 'Finalizado') && (status !== 'Terceirizado' || trackerConfig.enable_outsourced) && (status !== 'Teste Final' || trackerConfig.test_flow === 'kanban')"
                                      class="w-80 flex flex-col bg-gray-100 rounded-lg h-full border border-gray-200"
                                      x-data="{ filter: initColumnFilter(status) }">
 
@@ -2212,7 +2273,7 @@
                     </div>
 
                     <!-- Split Columns -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow overflow-hidden">
+                    <div class="grid grid-cols-1 gap-6 flex-grow overflow-hidden" :class="trackerConfig.test_flow === 'technician' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'">
 
                         <!-- Col 1: Analise Tecnica -->
                         <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
@@ -2369,6 +2430,102 @@
                             </div>
                         </div>
 
+                        <!-- Col 3: Teste Final (Conditional) -->
+                        <div x-show="trackerConfig.test_flow === 'technician'" class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
+                             <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
+                                <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Teste Final</h3>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Teste Final').length"></span>
+                            </div>
+                            <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
+                                <template x-for="ticket in techTickets.filter(t => t.status === 'Teste Final' && matchesSearch(t))" :key="ticket.id">
+                                     <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
+                                          @click="viewTicketDetails(ticket, 'tech')"
+                                          :class="[
+                                              ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
+                                              (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
+                                          ]">
+
+                                        <!-- Priority Requested Badge -->
+                                        <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
+                                            <i class="fa-solid fa-bell fa-shake mr-1"></i> PRIORIDADE SOLICITADA
+                                        </div>
+
+                                        <div class="flex justify-between items-start mb-2 mt-1">
+                                            <span class="font-mono text-gray-500 text-xs" x-text="'OS #' + ticket.os_number"></span>
+                                            <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
+                                        </div>
+                                        <h4 class="font-bold text-gray-900 text-sm mb-1 leading-tight" x-text="ticket.device_model"></h4>
+                                        <p class="text-gray-500 text-xs mb-2 line-clamp-2" x-text="ticket.defect_reported"></p>
+
+                                         <div class="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
+                                            <span class="text-xs text-gray-400" x-text="formatDate(ticket.created_at)"></span>
+                                            <span class="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded" x-text="ticket.client_name"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="techTickets.filter(t => t.status === 'Teste Final').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
+                                    Nenhum teste pendente.
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- VIEW: TESTER BENCH -->
+                <div x-show="view === 'tester_bench'" class="flex-grow p-6 overflow-y-auto flex flex-col" x-cloak>
+                    <header class="mb-6 flex justify-between items-center">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-800"><i class="fa-solid fa-vial mr-2 text-brand-500"></i> Bancada de Teste</h1>
+                            <p class="text-gray-500">Gestão de Qualidade e Testes Finais.</p>
+                        </div>
+                    </header>
+
+                    <div class="flex-grow bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex flex-col max-w-2xl mx-auto w-full">
+                         <div class="p-4 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
+                            <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Aparelhos em Teste</h3>
+                            <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="tickets.filter(t => t.status === 'Teste Final').length"></span>
+                        </div>
+                        <div class="p-6 overflow-y-auto space-y-4 flex-grow">
+                            <template x-for="ticket in tickets.filter(t => t.status === 'Teste Final')" :key="ticket.id">
+                                 <!-- Reusing Card Design but Wider -->
+                                 <div class="bg-white rounded-xl shadow border-t-4 border-purple-500 p-6 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
+                                      @click="viewTicketDetails(ticket, 'tester')">
+
+                                    <div class="flex justify-between items-start mb-4">
+                                        <div>
+                                            <span class="font-mono text-gray-500 text-xs" x-text="'OS #' + ticket.os_number"></span>
+                                            <h4 class="font-bold text-gray-900 text-lg leading-tight mt-1" x-text="ticket.device_model"></h4>
+                                            <p class="text-gray-600 text-sm" x-text="ticket.client_name"></p>
+                                        </div>
+                                        <span class="text-xs font-bold px-3 py-1 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4 text-xs text-gray-600 bg-gray-50 p-3 rounded border border-gray-100">
+                                        <div>
+                                            <span class="font-bold block text-gray-400 uppercase text-[10px]">Técnico</span>
+                                            <span x-text="getEmployeeName(ticket.technician_id)"></span>
+                                        </div>
+                                        <div>
+                                            <span class="font-bold block text-gray-400 uppercase text-[10px]">Defeito Relatado</span>
+                                            <span class="truncate block" x-text="ticket.defect_reported"></span>
+                                        </div>
+                                        <div>
+                                            <span class="font-bold block text-gray-400 uppercase text-[10px]">Entrada em Teste</span>
+                                            <span x-text="ticket.test_start_at ? new Date(ticket.test_start_at).toLocaleString() : 'Aguardando Início'"></span>
+                                        </div>
+                                        <div>
+                                            <span class="font-bold block text-gray-400 uppercase text-[10px]">Prazo Entrega</span>
+                                            <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleDateString() : '-'" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600 font-bold' : ''"></span>
+                                        </div>
+                                    </div>
+                                 </div>
+                            </template>
+                            <div x-show="tickets.filter(t => t.status === 'Teste Final').length === 0" class="text-center py-20 text-gray-400 italic">
+                                <i class="fa-solid fa-check-circle text-4xl mb-4 text-gray-200"></i>
+                                <p>Nenhum aparelho aguardando teste.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2733,6 +2890,10 @@
                                     <input type="checkbox" value="admin" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 h-4 w-4">
                                     <span class="text-sm">Admin</span>
                                 </label>
+                                <label x-show="trackerConfig.test_flow === 'tester'" class="flex items-center space-x-2">
+                                    <input type="checkbox" value="tester" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 h-4 w-4">
+                                    <span class="text-sm">Tester</span>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -2791,6 +2952,10 @@
                                 <label class="flex items-center space-x-2">
                                     <input type="checkbox" value="admin" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 h-4 w-4">
                                     <span class="text-sm">Admin</span>
+                                </label>
+                                <label x-show="trackerConfig.test_flow === 'tester'" class="flex items-center space-x-2">
+                                    <input type="checkbox" value="tester" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 h-4 w-4">
+                                    <span class="text-sm">Tester</span>
                                 </label>
                             </div>
                         </div>

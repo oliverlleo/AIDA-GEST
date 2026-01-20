@@ -51,6 +51,7 @@ function app() {
             logo_size: 64, // Default size in px
             enable_logistics: false,
             enable_outsourced: false, // Outsourced Workflow Toggle
+            test_flow: 'kanban', // 'kanban', 'technician', 'tester'
             custom_labels: {}, // Custom overrides for stage names
             colors: {
                 background: '#FFF7ED', // orange-50
@@ -867,6 +868,9 @@ function app() {
                 } else {
                     this.notify("Configurações de Acompanhamento salvas!");
                 }
+
+                // Refresh data to apply new flow rules (e.g. Tech Bench tickets)
+                await this.fetchTickets();
             } catch (e) {
                 this.notify("Erro ao salvar: " + e.message, "error");
             } finally {
