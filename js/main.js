@@ -240,7 +240,9 @@ function app() {
         // Search
         searchQuery: '', // Global search
         activeQuickFilter: null,
-        showFinalized: true,
+        showFinalized: false,
+        finalizedTickets: [],
+        finalizedPagination: { page: 0, limit: 50, hasMore: true, isLoading: false },
 
         // Time
         currentTime: new Date(),
@@ -1312,6 +1314,79 @@ function app() {
         async loadMoreTickets() {
             if (!this.ticketPagination.hasMore || this.ticketPagination.isLoading) return;
             this.fetchTickets(true);
+        },
+
+        async toggleShowFinalized() {
+            this.showFinalized = !this.showFinalized;
+
+            // "Ao alternar entre Mostrar e Ocultar finalizadas: A lista deve ser recarregada do início"
+            // Reload active tickets
+            await this.fetchTickets();
+
+            // Handle Finalized
+            if (this.showFinalized) {
+                // Reset and fetch
+                this.finalizedPagination = { page: 0, limit: 50, hasMore: true, isLoading: false };
+                this.finalizedTickets = [];
+                await this.fetchFinalizedTickets();
+            } else {
+                // Clear to free memory
+                this.finalizedTickets = [];
+                this.finalizedPagination = { page: 0, limit: 50, hasMore: true, isLoading: false };
+            }
+        },
+
+        async loadMoreFinalized() {
+            if (!this.finalizedPagination.hasMore || this.finalizedPagination.isLoading) return;
+            await this.fetchFinalizedTickets(true);
+        },
+
+        async fetchFinalizedTickets(loadMore = false) {
+            if (!this.user?.workspace_id) return;
+
+            this.finalizedPagination.isLoading = true;
+
+            if (loadMore) {
+                this.finalizedPagination.page++;
+            } else {
+                this.finalizedPagination.page = 0;
+                this.finalizedPagination.hasMore = true;
+                if (!loadMore) this.finalizedTickets = [];
+            }
+
+            try {
+                let endpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null`;
+                // Finalized Logic: Delivered or Status 'Finalizado'
+                // Usually finalized means delivered_at is not null OR status is 'Finalizado'
+                // Existing kanban view active logic uses delivered_at=is.null
+                // So finalized logic should be delivered_at=not.is.null
+                endpoint += `&delivered_at=not.is.null`;
+                endpoint += `&order=delivered_at.desc`; // Most recent first
+
+                // Pagination
+                const limit = this.finalizedPagination.limit;
+                const offset = this.finalizedPagination.page * limit;
+                endpoint += `&limit=${limit}&offset=${offset}`;
+
+                const data = await this.supabaseFetch(endpoint);
+
+                if (data) {
+                    if (loadMore) {
+                        this.finalizedTickets = [...this.finalizedTickets, ...data];
+                    } else {
+                        this.finalizedTickets = data;
+                    }
+
+                    if (data.length < this.finalizedPagination.limit) {
+                        this.finalizedPagination.hasMore = false;
+                    }
+                }
+            } catch (err) {
+                console.error("Fetch Finalized Error:", err);
+                this.notify("Erro ao buscar finalizadas.", "error");
+            } finally {
+                this.finalizedPagination.isLoading = false;
+            }
         },
 
         async fetchTickets(loadMore = false) {
@@ -2982,9 +3057,20 @@ function app() {
         },
 
         getSortedAndFilteredTickets(status) {
-            // NOTE: matchesSearch is now mostly handled by server-side query if search is global.
-            // But if we have local results, we still filter them for quick consistency.
-            let list = this.tickets.filter(t => t.status === status);
+            let list;
+
+            // Logic for Finalized Column separation
+            if (this.searchQuery) {
+                // When searching, all results are in this.tickets (fetched with search param)
+                list = this.tickets.filter(t => t.status === status);
+            } else {
+                // Standard View: Active in this.tickets, Finalized in this.finalizedTickets
+                if (status === 'Finalizado') {
+                    list = this.finalizedTickets;
+                } else {
+                    list = this.tickets.filter(t => t.status === status);
+                }
+            }
 
             // Quick Filters (Local)
             if (this.activeQuickFilter) {
