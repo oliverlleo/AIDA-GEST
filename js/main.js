@@ -699,24 +699,35 @@ function app() {
             supabaseClient
                 .channel('tickets_channel')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
-                (payload) => this.handleRealtimeUpdate(payload))
-                .subscribe();
+                (payload) => {
+                    console.log('[RT] event tickets', payload);
+                    this.handleRealtimeUpdate(payload);
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') console.log('[RT] subscribed tickets_channel');
+                });
 
             supabaseClient
                 .channel('notifications_channel')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
                 payload => {
+                    console.log('[RT] event notifications', payload);
                     this.fetchNotifications();
                 })
-                .subscribe();
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') console.log('[RT] subscribed notifications_channel');
+                });
 
             supabaseClient
                 .channel('ticket_logs_channel')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
-                () => {
+                (payload) => {
+                    console.log('[RT] event ticket_logs', payload);
                     this.fetchGlobalLogs();
                 })
-                .subscribe();
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') console.log('[RT] subscribed ticket_logs_channel');
+                });
         },
 
         // --- AUTH ---
