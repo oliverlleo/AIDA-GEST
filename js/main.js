@@ -159,6 +159,8 @@ function app() {
         lastDashboardCallTime: 0,
         dashboardThrottleTimer: null,
         pendingRealtimeRefresh: false,
+        loadedToken: null,
+        initInFlight: false,
 
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
@@ -310,6 +312,9 @@ function app() {
         },
 
         async init() {
+            if (this.initInFlight) return;
+            this.initInFlight = true;
+
             console.log("App initializing...");
             this.loading = true;
 
@@ -358,6 +363,7 @@ function app() {
                 console.error("Init Error:", err);
             } finally {
                 this.loading = false;
+                this.initInFlight = false;
             }
 
             supabaseClient.auth.onAuthStateChange(async (_event, session) => {
@@ -709,35 +715,43 @@ function app() {
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
 
-            const existing = supabaseClient.getChannels().find(c => c.topic === 'tickets_channel');
-            if (existing && existing.state === 'joined') return;
-            if (existing) supabaseClient.removeChannel(existing);
+            const channels = [
+                {
+                    topic: 'tickets_channel',
+                    setup: (c) => c.on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, (payload) => this.handleRealtimeUpdate(payload))
+                },
+                {
+                    topic: 'notifications_channel',
+                    setup: (c) => c.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => this.fetchNotifications())
+                },
+                {
+                    topic: 'ticket_logs_channel',
+                    setup: (c) => c.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' }, () => this.fetchGlobalLogs())
+                }
+            ];
 
-            supabaseClient
-                .channel('tickets_channel')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },
-                (payload) => this.handleRealtimeUpdate(payload))
-                .subscribe((status) => {
+            channels.forEach(({ topic, setup }) => {
+                const existing = supabaseClient.getChannels().find(c => c.topic === topic);
+
+                if (existing) {
+                    if (['joined', 'joining', 'subscribed'].includes(existing.state)) {
+                        console.log(`[RT] channel reused (${topic}) state=${existing.state}`);
+                        return;
+                    } else {
+                        console.log(`[RT] channel recreating (${topic}) was=${existing.state}`);
+                        supabaseClient.removeChannel(existing);
+                    }
+                }
+
+                const channel = supabaseClient.channel(topic);
+                setup(channel).subscribe((status) => {
                     if (status === 'SUBSCRIBED') {
-                        console.log('[RT] subscribed', 'tickets_channel');
+                        console.log(`[RT] subscribed (${topic})`);
+                    } else if (status === 'CHANNEL_ERROR') {
+                        console.error(`[RT] error (${topic})`);
                     }
                 });
-
-            supabaseClient
-                .channel('notifications_channel')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
-                payload => {
-                    this.fetchNotifications();
-                })
-                .subscribe();
-
-            supabaseClient
-                .channel('ticket_logs_channel')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
-                () => {
-                    this.fetchGlobalLogs();
-                })
-                .subscribe();
+            });
         },
 
         // --- AUTH ---
@@ -863,6 +877,14 @@ function app() {
         async loadAdminData() {
             if (!this.session) return;
             const user = this.session.user;
+            const key = user.id;
+
+            if (this.loadedToken === key) {
+                console.log('[Auth] Skipping loadAdminData - already loaded for', key);
+                return;
+            }
+
+            console.log('[Auth] loadAdminData start...', key);
 
             try {
                 // Modified select to include tracker_config
@@ -912,6 +934,8 @@ function app() {
                     this.fetchGlobalLogs();
                     this.setupRealtime();
                     if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'load_admin' });
+
+                    this.loadedToken = key;
                 }
             } catch (err) {
                 console.error("Load Admin Error:", err);
