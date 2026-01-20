@@ -153,6 +153,12 @@ function app() {
              internalStats: {}
         },
 
+        // --- DASHBOARD OPTIMIZATION STATE ---
+        dashboardMetricsPromise: null,
+        lastDashboardParams: null,
+        lastDashboardCallTime: 0,
+        dashboardThrottleTimer: null,
+
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
         adminForm: { email: '', password: '' },
@@ -393,23 +399,40 @@ function app() {
 
             this.$watch('adminDashboardFilters', () => {
                 // If filters change, reload dashboard metrics AND list
-                this.calculateMetrics();
+                this.requestDashboardMetrics({ reason: 'filters' });
                 this.fetchTickets();
-                if (this.adminDashboardFilters.viewType === 'chart') {
-                    setTimeout(() => this.renderCharts(), 50);
-                }
             });
         },
 
-        async calculateMetrics() {
-            // Updated to use RPC
-            this.ops = this.getDashboardOps();
-            await this.fetchDashboardMetricsRPC();
-        },
-
-        async fetchDashboardMetricsRPC() {
+        // --- OPTIMIZED DASHBOARD REQUEST ---
+        async requestDashboardMetrics({ reason = 'init' } = {}) {
             if (!this.user?.workspace_id) return;
 
+            // 1. Throttle for Realtime (1500ms)
+            if (reason === 'realtime') {
+                const now = Date.now();
+                const timeSinceLast = now - this.lastDashboardCallTime;
+                const THROTTLE_MS = 1500;
+
+                if (timeSinceLast < THROTTLE_MS) {
+                    if (this.dashboardThrottleTimer) return; // Already scheduled
+                    const delay = THROTTLE_MS - timeSinceLast;
+                    console.log(`[Dashboard] Throttling realtime update. Scheduled in ${delay}ms.`);
+                    this.dashboardThrottleTimer = setTimeout(() => {
+                        this.dashboardThrottleTimer = null;
+                        this.requestDashboardMetrics({ reason: 'realtime' });
+                    }, delay);
+                    return;
+                }
+            }
+
+            // Clear any pending throttle if we are executing now
+            if (this.dashboardThrottleTimer) {
+                clearTimeout(this.dashboardThrottleTimer);
+                this.dashboardThrottleTimer = null;
+            }
+
+            // 2. Prepare Params
             const f = this.adminDashboardFilters;
             const params = {
                 p_date_start: f.dateStart || null,
@@ -420,25 +443,63 @@ function app() {
                 p_device_model: f.deviceModel === 'all' ? null : f.deviceModel,
                 p_search: this.searchQuery || null
             };
+            // Generate key including workspace_id to ensure uniqueness across users
+            const paramString = JSON.stringify({ ...params, ws: this.user.workspace_id });
 
-            try {
-                const data = await this.supabaseFetch('rpc/get_dashboard_kpis', 'POST', params);
-                if (data) {
-                    // Merge RPC data into metrics, preserving structure if needed
-                    this.metrics = { ...this.metrics, ...data };
-                    // RPC doesn't return filteredTickets list, so we keep it from the fetchTickets list if needed,
-                    // or let fetchTickets handle the list display separately.
-                    // For the "Charts", data is now populated.
+            // 3. Deduplication (In-flight)
+            if (this.dashboardMetricsPromise) {
+                console.log(`[Dashboard] Waiting for in-flight request (${reason})`);
+                await this.dashboardMetricsPromise;
+                // After waiting, check if the completed request satisfies our needs (same params)
+                if (this.lastDashboardParams === paramString) {
+                    console.log(`[Dashboard] Skipped after wait (params match) (${reason})`);
+                    return;
                 }
-            } catch (e) {
-                console.error("Dashboard RPC Error:", e);
-                this.notify("Erro ao carregar métricas.", "error");
             }
+
+            // 4. Cache / Skip Duplicate calls (same params, no data change implied)
+            if (reason !== 'realtime' && this.lastDashboardParams === paramString) {
+                console.log(`[Dashboard] Skipping duplicate call (params unchanged) (${reason})`);
+                return;
+            }
+
+            // 5. Execute
+            console.log(`[Dashboard] Fetching Metrics... Reason: ${reason}`);
+            this.dashboardMetricsPromise = (async () => {
+                try {
+                    // Update OPS (local calculation)
+                    this.ops = this.getDashboardOps();
+
+                    const data = await this.supabaseFetch('rpc/get_dashboard_kpis', 'POST', params);
+                    if (data) {
+                        this.metrics = { ...this.metrics, ...data };
+                        this.lastDashboardParams = paramString;
+                        this.lastDashboardCallTime = Date.now();
+
+                        // Refresh Charts if visible
+                        if (this.adminDashboardFilters.viewType === 'chart') {
+                            setTimeout(() => this.renderCharts(), 50);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Dashboard RPC Error:", e);
+                    this.notify("Erro ao carregar métricas.", "error");
+                } finally {
+                    this.dashboardMetricsPromise = null;
+                }
+            })();
+
+            return this.dashboardMetricsPromise;
+        },
+
+        // Backward compatibility / Alias if needed
+        async calculateMetrics() {
+            await this.requestDashboardMetrics({ reason: 'legacy_call' });
         },
 
         toggleAdminView() {
             this.adminDashboardFilters.viewType = this.adminDashboardFilters.viewType === 'data' ? 'chart' : 'data';
-            this.calculateMetrics();
+            this.requestDashboardMetrics({ reason: 'view_toggle' });
             if (this.adminDashboardFilters.viewType === 'chart') {
                 setTimeout(() => this.renderCharts(), 50);
             }
@@ -1087,21 +1148,48 @@ function app() {
 
         // --- TICKET LOGIC ---
 
+        isRelevantUpdate(payload) {
+            if (!payload) return false;
+            const { eventType, new: newRec, old: oldRec } = payload;
+
+            if (eventType === 'INSERT' || eventType === 'DELETE') return true;
+
+            if (eventType === 'UPDATE') {
+                const fields = [
+                    'status', 'delivered_at', 'repair_start_at', 'repair_end_at',
+                    'budget_sent_at', 'pickup_available_at', 'technician_id',
+                    'defect_reported', 'device_model', 'created_at', 'deleted_at'
+                ];
+
+                // If deleted_at changed (soft delete)
+                if (newRec.deleted_at !== oldRec.deleted_at) return true;
+
+                // Check value changes
+                for (const f of fields) {
+                    if (newRec[f] != oldRec[f]) return true;
+                }
+            }
+            return false;
+        },
+
         handleRealtimeUpdate(payload) {
             // 1. Immediate update for focused ticket
             if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
                 this.selectedTicket = { ...this.selectedTicket, ...payload.new };
             }
 
-            // 2. Debounced Refresh for Lists & Metrics
+            // 2. Optimized Dashboard Refresh (Throttle + Relevance Check)
+            if (this.view === 'dashboard' && this.isRelevantUpdate(payload)) {
+                 // Invalidate cache immediately so throttle logic works with "stale" assumption
+                 // Or actually, the throttle logic handles the "call", we just need to tell it to run.
+                 // We don't manually clear lastDashboardParams here because "realtime" reason bypasses the cache check.
+                 this.requestDashboardMetrics({ reason: 'realtime' });
+            }
+
+            // 3. Debounced List Refresh (Keep debounce for LIST only to avoid flicker)
             if (this.realtimeDebounceTimer) clearTimeout(this.realtimeDebounceTimer);
 
             this.realtimeDebounceTimer = setTimeout(async () => {
-                // Dashboard Metrics Refresh
-                if (this.view === 'dashboard') {
-                    this.calculateMetrics();
-                }
-
                 // List Refresh Strategy
                 if (payload.eventType === 'INSERT') {
                     if (this.ticketPagination.page === 0) {
@@ -1110,18 +1198,11 @@ function app() {
                         this.notify("Novos chamados disponíveis.", "info");
                     }
                 } else if (payload.eventType === 'UPDATE') {
-                    // Optimistic Local Update first (if possible) could be done here,
-                    // but simple re-fetch of current page is safer for consistency.
-                    // If we are on Page 0, re-fetch.
                     if (this.ticketPagination.page === 0) {
-                        // Optimistic update for simple status changes to avoid flicker?
-                        // For now, fetchTickets preserves consistency.
                         await this.fetchTickets();
                     } else {
-                        // Just update the item in array if exists
                         const idx = this.tickets.findIndex(t => t.id === payload.new.id);
                         if (idx > -1) {
-                            // If deleted, remove
                             if (payload.new.deleted_at) {
                                 this.tickets.splice(idx, 1);
                             } else {
@@ -1130,7 +1211,7 @@ function app() {
                         }
                     }
                 }
-            }, 2000); // 2 second debounce to batch rapid updates
+            }, 2000);
         },
 
         handleSearchInput() {
@@ -1138,7 +1219,7 @@ function app() {
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
                 this.fetchTickets();
-                if (this.view === 'dashboard') this.calculateMetrics(); // Update charts too
+                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'search' });
             }, 500); // 500ms debounce
         },
 
