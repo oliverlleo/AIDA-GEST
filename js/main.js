@@ -1401,7 +1401,6 @@ function app() {
 
                     // Check if we reached the end (for pagination)
                     // For Kanban we don't use standard pagination flags
-                    this.ops = this.getDashboardOps(); // Update ops locally just in case
                     await this.fetchOperationalAlerts(); // Ensure alerts are fresh
                     this.ticketPagination.isLoading = false;
                     return; // EXIT HERE for Kanban
