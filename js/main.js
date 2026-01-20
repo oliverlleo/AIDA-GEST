@@ -516,6 +516,13 @@ function app() {
             return this.dashboardMetricsPromise;
         },
 
+        // Explicitly invalidate cache to force a fresh fetch on next request
+        invalidateDashboardCache(reason) {
+            this.lastDashboardCallTime = 0;
+            this.lastDashboardParams = null;
+            console.log('[Dashboard] cache invalidated reason=' + reason);
+        },
+
         // Backward compatibility / Alias if needed
         async calculateMetrics() {
             await this.requestDashboardMetrics({ reason: 'legacy_call' });
@@ -1233,6 +1240,7 @@ function app() {
             if (this.view === 'dashboard') {
                 if (this.isRelevantUpdate(payload)) {
                     console.log('[Dashboard][Realtime] relevant event -> scheduling refresh');
+                    this.invalidateDashboardCache('realtime_event');
                     this.requestDashboardMetrics({ reason: 'realtime' });
                 }
             }
