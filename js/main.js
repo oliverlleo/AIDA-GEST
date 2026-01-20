@@ -888,7 +888,8 @@ function app() {
 
                     // Initial Dashboard Load
                     if (this.view === 'dashboard') {
-                        this.requestDashboardMetrics({ reason: 'init', force: true });
+                        // Use force: false to allow deduplication if calculateMetrics() ran first
+                        this.requestDashboardMetrics({ reason: 'init', force: false });
                     }
                 }
             } catch (err) {
