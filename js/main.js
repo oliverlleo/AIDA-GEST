@@ -17,6 +17,9 @@ try {
     console.error("Supabase fail:", e);
 }
 
+let isUnloading = false;
+window.addEventListener('beforeunload', () => { isUnloading = true; });
+
 function app() {
     return {
         // State
@@ -713,6 +716,7 @@ function app() {
 
         setupRealtime() {
             if (!this.user?.workspace_id || !supabaseClient) return;
+            if (this.session && !this.session.user) return; // Ensure session is fully ready if applicable
 
             const channels = [
                 {
@@ -747,7 +751,7 @@ function app() {
                     if (status === 'SUBSCRIBED') {
                         console.log(`[RT] subscribed (${topic})`);
                     } else if (status === 'CHANNEL_ERROR') {
-                        console.error(`[RT] error (${topic})`);
+                        if (!isUnloading) console.error(`[RT] error (${topic})`);
                     }
                 });
             });
