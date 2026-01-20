@@ -1176,21 +1176,37 @@ function app() {
             if (!payload) return false;
             const { eventType, new: newRec, old: oldRec } = payload;
 
+            // 1. Workspace Security Check
+            if (newRec && newRec.workspace_id && this.user && this.user.workspace_id) {
+                if (newRec.workspace_id !== this.user.workspace_id) {
+                    // console.log('[Dashboard][Realtime] ignored (wrong workspace)');
+                    return false;
+                }
+            }
+
+            // 2. Event Type Check
             if (eventType === 'INSERT' || eventType === 'DELETE') {
                 return true;
             }
 
+            // 3. Update Relevance Check
             if (eventType === 'UPDATE') {
                 const fields = [
-                    'status', 'delivered_at', 'repair_start_at', 'repair_end_at',
-                    'budget_sent_at', 'pickup_available_at', 'technician_id',
-                    'defect_reported', 'device_model', 'created_at', 'deleted_at'
+                    'status',
+                    'delivered_at',
+                    'repair_start_at',
+                    'repair_end_at',
+                    'budget_sent_at',
+                    'pickup_available_at',
+                    'technician_id',
+                    'defect_reported', // Maps to 'defect' concept
+                    'device_model',
+                    'created_at',
+                    'deleted_at'
                 ];
 
                 // Check value changes strictly
                 for (const f of fields) {
-                    // Handle cases where oldRec might be missing in some Supabase configs (though usually present for UPDATE)
-                    // If oldRec is missing, we assume change if newRec has the field.
                     const oldVal = oldRec ? oldRec[f] : undefined;
                     const newVal = newRec ? newRec[f] : undefined;
                     if (newVal != oldVal) return true;
