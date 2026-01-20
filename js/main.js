@@ -158,6 +158,7 @@ function app() {
         lastDashboardParams: null,
         lastDashboardCallTime: 0,
         dashboardThrottleTimer: null,
+        pendingRealtimeRefresh: false,
 
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
@@ -408,16 +409,17 @@ function app() {
         async requestDashboardMetrics({ reason = 'init' } = {}) {
             if (!this.user?.workspace_id) return;
 
+            const now = Date.now();
+
             // 1. Throttle for Realtime (1500ms)
             if (reason === 'realtime') {
-                const now = Date.now();
                 const timeSinceLast = now - this.lastDashboardCallTime;
                 const THROTTLE_MS = 1500;
 
                 if (timeSinceLast < THROTTLE_MS) {
                     if (this.dashboardThrottleTimer) return; // Already scheduled
                     const delay = THROTTLE_MS - timeSinceLast;
-                    console.log(`[Dashboard] Throttling realtime update. Scheduled in ${delay}ms.`);
+                    console.log(`[Dashboard][Realtime] throttled (wait ${delay} ms)`);
                     this.dashboardThrottleTimer = setTimeout(() => {
                         this.dashboardThrottleTimer = null;
                         this.requestDashboardMetrics({ reason: 'realtime' });
@@ -448,23 +450,31 @@ function app() {
 
             // 3. Deduplication (In-flight)
             if (this.dashboardMetricsPromise) {
-                console.log(`[Dashboard] Waiting for in-flight request (${reason})`);
-                await this.dashboardMetricsPromise;
-                // After waiting, check if the completed request satisfies our needs (same params)
-                if (this.lastDashboardParams === paramString) {
-                    console.log(`[Dashboard] Skipped after wait (params match) (${reason})`);
-                    return;
+                // If a realtime request comes in while we are loading, mark it pending so we refresh AGAIN after.
+                if (reason === 'realtime') {
+                    console.log('[Dashboard][Realtime] joining in-flight (marking pending refresh)');
+                    this.pendingRealtimeRefresh = true;
+                } else {
+                    console.log(`[Dashboard] Waiting for in-flight request (${reason})`);
                 }
+
+                return this.dashboardMetricsPromise;
             }
 
-            // 4. Cache / Skip Duplicate calls (same params, no data change implied)
-            if (reason !== 'realtime' && this.lastDashboardParams === paramString) {
-                console.log(`[Dashboard] Skipping duplicate call (params unchanged) (${reason})`);
+            // 4. Cache / Skip Duplicate calls
+            // - If reason is realtime: ALWAYS fetch (unless throttled above)
+            // - If not realtime: Check params match AND strict cache TTL (e.g. 5s) to avoid unnecessary re-fetches
+            const CACHE_TTL = 5000;
+            const isCacheValid = (now - this.lastDashboardCallTime) < CACHE_TTL;
+
+            if (reason !== 'realtime' && this.lastDashboardParams === paramString && isCacheValid) {
+                console.log(`[Dashboard] skip duplicate/cached reason=${reason}`);
                 return;
             }
 
             // 5. Execute
-            console.log(`[Dashboard] Fetching Metrics... Reason: ${reason}`);
+            console.log(`[Dashboard] RPC call reason=${reason} key=${paramString.slice(0, 20)}...`);
+
             this.dashboardMetricsPromise = (async () => {
                 try {
                     // Update OPS (local calculation)
@@ -486,6 +496,20 @@ function app() {
                     this.notify("Erro ao carregar métricas.", "error");
                 } finally {
                     this.dashboardMetricsPromise = null;
+
+                    // If a realtime update came in while we were busy, trigger a new fetch now
+                    if (this.pendingRealtimeRefresh) {
+                        this.pendingRealtimeRefresh = false;
+                        // Trigger immediate check (will be subject to throttle logic inside if applicable)
+                        // If reason is 'realtime', it respects throttling.
+                        // We assume lastDashboardCallTime was JUST updated above (if success).
+                        // So a direct call might be throttled.
+                        // However, if we just updated, maybe we don't *need* to fetch again?
+                        // Actually, if an event happened *during* the fetch, the data we just got *might* be stale.
+                        // But the throttle will block it anyway if < 1.5s.
+                        // So this effectively queues it for "in 1.5s".
+                        this.requestDashboardMetrics({ reason: 'realtime' });
+                    }
                 }
             })();
 
@@ -1152,7 +1176,9 @@ function app() {
             if (!payload) return false;
             const { eventType, new: newRec, old: oldRec } = payload;
 
-            if (eventType === 'INSERT' || eventType === 'DELETE') return true;
+            if (eventType === 'INSERT' || eventType === 'DELETE') {
+                return true;
+            }
 
             if (eventType === 'UPDATE') {
                 const fields = [
@@ -1161,14 +1187,17 @@ function app() {
                     'defect_reported', 'device_model', 'created_at', 'deleted_at'
                 ];
 
-                // If deleted_at changed (soft delete)
-                if (newRec.deleted_at !== oldRec.deleted_at) return true;
-
-                // Check value changes
+                // Check value changes strictly
                 for (const f of fields) {
-                    if (newRec[f] != oldRec[f]) return true;
+                    // Handle cases where oldRec might be missing in some Supabase configs (though usually present for UPDATE)
+                    // If oldRec is missing, we assume change if newRec has the field.
+                    const oldVal = oldRec ? oldRec[f] : undefined;
+                    const newVal = newRec ? newRec[f] : undefined;
+                    if (newVal != oldVal) return true;
                 }
             }
+
+            console.log('[Dashboard][Realtime] ignored (not relevant)');
             return false;
         },
 
@@ -1179,11 +1208,11 @@ function app() {
             }
 
             // 2. Optimized Dashboard Refresh (Throttle + Relevance Check)
-            if (this.view === 'dashboard' && this.isRelevantUpdate(payload)) {
-                 // Invalidate cache immediately so throttle logic works with "stale" assumption
-                 // Or actually, the throttle logic handles the "call", we just need to tell it to run.
-                 // We don't manually clear lastDashboardParams here because "realtime" reason bypasses the cache check.
-                 this.requestDashboardMetrics({ reason: 'realtime' });
+            if (this.view === 'dashboard') {
+                if (this.isRelevantUpdate(payload)) {
+                    console.log('[Dashboard][Realtime] relevant event -> scheduling refresh');
+                    this.requestDashboardMetrics({ reason: 'realtime' });
+                }
             }
 
             // 3. Debounced List Refresh (Keep debounce for LIST only to avoid flicker)
