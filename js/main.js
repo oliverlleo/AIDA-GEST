@@ -345,6 +345,7 @@ function app() {
                     await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
+                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'init' });
                 }
             } catch (err) {
                 console.error("Init Error:", err);
@@ -739,6 +740,7 @@ function app() {
                     }
 
                     this.setupRealtime();
+                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'login_employee' });
                 } else {
                      this.notify('Credenciais inválidas.', 'error');
                 }
@@ -813,6 +815,7 @@ function app() {
                     await this.fetchOutsourcedCompanies();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
+                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'load_admin' });
                 }
             } catch (err) {
                 console.error("Load Admin Error:", err);
