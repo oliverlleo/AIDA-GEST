@@ -1452,7 +1452,20 @@ function app() {
 
                     // POPULATE TECH TICKETS (Client Side Filter for safety/convenience)
                     if (this.view === 'tech_orders') {
-                        this.techTickets = this.tickets;
+                        this.techTickets = this.tickets.sort((a, b) => {
+                            // 1. Priority Requested (Always Top)
+                            if (a.priority_requested && !b.priority_requested) return -1;
+                            if (!a.priority_requested && b.priority_requested) return 1;
+
+                            // 2. Deadline (Sooner first)
+                            const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
+                            const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
+                            if (dA !== dB) return dA - dB;
+
+                            // 3. Priority Level (Tie-breaker)
+                            const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
+                            return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
+                        });
                     } else {
                         // For other views, we maintain client-side derivation for consistency
                         let relevantTickets = this.tickets;
