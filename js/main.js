@@ -351,7 +351,25 @@ function app() {
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
                             await this.fetchEmployees();
                             this.initTechFilter();
+
+                            // Restore Tracker Config
+                            if (this.employeeSession.tracker_config) {
+                                this.trackerConfig = {
+                                    ...this.trackerConfig,
+                                    ...this.employeeSession.tracker_config,
+                                    colors: {
+                                        ...this.trackerConfig.colors,
+                                        ...(this.employeeSession.tracker_config.colors || {})
+                                    }
+                                };
+                            }
+
+                            // Redirect Technician to Tech Bench on reload
+                            if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
+                                this.view = 'tech_orders';
+                            }
                         } catch (e) {
+                            console.error("Session restore error:", e);
                             localStorage.removeItem('techassist_employee');
                         }
                     }
