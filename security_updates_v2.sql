@@ -3,6 +3,9 @@
 -- Eliminate plain_password + Implement must_change_password + Secure Sessions
 -- ==============================================================================
 
+-- 0. Enable pgcrypto for hashing
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- 1. Create Employee Sessions Table
 CREATE TABLE IF NOT EXISTS public.employee_sessions (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

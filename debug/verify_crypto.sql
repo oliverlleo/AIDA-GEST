@@ -1,0 +1,1 @@
+SELECT crypt('test', gen_salt('bf')) as hash;
