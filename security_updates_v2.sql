@@ -247,3 +247,30 @@ $$;
 
 -- 8. Final Cleanup: Drop plain_password
 ALTER TABLE public.employees DROP COLUMN IF EXISTS plain_password;
+
+-- 9. Update get_employees_for_workspace to remove plain_password dependency
+DROP FUNCTION IF EXISTS public.get_employees_for_workspace(uuid);
+
+CREATE OR REPLACE FUNCTION public.get_employees_for_workspace(
+    p_workspace_id UUID
+) RETURNS TABLE (
+    id UUID,
+    workspace_id UUID,
+    name TEXT,
+    username TEXT,
+    roles TEXT[],
+    created_at TIMESTAMP WITH TIME ZONE
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT e.id, e.workspace_id, e.name, e.username, e.roles, e.created_at
+    FROM public.employees e
+    WHERE e.workspace_id = p_workspace_id
+    AND e.deleted_at IS NULL
+    ORDER BY e.created_at DESC;
+END;
+$$;
