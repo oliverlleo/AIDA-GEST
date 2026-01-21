@@ -22,6 +22,7 @@ ALTER TABLE public.employees
 ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
 
 -- 3. Update create_employee (Remove plain_password, Set must_change_password)
+DROP FUNCTION IF EXISTS create_employee(uuid, text, text, text, text[]);
 CREATE OR REPLACE FUNCTION create_employee(
     p_workspace_id UUID,
     p_name TEXT,
@@ -86,6 +87,7 @@ END;
 $$;
 
 -- 5. Update employee_login (Generate Token, Check Session)
+DROP FUNCTION IF EXISTS public.employee_login(text, text, text);
 CREATE OR REPLACE FUNCTION public.employee_login(
     p_company_code TEXT,
     p_username TEXT,
