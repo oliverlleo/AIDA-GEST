@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION get_operational_alerts(p_workspace_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 AS $$
 DECLARE
     v_pending_budgets JSONB;
@@ -17,13 +17,9 @@ DECLARE
     v_pending_delivery JSONB;
     v_pending_outsourced JSONB;
 BEGIN
-    -- Security Check: Ensure user belongs to workspace
-    IF NOT EXISTS (
-        SELECT 1 FROM public.profiles
-        WHERE id = auth.uid() AND workspace_id = p_workspace_id
-    ) THEN
-        RAISE EXCEPTION 'Access Denied';
-    END IF;
+    -- Security is handled by RLS (SECURITY INVOKER)
+    -- Admins: Authenticated + Owner check via RLS
+    -- Employees: Anon + x-workspace-id header check via RLS
 
     -- 1. Pending Budgets
     SELECT COALESCE(jsonb_agg(t.*), '[]'::jsonb)
