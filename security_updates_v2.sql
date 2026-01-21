@@ -36,6 +36,7 @@ CREATE OR REPLACE FUNCTION create_employee(
 RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_new_id UUID;
@@ -66,6 +67,7 @@ CREATE OR REPLACE FUNCTION update_employee(
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, extensions
 AS $$
 BEGIN
     UPDATE employees
@@ -102,7 +104,9 @@ CREATE OR REPLACE FUNCTION public.employee_login(
     roles TEXT[],
     token TEXT,
     must_change_password BOOLEAN
-) LANGUAGE plpgsql SECURITY DEFINER AS $$
+) LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
 DECLARE
     v_workspace_id UUID;
     v_employee_record RECORD;
@@ -157,7 +161,7 @@ CREATE OR REPLACE FUNCTION reset_employee_password(
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_owner_id UUID;
@@ -199,7 +203,7 @@ CREATE OR REPLACE FUNCTION employee_change_password(
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_session RECORD;
