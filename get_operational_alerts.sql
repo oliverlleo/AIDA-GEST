@@ -17,6 +17,14 @@ DECLARE
     v_pending_delivery JSONB;
     v_pending_outsourced JSONB;
 BEGIN
+    -- Security Check: Ensure user belongs to workspace
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND workspace_id = p_workspace_id
+    ) THEN
+        RAISE EXCEPTION 'Access Denied';
+    END IF;
+
     -- 1. Pending Budgets
     SELECT COALESCE(jsonb_agg(t.*), '[]'::jsonb)
     INTO v_pending_budgets

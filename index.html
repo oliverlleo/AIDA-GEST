@@ -1881,7 +1881,7 @@
                                 </button>
                             </div>
                             <div class="grid grid-cols-7 gap-2">
-                                 <template x-for="day in getWeekDays()" :key="day">
+                                 <template x-for="day in getWeekDays()" :key="day.getTime()">
                                      <div class="border rounded-lg p-2 min-h-[80px] relative transition-colors"
                                           :class="isSameDay(day, new Date()) ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100'">
                                          <div class="text-center mb-1">
@@ -2247,7 +2247,7 @@
 
                         <!-- Days Grid -->
                         <div class="grid grid-cols-7 gap-2">
-                             <template x-for="day in getWeekDays()" :key="day">
+                             <template x-for="day in getWeekDays()" :key="day.getTime()">
                                  <div class="border rounded-lg p-2 min-h-[80px] relative transition-colors"
                                       :class="isSameDay(day, new Date()) ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100'">
                                      <div class="text-center mb-1">
@@ -2578,7 +2578,7 @@
                                         <td class="px-6 py-4" x-text="emp.name"></td>
                                         <td class="px-6 py-4" x-text="emp.username"></td>
                                         <td class="px-6 py-4">
-                                             <template x-for="role in emp.roles"><span class="px-2 bg-blue-100 text-blue-800 text-xs rounded-full mr-1" x-text="role"></span></template>
+                                             <template x-for="role in emp.roles" :key="role"><span class="px-2 bg-blue-100 text-blue-800 text-xs rounded-full mr-1" x-text="role"></span></template>
                                         </td>
                                         <td class="px-6 py-4 text-right space-x-2">
                                             <button @click="openEditEmployee(emp)" class="text-blue-600 hover:text-blue-900" title="Editar"><i class="fa-solid fa-pen"></i></button>
@@ -3004,7 +3004,7 @@
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prioridade</label>
                             <select x-model="ticketForm.priority" class="w-full border rounded-lg p-2.5 bg-gray-50">
-                                <template x-for="p in PRIORITIES"><option :value="p" x-text="p"></option></template>
+                                <template x-for="p in PRIORITIES" :key="p"><option :value="p" x-text="p"></option></template>
                             </select>
                         </div>
                         <div x-data="{ open: false, search: '' }">
@@ -3759,7 +3759,7 @@
                                 <div class="border rounded-lg p-4 bg-gray-50">
                                     <h4 class="font-bold text-gray-600 text-sm uppercase mb-2">Checklist Entrada</h4>
                                     <div class="space-y-2">
-                                        <template x-for="(item, idx) in selectedTicket.checklist_data">
+                                        <template x-for="(item, idx) in selectedTicket.checklist_data" :key="idx">
                                             <div class="flex items-center space-x-2 bg-white p-2 rounded border">
                                                  <input type="checkbox" x-model="item.ok" :disabled="true" class="text-brand-600 focus:ring-brand-500 disabled:opacity-50">
                                                  <span class="text-sm" x-text="item.item"></span>
@@ -3774,7 +3774,7 @@
                                      x-show="['Teste Final', 'Retirada Cliente', 'Finalizado'].includes(selectedTicket.status)">
                                     <h4 class="font-bold text-brand-600 text-sm uppercase mb-2">Checklist Saída</h4>
                                     <div class="space-y-2">
-                                        <template x-for="(item, idx) in selectedTicket.checklist_final_data">
+                                        <template x-for="(item, idx) in selectedTicket.checklist_final_data" :key="idx">
                                             <div class="flex items-center space-x-2 bg-white p-2 rounded border">
                                                  <input type="checkbox" x-model="item.ok"
                                                         :disabled="selectedTicket.status !== 'Teste Final'"
@@ -4108,7 +4108,7 @@
                 <div class="p-6 bg-gray-50">
                     <!-- Weekday Headers -->
                     <div class="grid grid-cols-7 gap-px mb-2">
-                        <template x-for="day in ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']">
+                        <template x-for="day in ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']" :key="day">
                              <div class="text-center text-xs font-bold uppercase text-gray-500" x-text="day"></div>
                         </template>
                     </div>
@@ -4207,7 +4207,7 @@
                         <div x-show="selectedTicket && (!selectedTicket.is_outsourced || testFailureData.action === 'repair')">
                             <label class="block text-xs font-bold text-gray-500">Nova Prioridade</label>
                             <select x-model="testFailureData.newPriority" class="w-full border rounded p-2 text-sm">
-                                <template x-for="p in PRIORITIES"><option :value="p" x-text="p"></option></template>
+                                <template x-for="p in PRIORITIES" :key="p"><option :value="p" x-text="p"></option></template>
                             </select>
                         </div>
                         <div>

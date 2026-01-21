@@ -1396,8 +1396,9 @@ function app() {
                     // 2. Finalized Tickets (If enabled)
                     let finalizedPromise = Promise.resolve([]);
                     if (this.showFinalized) {
-                        const offset = this.finalizedPage * this.finalizedLimit;
-                        const finalEndpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=not.is.null&order=delivered_at.desc&limit=${this.finalizedLimit}&offset=${offset}`;
+                        // Fetch ALL currently loaded finalized tickets to maintain state on refresh
+                        const totalLimit = (this.finalizedPage + 1) * this.finalizedLimit;
+                        const finalEndpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=not.is.null&order=delivered_at.desc&limit=${totalLimit}`;
                         finalizedPromise = this.supabaseFetch(finalEndpoint);
                     }
 
