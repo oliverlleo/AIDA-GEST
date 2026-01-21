@@ -303,6 +303,11 @@ function app() {
                 'Prefer': method === 'GET' ? undefined : 'return=representation'
             };
 
+            // Employee Token Header
+            if (this.employeeSession && this.employeeSession.token) {
+                headers['x-employee-token'] = this.employeeSession.token;
+            }
+
             if (this.user && this.user.workspace_id) {
                 headers['x-workspace-id'] = this.user.workspace_id;
             }
@@ -348,6 +353,26 @@ function app() {
                     if (storedEmp) {
                         try {
                             this.employeeSession = JSON.parse(storedEmp);
+
+                            // Validate Session Token
+                            if (this.employeeSession.token) {
+                                try {
+                                    const sessionData = await this.supabaseFetch('rpc/validate_employee_session', 'POST', { p_token: this.employeeSession.token });
+                                    if (!sessionData || sessionData.length === 0 || !sessionData[0].valid) {
+                                        throw new Error("Sessão expirada");
+                                    }
+                                } catch (sessionErr) {
+                                    console.warn("Session validation failed:", sessionErr);
+                                    this.logout();
+                                    return;
+                                }
+                            } else {
+                                // Legacy session without token
+                                console.warn("Legacy session detected. Logging out.");
+                                this.logout();
+                                return;
+                            }
+
                             if (this.employeeSession.employee_id && !this.employeeSession.id) {
                                 this.employeeSession.id = this.employeeSession.employee_id;
                             }
@@ -860,7 +885,12 @@ function app() {
                 });
 
                 if (data && data.length > 0) {
-                    const emp = data[0];
+                    // New RPC returns: TABLE(token uuid, employee_json jsonb, workspace_json jsonb, must_change_password boolean)
+                    const result = data[0];
+                    const emp = result.employee_json;
+                    emp.token = result.token; // Attach Session Token
+                    emp.must_change_password = result.must_change_password; // Ensure flag is up to date
+
                     if (emp.employee_id && !emp.id) {
                         emp.id = emp.employee_id;
                     }
@@ -920,6 +950,14 @@ function app() {
 
         async logout() {
             this.loading = true;
+
+            // Logout from Employee Session (Server-side)
+            if (this.employeeSession && this.employeeSession.token) {
+                try {
+                    await this.supabaseFetch('rpc/employee_logout', 'POST', { p_token: this.employeeSession.token });
+                } catch (e) { console.warn("Logout RPC warning:", e); }
+            }
+
             try { if (this.session) await supabaseClient.auth.signOut(); } catch (e) {}
             this.employeeSession = null;
             this.user = null;
