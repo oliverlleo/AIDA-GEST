@@ -1,35 +1,25 @@
 # Backup Completo e Plano de Rollback - AIDA-GEST
 
-Este documento fornece instruções passo a passo para realizar um backup completo do banco de dados Supabase e, se necessário, restaurá-lo (rollback).
+Este documento fornece instruções rigorosas para realizar backup e restauração (rollback) do banco de dados Supabase.
 
 **Data:** 11/02/2025
-**Projeto:** AIDA-GEST (Supabase)
-**Ambiente:** Produção (Assumido)
+**Projeto:** AIDA-GEST (cpydazjwlmssbzzsurxu)
+**Ambiente:** Produção
 
 ---
 
 ## 1. Pré-requisitos
 
-Para executar o backup completo (Schema + Dados + Roles), você precisa da **Supabase CLI** instalada e logada na sua conta.
+Certifique-se de ter a **Supabase CLI** instalada e autenticada.
 
-### Instalação (se necessário)
 ```bash
-# MacOS/Linux (Homebrew)
-brew install supabase/tap/supabase
+# Verificar instalação
+supabase --version
 
-# Windows (Scoop)
-scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-scoop install supabase
-```
-
-### Login e Link
-```bash
-# 1. Login na CLI (vai abrir o navegador)
+# Login (se necessário)
 supabase login
 
-# 2. Linkar ao projeto remoto
-# Substitua <project-ref> pelo ID do seu projeto (cpydazjwlmssbzzsurxu)
-# Você precisará da senha do banco de dados.
+# Linkar ao projeto (necessário senha do DB)
 supabase link --project-ref cpydazjwlmssbzzsurxu
 ```
 
@@ -37,74 +27,72 @@ supabase link --project-ref cpydazjwlmssbzzsurxu
 
 ## 2. Executando o Backup (Dump)
 
-Execute estes comandos no terminal, na raiz deste projeto.
+Utilize o script automatizado `backup_script.sh` ou execute os comandos abaixo manualmente.
 
-### 2.1. Backup do Schema (Estrutura)
-Salva tabelas, views, funções (RPCs), triggers e políticas (RLS).
+### 2.1. Backup de Roles (Permissões Globais)
+Essencial para preservar usuários de banco customizados e grants.
 ```bash
-supabase db dump --db-url "postgresql://postgres:[SUA_SENHA]@db.cpydazjwlmssbzzsurxu.supabase.co:5432/postgres" -f backup/backup_schema.sql
-```
-*Nota: Se você já fez `supabase link`, pode usar apenas `supabase db dump -f backup/backup_schema.sql`.*
-
-### 2.2. Backup dos Dados (Conteúdo)
-Salva o conteúdo das tabelas (INSERTs). **Crítico para não perder clientes/tickets.**
-```bash
-supabase db dump --data-only --db-url "postgresql://postgres:[SUA_SENHA]@db.cpydazjwlmssbzzsurxu.supabase.co:5432/postgres" -f backup/backup_data.sql
+supabase db dump --role-only --project-ref cpydazjwlmssbzzsurxu -f backup/backup_roles.sql
 ```
 
-### 2.3. Backup de Roles (Permissões Globais)
-Salva usuários e permissões de nível de banco (caso existam customizações fora do padrão).
+### 2.2. Backup do Schema (Estrutura Completa)
+Salva definições de tabelas, views, funções, triggers e políticas RLS.
 ```bash
-supabase db dump --role-only --db-url "postgresql://postgres:[SUA_SENHA]@db.cpydazjwlmssbzzsurxu.supabase.co:5432/postgres" -f backup/backup_roles.sql
+supabase db dump --project-ref cpydazjwlmssbzzsurxu -f backup/backup_schema.sql
 ```
+
+### 2.3. Backup dos Dados (Conteúdo)
+Salva os dados das tabelas (INSERTs). **Crítico.**
+```bash
+supabase db dump --data-only --project-ref cpydazjwlmssbzzsurxu -f backup/backup_data.sql
+```
+
+### 2.4. Nota sobre o Schema `auth`
+O Supabase gerencia o schema `auth` (tabela `users`, etc.). O comando `supabase db dump` foca nos schemas do usuário (`public`).
+*   **Atenção:** Se você tiver triggers ou foreign keys apontando para `auth.users` no schema `public`, o `backup_schema.sql` deve conter essas referências.
+*   **Dados de Auth:** O dump padrão **NÃO** exporta senhas ou dados sensíveis de `auth.users` por segurança. Se precisar de backup total de usuários para migração entre projetos, utilize a opção de exportar usuários pelo Dashboard ou scripts específicos de administração, mas para rollback no **mesmo** projeto, a estrutura do `public` é a prioridade.
 
 ---
 
 ## 3. Plano de Restauração (Rollback)
 
-**⚠️ PERIGO:** A restauração pode sobrescrever dados atuais. Execute apenas se o sistema estiver quebrado e você precisar voltar ao estado anterior.
+Use o script `restore_script.sh` para automatizar ou siga a ordem abaixo.
 
-### Ordem de Execução
-1.  **Roles (Permissões)**
-2.  **Schema (Estrutura)**
-3.  **Data (Dados)**
+**⚠️ ALERTA DE PERIGO:** O restore apaga/sobrescreve o estado atual. Use somente em caso de falha crítica.
 
-### Comandos de Restore
+### Ordem Obrigatória
+1.  **Roles:** Restaurar permissões primeiro.
+2.  **Schema:** Recriar a estrutura (Tabelas/Funções).
+3.  **Dados:** Re popular as tabelas.
+
+### Comando Manual (via psql)
+Você precisará da string de conexão (Connection String) do seu banco.
 
 ```bash
-# 1. Restaurar Roles (Geralmente não é necessário se o projeto é o mesmo, mas por segurança)
-psql -h db.cpydazjwlmssbzzsurxu.supabase.co -U postgres -f backup/backup_roles.sql
+# Exemplo de Connection String
+DB_URL="postgresql://postgres:[SENHA]@db.cpydazjwlmssbzzsurxu.supabase.co:5432/postgres"
 
-# 2. Restaurar Schema (Recria tabelas/funções)
-# Aviso: Isso pode falhar se as tabelas já existirem. O ideal é limpar o schema public antes em um caso de desastre total.
-psql -h db.cpydazjwlmssbzzsurxu.supabase.co -U postgres -f backup/backup_schema.sql
+# 1. Restaurar Roles
+psql "$DB_URL" -f backup/backup_roles.sql
+
+# 2. Restaurar Schema
+# (Recomendado: Limpar o schema public antes se estiver corrompido)
+psql "$DB_URL" -f backup/backup_schema.sql
 
 # 3. Restaurar Dados
-psql -h db.cpydazjwlmssbzzsurxu.supabase.co -U postgres -f backup/backup_data.sql
+psql "$DB_URL" -f backup/backup_data.sql
 ```
 
 ---
 
-## 4. Validação do Backup
+## 4. Checklist Final: Backup OK
 
-Após gerar os arquivos `.sql` na pasta `backup/`, verifique:
+Antes de prosseguir com qualquer migração, verifique:
 
-1.  **Tamanho dos arquivos:** `backup_data.sql` deve ter um tamanho considerável (KB ou MB) dependendo do volume de tickets. `backup_schema.sql` deve conter definições de `CREATE TABLE`, `CREATE FUNCTION`, etc.
-2.  **Conteúdo Crítico:** Abra `backup_schema.sql` e procure por:
-    *   `CREATE TABLE public.tickets`
-    *   `CREATE FUNCTION public.employee_login`
-    *   `CREATE POLICY` (RLS)
-3.  **Dados:** Abra `backup_data.sql` e procure por `COPY public.tickets` ou `INSERT INTO public.tickets`.
+- [ ] Arquivo `backup/backup_roles.sql` existe e não está vazio.
+- [ ] Arquivo `backup/backup_schema.sql` existe e contém `CREATE TABLE public.tickets`.
+- [ ] Arquivo `backup/backup_data.sql` existe e contém dados (`COPY` ou `INSERT`).
+- [ ] Você possui a senha do banco de dados (`postgres`) salva e acessível.
+- [ ] O script `restore_script.sh` foi revisado e compreendido.
 
-Se esses elementos estiverem presentes, o backup está tecnicamente íntegro.
-
----
-
-## 5. Arquivos Gerados (Esperado)
-
-Ao final do processo, você deve ter nesta pasta:
-*   `backup_schema.sql`
-*   `backup_data.sql`
-*   `backup_roles.sql`
-*   `INSTRUCTIONS.md` (este arquivo)
-*   `legacy_sql_archive/` (pasta com scripts antigos removidos da raiz)
+Se todos os itens estiverem marcados, o backup é considerado válido.

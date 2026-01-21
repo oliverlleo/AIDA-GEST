@@ -2,8 +2,6 @@
 
 # Configurações do Projeto
 PROJECT_REF="cpydazjwlmssbzzsurxu"
-DB_HOST="db.$PROJECT_REF.supabase.co"
-DB_USER="postgres"
 
 echo "=========================================="
 echo "Iniciando Backup Total do Supabase (AIDA-GEST)"
@@ -25,6 +23,7 @@ if [ $? -eq 0 ]; then echo "OK"; else echo "FALHA ao exportar roles"; exit 1; fi
 
 echo ""
 echo "[2/3] Exportando Schema (Estrutura)..."
+# Nota: --schema public padrão. Se precisar de auth, usar --schema auth (mas cuidado com dados sensíveis)
 supabase db dump --project-ref "$PROJECT_REF" -f backup/backup_schema.sql
 if [ $? -eq 0 ]; then echo "OK"; else echo "FALHA ao exportar schema"; exit 1; fi
 
