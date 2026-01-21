@@ -309,7 +309,13 @@ function app() {
             }
 
             if (this.user && this.user.workspace_id) {
-                headers['x-workspace-id'] = this.user.workspace_id;
+                // If Employee, do NOT send x-workspace-id (Backend derives from Token)
+                // If Admin, send it (Admin context uses headers for RLS sometimes, or explicit params)
+                // But for safety/compat with new RLS policy, we can send it for Admin.
+                // For Employee, strictly omit it to prevent confusion/spoofing, although backend now ignores it.
+                if (!this.employeeSession) {
+                    headers['x-workspace-id'] = this.user.workspace_id;
+                }
             }
 
             const options = {
@@ -361,6 +367,17 @@ function app() {
                                     if (!sessionData || sessionData.length === 0 || !sessionData[0].valid) {
                                         throw new Error("Sessão expirada");
                                     }
+
+                                    // FORCE UPDATE from Server Truth
+                                    const freshSession = sessionData[0];
+                                    this.employeeSession.workspace_id = freshSession.workspace_id;
+                                    this.employeeSession.employee_id = freshSession.employee_id;
+                                    this.employeeSession.roles = freshSession.roles || [];
+                                    if (!this.employeeSession.id) this.employeeSession.id = freshSession.employee_id;
+
+                                    // Update Storage with trusted data
+                                    localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
+
                                 } catch (sessionErr) {
                                     console.warn("Session validation failed:", sessionErr);
                                     this.logout();
@@ -373,9 +390,6 @@ function app() {
                                 return;
                             }
 
-                            if (this.employeeSession.employee_id && !this.employeeSession.id) {
-                                this.employeeSession.id = this.employeeSession.employee_id;
-                            }
                             this.user = this.employeeSession;
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
