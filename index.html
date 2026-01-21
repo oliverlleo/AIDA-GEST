@@ -3687,6 +3687,16 @@
                                         </div>
                                     </div>
                                 </template>
+
+                                <!-- Load More Finalized Button -->
+                                <div x-show="status === 'Finalizado' && showFinalized && finalizedHasMore" class="pt-2 pb-1 text-center">
+                                    <button @click="loadMoreFinalized()"
+                                            class="text-xs bg-white border border-gray-300 text-gray-600 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 hover:text-black transition-colors w-full shadow-sm flex items-center justify-center"
+                                            :disabled="isLoadingFinalized">
+                                        <i x-show="isLoadingFinalized" class="fa-solid fa-spinner fa-spin mr-2"></i>
+                                        <span x-text="isLoadingFinalized ? 'Carregando...' : 'Carregar mais'"></span>
+                                    </button>
+                                </div>
                             </div>
                              <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
                                 <h4 class="font-bold text-gray-700 text-xs uppercase mb-2">Cliente</h4>

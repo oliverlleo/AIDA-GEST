@@ -100,6 +100,13 @@ function app() {
         searchDebounceTimer: null,
         realtimeDebounceTimer: null,
 
+        // Finalized Pagination State
+        showFinalized: false,
+        finalizedPage: 0,
+        finalizedLimit: 50,
+        finalizedHasMore: false,
+        isLoadingFinalized: false,
+
         // Dashboard Data
         ops: {
             pendingBudgets: [],
@@ -240,7 +247,7 @@ function app() {
         // Search
         searchQuery: '', // Global search
         activeQuickFilter: null,
-        showFinalized: true,
+        showFinalized: false,
 
         // Time
         currentTime: new Date(),
@@ -404,6 +411,11 @@ function app() {
 
             this.$watch('searchQuery', () => {
                 this.handleSearchInput();
+            });
+
+            this.$watch('showFinalized', () => {
+                this.finalizedPage = 0;
+                this.fetchTickets();
             });
 
             this.$watch('adminDashboardFilters', () => {
@@ -1314,6 +1326,28 @@ function app() {
             this.fetchTickets(true);
         },
 
+        async loadMoreFinalized() {
+            if (this.isLoadingFinalized || !this.finalizedHasMore) return;
+            this.isLoadingFinalized = true;
+            this.finalizedPage++;
+
+            try {
+                const offset = this.finalizedPage * this.finalizedLimit;
+                const endpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=not.is.null&order=delivered_at.desc&limit=${this.finalizedLimit}&offset=${offset}`;
+                const data = await this.supabaseFetch(endpoint);
+
+                if (data) {
+                    if (data.length < this.finalizedLimit) this.finalizedHasMore = false;
+                    this.tickets = [...this.tickets, ...data];
+                }
+            } catch (e) {
+                console.error("Load More Finalized Error:", e);
+                this.finalizedPage--; // Revert page on error
+            } finally {
+                this.isLoadingFinalized = false;
+            }
+        },
+
         async fetchTickets(loadMore = false) {
             if (!this.user?.workspace_id) return;
 
@@ -1340,11 +1374,41 @@ function app() {
 
                 // VIEW SPECIFIC LOGIC
                 if (this.view === 'kanban' && !this.searchQuery) {
-                    // Kanban: Active Only
-                    // Definition: Not Delivered (delivered_at IS NULL)
-                    endpoint += `&delivered_at=is.null`;
-                    endpoint += `&order=created_at.desc`;
-                    endpoint += `&limit=200`; // Hard limit for DOM safety
+                    // KANBAN SPLIT FETCHING
+                    // 1. Active Tickets (Always fetch up to 200)
+                    const activeEndpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=is.null&order=created_at.desc&limit=200`;
+                    const activePromise = this.supabaseFetch(activeEndpoint);
+
+                    // 2. Finalized Tickets (If enabled)
+                    let finalizedPromise = Promise.resolve([]);
+                    if (this.showFinalized) {
+                        const offset = this.finalizedPage * this.finalizedLimit;
+                        const finalEndpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=not.is.null&order=delivered_at.desc&limit=${this.finalizedLimit}&offset=${offset}`;
+                        finalizedPromise = this.supabaseFetch(finalEndpoint);
+                    }
+
+                    const [activeData, finalizedData] = await Promise.all([activePromise, finalizedPromise]);
+
+                    if (this.showFinalized) {
+                        this.finalizedHasMore = (finalizedData && finalizedData.length === this.finalizedLimit);
+                    }
+
+                    // 3. Combine Logic
+                    // If loading more finalized, we append to existing finalized
+                    // But fetchTickets usually resets.
+                    // However, for simplicity here we assume fetchTickets is a full reload of active + current page of finalized?
+                    // Wait, if I load page 1 (50-100), I need page 0 (0-50) too if I just reset this.tickets.
+                    // But if I clicked "Load More", I called loadMoreFinalized(), not fetchTickets().
+                    // So fetchTickets() is for INIT/REFRESH.
+                    // So we just set tickets.
+                    this.tickets = [...(activeData || []), ...(finalizedData || [])];
+
+                    // Check if we reached the end (for pagination)
+                    // For Kanban we don't use standard pagination flags
+                    await this.fetchOperationalAlerts(); // Ensure alerts are fresh
+                    this.ticketPagination.isLoading = false;
+                    return; // EXIT HERE for Kanban
+
                 } else if (this.view === 'tech_orders') {
                     // Tech View
                     if (this.hasRole('admin')) {
@@ -1392,7 +1456,20 @@ function app() {
 
                     // POPULATE TECH TICKETS (Client Side Filter for safety/convenience)
                     if (this.view === 'tech_orders') {
-                        this.techTickets = this.tickets;
+                        this.techTickets = this.tickets.sort((a, b) => {
+                            // 1. Priority Requested (Always Top)
+                            if (a.priority_requested && !b.priority_requested) return -1;
+                            if (!a.priority_requested && b.priority_requested) return 1;
+
+                            // 2. Deadline (Sooner first)
+                            const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
+                            const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
+                            if (dA !== dB) return dA - dB;
+
+                            // 3. Priority Level (Tie-breaker)
+                            const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
+                            return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
+                        });
                     } else {
                         // For other views, we maintain client-side derivation for consistency
                         let relevantTickets = this.tickets;
@@ -1404,12 +1481,18 @@ function app() {
                         this.techTickets = relevantTickets.filter(t =>
                             ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                         ).sort((a, b) => {
+                            // 1. Priority Requested (Always Top)
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
+
+                            // 2. Deadline (Sooner first)
+                            const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
+                            const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
+                            if (dA !== dB) return dA - dB;
+
+                            // 3. Priority Level (Tie-breaker)
                             const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
-                            const pDiff = pOrder[a.priority] - pOrder[b.priority];
-                            if (pDiff !== 0) return pDiff;
-                            return new Date(a.deadline || 0) - new Date(b.deadline || 0);
+                            return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
                         });
                     }
 
