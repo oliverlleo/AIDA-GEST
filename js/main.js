@@ -178,6 +178,11 @@ function app() {
         registerForm: { companyName: '', email: '', password: '' },
         employeeForm: { name: '', username: '', password: '', roles: [] },
 
+        // Password Forms
+        mustChangePassword: false,
+        changePasswordForm: { oldPassword: '', newPassword: '', confirmPassword: '' },
+        resetPasswordForm: { employeeId: '', newPassword: '', confirmPassword: '' },
+
         // Ticket Form
         ticketForm: {
             client_name: '', os_number: '', model: '', serial: '',
@@ -253,7 +258,7 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false },
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -364,6 +369,12 @@ function app() {
                                 };
                             }
 
+                            // CHECK MUST CHANGE PASSWORD
+                            if (this.employeeSession.must_change_password) {
+                                this.mustChangePassword = true;
+                                this.modals.forceChangePassword = true;
+                            }
+
                             // Redirect Technician to Tech Bench on reload
                             if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
                                 this.view = 'tech_orders';
@@ -376,6 +387,9 @@ function app() {
                 }
 
                 if (this.user) {
+                    // Block access if must change password
+                    if (this.mustChangePassword) return;
+
                     this.initTechFilter();
                     await this.fetchTickets();
                     await this.fetchTemplates();
@@ -866,6 +880,15 @@ function app() {
                                 ...(emp.tracker_config.colors || {})
                             }
                         };
+                    }
+
+                    // Check Must Change Password
+                    if (emp.must_change_password) {
+                        this.mustChangePassword = true;
+                        this.modals.forceChangePassword = true;
+                        // Don't load data yet, just save session so they can change password
+                        localStorage.setItem('techassist_employee', JSON.stringify(emp));
+                        return;
                     }
 
                     localStorage.setItem('techassist_employee', JSON.stringify(emp));
@@ -3259,10 +3282,75 @@ function app() {
                 id: emp.id,
                 name: emp.name,
                 username: emp.username,
-                password: emp.plain_password || '',
+                password: '', // Password is never loaded
                 roles: emp.roles || []
             };
             this.modals.editEmployee = true;
+        },
+
+        openResetPassword(emp) {
+            this.resetPasswordForm = { employeeId: emp.id, newPassword: '', confirmPassword: '' };
+            this.modals.resetPassword = true;
+        },
+
+        async resetEmployeePassword() {
+            const { employeeId, newPassword, confirmPassword } = this.resetPasswordForm;
+            if (!newPassword || !confirmPassword) return this.notify("Preencha as senhas.", "error");
+            if (newPassword !== confirmPassword) return this.notify("Senhas não conferem.", "error");
+
+            this.loading = true;
+            try {
+                await this.supabaseFetch('rpc/reset_employee_password', 'POST', {
+                    p_employee_id: employeeId,
+                    p_new_password: newPassword
+                });
+                this.notify("Senha resetada! O funcionário deverá trocar no próximo login.");
+                this.modals.resetPassword = false;
+                this.modals.editEmployee = false;
+            } catch (e) {
+                this.notify("Erro ao resetar: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async changeOwnPassword() {
+            const { oldPassword, newPassword, confirmPassword } = this.changePasswordForm;
+            if (!oldPassword || !newPassword || !confirmPassword) return this.notify("Preencha todos os campos.", "error");
+            if (newPassword !== confirmPassword) return this.notify("Nova senha não confere.", "error");
+
+            this.loading = true;
+            try {
+                const token = this.employeeSession ? this.employeeSession.token : null;
+                if (!token) throw new Error("Sessão inválida.");
+
+                await this.supabaseFetch('rpc/employee_change_password', 'POST', {
+                    p_token: token,
+                    p_old_password: oldPassword,
+                    p_new_password: newPassword
+                });
+
+                this.notify("Senha alterada com sucesso!");
+                this.modals.forceChangePassword = false;
+                this.mustChangePassword = false;
+
+                // Update local session state
+                this.employeeSession.must_change_password = false;
+                localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
+
+                // Continue login flow
+                await this.fetchEmployees();
+                this.initTechFilter();
+                await this.fetchTickets();
+                this.fetchGlobalLogs();
+                this.setupRealtime();
+                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'password_changed' });
+
+            } catch (e) {
+                this.notify("Erro ao alterar senha: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
         },
 
         async updateEmployee() {

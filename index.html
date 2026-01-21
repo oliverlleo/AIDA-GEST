@@ -2872,8 +2872,11 @@
                             <input type="text" x-model="employeeForm.username" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Senha (Visível)</label>
-                            <input type="text" x-model="employeeForm.password" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" placeholder="Deixe vazio para manter a atual">
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Segurança</label>
+                            <button @click="openResetPassword(employeeForm)" class="w-full bg-red-100 text-red-600 font-bold py-2 rounded-lg border border-red-200 hover:bg-red-200 transition-colors flex items-center justify-center">
+                                <i class="fa-solid fa-key mr-2"></i> Resetar Senha
+                            </button>
+                            <p class="text-[10px] text-gray-400 mt-1">Isso exigirá que o funcionário troque a senha no próximo login.</p>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-2">Permissões (Funções)</label>
@@ -2935,7 +2938,7 @@
                             <input type="text" x-model="employeeForm.username" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Senha</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Senha Inicial</label>
                             <input type="password" x-model="employeeForm.password" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all">
                         </div>
                         <div>
@@ -4291,6 +4294,66 @@
                     Enviar
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- 9. RESET PASSWORD MODAL (Admin) -->
+    <div x-show="modals.resetPassword" class="fixed inset-0 z-[130] flex items-center justify-center" x-cloak>
+        <div class="fixed inset-0 bg-black bg-opacity-75" @click="modals.resetPassword = false"></div>
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm z-10 relative">
+            <h3 class="text-lg font-bold mb-4">Resetar Senha</h3>
+            <p class="text-sm text-gray-500 mb-4">Defina uma nova senha temporária para o funcionário.</p>
+
+            <div class="space-y-3">
+                <input type="password" x-model="resetPasswordForm.newPassword" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-black outline-none" placeholder="Nova Senha">
+                <input type="password" x-model="resetPasswordForm.confirmPassword" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-black outline-none" placeholder="Confirmar Senha">
+            </div>
+
+            <div class="flex space-x-3 mt-6">
+                <button @click="modals.resetPassword = false" class="flex-1 text-gray-500 font-bold text-sm hover:text-black">Cancelar</button>
+                <button @click="resetEmployeePassword()" class="flex-1 bg-red-600 text-white py-2 rounded-lg font-bold hover:bg-red-700">
+                    <span x-show="!loading">Resetar</span>
+                    <span x-show="loading" class="animate-pulse">...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 10. FORCE CHANGE PASSWORD MODAL (User) -->
+    <div x-show="modals.forceChangePassword" class="fixed inset-0 z-[200] flex items-center justify-center" x-cloak>
+        <div class="fixed inset-0 bg-black bg-opacity-90"></div> <!-- Blocking overlay -->
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md z-10 relative border-t-8 border-brand-500">
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-100 text-brand-600 mb-4">
+                    <i class="fa-solid fa-lock text-2xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Troca Obrigatória</h2>
+                <p class="text-gray-500 mt-2">Por segurança, você precisa definir uma nova senha para continuar acessando o sistema.</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Senha Atual</label>
+                    <input type="password" x-model="changePasswordForm.oldPassword" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-brand-500 focus:ring-0 outline-none transition-colors" placeholder="••••••">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Nova Senha</label>
+                    <input type="password" x-model="changePasswordForm.newPassword" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-brand-500 focus:ring-0 outline-none transition-colors" placeholder="••••••">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Confirmar Nova Senha</label>
+                    <input type="password" x-model="changePasswordForm.confirmPassword" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-brand-500 focus:ring-0 outline-none transition-colors" placeholder="••••••">
+                </div>
+            </div>
+
+            <button @click="changeOwnPassword()" class="w-full mt-8 bg-black text-white font-bold py-4 rounded-xl hover:bg-gray-800 transition-transform active:scale-95 shadow-lg flex items-center justify-center">
+                <span x-show="!loading">Trocar Senha e Entrar</span>
+                <span x-show="loading"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Processando...</span>
+            </button>
+
+            <p class="text-center mt-4 text-xs text-gray-400">
+                <button @click="logout()" class="underline hover:text-red-500">Sair / Cancelar</button>
+            </p>
         </div>
     </div>
 
