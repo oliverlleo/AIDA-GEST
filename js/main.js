@@ -1464,12 +1464,18 @@ function app() {
                         this.techTickets = relevantTickets.filter(t =>
                             ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                         ).sort((a, b) => {
+                            // 1. Priority Requested (Always Top)
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
+
+                            // 2. Deadline (Sooner first)
+                            const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
+                            const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
+                            if (dA !== dB) return dA - dB;
+
+                            // 3. Priority Level (Tie-breaker)
                             const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
-                            const pDiff = pOrder[a.priority] - pOrder[b.priority];
-                            if (pDiff !== 0) return pDiff;
-                            return new Date(a.deadline || 0) - new Date(b.deadline || 0);
+                            return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
                         });
                     }
 
