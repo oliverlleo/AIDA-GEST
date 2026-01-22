@@ -2048,6 +2048,50 @@ function app() {
         },
 
         async uploadTicketPhoto(file, ticketId) {
+            // Employee Upload Flow (Signed URL)
+            if (this.employeeSession && this.employeeSession.token) {
+                this.loading = true;
+                try {
+                    // 1. Get Signed URL from Edge Function
+                    const { data: signData, error: signError } = await supabaseClient.functions.invoke('generate-upload-url', {
+                        body: {
+                            ticket_id: ticketId,
+                            filename: file.name,
+                            file_type: file.type,
+                            storage_bucket: 'ticket_photos'
+                        },
+                        headers: {
+                            'x-employee-token': this.employeeSession.token
+                        }
+                    });
+
+                    if (signError || !signData) throw new Error(signError?.message || "Erro ao autorizar upload.");
+
+                    // 2. Upload to Signed URL
+                    const uploadRes = await fetch(signData.signedUrl, {
+                        method: 'PUT', // Signed URLs usually use PUT
+                        body: file,
+                        headers: { 'Content-Type': file.type }
+                    });
+
+                    if (!uploadRes.ok) throw new Error("Falha no envio do arquivo.");
+
+                    // 3. Construct Public URL (Or use returned path)
+                    // Note: If bucket is public, we can construct. If private, we might need a signed download URL later.
+                    // Assuming public read for now as per legacy.
+                    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${signData.path}`;
+                    return publicUrl;
+
+                } catch(e) {
+                    console.error("Employee Upload Error:", e);
+                    this.notify("Erro upload: " + e.message, "error");
+                    return null;
+                } finally {
+                    this.loading = false;
+                }
+            }
+
+            // Admin Upload Flow (Legacy Direct)
             if (!this.user?.workspace_id) return;
             this.loading = true;
 
@@ -2056,7 +2100,12 @@ function app() {
             const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
 
             try {
-                const headers = this.getStorageHeaders(file.type);
+                // Admin uses standard Auth header (Bearer JWT)
+                const headers = {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${this.session?.access_token}`,
+                    'Content-Type': file.type
+                };
 
                 const response = await fetch(url, {
                     method: 'POST',
