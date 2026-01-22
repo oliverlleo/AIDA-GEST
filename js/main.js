@@ -336,6 +336,25 @@ function app() {
             return await response.json();
         },
 
+        // --- STORAGE HELPER ---
+        getStorageHeaders(contentType) {
+            const token = this.session?.access_token || SUPABASE_KEY;
+
+            const headers = {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': contentType
+            };
+
+            // If Employee, send token for RLS derivation
+            if (this.employeeSession?.token) {
+                headers['x-employee-token'] = this.employeeSession.token;
+            }
+
+            // Do NOT send x-workspace-id (Removed as per security hardening)
+            return headers;
+        },
+
         async init() {
             if (this.initInFlight) return;
             this.initInFlight = true;
@@ -1118,14 +1137,7 @@ function app() {
                 const path = `${this.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
                 const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
 
-                let token = this.session?.access_token || SUPABASE_KEY;
-                const headers = {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': `Bearer ${token}`,
-                    'x-workspace-id': this.user.workspace_id,
-                    'Content-Type': file.type
-                };
-
+                const headers = this.getStorageHeaders(file.type);
                 const response = await fetch(url, { method: 'POST', headers, body: file });
                 if (!response.ok) throw new Error("Falha no upload");
 
@@ -2044,17 +2056,7 @@ function app() {
             const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
 
             try {
-                let token = SUPABASE_KEY;
-                if (this.session && this.session.access_token) {
-                    token = this.session.access_token;
-                }
-
-                const headers = {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': `Bearer ${token}`,
-                    'x-workspace-id': this.user.workspace_id,
-                    'Content-Type': file.type
-                };
+                const headers = this.getStorageHeaders(file.type);
 
                 const response = await fetch(url, {
                     method: 'POST',
