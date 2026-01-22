@@ -2093,6 +2093,12 @@ function app() {
 
             // Admin Upload Flow (Legacy Direct)
             if (!this.user?.workspace_id) return;
+
+            // Guard: Ensure session is valid
+            if (!this.session?.access_token) {
+                return this.notify("Sessão inválida. Faça login novamente.", "error");
+            }
+
             this.loading = true;
 
             const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
