@@ -16,38 +16,54 @@ serve(async (req) => {
   try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', // Use Service Role for Admin actions
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { persistSession: false } }
     );
 
-    // 1. Get Inputs
     const { ticket_id, filename, file_type, storage_bucket } = await req.json();
     const employeeToken = req.headers.get('x-employee-token');
+    const authHeader = req.headers.get('authorization');
 
-    if (!employeeToken) {
-      throw new Error("Token de funcionário ausente.");
+    let workspace_id;
+
+    // A. Validate User
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+       // ADMIN Flow (Supabase Auth)
+       const token = authHeader.split(' ')[1];
+       const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+
+       if (userError || !user) throw new Error("Admin não autenticado.");
+
+       // Get Admin Workspace
+       const { data: ws, error: wsError } = await supabaseClient
+         .from('workspaces')
+         .select('id')
+         .eq('owner_id', user.id)
+         .single();
+
+       if (wsError || !ws) throw new Error("Workspace não encontrado para este Admin.");
+       workspace_id = ws.id;
+
+    } else if (employeeToken) {
+       // EMPLOYEE Flow
+       const { data: sessionData, error: sessionError } = await supabaseClient
+         .rpc('validate_employee_session', { p_token: employeeToken });
+
+       if (sessionError || !sessionData || sessionData.length === 0 || !sessionData[0].valid) {
+         throw new Error("Sessão de funcionário inválida.");
+       }
+       workspace_id = sessionData[0].workspace_id;
+
+    } else {
+       throw new Error("Token ausente.");
     }
+
     if (!ticket_id || !filename) {
       throw new Error("Dados do arquivo incompletos.");
     }
 
-    // 2. Validate Employee Session & Get Context
-    // We call the DB RPC directly or query the table using Service Role
-    // RPC 'validate_employee_session' is perfect.
-    const { data: sessionData, error: sessionError } = await supabaseClient
-      .rpc('validate_employee_session', { p_token: employeeToken });
-
-    if (sessionError || !sessionData || sessionData.length === 0 || !sessionData[0].valid) {
-      return new Response(
-        JSON.stringify({ error: 'Sessão inválida ou expirada.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { workspace_id } = sessionData[0];
-
-    // 3. Verify Ticket Ownership (Optional but secure)
-    // Ensure the ticket belongs to the workspace
+    // B. Validate Ticket Ownership
+    // Ticket must belong to workspace
     const { data: ticket, error: ticketError } = await supabaseClient
       .from('tickets')
       .select('id')
@@ -56,35 +72,26 @@ serve(async (req) => {
       .single();
 
     if (ticketError || !ticket) {
-       return new Response(
-        JSON.stringify({ error: 'Chamado não encontrado ou acesso negado.' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+       throw new Error("Chamado não pertence ao workspace.");
     }
 
-    // 4. Generate Signed Upload URL
-    // Path: workspace_id/ticket_id/timestamp_filename
-    // Sanitizing filename slightly
+    // C. Generate Signed URL
     const safeFilename = filename.replace(/[^a-zA-Z0-9.\-_]/g, '');
     const path = `${workspace_id}/${ticket_id}/${Date.now()}_${safeFilename}`;
-    const bucket = storage_bucket || 'ticket_photos'; // Default
+    const bucket = storage_bucket || 'ticket_photos';
 
     const { data: signData, error: signError } = await supabaseClient
       .storage
       .from(bucket)
       .createSignedUploadUrl(path);
 
-    if (signError) {
-      throw signError;
-    }
+    if (signError) throw signError;
 
-    // 5. Return the URL and Token
     return new Response(
       JSON.stringify({
         signedUrl: signData.signedUrl,
-        token: signData.token, -- Usually internal token
-        path: signData.path,
-        fullPath: signData.signedUrl -- Usually contains query params
+        path: signData.path, // This is the storage path to save in DB
+        token: signData.token
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

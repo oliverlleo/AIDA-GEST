@@ -2048,91 +2048,71 @@ function app() {
         },
 
         async uploadTicketPhoto(file, ticketId) {
-            // Employee Upload Flow (Signed URL)
-            if (this.employeeSession && this.employeeSession.token) {
-                this.loading = true;
-                try {
-                    // 1. Get Signed URL from Edge Function
-                    const { data: signData, error: signError } = await supabaseClient.functions.invoke('generate-upload-url', {
-                        body: {
-                            ticket_id: ticketId,
-                            filename: file.name,
-                            file_type: file.type,
-                            storage_bucket: 'ticket_photos'
-                        },
-                        headers: {
-                            'x-employee-token': this.employeeSession.token
-                        }
-                    });
-
-                    if (signError || !signData) throw new Error(signError?.message || "Erro ao autorizar upload.");
-
-                    // 2. Upload to Signed URL
-                    const uploadRes = await fetch(signData.signedUrl, {
-                        method: 'PUT', // Signed URLs usually use PUT
-                        body: file,
-                        headers: { 'Content-Type': file.type }
-                    });
-
-                    if (!uploadRes.ok) throw new Error("Falha no envio do arquivo.");
-
-                    // 3. Construct Public URL (Or use returned path)
-                    // Note: If bucket is public, we can construct. If private, we might need a signed download URL later.
-                    // Assuming public read for now as per legacy.
-                    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${signData.path}`;
-                    return publicUrl;
-
-                } catch(e) {
-                    console.error("Employee Upload Error:", e);
-                    this.notify("Erro upload: " + e.message, "error");
-                    return null;
-                } finally {
-                    this.loading = false;
-                }
-            }
-
-            // Admin Upload Flow (Legacy Direct)
-            if (!this.user?.workspace_id) return;
-
-            // Guard: Ensure session is valid
-            if (!this.session?.access_token) {
-                return this.notify("Sessão inválida. Faça login novamente.", "error");
-            }
+            // UNIFIED FLOW: ALWAYS USE EDGE FUNCTION (Admin & Employee)
+            // This ensures standard behavior and avoids RLS confusion on direct storage access.
 
             this.loading = true;
-
-            const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
-            const path = `${this.user.workspace_id}/${ticketId}/${fileName}`;
-            const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
-
             try {
-                // Admin uses standard Auth header (Bearer JWT)
-                const headers = {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': `Bearer ${this.session?.access_token}`,
-                    'Content-Type': file.type
-                };
+                // Prepare Headers
+                const headers = {};
 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: headers,
-                    body: file
-                });
-
-                if (!response.ok) {
-                    const err = await response.json().catch(() => ({}));
-                    throw new Error(err.message || 'Upload falhou');
+                if (this.employeeSession?.token) {
+                    headers['x-employee-token'] = this.employeeSession.token;
+                } else if (this.session?.access_token) {
+                    headers['Authorization'] = `Bearer ${this.session.access_token}`;
+                } else {
+                    throw new Error("Sessão inválida. Faça login.");
                 }
 
-                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
-                return publicUrl;
+                // 1. Get Signed URL
+                const { data: signData, error: signError } = await supabaseClient.functions.invoke('generate-upload-url', {
+                    body: {
+                        ticket_id: ticketId,
+                        filename: file.name,
+                        file_type: file.type,
+                        storage_bucket: 'ticket_photos'
+                    },
+                    headers: headers
+                });
 
-            } catch (e) {
-                console.error(e);
+                if (signError || !signData) throw new Error(signError?.message || "Erro ao autorizar upload.");
+
+                // 2. Upload to Signed URL
+                const uploadRes = await fetch(signData.signedUrl, {
+                    method: 'PUT',
+                    body: file,
+                    headers: { 'Content-Type': file.type }
+                });
+
+                if (!uploadRes.ok) throw new Error("Falha no envio do arquivo.");
+
+                // Return PATH (Storage Path), not Public URL.
+                // The frontend will use getPhotoUrl() to resolve this path to a signed URL for viewing.
+                return signData.path;
+
+            } catch(e) {
+                console.error("Upload Error:", e);
                 this.notify("Erro upload: " + e.message, "error");
                 return null;
             } finally {
                 this.loading = false;
+            }
+        },
+
+        // Helper to resolve view URLs
+        async getPhotoUrl(path) {
+            // If it's already a full URL (legacy public), return it
+            if (path.startsWith('http')) return path;
+
+            try {
+                const { data, error } = await supabaseClient.functions.invoke('generate-download-url', {
+                    body: { path },
+                    headers: this.employeeSession?.token ? { 'x-employee-token': this.employeeSession.token } : undefined
+                });
+                return data?.signedUrl || '';
+            } catch(e) {
+                console.error("Error signing URL:", e);
+                return '';
             }
         },
 
