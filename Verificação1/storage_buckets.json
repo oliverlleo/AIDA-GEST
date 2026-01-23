@@ -2,7 +2,7 @@
   {
     "id": "ticket_photos",
     "name": "ticket_photos",
-    "public": true,
+    "public": false,
     "avif_autodetection": false,
     "file_size_limit": null,
     "allowed_mime_types": null
