@@ -2101,18 +2101,32 @@ function app() {
 
         // Helper to resolve view URLs
         async getPhotoUrl(path) {
-            // If it's already a full URL (legacy public), return it
-            if (path.startsWith('http')) return path;
+            if (!path) return '';
+
+            // Handle Legacy Public URLs (Convert to Path if possible)
+            // Pattern: .../storage/v1/object/public/ticket_photos/<path>
+            const marker = '/storage/v1/object/public/ticket_photos/';
+            if (path.includes(marker)) {
+                path = path.split(marker)[1];
+            } else if (path.startsWith('http')) {
+                // If it's an external URL not from our bucket, return as is.
+                // If it's a signed URL (has query params), return as is.
+                return path;
+            }
 
             try {
+                // Always try to sign the path (whether it was raw path or extracted)
                 const { data, error } = await supabaseClient.functions.invoke('generate-download-url', {
                     body: { path },
                     headers: this.employeeSession?.token ? { 'x-employee-token': this.employeeSession.token } : undefined
                 });
+                if (error) throw error;
+                // Add a timestamp to force refresh if needed (handled by browser cache usually, but good practice if replacing src)
                 return data?.signedUrl || '';
             } catch(e) {
-                console.error("Error signing URL:", e);
-                return '';
+                console.warn("Error signing URL:", e);
+                // Fallback: If signing fails, return original (might be 404/403 but better than nothing)
+                return path;
             }
         },
 
