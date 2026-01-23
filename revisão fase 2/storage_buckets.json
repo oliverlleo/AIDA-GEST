@@ -1,0 +1,10 @@
+[
+  {
+    "id": "ticket_photos",
+    "name": "ticket_photos",
+    "public": true,
+    "avif_autodetection": false,
+    "file_size_limit": null,
+    "allowed_mime_types": null
+  }
+]
