@@ -783,6 +783,9 @@
                                                     <span x-show="t.delivery_method === 'pickup'" class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold">Retirada Balcão</span>
                                                     <span x-show="t.delivery_method === 'carrier'" class="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">Transportadora</span>
                                                 </div>
+                                            <div x-show="t.pickup_available_at" class="text-[10px] text-gray-400 mt-1 font-mono">
+                                                <i class="fa-regular fa-clock mr-1"></i> <span x-text="new Date(t.pickup_available_at).toLocaleDateString('pt-BR')"></span>
+                                            </div>
                                             </div>
                                             <div class="flex items-center space-x-2">
                                                 <button @click="markDelivered(t)" class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded font-bold hover:bg-green-200 transition-colors">
@@ -797,11 +800,14 @@
                             </div>
                             </div> <!-- End Grid for Client Pendencies -->
 
+                            </div>
+
                             <!-- Tech Pendencies (Aberto) -->
                             <h3 class="text-lg font-bold text-gray-800 flex items-center pt-2">
                                 <i class="fa-solid fa-user-gear text-brand-500 mr-2"></i> Pendências com Técnico
                             </h3>
 
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                                     <h4 class="font-bold text-gray-700 text-sm">Aguardando Início (Enviar p/ Análise)</h4>
@@ -843,6 +849,7 @@
                                     </template>
                                     <div x-show="!ops.pendingTech.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum chamado aguardando início.</div>
                                 </div>
+                            </div>
                             </div>
 
                             <!-- Outsourced Pendencies (MOVED UP) -->
