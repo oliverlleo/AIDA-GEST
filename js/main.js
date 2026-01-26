@@ -2048,47 +2048,27 @@ function app() {
         },
 
         async uploadTicketPhoto(file, ticketId) {
-            // UNIFIED FLOW: ALWAYS USE EDGE FUNCTION (Admin & Employee)
-            // This ensures standard behavior and avoids RLS confusion on direct storage access.
-
+            // DIRECT UPLOAD FLOW (Bypasses Edge Function to avoid CORS issues)
             this.loading = true;
             try {
-                // Prepare Headers
-                const headers = {};
+                // 1. Generate Safe Path
+                const wsId = this.user?.workspace_id || 'unknown';
+                const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
+                const path = `${wsId}/${ticketId}/${Date.now()}_${safeName}`;
 
-                if (this.employeeSession?.token) {
-                    headers['x-employee-token'] = this.employeeSession.token;
-                } else if (this.session?.access_token) {
-                    headers['Authorization'] = `Bearer ${this.session.access_token}`;
-                } else {
-                    throw new Error("Sessão inválida. Faça login.");
-                }
+                // 2. Upload Direct to Storage (Uses RLS Policy)
+                const { data, error } = await supabaseClient
+                    .storage
+                    .from('ticket_photos')
+                    .upload(path, file, {
+                        cacheControl: '3600',
+                        upsert: false
+                    });
 
-                // 1. Get Signed URL
-                const { data: signData, error: signError } = await supabaseClient.functions.invoke('generate-upload-url', {
-                    body: {
-                        ticket_id: ticketId,
-                        filename: file.name,
-                        file_type: file.type,
-                        storage_bucket: 'ticket_photos'
-                    },
-                    headers: headers
-                });
+                if (error) throw error;
 
-                if (signError || !signData) throw new Error(signError?.message || "Erro ao autorizar upload.");
-
-                // 2. Upload to Signed URL
-                const uploadRes = await fetch(signData.signedUrl, {
-                    method: 'PUT',
-                    body: file,
-                    headers: { 'Content-Type': file.type }
-                });
-
-                if (!uploadRes.ok) throw new Error("Falha no envio do arquivo.");
-
-                // Return PATH (Storage Path), not Public URL.
-                // The frontend will use getPhotoUrl() to resolve this path to a signed URL for viewing.
-                return signData.path;
+                // Return PATH to be saved in DB
+                return path;
 
             } catch(e) {
                 console.error("Upload Error:", e);
@@ -2103,29 +2083,22 @@ function app() {
         async getPhotoUrl(path) {
             if (!path) return '';
 
-            // Handle Legacy Public URLs (Convert to Path if possible)
-            // Pattern: .../storage/v1/object/public/ticket_photos/<path>
+            // Handle Legacy Public URLs
             const marker = '/storage/v1/object/public/ticket_photos/';
             if (path.includes(marker)) {
                 path = path.split(marker)[1];
             } else if (path.startsWith('http')) {
-                // If it's an external URL not from our bucket, return as is.
-                // If it's a signed URL (has query params), return as is.
                 return path;
             }
 
             try {
-                // Always try to sign the path (whether it was raw path or extracted)
-                const { data, error } = await supabaseClient.functions.invoke('generate-download-url', {
-                    body: { path },
-                    headers: this.employeeSession?.token ? { 'x-employee-token': this.employeeSession.token } : undefined
-                });
+                // Call RPC instead of Edge Function
+                const { data, error } = await this.supabaseFetch('rpc/generate_download_url_sql', 'POST', { p_path: path });
+
                 if (error) throw error;
-                // Add a timestamp to force refresh if needed (handled by browser cache usually, but good practice if replacing src)
                 return data?.signedUrl || '';
             } catch(e) {
                 console.warn("Error signing URL:", e);
-                // Fallback: If signing fails, return original (might be 404/403 but better than nothing)
                 return path;
             }
         },
