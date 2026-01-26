@@ -2092,14 +2092,18 @@ function app() {
             }
 
             try {
-                // Call RPC instead of Edge Function
-                const { data, error } = await this.supabaseFetch('rpc/generate_download_url_sql', 'POST', { p_path: path });
+                // STANDARD SUPABASE SDK CALL
+                // Requires RLS 'SELECT' permission for 'authenticated' users on 'ticket_photos' bucket
+                const { data, error } = await supabaseClient
+                    .storage
+                    .from('ticket_photos')
+                    .createSignedUrl(path, 60); // 60 seconds validity
 
                 if (error) throw error;
                 return data?.signedUrl || '';
             } catch(e) {
                 console.warn("Error signing URL:", e);
-                return path;
+                return path; // Return original path/url if signing fails
             }
         },
 
