@@ -2048,49 +2048,30 @@ function app() {
         },
 
         async uploadTicketPhoto(file, ticketId) {
-            // UNIFIED FLOW: ALWAYS USE EDGE FUNCTION (Admin & Employee)
-            // This ensures standard behavior and avoids RLS confusion on direct storage access.
-
-            this.loading = true;
             try {
-                // Prepare Headers
-                const headers = {};
+                this.loading = true;
 
-                if (this.employeeSession?.token) {
-                    headers['x-employee-token'] = this.employeeSession.token;
-                } else if (this.session?.access_token) {
-                    headers['Authorization'] = `Bearer ${this.session.access_token}`;
-                } else {
-                    throw new Error("Sessão inválida. Faça login.");
+                // 1) Path ESTRITO: workspaceId/ticketId/...
+                const workspaceId = this.employeeSession?.workspace_id || this.user?.workspace_id;
+                if (!workspaceId) throw new Error("Workspace ID not found for upload");
+
+                const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+                const path = `${workspaceId}/${ticketId}/${Date.now()}_${safeName}`;
+
+                // 2) Upload direto no Storage (sem Edge Function)
+                const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
+                const headers = this.getStorageHeaders(file.type); // já injeta x-employee-token quando existir
+
+                const res = await fetch(url, { method: 'POST', headers, body: file });
+                if (!res.ok) {
+                    const txt = await res.text().catch(() => '');
+                    throw new Error(`Falha no upload (${res.status}): ${txt}`);
                 }
 
-                // 1. Get Signed URL
-                const { data: signData, error: signError } = await supabaseClient.functions.invoke('generate-upload-url', {
-                    body: {
-                        ticket_id: ticketId,
-                        filename: file.name,
-                        file_type: file.type,
-                        storage_bucket: 'ticket_photos'
-                    },
-                    headers: headers
-                });
+                // 3) Retornar APENAS o path (nunca URL pública)
+                return path;
 
-                if (signError || !signData) throw new Error(signError?.message || "Erro ao autorizar upload.");
-
-                // 2. Upload to Signed URL
-                const uploadRes = await fetch(signData.signedUrl, {
-                    method: 'PUT',
-                    body: file,
-                    headers: { 'Content-Type': file.type }
-                });
-
-                if (!uploadRes.ok) throw new Error("Falha no envio do arquivo.");
-
-                // Return PATH (Storage Path), not Public URL.
-                // The frontend will use getPhotoUrl() to resolve this path to a signed URL for viewing.
-                return signData.path;
-
-            } catch(e) {
+            } catch (e) {
                 console.error("Upload Error:", e);
                 this.notify("Erro upload: " + e.message, "error");
                 return null;
@@ -2103,30 +2084,38 @@ function app() {
         async getPhotoUrl(path) {
             if (!path) return '';
 
-            // Handle Legacy Public URLs (Convert to Path if possible)
-            // Pattern: .../storage/v1/object/public/ticket_photos/<path>
+            // legado: converter URL pública antiga para path
             const marker = '/storage/v1/object/public/ticket_photos/';
-            if (path.includes(marker)) {
-                path = path.split(marker)[1];
-            } else if (path.startsWith('http')) {
-                // If it's an external URL not from our bucket, return as is.
-                // If it's a signed URL (has query params), return as is.
-                return path;
-            }
+            if (path.includes(marker)) path = path.split(marker)[1];
+
+            // se já for URL pronta (não-Storage), retorna
+            if (path.startsWith('http') && !path.includes('/ticket_photos/')) return path;
 
             try {
-                // Always try to sign the path (whether it was raw path or extracted)
-                const { data, error } = await supabaseClient.functions.invoke('generate-download-url', {
-                    body: { path },
-                    headers: this.employeeSession?.token ? { 'x-employee-token': this.employeeSession.token } : undefined
+                // Encode path components to handle spaces/special chars safely
+                const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+                const signEndpoint = `${SUPABASE_URL}/storage/v1/object/sign/ticket_photos/${encodedPath}`;
+
+                const headers = this.getStorageHeaders('application/json');
+                const res = await fetch(signEndpoint, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ expiresIn: 600 }) // 10 min
                 });
-                if (error) throw error;
-                // Add a timestamp to force refresh if needed (handled by browser cache usually, but good practice if replacing src)
-                return data?.signedUrl || '';
-            } catch(e) {
-                console.warn("Error signing URL:", e);
-                // Fallback: If signing fails, return original (might be 404/403 but better than nothing)
-                return path;
+
+                if (!res.ok) {
+                    const txt = await res.text().catch(() => '');
+                    throw new Error(`sign failed ${res.status}: ${txt}`);
+                }
+
+                const data = await res.json();
+                const signed = data?.signedURL || data?.signedUrl;
+                if (!signed) return '';
+
+                return signed.startsWith('http') ? signed : `${SUPABASE_URL}${signed}`;
+            } catch (e) {
+                console.warn('Error signing URL:', e);
+                return ''; // NÃO retornar path cru
             }
         },
 
@@ -2138,9 +2127,15 @@ function app() {
             let targetArray;
 
             if (targetList === 'new') {
+                // Para "Novo Ticket", ticketForm.id já existe (gerado no openNewTicketModal)
+                // O upload agora usa workspaceId no path, então não depende de ticket existir no banco.
                 ticketId = this.ticketForm.id;
                 targetArray = this.ticketForm.photos;
             } else {
+                if (!this.selectedTicket || !this.selectedTicket.id) {
+                    this.notify("Erro: Ticket inválido.", "error");
+                    return;
+                }
                 ticketId = this.selectedTicket.id;
                 if (!this.selectedTicket.photos_urls) this.selectedTicket.photos_urls = [];
                 targetArray = this.selectedTicket.photos_urls;
