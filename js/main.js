@@ -1134,15 +1134,16 @@ function app() {
 
             this.loading = true;
             try {
+                const bucket = 'workspace_logos';
                 const path = `${this.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
-                const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
+                const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
 
                 const headers = this.getStorageHeaders(file.type);
                 const response = await fetch(url, { method: 'POST', headers, body: file });
                 if (!response.ok) throw new Error("Falha no upload");
 
-                // Construct Public URL
-                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
+                // Construct Public URL (bucket is public now)
+                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
                 this.trackerConfig.logo_url = publicUrl;
                 this.notify("Logo carregado!");
             } catch(e) {
@@ -1918,7 +1919,13 @@ function app() {
                  };
 
                  const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
-                 const createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
+                 let createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
+
+                 // Ensure we have the public_token (if backend generated it and frontend didn't get it back fully populated)
+                 if (!createdTicket.public_token) {
+                     const fresh = await this.supabaseFetch(`tickets?id=eq.${createdTicket.id}&select=*`);
+                     if (fresh && fresh.length > 0) createdTicket = fresh[0];
+                 }
 
                  const ctx = this.getLogContext(createdTicket);
                  await this.logTicketAction(createdTicket.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
@@ -2187,20 +2194,28 @@ function app() {
         },
 
         // --- SHARE TICKET ---
-        getTrackingLink(ticketId) {
+        getTrackingLink(ticket) {
             const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '') + 'acompanhar.html';
-            return `${baseUrl}?id=${ticketId}`;
+            return `${baseUrl}?id=${ticket.id}&token=${ticket.public_token}`;
         },
 
         openShareModal() {
             if (this.selectedTicket) {
+                // Ensure public_token is available
+                if (!this.selectedTicket.public_token) {
+                    // Fallback refresh logic if missing (should not happen often)
+                    this.fetchTickets().then(() => {
+                        const updated = this.tickets.find(t => t.id === this.selectedTicket.id);
+                        if(updated) this.selectedTicket = updated;
+                    });
+                }
                 this.showShareModal = true;
             }
         },
 
         copyTrackingLink() {
              if (!this.selectedTicket) return;
-             const link = this.getTrackingLink(this.selectedTicket.id);
+             const link = this.getTrackingLink(this.selectedTicket);
              navigator.clipboard.writeText(link).then(() => {
                  this.notify("Link copiado!");
              });
@@ -2209,7 +2224,7 @@ function app() {
         sendTrackingWhatsApp() {
             if (!this.selectedTicket || !this.selectedTicket.contact_info) return this.notify("Sem contato cadastrado", "error");
 
-            const link = this.getTrackingLink(this.selectedTicket.id);
+            const link = this.getTrackingLink(this.selectedTicket);
             const msg = `Olá ${this.selectedTicket.client_name}, acompanhe o progresso do seu reparo em tempo real aqui: ${link}`;
 
             let number = this.selectedTicket.contact_info.replace(/\D/g, '');
@@ -2221,7 +2236,7 @@ function app() {
         sendCarrierWhatsApp(ticket, carrier, trackingCode) {
             if (!ticket || !ticket.contact_info) return;
 
-            const link = this.getTrackingLink(ticket.id);
+            const link = this.getTrackingLink(ticket);
             let msg = `Olá ${ticket.client_name}, boa notícia! Seu aparelho ${ticket.device_model} (OS ${ticket.os_number}) foi enviado pela transportadora ${carrier}.`;
 
             if (trackingCode) {
@@ -2506,7 +2521,7 @@ function app() {
                     budget_sent_at: new Date().toISOString()
                 });
 
-                const link = this.getTrackingLink(ticket.id);
+                const link = this.getTrackingLink(ticket);
                 const msg = `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`;
 
                 let number = ticket.contact_info.replace(/\D/g, '');
