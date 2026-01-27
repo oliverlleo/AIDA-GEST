@@ -1134,15 +1134,16 @@ function app() {
 
             this.loading = true;
             try {
+                const bucket = 'workspace_logos';
                 const path = `${this.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
-                const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
+                const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
 
                 const headers = this.getStorageHeaders(file.type);
                 const response = await fetch(url, { method: 'POST', headers, body: file });
                 if (!response.ok) throw new Error("Falha no upload");
 
-                // Construct Public URL
-                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/ticket_photos/${path}`;
+                // Construct Public URL (bucket is public now)
+                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
                 this.trackerConfig.logo_url = publicUrl;
                 this.notify("Logo carregado!");
             } catch(e) {
