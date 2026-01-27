@@ -2048,50 +2048,27 @@ function app() {
         },
 
         async uploadTicketPhoto(file, ticketId) {
-            // DIRECT UPLOAD FLOW (With Strict Security Headers)
-            this.loading = true;
             try {
-                // 1. Define o caminho ESTRITO: ticket_id/timestamp_nome
-                // Isso é obrigatório para a validação de segurança no banco (RLS folder check).
-                const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-                const filePath = `${ticketId}/${Date.now()}_${safeName}`;
+                this.loading = true;
 
-                // 2. Prepara as opções e headers
-                const options = {
-                    cacheControl: '3600',
-                    upsert: false,
-                    headers: {}
-                };
+                // 1) Path ESTRITO: ticketId/...
+                const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+                const path = `${ticketId}/${Date.now()}_${safeName}`;
 
-                // Se houver token de funcionário (no state ou localStorage), injeta no header para o RLS validar
-                let employeeToken = this.employeeSession?.token;
-                if (!employeeToken) {
-                    const stored = localStorage.getItem('techassist_employee');
-                    if (stored) {
-                        try { employeeToken = JSON.parse(stored).token; } catch (e) {}
-                    }
+                // 2) Upload direto no Storage (sem Edge Function)
+                const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
+                const headers = this.getStorageHeaders(file.type); // já injeta x-employee-token quando existir
+
+                const res = await fetch(url, { method: 'POST', headers, body: file });
+                if (!res.ok) {
+                    const txt = await res.text().catch(() => '');
+                    throw new Error(`Falha no upload (${res.status}): ${txt}`);
                 }
 
-                if (employeeToken) {
-                    options.headers['x-employee-token'] = employeeToken;
-                }
+                // 3) Retornar APENAS o path (nunca URL pública)
+                return path;
 
-                // 3. Upload usando o SDK (Segurança validada pelo Banco)
-                const { data, error } = await supabaseClient
-                    .storage
-                    .from('ticket_photos')
-                    .upload(filePath, file, options);
-
-                if (error) {
-                    console.error('Erro no upload:', error);
-                    throw error;
-                }
-
-                // 4. Retorna o PATH para ser salvo na tabela tickets (photos_urls array)
-                // Nota: O código original espera apenas o path aqui para fazer o push no array
-                return filePath;
-
-            } catch(e) {
+            } catch (e) {
                 console.error("Upload Error:", e);
                 this.notify("Erro upload: " + e.message, "error");
                 return null;
@@ -2104,27 +2081,31 @@ function app() {
         async getPhotoUrl(path) {
             if (!path) return '';
 
-            // Handle Legacy Public URLs
+            // legado: se vier URL pública antiga, extrair path
             const marker = '/storage/v1/object/public/ticket_photos/';
-            if (path.includes(marker)) {
-                path = path.split(marker)[1];
-            } else if (path.startsWith('http')) {
-                return path;
-            }
+            if (path.includes(marker)) path = path.split(marker)[1];
+            if (path.startsWith('http') && !path.includes('/ticket_photos/')) return path;
 
             try {
-                // STANDARD SUPABASE SDK CALL
-                // Requires RLS 'SELECT' permission for 'authenticated' users on 'ticket_photos' bucket
-                const { data, error } = await supabaseClient
-                    .storage
-                    .from('ticket_photos')
-                    .createSignedUrl(path, 60); // 60 seconds validity
+                const signUrl = `${SUPABASE_URL}/storage/v1/object/sign/ticket_photos/${path}`;
+                const headers = this.getStorageHeaders('application/json');
 
-                if (error) throw error;
-                return data?.signedUrl || '';
-            } catch(e) {
+                const res = await fetch(signUrl, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ expiresIn: 120 })
+                });
+
+                if (!res.ok) throw new Error(`Falha ao assinar (${res.status})`);
+                const data = await res.json();
+
+                // Alguns retornos vêm como signedURL
+                const signed = data?.signedURL || data?.signedUrl;
+                return signed ? (signed.startsWith('http') ? signed : `${SUPABASE_URL}${signed}`) : '';
+
+            } catch (e) {
                 console.warn("Error signing URL:", e);
-                return path; // Return original path/url if signing fails
+                return '';
             }
         },
 
