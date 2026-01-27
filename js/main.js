@@ -2081,18 +2081,34 @@ function app() {
         },
 
         // Helper to resolve view URLs
-        async getPhotoUrl(path) {
-            if (!path) return '';
+        async getPhotoUrl(input) {
+            if (!input) return '';
 
-            // legado: converter URL pública antiga para path
-            const marker = '/storage/v1/object/public/ticket_photos/';
-            if (path.includes(marker)) path = path.split(marker)[1];
+            let path = input;
+            console.log('[getPhotoUrl] input:', input);
 
-            // se já for URL pronta (não-Storage), retorna
-            if (path.startsWith('http') && !path.includes('/ticket_photos/')) return path;
+            // 1) Se já é signed (tem token na query), pode retornar direto
+            if (typeof path === 'string' && path.startsWith('http') && path.includes('token=')) {
+                return path;
+            }
+
+            // 2) Se veio URL pública antiga, extrai path
+            const pubMarker = '/storage/v1/object/public/ticket_photos/';
+            if (path.includes(pubMarker)) {
+                path = path.split(pubMarker)[1];
+            }
+
+            // 3) Se veio URL privada do storage (object/...), extrai path também
+            const objMarker = '/storage/v1/object/ticket_photos/';
+            if (path.includes(objMarker)) {
+                path = path.split(objMarker)[1];
+            }
+
+            // Se ainda for http e não for storage, retorna (ex: imagem externa)
+            if (path.startsWith('http')) return path;
 
             try {
-                // Encode path components to handle spaces/special chars safely
+                // Encode path components
                 const encodedPath = path.split('/').map(encodeURIComponent).join('/');
                 const signEndpoint = `${SUPABASE_URL}/storage/v1/object/sign/ticket_photos/${encodedPath}`;
 
@@ -2100,22 +2116,33 @@ function app() {
                 const res = await fetch(signEndpoint, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ expiresIn: 600 }) // 10 min
+                    body: JSON.stringify({ expiresIn: 600 })
                 });
 
                 if (!res.ok) {
                     const txt = await res.text().catch(() => '');
-                    throw new Error(`sign failed ${res.status}: ${txt}`);
+                    console.warn('[SIGN FAIL]', res.status, txt, { input, path });
+                    return '';
                 }
 
                 const data = await res.json();
                 const signed = data?.signedURL || data?.signedUrl;
                 if (!signed) return '';
 
-                return signed.startsWith('http') ? signed : `${SUPABASE_URL}${signed}`;
+                let full;
+                if (signed.startsWith('http')) {
+                    full = signed.includes('/storage/v1/') ? signed : signed.replace(`${SUPABASE_URL}/`, `${SUPABASE_URL}/storage/v1/`);
+                } else if (signed.startsWith('/')) {
+                    full = `${SUPABASE_URL}/storage/v1${signed}`;
+                } else {
+                    full = `${SUPABASE_URL}/storage/v1/${signed}`;
+                }
+
+                console.log('[getPhotoUrl] signed src:', full);
+                return full;
             } catch (e) {
-                console.warn('Error signing URL:', e);
-                return ''; // NÃO retornar path cru
+                console.warn('Error signing URL:', e, { input, path });
+                return '';
             }
         },
 

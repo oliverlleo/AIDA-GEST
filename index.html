@@ -3305,7 +3305,7 @@
                                      x-init="load(url)">
                                     <div x-show="loading" class="absolute inset-0 bg-gray-100 animate-pulse rounded-lg flex items-center justify-center"><i class="fa-solid fa-image text-gray-300"></i></div>
                                     <div x-show="!loading && error" class="absolute inset-0 bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 text-[10px]"><i class="fa-solid fa-triangle-exclamation mb-1"></i>Erro</div>
-                                    <img x-show="!loading && !error" :src="src" @error="if(retries < 2){ retries++; load(url); } else { error = true; }" class="w-full h-full object-cover rounded-lg border border-gray-200 cursor-pointer" @click="if(src) window.open(src, '_blank')">
+                                    <img x-show="!loading && !error && src" :src="src" @error="error = true" @load="error = false" class="w-full h-full object-cover rounded-lg border border-gray-200 cursor-pointer" @click="if(src) window.open(src, '_blank')">
                                     <button @click="removePhoto(idx, 'new')" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
                                         <i class="fa-solid fa-times"></i>
                                     </button>
@@ -3747,7 +3747,7 @@
                                                  x-init="load(url)">
                                                 <div x-show="loading" class="absolute inset-0 bg-gray-100 animate-pulse rounded-lg flex items-center justify-center"><i class="fa-solid fa-image text-gray-300"></i></div>
                                                 <div x-show="!loading && error" class="absolute inset-0 bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-400 text-[10px]"><i class="fa-solid fa-triangle-exclamation mb-1"></i>Erro</div>
-                                                <img x-show="!loading && !error" :src="src" @error="if(retries < 2){ retries++; load(url); } else { error = true; }" class="w-full h-full object-cover rounded border border-gray-200 cursor-pointer" @click="if(src) window.open(src, '_blank')">
+                                                <img x-show="!loading && !error && src" :src="src" @error="error = true" @load="error = false" class="w-full h-full object-cover rounded border border-gray-200 cursor-pointer" @click="if(src) window.open(src, '_blank')">
                                                 <button @click="removePhoto(idx, 'existing')" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <i class="fa-solid fa-times"></i>
                                                 </button>

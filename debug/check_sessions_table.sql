@@ -1,0 +1,1 @@
+SELECT to_regclass('public.employee_sessions');
