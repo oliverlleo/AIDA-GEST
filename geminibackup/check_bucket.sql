@@ -1,0 +1,1 @@
+SELECT id, name, public FROM storage.buckets WHERE id = 'workspace_logos';
