@@ -2084,31 +2084,38 @@ function app() {
         async getPhotoUrl(path) {
             if (!path) return '';
 
-            // legado: se vier URL pública antiga, extrair path
+            // legado: converter URL pública antiga para path
             const marker = '/storage/v1/object/public/ticket_photos/';
             if (path.includes(marker)) path = path.split(marker)[1];
+
+            // se já for URL pronta (não-Storage), retorna
             if (path.startsWith('http') && !path.includes('/ticket_photos/')) return path;
 
             try {
-                const signUrl = `${SUPABASE_URL}/storage/v1/object/sign/ticket_photos/${path}`;
-                const headers = this.getStorageHeaders('application/json');
+                // Encode path components to handle spaces/special chars safely
+                const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+                const signEndpoint = `${SUPABASE_URL}/storage/v1/object/sign/ticket_photos/${encodedPath}`;
 
-                const res = await fetch(signUrl, {
+                const headers = this.getStorageHeaders('application/json');
+                const res = await fetch(signEndpoint, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ expiresIn: 120 })
+                    body: JSON.stringify({ expiresIn: 600 }) // 10 min
                 });
 
-                if (!res.ok) throw new Error(`Falha ao assinar (${res.status})`);
+                if (!res.ok) {
+                    const txt = await res.text().catch(() => '');
+                    throw new Error(`sign failed ${res.status}: ${txt}`);
+                }
+
                 const data = await res.json();
-
-                // Alguns retornos vêm como signedURL
                 const signed = data?.signedURL || data?.signedUrl;
-                return signed ? (signed.startsWith('http') ? signed : `${SUPABASE_URL}${signed}`) : '';
+                if (!signed) return '';
 
+                return signed.startsWith('http') ? signed : `${SUPABASE_URL}${signed}`;
             } catch (e) {
-                console.warn("Error signing URL:", e);
-                return '';
+                console.warn('Error signing URL:', e);
+                return ''; // NÃO retornar path cru
             }
         },
 
