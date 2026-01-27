@@ -2048,27 +2048,48 @@ function app() {
         },
 
         async uploadTicketPhoto(file, ticketId) {
-            // DIRECT UPLOAD FLOW (Bypasses Edge Function to avoid CORS issues)
+            // DIRECT UPLOAD FLOW (With Strict Security Headers)
             this.loading = true;
             try {
-                // 1. Generate Safe Path
-                const wsId = this.user?.workspace_id || 'unknown';
-                const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
-                const path = `${wsId}/${ticketId}/${Date.now()}_${safeName}`;
+                // 1. Define o caminho ESTRITO: ticket_id/timestamp_nome
+                // Isso é obrigatório para a validação de segurança no banco (RLS folder check).
+                const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                const filePath = `${ticketId}/${Date.now()}_${safeName}`;
 
-                // 2. Upload Direct to Storage (Uses RLS Policy)
+                // 2. Prepara as opções e headers
+                const options = {
+                    cacheControl: '3600',
+                    upsert: false,
+                    headers: {}
+                };
+
+                // Se houver token de funcionário (no state ou localStorage), injeta no header para o RLS validar
+                let employeeToken = this.employeeSession?.token;
+                if (!employeeToken) {
+                    const stored = localStorage.getItem('techassist_employee');
+                    if (stored) {
+                        try { employeeToken = JSON.parse(stored).token; } catch (e) {}
+                    }
+                }
+
+                if (employeeToken) {
+                    options.headers['x-employee-token'] = employeeToken;
+                }
+
+                // 3. Upload usando o SDK (Segurança validada pelo Banco)
                 const { data, error } = await supabaseClient
                     .storage
                     .from('ticket_photos')
-                    .upload(path, file, {
-                        cacheControl: '3600',
-                        upsert: false
-                    });
+                    .upload(filePath, file, options);
 
-                if (error) throw error;
+                if (error) {
+                    console.error('Erro no upload:', error);
+                    throw error;
+                }
 
-                // Return PATH to be saved in DB
-                return path;
+                // 4. Retorna o PATH para ser salvo na tabela tickets (photos_urls array)
+                // Nota: O código original espera apenas o path aqui para fazer o push no array
+                return filePath;
 
             } catch(e) {
                 console.error("Upload Error:", e);
