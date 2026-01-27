@@ -1,1 +1,0 @@
-ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS analysis_deadline TIMESTAMP WITH TIME ZONE;
