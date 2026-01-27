@@ -2117,9 +2117,45 @@ function app() {
             let targetArray;
 
             if (targetList === 'new') {
-                ticketId = this.ticketForm.id;
-                targetArray = this.ticketForm.photos;
+                // Para "Novo Ticket", bloquear upload se ainda não foi salvo
+                // A policy exige que o ticket exista no banco para validar o acesso
+                if (!this.ticketForm.id) {
+                     this.notify("Salve o chamado antes de anexar fotos.", "error");
+                     event.target.value = '';
+                     return;
+                }
+                // Mas espere... ticketForm.id é gerado no frontend com crypto.randomUUID()
+                // O RLS exige (SELECT 1 FROM tickets WHERE id = folder).
+                // SE O TICKET AINDA NÃO FOI INSERIDO (INSERT tickets), O RLS VAI FALHAR.
+                // Portanto, PRECISAMOS validar se o ticket já existe de fato?
+                // Na lógica atual "Novo Ticket", fazemos INSERT tickets DEPOIS.
+                // Então o upload FALHARÁ com 403 se fizermos antes do createTicket.
+                // SOLUÇÃO: Impedir upload na criação? Ou avisar "Salve para adicionar fotos"?
+
+                // VAMOS SEGUIR A INSTRUÇÃO: "if (!this.selectedTicket?.id) ..."
+                // Mas aqui é ticketForm.
+
+                // Se estiver criando ticket, ainda não existe no DB.
+                // A instrução do usuário: "if (!this.selectedTicket?.id) { notify... return; }"
+                // sugere que ele quer bloquear uploads em tickets não persistidos.
+
+                // No caso do modal 'new', o ticketForm.id existe (UUID gerado), mas não no DB.
+                // Então o upload vai falhar no RLS.
+                // Bloquearemos e pediremos para salvar primeiro.
+                // O usuário terá que criar o ticket e depois editar para por fotos.
+                // Isso é uma limitação do "Strict RLS" (Ticket First).
+
+                this.notify("Salve o chamado primeiro para anexar fotos.", "info");
+                event.target.value = '';
+                return;
+
+                // ticketId = this.ticketForm.id;
+                // targetArray = this.ticketForm.photos;
             } else {
+                if (!this.selectedTicket || !this.selectedTicket.id) {
+                    this.notify("Erro: Ticket inválido.", "error");
+                    return;
+                }
                 ticketId = this.selectedTicket.id;
                 if (!this.selectedTicket.photos_urls) this.selectedTicket.photos_urls = [];
                 targetArray = this.selectedTicket.photos_urls;
@@ -2129,6 +2165,10 @@ function app() {
                 const url = await this.uploadTicketPhoto(files[i], ticketId);
                 if (url) {
                     targetArray.push(url);
+                    // Se for edição, já salva o array atualizado no banco?
+                    // O usuario clica em "Salvar Alterações" depois.
+                    // Mas o arquivo já subiu. Se ele cancelar, o arquivo fica órfão.
+                    // Isso é aceitável por enquanto.
                 }
             }
 
