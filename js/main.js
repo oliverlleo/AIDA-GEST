@@ -2129,9 +2129,17 @@ function app() {
                 const signed = data?.signedURL || data?.signedUrl;
                 if (!signed) return '';
 
-                const result = signed.startsWith('http') ? signed : `${SUPABASE_URL}${signed}`;
-                console.log('[getPhotoUrl] signed src:', result);
-                return result;
+                let full;
+                if (signed.startsWith('http')) {
+                    full = signed.includes('/storage/v1/') ? signed : signed.replace(`${SUPABASE_URL}/`, `${SUPABASE_URL}/storage/v1/`);
+                } else if (signed.startsWith('/')) {
+                    full = `${SUPABASE_URL}/storage/v1${signed}`;
+                } else {
+                    full = `${SUPABASE_URL}/storage/v1/${signed}`;
+                }
+
+                console.log('[getPhotoUrl] signed src:', full);
+                return full;
             } catch (e) {
                 console.warn('Error signing URL:', e, { input, path });
                 return '';
