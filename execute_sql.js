@@ -3,8 +3,13 @@ const fs = require('fs');
 const https = require('https');
 
 const REF = 'cpydazjwlmssbzzsurxu';
-const TOKEN = 'sbp_bb8d8691fccd83e6a48791b2c8a0f0347316d960';
+const TOKEN = process.env.SUPABASE_SERVICE_KEY;
 const SQL_FILE = process.argv[2];
+
+if (!TOKEN) {
+    console.error("Error: SUPABASE_SERVICE_KEY environment variable is not set.");
+    process.exit(1);
+}
 
 if (!SQL_FILE) {
     console.error("Usage: node execute_sql.js <file.sql>");
