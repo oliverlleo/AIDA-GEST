@@ -3089,6 +3089,43 @@ function app() {
         },
 
         // --- UTILS ---
+        safeLogHTML(input) {
+            if (!input) return '';
+            // Convert \n to <br> before parsing to preserve line breaks
+            const inputWithBreaks = input.replace(/\n/g, '<br>');
+
+            const doc = new DOMParser().parseFromString(inputWithBreaks, 'text/html');
+            const allowedTags = ['B', 'STRONG', 'BR'];
+
+            const walk = (root) => {
+                const children = Array.from(root.childNodes);
+                for (const child of children) {
+                    if (child.nodeType === Node.ELEMENT_NODE) {
+                        const tagName = child.tagName.toUpperCase();
+                        if (allowedTags.includes(tagName)) {
+                            // Allowed: strip attributes, recurse
+                            while (child.attributes.length > 0) {
+                                child.removeAttribute(child.attributes[0].name);
+                            }
+                            walk(child);
+                        } else {
+                            // Disallowed: Unwrap (replace element with its children)
+                            const fragment = document.createDocumentFragment();
+                            while (child.firstChild) {
+                                fragment.appendChild(child.firstChild);
+                            }
+                            // Process the moved children (now in fragment)
+                            walk(fragment);
+                            child.parentNode.replaceChild(fragment, child);
+                        }
+                    }
+                }
+            };
+
+            walk(doc.body);
+            return doc.body.innerHTML;
+        },
+
         escapeHtml(text) {
             if (!text) return '';
             return text
