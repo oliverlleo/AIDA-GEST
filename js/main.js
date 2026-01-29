@@ -1,7 +1,7 @@
 
 // Configuração do Supabase
-const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
+const SUPABASE_URL = 'https://xfkxwqbbydexnbqskssr.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhma3h3cWJieWRleG5icXNrc3NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk2NjE2MDcsImV4cCI6MjA4NTIzNzYwN30.hLXPqS-okssXbDl7wVhKRcgG_ybwmkxoU1wDRh4sgcU';
 
 // Safe initialization
 let supabaseClient;
