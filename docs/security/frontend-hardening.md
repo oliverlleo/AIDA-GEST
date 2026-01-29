@@ -61,6 +61,7 @@
         url.searchParams.delete('token');
         window.history.replaceState({}, document.title, url.toString());
         ```
+    *   **Robust Rendering:** Switched main content `div` from `x-show` to `template x-if` to prevent property access on null `ticket` object during loading.
 
 ## Verification Checklist
 
@@ -72,5 +73,6 @@
     - URL cleanup logic implemented.
     - Referrer policy set.
     - Link attributes set.
+    - `x-if` implemented to prevent "Cannot read properties of null".
 - [x] **Deployment:**
     - Script version bumped to `v=13` to prevent "safeLogHTML is not defined" errors due to caching.

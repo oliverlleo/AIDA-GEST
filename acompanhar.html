@@ -51,11 +51,12 @@
     </div>
 
     <!-- Main Content -->
-    <div x-show="!loading && !error && ticket" class="w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-300"
-         :style="`background-color: ${config.colors.card_bg}`"
-         x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+    <template x-if="!loading && !error && ticket">
+        <div class="w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-300"
+             :style="`background-color: ${config.colors.card_bg}`"
+             x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
 
-        <!-- Top Decoration -->
+            <!-- Top Decoration -->
         <div class="h-2 w-full transition-colors" :style="`background-color: ${config.colors.header_bg}`"></div>
 
         <!-- Header -->
@@ -181,11 +182,12 @@
              </div>
         </div>
 
-        <!-- Footer -->
-        <div class="p-4 text-center border-t border-gray-100 bg-gray-50">
-            <p class="text-xs font-medium" :style="`color: ${config.colors.text_secondary}`">CentralOSt &copy; 2024</p>
+            <!-- Footer -->
+            <div class="p-4 text-center border-t border-gray-100 bg-gray-50">
+                <p class="text-xs font-medium" :style="`color: ${config.colors.text_secondary}`">CentralOSt &copy; 2024</p>
+            </div>
         </div>
-    </div>
+    </template>
 
     <script>
         const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
