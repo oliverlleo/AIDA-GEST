@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
     <title>Acompanhe seu Reparo | CentralOS</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -172,7 +173,7 @@
 
             <!-- Help Button -->
              <div class="text-center">
-                 <a :href="getWhatsAppLink()" target="_blank"
+                 <a :href="getWhatsAppLink()" target="_blank" rel="noopener noreferrer"
                     class="inline-flex items-center justify-center space-x-2 text-green-600 bg-green-50 hover:bg-green-100 border border-green-200 px-6 py-3 rounded-xl font-bold transition-all w-full">
                      <i class="fa-brands fa-whatsapp text-xl"></i>
                      <span>Precisa de ajuda?</span>
@@ -273,6 +274,15 @@
                         this.error = "Link inválido ou desatualizado. Solicite um novo link de acompanhamento.";
                         this.loading = false;
                         return;
+                    }
+
+                    // Remove token from URL to prevent leakage
+                    try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('token');
+                        window.history.replaceState({}, document.title, url.toString());
+                    } catch (e) {
+                        console.warn("Could not clean URL", e);
                     }
 
                     try {
