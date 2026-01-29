@@ -45,8 +45,10 @@
     *   **Attributes:** All attributes are stripped from allowed tags.
     *   **Disallowed Tags:** Unwrapped (replaced with children).
     *   **Return:** `doc.body.innerHTML`.
+    *   **Scope:** Function defined within `app()` returned object for Alpine.js accessibility.
 *   **Applied to `index.html`**:
     *   Replaced `x-html="log.details || log.action"` with `x-html="safeLogHTML(log.details || log.action)"`.
+    *   **Cache Busting:** Bumped `js/main.js?v=13` to ensure clients receive the new function.
 
 ### Tracking Hardening
 
@@ -70,3 +72,5 @@
     - URL cleanup logic implemented.
     - Referrer policy set.
     - Link attributes set.
+- [x] **Deployment:**
+    - Script version bumped to `v=13` to prevent "safeLogHTML is not defined" errors due to caching.
