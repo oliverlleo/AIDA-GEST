@@ -457,31 +457,6 @@
                             </div>
                         </div>
 
-                        <!-- Required Fields -->
-                        <div>
-                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-clipboard-check mr-2 text-brand-500"></i> Obrigatoriedade de Campos</h3>
-                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                <div class="flex items-center justify-between mb-4">
-                                    <div>
-                                        <span class="text-sm font-bold text-gray-800 block">Ativar Validação Estrita</span>
-                                        <span class="text-xs text-gray-500 block">Define quais campos são obrigatórios para abrir um chamado.</span>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" x-model="trackerConfig.enable_required_ticket_fields" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
-                                    </label>
-                                </div>
-
-                                <div x-show="trackerConfig.enable_required_ticket_fields" x-transition class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-gray-200">
-                                    <template x-for="field in TICKET_REQUIRED_FIELDS" :key="field.key">
-                                        <label class="flex items-center space-x-2 p-2 border rounded bg-white hover:bg-gray-100 transition-colors cursor-pointer select-none">
-                                            <input type="checkbox" x-model="trackerConfig.required_ticket_fields[field.key]" class="rounded text-brand-600 focus:ring-brand-500 border-gray-300">
-                                            <span class="text-xs font-bold text-gray-700" x-text="field.label"></span>
-                                        </label>
-                                    </template>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -606,7 +581,31 @@
                             </div>
                         </div>
 
+                        <!-- Required Fields -->
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-clipboard-check mr-2 text-brand-500"></i> Obrigatoriedade de Campos</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Ativar Validação Estrita</span>
+                                        <span class="text-xs text-gray-500 block">Define quais campos são obrigatórios para abrir um chamado.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" x-model="trackerConfig.enable_required_ticket_fields" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
 
+                                <div x-show="trackerConfig.enable_required_ticket_fields" x-transition class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-gray-200">
+                                    <template x-for="field in TICKET_REQUIRED_FIELDS" :key="field.key">
+                                        <label class="flex items-center space-x-2 p-2 border rounded bg-white hover:bg-gray-100 transition-colors cursor-pointer select-none">
+                                            <input type="checkbox" x-model="trackerConfig.required_ticket_fields[field.key]" class="rounded text-brand-600 focus:ring-brand-500 border-gray-300">
+                                            <span class="text-xs font-bold text-gray-700" x-text="field.label"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
 
                     </div>
                 </div>
