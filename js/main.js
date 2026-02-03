@@ -89,6 +89,14 @@ function app() {
                 checklist_exit: false,
                 photos: false,
                 serial_number: false
+            },
+            // OS Number Generation
+            os_generation: {
+                enabled: false,
+                mode: 'random', // 'random', 'sequential'
+                prefix: '',
+                start_seq: 1000,
+                length: 6
             }
         },
         previewStatus: 'Andamento Reparo', // For Admin Preview
@@ -1925,9 +1933,12 @@ function app() {
         },
 
         validateTicketRequirements(ticketData) {
+            // If OS Generation is enabled, skip OS validation (server will fill it)
+            const isOsAuto = this.trackerConfig.os_generation && this.trackerConfig.os_generation.enabled;
+
             if (!this.trackerConfig.enable_required_ticket_fields) {
                 // Legacy Validation (Hardcoded + Deadlines)
-                if (!ticketData.client_name || !ticketData.os_number || !ticketData.device_model || !ticketData.defect_reported) {
+                if (!ticketData.client_name || (!isOsAuto && !ticketData.os_number) || !ticketData.device_model || !ticketData.defect_reported) {
                     return { valid: false, missing: ['Campos Padrão (*)'] };
                 }
                 if (!ticketData.analysis_deadline) return { valid: false, missing: ['Prazo de Análise'] };
@@ -1945,6 +1956,9 @@ function app() {
             const reqConfig = this.trackerConfig.required_ticket_fields || {};
 
             this.TICKET_REQUIRED_FIELDS.forEach(field => {
+                // Skip OS Number check if Auto-Gen is on
+                if (field.key === 'os_number' && isOsAuto) return;
+
                 if (reqConfig[field.key]) {
                     let isValid = true;
                     const val = ticketData[field.col];
@@ -1993,11 +2007,13 @@ function app() {
                  let techId = this.ticketForm.technician_id;
                  if (techId === 'all') techId = null;
 
+                 const isOsAuto = this.trackerConfig.os_generation && this.trackerConfig.os_generation.enabled;
+
                  const ticketData = {
                      id: this.ticketForm.id,
                      workspace_id: this.user.workspace_id,
                     client_name: this.ticketForm.client_name,
-                    os_number: this.ticketForm.os_number,
+                    os_number: isOsAuto ? null : this.ticketForm.os_number, // Send null if auto
                     device_model: this.ticketForm.model,
                     serial_number: this.ticketForm.serial,
                     defect_reported: this.ticketForm.defects.length ? this.ticketForm.defects.join(', ') : null,

@@ -457,6 +457,61 @@
                             </div>
                         </div>
 
+                        <!-- OS Number Generation -->
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-hashtag mr-2 text-brand-500"></i> Numeração de OS</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Gerar Automaticamente</span>
+                                        <span class="text-xs text-gray-500 block">O sistema cria o número da OS ao salvar.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" x-model="trackerConfig.os_generation.enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
+
+                                <div x-show="trackerConfig.os_generation.enabled" x-transition class="border-t border-gray-200 pt-4 space-y-4">
+
+                                    <!-- Mode Selection -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <label class="cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center transition-all hover:bg-white"
+                                               :class="trackerConfig.os_generation.mode === 'random' ? 'border-brand-500 bg-white shadow-sm' : 'border-gray-200 opacity-60'">
+                                            <input type="radio" value="random" x-model="trackerConfig.os_generation.mode" class="sr-only">
+                                            <i class="fa-solid fa-shuffle text-xl mb-2" :class="trackerConfig.os_generation.mode === 'random' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                            <span class="text-xs font-bold text-gray-800">Aleatório</span>
+                                            <span class="text-[10px] text-gray-500">Ex: 8X2A9</span>
+                                        </label>
+
+                                        <label class="cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center transition-all hover:bg-white"
+                                               :class="trackerConfig.os_generation.mode === 'sequential' ? 'border-brand-500 bg-white shadow-sm' : 'border-gray-200 opacity-60'">
+                                            <input type="radio" value="sequential" x-model="trackerConfig.os_generation.mode" class="sr-only">
+                                            <i class="fa-solid fa-arrow-down-1-9 text-xl mb-2" :class="trackerConfig.os_generation.mode === 'sequential' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                            <span class="text-xs font-bold text-gray-800">Sequencial</span>
+                                            <span class="text-[10px] text-gray-500">Ex: 1001, 1002</span>
+                                        </label>
+                                    </div>
+
+                                    <!-- Prefix -->
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-500 mb-1">Prefixo Personalizado (Opcional)</label>
+                                        <div class="flex items-center">
+                                            <input type="text" x-model="trackerConfig.os_generation.prefix" placeholder="Ex: COS-" class="w-full border rounded-lg p-2 text-sm uppercase">
+                                        </div>
+                                    </div>
+
+                                    <!-- Start Sequence (Only for Sequential) -->
+                                    <div x-show="trackerConfig.os_generation.mode === 'sequential'">
+                                        <label class="block text-xs font-bold text-gray-500 mb-1">Iniciar Sequência em</label>
+                                        <input type="number" x-model.number="trackerConfig.os_generation.start_seq" class="w-full border rounded-lg p-2 text-sm" min="1">
+                                        <p class="text-[10px] text-gray-400 mt-1">O próximo chamado receberá este número.</p>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -3058,8 +3113,18 @@
                             <input type="text" x-model="ticketForm.contact" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Nº OS (Manual) <span x-show="isFieldRequired('os_number')" class="text-red-500">*</span></label>
-                            <input type="text" x-model="ticketForm.os_number" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                            <label class="block text-xs font-bold text-gray-500 mb-1">
+                                Nº OS <span x-show="!trackerConfig.os_generation.enabled && isFieldRequired('os_number')" class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <input type="text" x-model="ticketForm.os_number"
+                                       :disabled="trackerConfig.os_generation.enabled"
+                                       :placeholder="trackerConfig.os_generation.enabled ? 'Gerado Automaticamente' : ''"
+                                       class="w-full border rounded-lg p-2.5 bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                                <div x-show="trackerConfig.os_generation.enabled" class="absolute inset-y-0 right-0 flex items-center pr-3">
+                                    <i class="fa-solid fa-lock text-gray-400"></i>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prioridade <span x-show="isFieldRequired('priority')" class="text-red-500">*</span></label>
