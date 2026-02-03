@@ -1917,8 +1917,8 @@ function app() {
 
         isFieldRequired(key) {
             if (!this.trackerConfig.enable_required_ticket_fields) {
-                // Default legacy requirements
-                const defaults = ['client_name', 'os_number', 'device_model', 'defect_reported', 'responsible'];
+                // Default legacy requirements (Updated to include Deadlines)
+                const defaults = ['client_name', 'os_number', 'device_model', 'defect_reported', 'responsible', 'analysis_deadline', 'deadline'];
                 return defaults.includes(key);
             }
             return !!this.trackerConfig.required_ticket_fields[key];
@@ -1926,17 +1926,17 @@ function app() {
 
         validateTicketRequirements(ticketData) {
             if (!this.trackerConfig.enable_required_ticket_fields) {
-                // Legacy Validation (Hardcoded)
+                // Legacy Validation (Hardcoded + Deadlines)
                 if (!ticketData.client_name || !ticketData.os_number || !ticketData.device_model || !ticketData.defect_reported) {
                     return { valid: false, missing: ['Campos Padrão (*)'] };
                 }
+                if (!ticketData.analysis_deadline) return { valid: false, missing: ['Prazo de Análise'] };
+                if (!ticketData.deadline) return { valid: false, missing: ['Prazo de Entrega'] };
+
                 if (ticketData.is_outsourced) {
                     if (!ticketData.outsourced_company_id) return { valid: false, missing: ['Empresa Parceira'] };
                 } else {
-                    // In legacy mode, technician_id can be NULL (Todos) so we just check if selection was made in UI logic,
-                    // but here we are validating payload.
-                    // The UI logic usually enforces 'all' or specific ID.
-                    // If technician_id is null, it means 'all', which is valid in legacy.
+                    // In legacy mode, technician_id can be NULL (Todos)
                 }
                 return { valid: true };
             }
