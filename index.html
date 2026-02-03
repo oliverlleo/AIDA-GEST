@@ -1162,7 +1162,7 @@
                                 <select x-model="adminDashboardFilters.technician" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
                                     <option value="all">Todos os técnicos</option>
                                     <template x-for="employee in employees.filter(emp => (emp.roles || []).includes('tecnico'))" :key="employee.id">
-                                        <option :value="employee.id" x-text="employee.name"></option>
+                                        <option :value="employee.id" x-text="employee.name + (employee.is_locked ? ' (Bloqueado)' : '')"></option>
                                     </template>
                                 </select>
                             </div>
@@ -2862,6 +2862,15 @@
 
                 <!-- Body -->
                 <div class="p-6">
+                    <!-- Locked Badge -->
+                    <div x-show="employees.find(e => e.id === employeeForm.id)?.is_locked" class="bg-red-50 border-l-4 border-red-500 p-4 mb-4 flex justify-between items-center rounded-r">
+                        <div>
+                            <p class="text-sm font-bold text-red-700">Acesso Bloqueado</p>
+                            <p class="text-xs text-red-600">Este usuário excedeu o limite de tentativas de login.</p>
+                        </div>
+                        <i class="fa-solid fa-lock text-red-400 text-xl mr-2"></i>
+                    </div>
+
                     <div class="space-y-4">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Nome Completo</label>
