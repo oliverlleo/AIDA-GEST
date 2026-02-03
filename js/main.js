@@ -899,7 +899,7 @@ function app() {
 
                 this.newCompanyCode = generatedCode;
                 this.registrationSuccess = true;
-                this.notify('Conta criada!', 'success');
+                this.notify('Conta criada! Anote o código.', 'success');
              } catch (err) {
                  console.error(err);
                  this.notify('Erro: ' + err.message, 'error');

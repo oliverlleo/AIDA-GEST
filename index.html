@@ -75,7 +75,7 @@
     <div class="min-h-screen flex flex-col">
 
         <!-- Top Navbar -->
-        <nav x-show="session || employeeSession" class="bg-black text-white h-16 px-6 flex justify-between items-center shadow-md z-30" x-cloak>
+        <nav x-show="(session || employeeSession) && view !== 'setup_required'" class="bg-black text-white h-16 px-6 flex justify-between items-center shadow-md z-30" x-cloak>
             <div class="flex items-center space-x-6">
                 <div class="flex items-center space-x-2">
                     <img src="logo.png" alt="CentralOS" class="h-12">
@@ -123,7 +123,7 @@
         <div class="flex flex-grow overflow-hidden relative">
 
             <!-- Sidebar -->
-            <aside x-show="session || employeeSession" class="w-20 md:w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col transition-all duration-300" x-cloak>
+            <aside x-show="(session || employeeSession) && view !== 'setup_required'" class="w-20 md:w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col transition-all duration-300" x-cloak>
                 <div class="p-4 space-y-2 flex-grow overflow-y-auto">
 
                     <div class="mb-6 md:px-4">
@@ -2634,13 +2634,45 @@
 
                 <!-- Setup Required Screen -->
                 <div x-show="view === 'setup_required'" class="absolute inset-0 bg-white z-50 flex items-center justify-center" x-cloak>
-                    <div class="max-w-md w-full p-8 text-center">
-                        <h2 class="text-2xl font-bold mb-4">Bem-vindo!</h2>
-                        <p class="mb-6">Para finalizar, qual o nome da sua assistência?</p>
-                        <form @submit.prevent="completeCompanySetup">
-                            <input type="text" x-model="registerForm.companyName" class="w-full border p-3 rounded mb-4" placeholder="Nome da Empresa" required>
-                            <button type="submit" class="bg-black text-white w-full py-3 rounded font-bold">Começar</button>
-                        </form>
+                    <div class="max-w-md w-full p-8 text-center transition-all duration-300">
+
+                        <!-- Form State -->
+                        <div x-show="!registrationSuccess" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+                            <h2 class="text-2xl font-bold mb-4 text-gray-900">Bem-vindo!</h2>
+                            <p class="mb-6 text-gray-600">Para começar, qual o nome da sua assistência?</p>
+                            <form @submit.prevent="completeCompanySetup" class="space-y-4">
+                                <input type="text" x-model="registerForm.companyName" class="w-full border-2 border-gray-200 p-4 rounded-xl focus:border-brand-500 focus:ring-0 outline-none transition-colors text-lg" placeholder="Nome da Empresa" required>
+                                <button type="submit" class="bg-black text-white w-full py-4 rounded-xl font-bold hover:bg-gray-800 transition-transform active:scale-95 shadow-lg">Começar</button>
+                            </form>
+                        </div>
+
+                        <!-- Success State -->
+                        <div x-show="registrationSuccess" x-transition:enter="transition ease-out duration-500 delay-100" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
+                            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600 animate-bounce">
+                                <i class="fa-solid fa-check text-4xl"></i>
+                            </div>
+                            <h2 class="text-3xl font-bold mb-2 text-gray-900">Tudo pronto!</h2>
+                            <p class="text-gray-500 mb-6">Sua assistência foi configurada com sucesso.</p>
+
+                            <div class="bg-gray-50 border-2 border-gray-100 rounded-2xl p-6 mb-8">
+                                <p class="text-sm font-bold text-gray-400 uppercase tracking-wide mb-1">Empresa</p>
+                                <p class="text-xl font-bold text-gray-900 mb-4" x-text="registerForm.companyName"></p>
+
+                                <div class="w-full h-px bg-gray-200 mb-4"></div>
+
+                                <p class="text-sm font-bold text-gray-400 uppercase tracking-wide mb-1">Código da Empresa</p>
+                                <div class="bg-white border-2 border-brand-200 rounded-xl p-3 inline-block shadow-sm">
+                                    <span class="text-4xl font-mono font-bold text-brand-600 tracking-widest" x-text="newCompanyCode"></span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2"><i class="fa-solid fa-circle-info mr-1"></i> Este código será usado para login de funcionário.</p>
+                            </div>
+
+                            <button @click="window.location.reload()" class="bg-black text-white w-full py-4 rounded-xl font-bold hover:bg-brand-500 transition-all shadow-lg hover:shadow-brand-500/30 flex items-center justify-center group">
+                                <span>Acessar Sistema</span>
+                                <i class="fa-solid fa-arrow-right ml-2 group-hover:translate-x-1 transition-transform"></i>
+                            </button>
+                        </div>
+
                     </div>
                 </div>
             </main>
