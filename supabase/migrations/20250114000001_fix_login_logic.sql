@@ -1,33 +1,3 @@
-# Login Hardening Implementation Report
-
-**Date:** 2025-01-14
-**Status:** Applied Successfully
-
-## Overview
-
-This update implements security hardening for the employee login system strictly in the backend (PostgreSQL). It enforces progressive lockouts for repeated failures and prevents account enumeration.
-
-### Changes Applied
-
-1.  **New Table:** `public.employee_auth_state` (Isolated)
-    *   Tracks failed attempts, lock status, and forced reset requirements.
-    *   **Permissions:** Restricted to `service_role` and `postgres` only. No access for `anon` or `authenticated`.
-
-2.  **Function Patch:** `public.employee_login`
-    *   **Authentication Logic:** Directly handles password verification logic (`IF/ELSE`) to ensure fail counters are incremented on *any* password mismatch.
-    *   **Lockout Check:** Before attempting login, checks if the user is locked (time-based) or requires a reset.
-    *   **Failure Handling:** Increments counters, calculates progressive lock (`10 * 2^(lock_count-1)`), and sleeps (anti-enumeration).
-    *   **Success Handling:** Resets counters upon successful login.
-
-3.  **Function Patch:** `public.reset_employee_password`
-    *   **Wrapped Logic:** Preserves original password reset logic.
-    *   **State Clear:** Clears any lockout/reset flags for the employee upon admin reset.
-
-## Applied SQL (Migration)
-
-**File:** `supabase/migrations/20250114000001_fix_login_logic.sql`
-
-```sql
 BEGIN;
 
 CREATE OR REPLACE FUNCTION public.employee_login(p_company_code text, p_username text, p_password text)
@@ -128,15 +98,3 @@ END;
 $function$;
 
 COMMIT;
-```
-
-## Test Checklist (Manual)
-
-To be performed by QA/Admin via Frontend or Curl:
-
-- [ ] **Wrong Password (1x):** Should return "Credenciais inválidas" after ~300-600ms delay.
-- [ ] **Wrong Password (2x):** Should return "Credenciais inválidas".
-- [ ] **Wrong Password (3x):** Should return "Credenciais inválidas".
-- [ ] **Attempt 4 (Correct Password):** Should return "Conta bloqueada. Solicite ao administrador." (due to reset_required=true on 3rd fail).
-- [ ] **Admin Action:** Log in as Admin -> Employees -> Select User -> Reset Password.
-- [ ] **User Retry:** Log in with new password -> Should succeed.
