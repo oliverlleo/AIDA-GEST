@@ -3062,7 +3062,7 @@
                             <input type="text" x-model="ticketForm.os_number" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Prioridade</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Prioridade <span x-show="isFieldRequired('priority')" class="text-red-500">*</span></label>
                             <select x-model="ticketForm.priority" class="w-full border rounded-lg p-2.5 bg-gray-50">
                                 <template x-for="p in PRIORITIES" :key="p"><option :value="p" x-text="p"></option></template>
                             </select>
@@ -3129,7 +3129,7 @@
                             </div>
                         </div>
                          <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Nº Série / IMEI</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Nº Série / IMEI <span x-show="isFieldRequired('serial_number')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.serial" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>

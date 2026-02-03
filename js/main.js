@@ -87,7 +87,8 @@ function app() {
                 defect_reported: true,
                 checklist_entry: false,
                 checklist_exit: false,
-                photos: false
+                photos: false,
+                serial_number: false
             }
         },
         previewStatus: 'Andamento Reparo', // For Admin Preview
@@ -308,6 +309,7 @@ function app() {
             { key: 'client_name', label: 'Cliente', col: 'client_name', type: 'text' },
             { key: 'contact_info', label: 'Contato', col: 'contact_info', type: 'text' },
             { key: 'os_number', label: 'Nº OS (Manual)', col: 'os_number', type: 'text' },
+            { key: 'serial_number', label: 'Nº Série / IMEI', col: 'serial_number', type: 'text' },
             { key: 'priority', label: 'Prioridade', col: 'priority', type: 'text' },
             { key: 'device_model', label: 'Modelo', col: 'device_model', type: 'text' },
             { key: 'analysis_deadline', label: 'Prazo de Análise', col: 'analysis_deadline', type: 'date' },
