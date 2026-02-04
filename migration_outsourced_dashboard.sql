@@ -13,8 +13,10 @@ BEGIN
             SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
-              AND t.status = 'Analise Tecnica'
-              AND t.budget_status IS NULL
+              AND (
+                  (t.status = 'Analise Tecnica') OR
+                  (t.status = 'Aprovacao' AND (t.budget_status IS NULL OR t.budget_status != 'Enviado'))
+              )
               AND t.deleted_at IS NULL
         ),
         'waitingBudgetResponse', (
@@ -62,7 +64,7 @@ BEGIN
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Compra Peca'
-              AND (t.parts_status IS NULL OR t.parts_status = 'Pendente')
+              AND (t.parts_status IS NULL OR t.parts_status NOT IN ('Comprado', 'Recebido'))
               AND t.deleted_at IS NULL
         ),
         'pendingReceipt', (
