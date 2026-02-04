@@ -148,6 +148,7 @@ function app() {
             pendingTracking: [],
             pendingDelivery: [],
             // Outsourced
+            outsourcedToSend: [], // New
             pendingOutsourced: []
         },
         metrics: {
