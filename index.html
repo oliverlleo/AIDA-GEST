@@ -456,6 +456,8 @@
                                 </div>
                             </div>
                         </div>
+
+
                     </div>
                 </div>
 
@@ -580,7 +582,86 @@
                             </div>
                         </div>
 
+                        <!-- Required Fields -->
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-clipboard-check mr-2 text-brand-500"></i> Obrigatoriedade de Campos</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Ativar Validação Estrita</span>
+                                        <span class="text-xs text-gray-500 block">Define quais campos são obrigatórios para abrir um chamado.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" x-model="trackerConfig.enable_required_ticket_fields" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
 
+                                <div x-show="trackerConfig.enable_required_ticket_fields" x-transition class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-gray-200">
+                                    <template x-for="field in TICKET_REQUIRED_FIELDS" :key="field.key">
+                                        <label class="flex items-center space-x-2 p-2 border rounded bg-white hover:bg-gray-100 transition-colors cursor-pointer select-none">
+                                            <input type="checkbox" x-model="trackerConfig.required_ticket_fields[field.key]" class="rounded text-brand-600 focus:ring-brand-500 border-gray-300">
+                                            <span class="text-xs font-bold text-gray-700" x-text="field.label"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- OS Number Generation -->
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-hashtag mr-2 text-brand-500"></i> Numeração de OS</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Gerar Automaticamente</span>
+                                        <span class="text-xs text-gray-500 block">O sistema cria o número da OS ao salvar.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" x-model="trackerConfig.os_generation.enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
+
+                                <div x-show="trackerConfig.os_generation.enabled" x-transition class="border-t border-gray-200 pt-4 space-y-4">
+
+                                    <!-- Mode Selection -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <label class="cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center transition-all hover:bg-white"
+                                               :class="trackerConfig.os_generation.mode === 'random' ? 'border-brand-500 bg-white shadow-sm' : 'border-gray-200 opacity-60'">
+                                            <input type="radio" value="random" x-model="trackerConfig.os_generation.mode" class="sr-only">
+                                            <i class="fa-solid fa-shuffle text-xl mb-2" :class="trackerConfig.os_generation.mode === 'random' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                            <span class="text-xs font-bold text-gray-800">Aleatório</span>
+                                            <span class="text-[10px] text-gray-500">Ex: 8X2A9</span>
+                                        </label>
+
+                                        <label class="cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center transition-all hover:bg-white"
+                                               :class="trackerConfig.os_generation.mode === 'sequential' ? 'border-brand-500 bg-white shadow-sm' : 'border-gray-200 opacity-60'">
+                                            <input type="radio" value="sequential" x-model="trackerConfig.os_generation.mode" class="sr-only">
+                                            <i class="fa-solid fa-arrow-down-1-9 text-xl mb-2" :class="trackerConfig.os_generation.mode === 'sequential' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                            <span class="text-xs font-bold text-gray-800">Sequencial</span>
+                                            <span class="text-[10px] text-gray-500">Ex: 1001, 1002</span>
+                                        </label>
+                                    </div>
+
+                                    <!-- Prefix -->
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-500 mb-1">Prefixo Personalizado (Opcional)</label>
+                                        <div class="flex items-center">
+                                            <input type="text" x-model="trackerConfig.os_generation.prefix" placeholder="Ex: COS-" class="w-full border rounded-lg p-2 text-sm uppercase">
+                                        </div>
+                                    </div>
+
+                                    <!-- Start Sequence (Only for Sequential) -->
+                                    <div x-show="trackerConfig.os_generation.mode === 'sequential'">
+                                        <label class="block text-xs font-bold text-gray-500 mb-1">Iniciar Sequência em</label>
+                                        <input type="number" x-model.number="trackerConfig.os_generation.start_seq" class="w-full border rounded-lg p-2 text-sm" min="1">
+                                        <p class="text-[10px] text-gray-400 mt-1">O próximo chamado receberá este número.</p>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
 
                     </div>
                 </div>
@@ -3025,25 +3106,35 @@
                     <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4 border-b pb-2">Informações do Cliente e Aparelho</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Cliente *</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Cliente <span x-show="isFieldRequired('client_name')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.client_name" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Contato</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Contato <span x-show="isFieldRequired('contact_info')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.contact" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Nº OS (Manual) *</label>
-                            <input type="text" x-model="ticketForm.os_number" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                            <label class="block text-xs font-bold text-gray-500 mb-1">
+                                Nº OS <span x-show="!trackerConfig.os_generation.enabled && isFieldRequired('os_number')" class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <input type="text" x-model="ticketForm.os_number"
+                                       :disabled="trackerConfig.os_generation.enabled"
+                                       :placeholder="trackerConfig.os_generation.enabled ? 'Gerado Automaticamente' : ''"
+                                       class="w-full border rounded-lg p-2.5 bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                                <div x-show="trackerConfig.os_generation.enabled" class="absolute inset-y-0 right-0 flex items-center pr-3">
+                                    <i class="fa-solid fa-lock text-gray-400"></i>
+                                </div>
+                            </div>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Prioridade</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Prioridade <span x-show="isFieldRequired('priority')" class="text-red-500">*</span></label>
                             <select x-model="ticketForm.priority" class="w-full border rounded-lg p-2.5 bg-gray-50">
                                 <template x-for="p in PRIORITIES" :key="p"><option :value="p" x-text="p"></option></template>
                             </select>
                         </div>
                         <div x-data="{ open: false, search: '' }">
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Modelo *</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Modelo <span x-show="isFieldRequired('device_model')" class="text-red-500">*</span></label>
                             <div class="relative">
                                 <!-- Trigger Button (Looks like Select) -->
                                 <button @click="open = !open; search = ''; $nextTick(() => $refs.searchInput.focus())"
@@ -3104,26 +3195,29 @@
                             </div>
                         </div>
                          <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Nº Série / IMEI</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Nº Série / IMEI <span x-show="isFieldRequired('serial_number')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.serial" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Análise</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Análise <span x-show="isFieldRequired('analysis_deadline')" class="text-red-500">*</span></label>
                             <input type="datetime-local" x-model="ticketForm.analysis_deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Entrega</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Entrega <span x-show="isFieldRequired('deadline')" class="text-red-500">*</span></label>
                             <input type="datetime-local" x-model="ticketForm.deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho <span x-show="isFieldRequired('device_condition')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
                         </div>
 
                         <!-- Technician / Outsourced Combo -->
                         <div>
                             <div class="flex justify-between items-end mb-1">
-                                <label class="block text-xs font-bold text-gray-500" x-text="ticketForm.is_outsourced ? 'Empresa Parceira *' : 'Técnico Responsável *'"></label>
+                                <label class="block text-xs font-bold text-gray-500">
+                                    <span x-text="ticketForm.is_outsourced ? 'Empresa Parceira' : 'Técnico Responsável'"></span>
+                                    <span x-show="isFieldRequired('responsible')" class="text-red-500">*</span>
+                                </label>
 
                                 <!-- Small Inline Toggle -->
                                 <label x-show="trackerConfig.enable_outsourced" class="inline-flex items-center cursor-pointer">
@@ -3136,7 +3230,7 @@
                             <!-- Tech Select -->
                             <select x-show="!ticketForm.is_outsourced" x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
                                 <option value="">-- Selecione um Técnico --</option>
-                                <option value="all">TODOS (Disponível para equipe)</option>
+                                <option value="all" x-show="!isFieldRequired('responsible')">TODOS (Disponível para equipe)</option>
                                 <template x-for="tech in getTechnicians()" :key="tech.id">
                                     <option :value="tech.id" x-text="tech.name"></option>
                                 </template>
@@ -3155,7 +3249,7 @@
                         </div>
 
                         <div class="col-span-2" x-data="{ open: false, search: '' }">
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado *</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado <span x-show="isFieldRequired('defect_reported')" class="text-red-500">*</span></label>
 
                             <!-- Selected Tags -->
                             <div class="flex flex-wrap gap-2 mb-2" x-show="ticketForm.defects && ticketForm.defects.length > 0">
@@ -3235,7 +3329,9 @@
                     <!-- Section 2: Checklist -->
                     <div class="mb-6">
                         <div class="flex justify-between items-end border-b pb-2 mb-4">
-                            <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide">Checklist de Entrada</h4>
+                            <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide">
+                                Checklist de Entrada <span x-show="isFieldRequired('checklist_entry')" class="text-red-500">*</span>
+                            </h4>
                             <div class="flex items-center space-x-2">
                                 <select x-model="selectedTemplateId" @change="loadTemplate()" class="text-xs border rounded p-1">
                                     <option value="">Carregar Modelo...</option>
@@ -3279,7 +3375,9 @@
                     <!-- Section 3: Final Checklist -->
                     <div class="mb-6">
                         <div class="flex justify-between items-end border-b pb-2 mb-4">
-                            <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide">Checklist de Saída</h4>
+                            <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide">
+                                Checklist de Saída <span x-show="isFieldRequired('checklist_exit')" class="text-red-500">*</span>
+                            </h4>
                             <div class="flex items-center space-x-2">
                                 <select x-model="selectedTemplateIdFinal" @change="loadTemplateFinal()" class="text-xs border rounded p-1">
                                     <option value="">Carregar Modelo...</option>
@@ -3322,7 +3420,9 @@
 
                     <!-- Section 4: Photos -->
                      <div>
-                        <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide mb-2 border-b pb-2">Fotos</h4>
+                        <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide mb-2 border-b pb-2">
+                            Fotos <span x-show="isFieldRequired('photos')" class="text-red-500">*</span>
+                        </h4>
                         <div class="mb-3">
                             <label class="cursor-pointer bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 text-xs font-bold py-2 px-4 rounded inline-flex items-center transition-colors">
                                 <i class="fa-solid fa-camera mr-2"></i> Adicionar Fotos

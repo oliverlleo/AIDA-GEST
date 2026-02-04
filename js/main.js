@@ -71,7 +71,33 @@ function app() {
             visible_stages: [
                 'Aberto', 'Terceirizado', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
                 'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
-            ]
+            ],
+            // New Requirement Features
+            enable_required_ticket_fields: false,
+            required_ticket_fields: {
+                client_name: true,
+                contact_info: false,
+                os_number: true,
+                priority: false,
+                device_model: true,
+                analysis_deadline: false,
+                deadline: false,
+                device_condition: false,
+                responsible: true,
+                defect_reported: true,
+                checklist_entry: false,
+                checklist_exit: false,
+                photos: false,
+                serial_number: false
+            },
+            // OS Number Generation
+            os_generation: {
+                enabled: false,
+                mode: 'random', // 'random', 'sequential'
+                prefix: '',
+                start_seq: 1000,
+                length: 6
+            }
         },
         previewStatus: 'Andamento Reparo', // For Admin Preview
 
@@ -286,6 +312,24 @@ function app() {
             'Finalizado': 'Finalizado'
         },
 
+        // REQUIRED FIELDS DEFINITION
+        TICKET_REQUIRED_FIELDS: [
+            { key: 'client_name', label: 'Cliente', col: 'client_name', type: 'text' },
+            { key: 'contact_info', label: 'Contato', col: 'contact_info', type: 'text' },
+            { key: 'os_number', label: 'Nº OS (Manual)', col: 'os_number', type: 'text' },
+            { key: 'serial_number', label: 'Nº Série / IMEI', col: 'serial_number', type: 'text' },
+            { key: 'priority', label: 'Prioridade', col: 'priority', type: 'text' },
+            { key: 'device_model', label: 'Modelo', col: 'device_model', type: 'text' },
+            { key: 'analysis_deadline', label: 'Prazo de Análise', col: 'analysis_deadline', type: 'date' },
+            { key: 'deadline', label: 'Prazo de Entrega', col: 'deadline', type: 'date' },
+            { key: 'device_condition', label: 'Situação do Aparelho', col: 'device_condition', type: 'text' },
+            { key: 'responsible', label: 'Técnico Responsável', col: 'technician_id', type: 'id_check' },
+            { key: 'defect_reported', label: 'Defeito Relatado', col: 'defect_reported', type: 'text' },
+            { key: 'checklist_entry', label: 'Checklist de Entrada', col: 'checklist_data', type: 'array' },
+            { key: 'checklist_exit', label: 'Checklist de Saída', col: 'checklist_final_data', type: 'array' },
+            { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' }
+        ],
+
         // --- HELPER: NATIVE FETCH (Stateless) ---
         async supabaseFetch(endpoint, method = 'GET', body = null) {
             const isRpc = endpoint.startsWith('rpc/');
@@ -423,6 +467,11 @@ function app() {
                                     colors: {
                                         ...this.trackerConfig.colors,
                                         ...(this.employeeSession.tracker_config.colors || {})
+                                    },
+                                    // Merge new fields if they don't exist in saved config
+                                    required_ticket_fields: {
+                                        ...this.trackerConfig.required_ticket_fields,
+                                        ...(this.employeeSession.tracker_config.required_ticket_fields || {})
                                     }
                                 };
                             }
@@ -941,6 +990,10 @@ function app() {
                             colors: {
                                 ...this.trackerConfig.colors,
                                 ...(emp.tracker_config.colors || {})
+                            },
+                            required_ticket_fields: {
+                                ...this.trackerConfig.required_ticket_fields,
+                                ...(emp.tracker_config.required_ticket_fields || {})
                             }
                         };
                     }
@@ -1047,6 +1100,10 @@ function app() {
                             colors: {
                                 ...this.trackerConfig.colors,
                                 ...(profile.workspaces.tracker_config.colors || {})
+                            },
+                            required_ticket_fields: {
+                                ...this.trackerConfig.required_ticket_fields,
+                                ...(profile.workspaces.tracker_config.required_ticket_fields || {})
                             }
                         };
                     }
@@ -1866,17 +1923,72 @@ function app() {
             if (tmpl) this.ticketForm.checklist_final = tmpl.items.map(s => ({ item: s, ok: false }));
         },
 
+        isFieldRequired(key) {
+            if (!this.trackerConfig.enable_required_ticket_fields) {
+                // Default legacy requirements (Updated to include Deadlines)
+                const defaults = ['client_name', 'os_number', 'device_model', 'defect_reported', 'responsible', 'analysis_deadline', 'deadline'];
+                return defaults.includes(key);
+            }
+            return !!this.trackerConfig.required_ticket_fields[key];
+        },
+
+        validateTicketRequirements(ticketData) {
+            // If OS Generation is enabled, skip OS validation (server will fill it)
+            const isOsAuto = this.trackerConfig.os_generation && this.trackerConfig.os_generation.enabled;
+
+            if (!this.trackerConfig.enable_required_ticket_fields) {
+                // Legacy Validation (Hardcoded + Deadlines)
+                if (!ticketData.client_name || (!isOsAuto && !ticketData.os_number) || !ticketData.device_model || !ticketData.defect_reported) {
+                    return { valid: false, missing: ['Campos Padrão (*)'] };
+                }
+                if (!ticketData.analysis_deadline) return { valid: false, missing: ['Prazo de Análise'] };
+                if (!ticketData.deadline) return { valid: false, missing: ['Prazo de Entrega'] };
+
+                if (ticketData.is_outsourced) {
+                    if (!ticketData.outsourced_company_id) return { valid: false, missing: ['Empresa Parceira'] };
+                } else {
+                    // In legacy mode, technician_id can be NULL (Todos)
+                }
+                return { valid: true };
+            }
+
+            const missing = [];
+            const reqConfig = this.trackerConfig.required_ticket_fields || {};
+
+            this.TICKET_REQUIRED_FIELDS.forEach(field => {
+                // Skip OS Number check if Auto-Gen is on
+                if (field.key === 'os_number' && isOsAuto) return;
+
+                if (reqConfig[field.key]) {
+                    let isValid = true;
+                    const val = ticketData[field.col];
+
+                    if (field.type === 'text') {
+                        if (!val || String(val).trim() === '') isValid = false;
+                    } else if (field.type === 'date') {
+                        if (!val) isValid = false;
+                    } else if (field.type === 'array') {
+                        if (!val || !Array.isArray(val) || val.length === 0) isValid = false;
+                    } else if (field.type === 'id_check') {
+                        if (ticketData.is_outsourced) {
+                            if (!ticketData.outsourced_company_id) isValid = false;
+                        } else {
+                            if (!val) isValid = false; // Must have specific technician (Not NULL)
+                        }
+                    }
+
+                    if (!isValid) missing.push(field.label);
+                }
+            });
+
+            return {
+                valid: missing.length === 0,
+                missing: missing
+            };
+        },
+
         async createTicket() {
-             if (!this.ticketForm.client_name || !this.ticketForm.os_number || !this.ticketForm.model || !this.ticketForm.defects || this.ticketForm.defects.length === 0) {
-                 return this.notify("Preencha os campos obrigatórios (*)", "error");
-             }
-
-             if (this.ticketForm.is_outsourced) {
-                 if (!this.ticketForm.outsourced_company_id) return this.notify("Selecione a empresa parceira.", "error");
-             } else {
-                 if (!this.ticketForm.technician_id) return this.notify("Selecione um Técnico Responsável ou 'Todos'.", "error");
-             }
-
+             // Basic Integrity Checks
              if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
                  return this.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
              }
@@ -1895,11 +2007,13 @@ function app() {
                  let techId = this.ticketForm.technician_id;
                  if (techId === 'all') techId = null;
 
+                 const isOsAuto = this.trackerConfig.os_generation && this.trackerConfig.os_generation.enabled;
+
                  const ticketData = {
                      id: this.ticketForm.id,
                      workspace_id: this.user.workspace_id,
                     client_name: this.ticketForm.client_name,
-                    os_number: this.ticketForm.os_number,
+                    os_number: isOsAuto ? null : this.ticketForm.os_number, // Send null if auto
                     device_model: this.ticketForm.model,
                     serial_number: this.ticketForm.serial,
                     defect_reported: this.ticketForm.defects.length ? this.ticketForm.defects.join(', ') : null,
@@ -1917,6 +2031,13 @@ function app() {
                      status: 'Aberto',
                      created_by_name: this.user.name
                  };
+
+                 // Configurable Validation
+                 const validation = this.validateTicketRequirements(ticketData);
+                 if (!validation.valid) {
+                     this.loading = false;
+                     return this.notify("Preencha os campos obrigatórios: " + validation.missing.join(', '), "error");
+                 }
 
                  const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
                  let createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
