@@ -1,14 +1,16 @@
+DROP FUNCTION IF EXISTS get_operational_alerts(uuid);
+
 CREATE OR REPLACE FUNCTION get_operational_alerts(p_workspace_id uuid)
-RETURNS json
+RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY INVOKER
 AS $$
 DECLARE
-    v_result json;
+    v_result jsonb;
 BEGIN
-    SELECT json_build_object(
+    SELECT jsonb_build_object(
         'pendingBudgets', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Analise Tecnica'
@@ -16,7 +18,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'waitingBudgetResponse', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Aprovacao'
@@ -24,7 +26,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'pendingPickups', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Retirada Cliente'
@@ -32,7 +34,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'urgentAnalysis', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.analysis_deadline < now()
@@ -40,7 +42,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'delayedDeliveries', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.deadline < now()
@@ -48,7 +50,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'priorityTickets', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.priority_requested = true
@@ -56,7 +58,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'pendingPurchase', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Compra Peca'
@@ -64,7 +66,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'pendingReceipt', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Compra Peca'
@@ -72,7 +74,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'pendingTech', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Aberto'
@@ -80,7 +82,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'outsourcedToSend', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Aberto'
@@ -88,14 +90,14 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'pendingOutsourced', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Terceirizado'
               AND t.deleted_at IS NULL
         ),
         'pendingTracking', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Retirada Cliente'
@@ -105,7 +107,7 @@ BEGIN
               AND t.deleted_at IS NULL
         ),
         'pendingDelivery', (
-            SELECT COALESCE(json_agg(t), '[]'::json)
+            SELECT COALESCE(jsonb_agg(t), '[]'::jsonb)
             FROM tickets t
             WHERE t.workspace_id = p_workspace_id
               AND t.status = 'Retirada Cliente'
@@ -121,3 +123,5 @@ BEGIN
     RETURN v_result;
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION get_operational_alerts(uuid) TO anon, authenticated, service_role;
