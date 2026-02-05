@@ -542,6 +542,9 @@ function app() {
                     this.fetchTickets();
                     this.fetchGlobalLogs();
                     this.calculateMetrics();
+                } else if (value === 'admin_dashboard') {
+                    this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
+                    this.fetchTickets();
                 } else {
                     // Other views (e.g. tech_orders)
                     this.clearFilters();
@@ -596,9 +599,14 @@ function app() {
 
             // 2. Prepare Params
             const f = this.adminDashboardFilters;
+
+            // garante período mesmo se só um lado vier preenchido
+            const dateStart = f.dateStart || f.dateEnd || null;
+            const dateEnd = f.dateEnd || f.dateStart || null;
+
             const params = {
-                p_date_start: f.dateStart || null,
-                p_date_end: f.dateEnd || null,
+                p_date_start: dateStart,
+                p_date_end: dateEnd,
                 p_technician_id: f.technician === 'all' ? null : f.technician,
                 p_status: f.status === 'all' ? null : f.status,
                 p_defect: f.defect === 'all' ? null : f.defect,
