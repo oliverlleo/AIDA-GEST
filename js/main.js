@@ -3757,11 +3757,15 @@ function app() {
         },
 
         formatDuration(ms) {
-            if (!ms || Number.isNaN(ms)) return '-';
-            const totalMinutes = Math.round(ms / 60000);
+            const n = Number(ms);
+            if (ms === null || ms === undefined || Number.isNaN(n)) return '-';
+            if (n < 0) return '-';
+
+            const totalMinutes = Math.round(n / 60000);
             const days = Math.floor(totalMinutes / 1440);
             const hours = Math.floor((totalMinutes % 1440) / 60);
             const minutes = totalMinutes % 60;
+
             const parts = [];
             if (days) parts.push(`${days}d`);
             if (hours || days) parts.push(`${hours}h`);

@@ -1780,7 +1780,7 @@
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-500">Chamados por dia</span>
-                                    <span class="text-lg font-semibold text-gray-900" x-text="metrics.ticketsPerDay">0</span>
+                                    <span class="text-lg font-semibold text-gray-900" x-text="Number(metrics.ticketsPerDay || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })">0</span>
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-500">Tempo para orçamento</span>
