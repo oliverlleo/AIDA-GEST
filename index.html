@@ -2450,6 +2450,16 @@
                                             <div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
                                                 Técnico: <span class="font-normal" x-text="getEmployeeName(ticket.technician_id)"></span>
                                             </div>
+
+                                            <!-- Kanban Actions -->
+                                            <div class="pt-2 mt-1 border-t border-gray-100 flex space-x-2" @click.stop>
+                                                <button x-show="!ticket.analysis_started_at" @click.stop="startTicketAnalysis(ticket)" :disabled="loading" class="flex-1 bg-yellow-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-yellow-700 transition-colors disabled:opacity-50">
+                                                    <i class="fa-solid fa-play mr-1"></i> Iniciar
+                                                </button>
+                                                <button x-show="ticket.analysis_started_at" @click.stop="finishAnalysisFromKanban(ticket)" :disabled="loading" class="flex-1 bg-indigo-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-indigo-700 transition-colors disabled:opacity-50">
+                                                    <i class="fa-solid fa-check-double mr-1"></i> Finalizar
+                                                </button>
+                                            </div>
                                         </div>
                                      </div>
                                 </template>
@@ -2496,14 +2506,6 @@
                                         </div>
                                         <h4 class="font-bold text-gray-900 text-sm mb-1 leading-tight" x-text="ticket.device_model"></h4>
 
-                                        <!-- Timer -->
-                                        <template x-if="ticket.repair_start_at">
-                                            <div class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold mt-2 inline-flex items-center">
-                                                <i class="fa-solid fa-stopwatch mr-1"></i>
-                                                <span x-text="getDuration(ticket.repair_start_at)"></span>
-                                            </div>
-                                        </template>
-
                                         <div class="mt-2 pt-2 border-t border-gray-50 space-y-1">
                                             <!-- Deadlines Section -->
                                             <div class="space-y-0.5 mb-2">
@@ -2529,6 +2531,26 @@
 
                                             <div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
                                                 Técnico: <span class="font-normal" x-text="getEmployeeName(ticket.technician_id)"></span>
+                                            </div>
+
+                                            <!-- Kanban Actions -->
+                                            <div class="pt-2 mt-1 border-t border-gray-100 flex flex-col space-y-2" @click.stop>
+                                                <div class="flex space-x-2">
+                                                    <button x-show="!ticket.repair_start_at" @click.stop="startRepair(ticket)" :disabled="loading" class="flex-1 bg-blue-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-blue-700 transition-colors disabled:opacity-50">
+                                                        <i class="fa-solid fa-screwdriver-wrench mr-1"></i> Iniciar
+                                                    </button>
+                                                    <button x-show="ticket.repair_start_at" @click.stop="openOutcomeModal('repair', ticket)" :disabled="loading" class="flex-1 bg-orange-500 text-white text-[10px] font-bold py-1.5 rounded hover:bg-orange-600 transition-colors disabled:opacity-50">
+                                                        <i class="fa-solid fa-flag-checkered mr-1"></i> Finalizar
+                                                    </button>
+                                                </div>
+
+                                                <!-- Timer below buttons -->
+                                                <template x-if="ticket.repair_start_at">
+                                                    <div class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold text-center border border-blue-100">
+                                                        <i class="fa-solid fa-stopwatch mr-1"></i>
+                                                        <span x-text="getDuration(ticket.repair_start_at)"></span>
+                                                    </div>
+                                                </template>
                                             </div>
                                         </div>
                                      </div>
@@ -4477,6 +4499,33 @@
                 <button @click="modals.outsourced = false" class="flex-1 text-gray-500 font-bold text-sm hover:text-black">Cancelar</button>
                 <button @click="sendToOutsourced()" class="flex-1 bg-black text-white py-3 rounded-lg font-bold hover:bg-brand-500">
                     Enviar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8.1 FINISH ANALYSIS MINI MODAL (New) -->
+    <div x-show="modals.finishAnalysis" class="fixed inset-0 z-[80] flex items-center justify-center" x-cloak>
+        <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.finishAnalysis = false"></div>
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm z-10 relative">
+            <h3 class="text-lg font-bold mb-4 text-blue-800">Conclusão da Análise</h3>
+
+            <div class="mb-4">
+                <label class="flex items-center space-x-2 mb-2 cursor-pointer">
+                    <input type="checkbox" x-model="analysisForm.needsParts" class="form-checkbox text-blue-600 h-5 w-5 rounded">
+                    <span class="text-sm font-bold text-gray-700">Deseja comprar peças?</span>
+                </label>
+
+                <div x-show="analysisForm.needsParts" x-transition>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
+                    <input type="text" x-model="analysisForm.partsList" class="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: Tela, Bateria...">
+                </div>
+            </div>
+
+            <div class="flex space-x-3">
+                <button @click="modals.finishAnalysis = false" class="flex-1 text-gray-500 font-bold text-sm hover:text-black">Cancelar</button>
+                <button @click="confirmFinishAnalysisKanban()" class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow">
+                    Confirmar
                 </button>
             </div>
         </div>

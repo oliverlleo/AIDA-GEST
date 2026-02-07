@@ -285,7 +285,7 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false },
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -2633,6 +2633,20 @@ function app() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        finishAnalysisFromKanban(ticket) {
+            this.selectedTicket = ticket;
+            this.analysisForm = { needsParts: false, partsList: '' };
+            this.modals.finishAnalysis = true;
+        },
+
+        async confirmFinishAnalysisKanban() {
+            if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
+                return this.notify("Liste as peças necessárias.", "error");
+            }
+            this.modals.finishAnalysis = false;
+            await this.finishAnalysis();
         },
 
         async finishAnalysis() {

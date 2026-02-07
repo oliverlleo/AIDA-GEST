@@ -1,4 +1,4 @@
--- 1. Add Column to tickets table
+-- 1. Add Column to tickets table (Idempotent)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tickets' AND column_name = 'analysis_started_at') THEN
@@ -6,7 +6,7 @@ BEGIN
     END IF;
 END $$;
 
--- 2. Create RPC Function
+-- 2. Create RPC Function (Updated with Bold Tags)
 CREATE OR REPLACE FUNCTION start_ticket_analysis(p_ticket_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -23,10 +23,8 @@ BEGIN
     v_user_id := auth.uid();
 
     IF v_user_id IS NOT NULL AND v_user_id != '00000000-0000-0000-0000-000000000000'::UUID THEN
-        -- Admin / Authenticated User
         v_user_name := 'Administrador';
     ELSE
-        -- Check for Employee Token
         BEGIN
             v_token := current_setting('request.headers', true)::json->>'x-employee-token';
         EXCEPTION WHEN OTHERS THEN
@@ -34,9 +32,6 @@ BEGIN
         END;
 
         IF v_token IS NOT NULL THEN
-            -- In a full implementation, we would query the employees table here.
-            -- Without exact schema knowledge of where tokens are stored (likely hashed),
-            -- we default to 'Técnico' to ensure security (avoiding client-side spoofing).
             v_user_name := 'Técnico';
         ELSE
             v_user_name := 'Sistema';
@@ -68,7 +63,7 @@ BEGIN
         updated_at = NOW()
     WHERE id = p_ticket_id;
 
-    -- 4. Insert Log
+    -- 4. Insert Log (With BOLD formatting)
     INSERT INTO ticket_logs (
         ticket_id,
         action,
@@ -79,12 +74,12 @@ BEGIN
     VALUES (
         p_ticket_id,
         'Iniciou Análise',
-        format('ANÁLISE DO %s DE %s da OS %s FOI INICIADA', UPPER(v_ticket.device_model), UPPER(v_ticket.client_name), v_ticket.os_number),
+        format('ANÁLISE DO <b>%s</b> DE <b>%s</b> da OS <b>%s</b> FOI INICIADA', UPPER(v_ticket.device_model), UPPER(v_ticket.client_name), v_ticket.os_number),
         v_user_name,
         NOW()
     );
 END;
 $$;
 
--- 3. Reload Schema Cache (Critical for PostgREST to pick up the change)
+-- 3. Reload Schema Cache
 NOTIFY pgrst, 'reload schema';
