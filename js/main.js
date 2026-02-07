@@ -199,6 +199,11 @@ function app() {
         loadedToken: null,
         initInFlight: false,
 
+        // Daily Report State
+        dailyReport: null,
+        dailyReportLoading: false,
+        dailyReportError: null,
+
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
         adminForm: { email: '', password: '' },
@@ -563,7 +568,11 @@ function app() {
 
             this.$watch('adminDashboardFilters', () => {
                 // If filters change, reload dashboard metrics AND list
-                this.requestDashboardMetrics({ reason: 'filters' });
+                if (this.adminDashboardFilters.quickView === 'daily_report') {
+                    this.requestDailyReport();
+                } else {
+                    this.requestDashboardMetrics({ reason: 'filters' });
+                }
                 this.fetchTickets();
             });
         },
@@ -694,6 +703,33 @@ function app() {
         // Backward compatibility / Alias if needed
         async calculateMetrics() {
             await this.requestDashboardMetrics({ reason: 'legacy_call' });
+        },
+
+        async requestDailyReport() {
+            if (!this.user?.workspace_id) return;
+            this.dailyReportLoading = true;
+            this.dailyReportError = null;
+
+            try {
+                const f = this.adminDashboardFilters;
+                // Note: backend handles null dates by defaulting to "today"
+                const params = {
+                    p_date_start: f.dateStart || null,
+                    p_date_end: f.dateEnd || null
+                };
+
+                const data = await this.supabaseFetch('rpc/get_daily_report', 'POST', params);
+                if (data) {
+                    this.dailyReport = data;
+                } else {
+                    this.dailyReportError = "Nenhum dado retornado.";
+                }
+            } catch (e) {
+                console.error("Daily Report Error:", e);
+                this.dailyReportError = e.message;
+            } finally {
+                this.dailyReportLoading = false;
+            }
         },
 
         toggleAdminView() {
