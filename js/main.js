@@ -542,6 +542,9 @@ function app() {
                     this.fetchTickets();
                     this.fetchGlobalLogs();
                     this.calculateMetrics();
+                } else if (value === 'admin_dashboard') {
+                    this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
+                    this.fetchTickets();
                 } else {
                     // Other views (e.g. tech_orders)
                     this.clearFilters();
@@ -596,9 +599,14 @@ function app() {
 
             // 2. Prepare Params
             const f = this.adminDashboardFilters;
+
+            // garante período mesmo se só um lado vier preenchido
+            const dateStart = f.dateStart || f.dateEnd || null;
+            const dateEnd = f.dateEnd || f.dateStart || null;
+
             const params = {
-                p_date_start: f.dateStart || null,
-                p_date_end: f.dateEnd || null,
+                p_date_start: dateStart,
+                p_date_end: dateEnd,
                 p_technician_id: f.technician === 'all' ? null : f.technician,
                 p_status: f.status === 'all' ? null : f.status,
                 p_defect: f.defect === 'all' ? null : f.defect,
@@ -2602,6 +2610,31 @@ function app() {
             });
         },
 
+        async startTicketAnalysis(ticket) {
+            this.loading = true;
+            try {
+                // Call RPC
+                await this.supabaseFetch('rpc/start_ticket_analysis', 'POST', {
+                    p_ticket_id: ticket.id
+                });
+
+                // Update Local State
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket.analysis_started_at = new Date().toISOString();
+                }
+
+                this.notify("Análise iniciada com sucesso!");
+                await this.fetchTickets();
+                if (this.view === 'dashboard') this.fetchGlobalLogs();
+
+            } catch (e) {
+                console.error("Start Analysis Error:", e);
+                this.notify("Erro ao iniciar: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
         async finishAnalysis() {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
@@ -3757,11 +3790,15 @@ function app() {
         },
 
         formatDuration(ms) {
-            if (!ms || Number.isNaN(ms)) return '-';
-            const totalMinutes = Math.round(ms / 60000);
+            const n = Number(ms);
+            if (ms === null || ms === undefined || Number.isNaN(n)) return '-';
+            if (n < 0) return '-';
+
+            const totalMinutes = Math.round(n / 60000);
             const days = Math.floor(totalMinutes / 1440);
             const hours = Math.floor((totalMinutes % 1440) / 60);
             const minutes = totalMinutes % 60;
+
             const parts = [];
             if (days) parts.push(`${days}d`);
             if (hours || days) parts.push(`${hours}h`);
