@@ -11,17 +11,13 @@ DECLARE
     v_end TIMESTAMP;
     v_result JSONB;
 BEGIN
-    -- 1. Secure Workspace Resolution (Copied pattern)
+    -- 1. Secure Workspace Resolution
     v_user_id := auth.uid();
 
-    -- Check if Admin (from profiles) or Owner (from workspaces)
-    -- Since this is an RPC for Admin Dashboard, we assume the caller is an Admin/Owner authenticated via Supabase Auth.
-    -- We'll try to get workspace_id from the profile of the current user.
     SELECT workspace_id INTO v_workspace_id
     FROM profiles
     WHERE id = v_user_id;
 
-    -- Fallback: Check if user is owner of a workspace directly
     IF v_workspace_id IS NULL THEN
         SELECT id INTO v_workspace_id
         FROM workspaces
@@ -33,8 +29,7 @@ BEGIN
         RAISE EXCEPTION 'Acesso negado: Workspace não encontrado para o usuário.';
     END IF;
 
-    -- 2. Date Range Calculation (Default to Today in Sao_Paulo/UTC-3 roughly or standard UTC day if simpler)
-    -- Ideally, we use the input dates. If null, we use CURRENT_DATE.
+    -- 2. Date Range Calculation
     IF p_date_start IS NULL OR p_date_start = '' THEN
         v_start := CURRENT_DATE::TIMESTAMP;
     ELSE
@@ -119,7 +114,8 @@ BEGIN
                         JOIN tickets t ON t.technician_id = e.id
                         WHERE e.workspace_id = v_workspace_id
                           AND t.repair_end_at BETWEEN v_start AND v_end
-                          AND (e.roles @> '["tecnico"]' OR e.roles::text ILIKE '%tecnico%') -- Robust check for jsonb roles
+                          -- Safe filter for roles (handles JSONB or TEXT representation to avoid casting errors)
+                          AND e.roles::text ILIKE '%tecnico%'
                         GROUP BY e.id, e.name
                     ) stat
                 )
