@@ -2615,8 +2615,7 @@ function app() {
             try {
                 // Call RPC
                 await this.supabaseFetch('rpc/start_ticket_analysis', 'POST', {
-                    p_ticket_id: ticket.id,
-                    p_user_name: this.user.name
+                    p_ticket_id: ticket.id
                 });
 
                 // Update Local State

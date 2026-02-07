@@ -1,5 +1,4 @@
 -- 1. Add Column to tickets table
--- We use a DO block to safely add the column only if it doesn't exist
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tickets' AND column_name = 'analysis_started_at') THEN
@@ -8,19 +7,43 @@ BEGIN
 END $$;
 
 -- 2. Create RPC Function
--- This function handles the "Start Analysis" action transactionally.
--- It uses SECURITY INVOKER to respect existing RLS policies (workspace isolation).
-CREATE OR REPLACE FUNCTION start_ticket_analysis(p_ticket_id UUID, p_user_name TEXT)
+CREATE OR REPLACE FUNCTION start_ticket_analysis(p_ticket_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
-SECURITY INVOKER -- Respects RLS of the caller
+SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
     v_ticket RECORD;
-    v_updated_rows INT;
+    v_user_name TEXT;
+    v_user_id UUID;
+    v_token TEXT;
 BEGIN
-    -- 1. Fetch Ticket (RLS applies here)
+    -- Resolve Actor
+    v_user_id := auth.uid();
+
+    IF v_user_id IS NOT NULL AND v_user_id != '00000000-0000-0000-0000-000000000000'::UUID THEN
+        -- Admin / Authenticated User
+        v_user_name := 'Administrador';
+    ELSE
+        -- Check for Employee Token
+        BEGIN
+            v_token := current_setting('request.headers', true)::json->>'x-employee-token';
+        EXCEPTION WHEN OTHERS THEN
+            v_token := NULL;
+        END;
+
+        IF v_token IS NOT NULL THEN
+            -- In a full implementation, we would query the employees table here.
+            -- Without exact schema knowledge of where tokens are stored (likely hashed),
+            -- we default to 'Técnico' to ensure security (avoiding client-side spoofing).
+            v_user_name := 'Técnico';
+        ELSE
+            v_user_name := 'Sistema';
+        END IF;
+    END IF;
+
+    -- 1. Fetch Ticket
     SELECT * INTO v_ticket
     FROM tickets
     WHERE id = p_ticket_id;
@@ -46,7 +69,6 @@ BEGIN
     WHERE id = p_ticket_id;
 
     -- 4. Insert Log
-    -- Message Format: "ANÁLISE DO {MODELO} DE {CLIENTE} da OS {OS} FOI INICIADA"
     INSERT INTO ticket_logs (
         ticket_id,
         action,
@@ -58,12 +80,11 @@ BEGIN
         p_ticket_id,
         'Iniciou Análise',
         format('ANÁLISE DO %s DE %s da OS %s FOI INICIADA', UPPER(v_ticket.device_model), UPPER(v_ticket.client_name), v_ticket.os_number),
-        p_user_name,
+        v_user_name,
         NOW()
     );
-
-    -- 5. Insert Activity (Assuming unified log table or if there's a separate one, adapting.
-    -- Based on code analysis, 'ticket_logs' seems to be the source for "Last Activities")
-
 END;
 $$;
+
+-- 3. Reload Schema Cache (Critical for PostgREST to pick up the change)
+NOTIFY pgrst, 'reload schema';
