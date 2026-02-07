@@ -203,6 +203,7 @@ function app() {
         dailyReport: null,
         dailyReportLoading: false,
         dailyReportError: null,
+        dailyReportUpdatedAt: null,
 
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
@@ -721,6 +722,7 @@ function app() {
                 const data = await this.supabaseFetch('rpc/get_daily_report', 'POST', params);
                 if (data) {
                     this.dailyReport = data;
+                    this.dailyReportUpdatedAt = new Date();
                 } else {
                     this.dailyReportError = "Nenhum dado retornado.";
                 }
@@ -730,6 +732,17 @@ function app() {
             } finally {
                 this.dailyReportLoading = false;
             }
+        },
+
+        getDailyPercent(part, total) {
+            const p = Number(part) || 0;
+            const t = Number(total) || 0;
+            if (t === 0) return 0;
+            return Math.round((p / t) * 100);
+        },
+
+        safeNum(n) {
+            return Number(n) || 0;
         },
 
         toggleAdminView() {

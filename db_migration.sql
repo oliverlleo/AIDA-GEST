@@ -81,5 +81,9 @@ BEGIN
 END;
 $$;
 
+-- Permissions
+REVOKE ALL ON FUNCTION start_ticket_analysis(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION start_ticket_analysis(UUID) TO authenticated;
+
 -- 3. Reload Schema Cache
 NOTIFY pgrst, 'reload schema';

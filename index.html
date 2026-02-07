@@ -1948,16 +1948,20 @@
                     <div x-show="adminDashboardFilters.quickView === 'daily_report'" x-transition class="space-y-8" x-cloak>
 
                         <!-- Header -->
-                        <div class="flex justify-between items-center mb-4">
+                        <div class="flex justify-between items-center mb-6">
                             <div>
                                 <h2 class="text-xl font-bold text-gray-800 flex items-center">
                                     <i class="fa-solid fa-calendar-day text-brand-500 mr-2"></i> Relatório Diário
                                 </h2>
-                                <p class="text-sm text-gray-500">
-                                    Consolidado do dia <span x-text="adminDashboardFilters.dateStart ? new Date(adminDashboardFilters.dateStart).toLocaleDateString('pt-BR') : 'Hoje'"></span>
-                                </p>
+                                <div class="flex items-center text-sm text-gray-500 mt-1">
+                                    <span>Resumo do dia <span class="font-bold" x-text="adminDashboardFilters.dateStart ? new Date(adminDashboardFilters.dateStart).toLocaleDateString('pt-BR') : 'Hoje'"></span></span>
+                                    <span x-show="dailyReportUpdatedAt" class="mx-2">•</span>
+                                    <span x-show="dailyReportUpdatedAt" class="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-400">
+                                        Atualizado: <span x-text="new Date(dailyReportUpdatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
+                                    </span>
+                                </div>
                             </div>
-                            <button @click="requestDailyReport()" class="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-lg font-bold hover:bg-gray-50 transition-colors shadow-sm text-sm flex items-center">
+                            <button @click="requestDailyReport()" class="bg-black text-white border border-transparent px-4 py-2 rounded-lg font-bold hover:bg-gray-800 transition-colors shadow-lg text-sm flex items-center">
                                 <i class="fa-solid fa-rotate-right mr-2" :class="dailyReportLoading ? 'fa-spin' : ''"></i> Atualizar
                             </button>
                         </div>
@@ -1975,164 +1979,246 @@
                         <!-- Content -->
                         <div x-show="!dailyReportLoading && dailyReport" class="space-y-8">
 
-                            <!-- KPI Cards Row -->
-                            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Chegaram Hoje</p>
-                                    <p class="text-2xl font-bold text-gray-900" x-text="dailyReport?.counts?.created || 0"></p>
+                            <!-- KPI Cards Row (Block 1) -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                                <!-- Card A: Entradas -->
+                                <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-brand-500 transition-colors relative overflow-hidden group">
+                                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-ticket text-4xl text-brand-500"></i></div>
+                                    <p class="text-xs text-gray-500 font-bold uppercase mb-2">Entradas</p>
+                                    <p class="text-3xl font-bold text-gray-900 mb-1" x-text="safeNum(dailyReport?.counts?.created)"></p>
+                                    <p class="text-[10px] text-gray-400">Chamados criados hoje</p>
+                                    <!-- Flow Indicator -->
+                                    <template x-if="safeNum(dailyReport?.lists?.delivered?.length) > 0">
+                                        <div class="mt-2 text-[10px] text-gray-500 flex items-center bg-gray-50 w-fit px-2 py-0.5 rounded">
+                                            <i class="fa-solid fa-arrow-right-arrow-left mr-1"></i>
+                                            <span x-text="safeNum(dailyReport?.lists?.delivered?.length) + ' saíram'"></span>
+                                        </div>
+                                    </template>
                                 </div>
-                                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Reparos Sucesso</p>
-                                    <p class="text-2xl font-bold text-green-600" x-text="dailyReport?.counts?.repair_success || 0"></p>
+
+                                <!-- Card B: Reparos -->
+                                <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-brand-500 transition-colors relative overflow-hidden group">
+                                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-screwdriver-wrench text-4xl text-brand-500"></i></div>
+                                    <p class="text-xs text-gray-500 font-bold uppercase mb-2">Reparos</p>
+                                    <p class="text-3xl font-bold text-gray-900 mb-2" x-text="safeNum(dailyReport?.counts?.repair_success) + safeNum(dailyReport?.counts?.repair_fail)"></p>
+
+                                    <div class="space-y-1">
+                                        <div class="flex justify-between text-[10px]">
+                                            <span class="text-gray-500">Consertados</span>
+                                            <span class="font-bold text-green-600 bg-green-50 px-1.5 rounded" x-text="safeNum(dailyReport?.counts?.repair_success)"></span>
+                                        </div>
+                                        <div class="flex justify-between text-[10px]">
+                                            <span class="text-gray-500">Sem conserto</span>
+                                            <span class="font-bold text-red-500 bg-red-50 px-1.5 rounded" x-text="safeNum(dailyReport?.counts?.repair_fail)"></span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 text-[10px] text-brand-600 font-bold border-t border-gray-100 pt-1">
+                                        Taxa de sucesso: <span x-text="getDailyPercent(dailyReport?.counts?.repair_success, safeNum(dailyReport?.counts?.repair_success) + safeNum(dailyReport?.counts?.repair_fail)) + '%'"></span>
+                                    </div>
                                 </div>
-                                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Reparos Falha</p>
-                                    <p class="text-2xl font-bold text-red-500" x-text="dailyReport?.counts?.repair_fail || 0"></p>
+
+                                <!-- Card C: Orçamentos -->
+                                <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-brand-500 transition-colors relative overflow-hidden group">
+                                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-file-invoice-dollar text-4xl text-brand-500"></i></div>
+                                    <p class="text-xs text-gray-500 font-bold uppercase mb-2">Orçamentos</p>
+                                    <p class="text-3xl font-bold text-gray-900 mb-2" x-text="safeNum(dailyReport?.counts?.budget_sent)"></p>
+
+                                    <div class="space-y-1">
+                                        <div class="flex justify-between text-[10px]">
+                                            <span class="text-gray-500">Aprovados</span>
+                                            <span class="font-bold text-green-600 bg-green-50 px-1.5 rounded" x-text="safeNum(dailyReport?.counts?.budget_approved)"></span>
+                                        </div>
+                                        <div class="flex justify-between text-[10px]">
+                                            <span class="text-gray-500">Recusados</span>
+                                            <span class="font-bold text-red-500 bg-red-50 px-1.5 rounded" x-text="safeNum(dailyReport?.counts?.budget_rejected)"></span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 text-[10px] text-brand-600 font-bold border-t border-gray-100 pt-1">
+                                        Aprovação: <span x-text="getDailyPercent(dailyReport?.counts?.budget_approved, safeNum(dailyReport?.counts?.budget_approved) + safeNum(dailyReport?.counts?.budget_rejected)) + '%'"></span>
+                                    </div>
                                 </div>
-                                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Orç. Enviados</p>
-                                    <p class="text-2xl font-bold text-blue-600" x-text="dailyReport?.counts?.budget_sent || 0"></p>
+
+                                <!-- Card D: Testes -->
+                                <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-brand-500 transition-colors relative overflow-hidden group">
+                                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-vial text-4xl text-brand-500"></i></div>
+                                    <p class="text-xs text-gray-500 font-bold uppercase mb-2">Testes</p>
+                                    <p class="text-3xl font-bold text-gray-900 mb-2" x-text="safeNum(dailyReport?.counts?.test_approved) + safeNum(dailyReport?.counts?.test_rejected)"></p>
+
+                                    <div class="space-y-1">
+                                        <div class="flex justify-between text-[10px]">
+                                            <span class="text-gray-500">Aprovados</span>
+                                            <span class="font-bold text-green-600 bg-green-50 px-1.5 rounded" x-text="safeNum(dailyReport?.counts?.test_approved)"></span>
+                                        </div>
+                                        <div class="flex justify-between text-[10px]">
+                                            <span class="text-gray-500">Reprovados</span>
+                                            <span class="font-bold text-red-500 bg-red-50 px-1.5 rounded" x-text="safeNum(dailyReport?.counts?.test_rejected)"></span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2 text-[10px] text-red-600 font-bold border-t border-gray-100 pt-1">
+                                        Reincidência: <span x-text="getDailyPercent(dailyReport?.counts?.test_rejected, safeNum(dailyReport?.counts?.test_approved) + safeNum(dailyReport?.counts?.test_rejected)) + '%'"></span>
+                                    </div>
                                 </div>
-                                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Orç. Aprovados</p>
-                                    <p class="text-2xl font-bold text-green-600" x-text="dailyReport?.counts?.budget_approved || 0"></p>
-                                </div>
-                                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Orç. Recusados</p>
-                                    <p class="text-2xl font-bold text-red-500" x-text="dailyReport?.counts?.budget_rejected || 0"></p>
-                                </div>
-                                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Testes Aprovados</p>
-                                    <p class="text-2xl font-bold text-green-600" x-text="dailyReport?.counts?.test_approved || 0"></p>
-                                </div>
-                                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Testes Reprovados</p>
-                                    <p class="text-2xl font-bold text-red-500" x-text="dailyReport?.counts?.test_rejected || 0"></p>
-                                </div>
-                                <div x-show="trackerConfig.enable_outsourced" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <p class="text-xs text-gray-500 font-bold uppercase mb-1">Terceirizados Env.</p>
-                                    <p class="text-2xl font-bold text-purple-600" x-text="dailyReport?.counts?.outsourced_sent || 0"></p>
+
+                                <!-- Card E: Terceirizados -->
+                                <div x-show="trackerConfig.enable_outsourced" class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-brand-500 transition-colors relative overflow-hidden group">
+                                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><i class="fa-solid fa-handshake text-4xl text-brand-500"></i></div>
+                                    <p class="text-xs text-gray-500 font-bold uppercase mb-2">Terceirização</p>
+                                    <p class="text-3xl font-bold text-gray-900 mb-2" x-text="safeNum(dailyReport?.counts?.outsourced_sent)"></p>
+                                    <p class="text-[10px] text-gray-400">Enviados para parceiro</p>
                                 </div>
                             </div>
 
-                            <!-- Lists Grid -->
+                            <!-- Block 2: Attention Today -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <!-- Arrivals List -->
-                                <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col h-96">
-                                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 text-sm">
-                                        Chegaram Hoje (Entrada)
-                                    </div>
-                                    <div class="overflow-y-auto flex-grow p-0 divide-y divide-gray-100">
-                                        <template x-for="item in dailyReport?.lists?.arrivals" :key="item.id">
-                                            <div class="p-3 hover:bg-gray-50 flex justify-between items-center text-sm">
-                                                <div>
-                                                    <span class="font-bold text-gray-900 block" x-text="item.client_name"></span>
-                                                    <span class="text-xs text-gray-500" x-text="item.device_model + ' - OS ' + item.os_number"></span>
-                                                </div>
-                                                <div class="flex flex-col items-end">
-                                                    <span class="text-xs font-mono text-gray-400" x-text="new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
-                                                    <button @click="viewTicketDetails(item)" class="text-[10px] font-bold text-brand-600 hover:underline mt-1">Ver</button>
-                                                </div>
-                                            </div>
-                                        </template>
-                                        <div x-show="!dailyReport?.lists?.arrivals?.length" class="p-4 text-center text-gray-400 italic text-sm">Nenhuma entrada hoje.</div>
-                                    </div>
-                                </div>
-
-                                <!-- Delivered List -->
-                                <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col h-96">
-                                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 text-sm">
-                                        Entregues Hoje (Saída)
-                                    </div>
-                                    <div class="overflow-y-auto flex-grow p-0 divide-y divide-gray-100">
-                                        <template x-for="item in dailyReport?.lists?.delivered" :key="item.id">
-                                            <div class="p-3 hover:bg-gray-50 flex justify-between items-center text-sm">
-                                                <div>
-                                                    <span class="font-bold text-gray-900 block" x-text="item.client_name"></span>
-                                                    <span class="text-xs text-gray-500" x-text="item.device_model + ' - OS ' + item.os_number"></span>
-                                                </div>
-                                                <div class="flex flex-col items-end">
-                                                    <span class="text-xs font-mono text-gray-400" x-text="new Date(item.delivered_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
-                                                    <button @click="viewTicketDetails(item)" class="text-[10px] font-bold text-brand-600 hover:underline mt-1">Ver</button>
-                                                </div>
-                                            </div>
-                                        </template>
-                                        <div x-show="!dailyReport?.lists?.delivered?.length" class="p-4 text-center text-gray-400 italic text-sm">Nenhuma entrega hoje.</div>
-                                    </div>
-                                </div>
-
                                 <!-- Overdue Analysis -->
                                 <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col h-64">
-                                    <div class="px-4 py-3 bg-red-50 border-b border-red-100 font-bold text-red-800 text-sm flex justify-between">
-                                        <span>Atrasados (Análise)</span>
-                                        <span class="bg-red-200 text-red-800 px-2 rounded-full text-xs" x-text="dailyReport?.lists?.overdue_analysis?.length || 0"></span>
+                                    <div class="px-4 py-3 bg-red-50 border-b border-red-100 flex justify-between items-center">
+                                        <span class="font-bold text-red-800 text-sm flex items-center"><i class="fa-solid fa-triangle-exclamation mr-2"></i> Atrasados — Análise</span>
+                                        <span class="bg-white border border-red-200 text-red-800 px-2 py-0.5 rounded-full text-xs font-bold" x-text="dailyReport?.lists?.overdue_analysis?.length || 0"></span>
                                     </div>
                                     <div class="overflow-y-auto flex-grow p-0 divide-y divide-gray-100">
                                         <template x-for="item in dailyReport?.lists?.overdue_analysis" :key="item.id">
-                                            <div class="p-3 hover:bg-red-50 flex justify-between items-center text-sm">
+                                            <div class="p-3 hover:bg-red-50 flex justify-between items-center text-sm transition-colors group">
                                                 <div>
-                                                    <span class="font-bold text-gray-800 text-xs block" x-text="'OS ' + item.os_number"></span>
-                                                    <span class="text-xs text-gray-500 truncate block w-40" x-text="item.device_model"></span>
+                                                    <span class="font-mono font-bold text-gray-800 text-xs block bg-gray-100 w-fit px-1 rounded mb-0.5" x-text="'OS ' + item.os_number"></span>
+                                                    <span class="font-bold text-gray-800 block text-xs" x-text="item.client_name"></span>
+                                                    <span class="text-[10px] text-gray-500 truncate block w-40" x-text="item.device_model"></span>
                                                 </div>
-                                                <div class="text-right">
-                                                    <span class="text-[10px] font-bold text-red-600 block" x-text="getOverdueTime(item.analysis_deadline)"></span>
-                                                    <button @click="viewTicketDetails(item)" class="text-[10px] font-bold text-gray-500 hover:text-black">Ver</button>
+                                                <div class="text-right flex flex-col items-end">
+                                                    <span class="text-[10px] font-bold text-red-600 block bg-red-100 px-2 rounded mb-1">
+                                                        <i class="fa-solid fa-clock mr-1"></i> <span x-text="getOverdueTime(item.analysis_deadline)"></span>
+                                                    </span>
+                                                    <button @click="viewTicketDetails(item)" class="text-[10px] font-bold text-gray-400 hover:text-black border border-gray-200 px-2 py-0.5 rounded hover:bg-white transition-colors">Ver</button>
                                                 </div>
                                             </div>
                                         </template>
-                                        <div x-show="!dailyReport?.lists?.overdue_analysis?.length" class="p-4 text-center text-gray-400 italic text-sm">Nenhum atraso.</div>
+                                        <div x-show="!dailyReport?.lists?.overdue_analysis?.length" class="h-full flex flex-col items-center justify-center text-gray-400">
+                                            <i class="fa-solid fa-check-circle text-3xl text-green-100 mb-2"></i>
+                                            <p class="text-sm font-medium text-green-600">Nenhum atraso hoje ✅</p>
+                                        </div>
                                     </div>
                                 </div>
 
                                 <!-- Overdue Repair -->
                                 <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col h-64">
-                                    <div class="px-4 py-3 bg-orange-50 border-b border-orange-100 font-bold text-orange-800 text-sm flex justify-between">
-                                        <span>Atrasados (Reparo)</span>
-                                        <span class="bg-orange-200 text-orange-800 px-2 rounded-full text-xs" x-text="dailyReport?.lists?.overdue_repair?.length || 0"></span>
+                                    <div class="px-4 py-3 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
+                                        <span class="font-bold text-orange-800 text-sm flex items-center"><i class="fa-solid fa-triangle-exclamation mr-2"></i> Atrasados — Reparo</span>
+                                        <span class="bg-white border border-orange-200 text-orange-800 px-2 py-0.5 rounded-full text-xs font-bold" x-text="dailyReport?.lists?.overdue_repair?.length || 0"></span>
                                     </div>
                                     <div class="overflow-y-auto flex-grow p-0 divide-y divide-gray-100">
                                         <template x-for="item in dailyReport?.lists?.overdue_repair" :key="item.id">
-                                            <div class="p-3 hover:bg-orange-50 flex justify-between items-center text-sm">
+                                            <div class="p-3 hover:bg-orange-50 flex justify-between items-center text-sm transition-colors group">
                                                 <div>
-                                                    <span class="font-bold text-gray-800 text-xs block" x-text="'OS ' + item.os_number"></span>
-                                                    <span class="text-xs text-gray-500 truncate block w-40" x-text="item.device_model"></span>
+                                                    <span class="font-mono font-bold text-gray-800 text-xs block bg-gray-100 w-fit px-1 rounded mb-0.5" x-text="'OS ' + item.os_number"></span>
+                                                    <span class="font-bold text-gray-800 block text-xs" x-text="item.client_name"></span>
+                                                    <span class="text-[10px] text-gray-500 truncate block w-40" x-text="item.device_model"></span>
                                                 </div>
-                                                <div class="text-right">
-                                                    <span class="text-[10px] font-bold text-orange-600 block" x-text="getOverdueTime(item.deadline)"></span>
-                                                    <button @click="viewTicketDetails(item)" class="text-[10px] font-bold text-gray-500 hover:text-black">Ver</button>
+                                                <div class="text-right flex flex-col items-end">
+                                                    <span class="text-[10px] font-bold text-orange-600 block bg-orange-100 px-2 rounded mb-1">
+                                                        <i class="fa-solid fa-clock mr-1"></i> <span x-text="getOverdueTime(item.deadline)"></span>
+                                                    </span>
+                                                    <button @click="viewTicketDetails(item)" class="text-[10px] font-bold text-gray-400 hover:text-black border border-gray-200 px-2 py-0.5 rounded hover:bg-white transition-colors">Ver</button>
                                                 </div>
                                             </div>
                                         </template>
-                                        <div x-show="!dailyReport?.lists?.overdue_repair?.length" class="p-4 text-center text-gray-400 italic text-sm">Nenhum atraso.</div>
+                                        <div x-show="!dailyReport?.lists?.overdue_repair?.length" class="h-full flex flex-col items-center justify-center text-gray-400">
+                                            <i class="fa-solid fa-check-circle text-3xl text-green-100 mb-2"></i>
+                                            <p class="text-sm font-medium text-green-600">Nenhum atraso hoje ✅</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Technicians Performance Table -->
+                            <!-- Block 3: Movement Today -->
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <!-- Arrivals List -->
+                                <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col h-80">
+                                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 text-sm flex justify-between">
+                                        <span>Chegaram Hoje (Entrada)</span>
+                                        <span class="bg-gray-200 text-gray-600 px-2 rounded-full text-xs" x-text="dailyReport?.lists?.arrivals?.length || 0"></span>
+                                    </div>
+                                    <div class="overflow-y-auto flex-grow p-0 divide-y divide-gray-100">
+                                        <template x-for="item in dailyReport?.lists?.arrivals" :key="item.id">
+                                            <div class="p-3 hover:bg-gray-50 flex justify-between items-center text-sm group">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded" x-text="new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></div>
+                                                    <div>
+                                                        <span class="font-bold text-gray-900 block text-xs" x-text="item.client_name"></span>
+                                                        <span class="text-[10px] text-gray-500" x-text="item.device_model + ' • OS ' + item.os_number"></span>
+                                                    </div>
+                                                </div>
+                                                <button @click="viewTicketDetails(item)" class="text-[10px] font-bold text-brand-600 border border-brand-200 px-2 py-0.5 rounded hover:bg-brand-50 transition-colors opacity-0 group-hover:opacity-100">Ver</button>
+                                            </div>
+                                        </template>
+                                        <div x-show="!dailyReport?.lists?.arrivals?.length" class="p-8 text-center text-gray-400 italic text-sm">Nenhuma entrada registrada hoje.</div>
+                                    </div>
+                                </div>
+
+                                <!-- Delivered List -->
+                                <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col h-80">
+                                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 text-sm flex justify-between">
+                                        <span>Entregues Hoje (Saída)</span>
+                                        <span class="bg-gray-200 text-gray-600 px-2 rounded-full text-xs" x-text="dailyReport?.lists?.delivered?.length || 0"></span>
+                                    </div>
+                                    <div class="overflow-y-auto flex-grow p-0 divide-y divide-gray-100">
+                                        <template x-for="item in dailyReport?.lists?.delivered" :key="item.id">
+                                            <div class="p-3 hover:bg-gray-50 flex justify-between items-center text-sm group">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded" x-text="new Date(item.delivered_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></div>
+                                                    <div>
+                                                        <span class="font-bold text-gray-900 block text-xs" x-text="item.client_name"></span>
+                                                        <span class="text-[10px] text-gray-500" x-text="item.device_model + ' • OS ' + item.os_number"></span>
+                                                    </div>
+                                                </div>
+                                                <button @click="viewTicketDetails(item)" class="text-[10px] font-bold text-brand-600 border border-brand-200 px-2 py-0.5 rounded hover:bg-brand-50 transition-colors opacity-0 group-hover:opacity-100">Ver</button>
+                                            </div>
+                                        </template>
+                                        <div x-show="!dailyReport?.lists?.delivered?.length" class="p-8 text-center text-gray-400 italic text-sm">Nenhuma entrega registrada hoje.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Block 4: Technicians Performance Table -->
                             <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 text-sm">
-                                    Performance de Técnicos (Hoje)
+                                <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 font-bold text-gray-700 text-sm flex justify-between items-center">
+                                    <span>Técnicos do Dia</span>
+                                    <span class="text-[10px] font-normal text-gray-400 uppercase">Ordenado por volume</span>
                                 </div>
                                 <table class="w-full text-sm text-left">
                                     <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-bold">
                                         <tr>
-                                            <th class="px-4 py-2">Técnico</th>
-                                            <th class="px-4 py-2 text-center text-green-600">Sucessos</th>
-                                            <th class="px-4 py-2 text-center text-red-500">Falhas</th>
-                                            <th class="px-4 py-2 text-right">Taxa (%)</th>
+                                            <th class="px-4 py-2 w-1/3">Técnico</th>
+                                            <th class="px-4 py-2 text-center text-green-600 w-1/6">Consertados</th>
+                                            <th class="px-4 py-2 text-center text-red-500 w-1/6">Sem Conserto</th>
+                                            <th class="px-4 py-2 text-center text-gray-700 w-1/6">Total</th>
+                                            <th class="px-4 py-2 text-right w-1/6">% Sucesso</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-100">
-                                        <template x-for="tech in dailyReport?.lists?.technicians" :key="tech.id">
-                                            <tr class="hover:bg-gray-50">
-                                                <td class="px-4 py-2 font-bold text-gray-800" x-text="tech.name"></td>
-                                                <td class="px-4 py-2 text-center font-mono font-bold text-green-600" x-text="tech.success"></td>
-                                                <td class="px-4 py-2 text-center font-mono font-bold text-red-500" x-text="tech.fail"></td>
-                                                <td class="px-4 py-2 text-right font-mono font-bold" x-text="tech.rate + '%'"></td>
+                                        <template x-for="tech in (dailyReport?.lists?.technicians || []).sort((a,b) => (Number(b.success)+Number(b.fail)) - (Number(a.success)+Number(a.fail)))" :key="tech.id">
+                                            <tr class="hover:bg-gray-50 transition-colors">
+                                                <td class="px-4 py-3 font-bold text-gray-800" x-text="tech.name"></td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <span class="bg-green-50 text-green-700 px-2 py-0.5 rounded font-bold" x-text="safeNum(tech.success)"></span>
+                                                </td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <span class="bg-red-50 text-red-700 px-2 py-0.5 rounded font-bold" x-text="safeNum(tech.fail)"></span>
+                                                </td>
+                                                <td class="px-4 py-3 text-center font-mono font-bold text-gray-900" x-text="safeNum(tech.success) + safeNum(tech.fail)"></td>
+                                                <td class="px-4 py-3 text-right">
+                                                    <div class="flex items-center justify-end gap-2">
+                                                        <span class="font-mono font-bold text-brand-600" x-text="tech.rate + '%'"></span>
+                                                        <div class="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                            <div class="h-full bg-brand-500 rounded-full" :style="`width: ${tech.rate}%`"></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         </template>
                                         <tr x-show="!dailyReport?.lists?.technicians?.length">
-                                            <td colspan="4" class="px-4 py-6 text-center text-gray-400 italic">Sem registros de finalização hoje.</td>
+                                            <td colspan="5" class="px-4 py-8 text-center text-gray-400 italic">
+                                                Nenhum reparo concluído hoje.
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
