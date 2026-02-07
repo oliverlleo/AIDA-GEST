@@ -2610,6 +2610,32 @@ function app() {
             });
         },
 
+        async startTicketAnalysis(ticket) {
+            this.loading = true;
+            try {
+                // Call RPC
+                await this.supabaseFetch('rpc/start_ticket_analysis', 'POST', {
+                    p_ticket_id: ticket.id,
+                    p_user_name: this.user.name
+                });
+
+                // Update Local State
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket.analysis_started_at = new Date().toISOString();
+                }
+
+                this.notify("Análise iniciada com sucesso!");
+                await this.fetchTickets();
+                if (this.view === 'dashboard') this.fetchGlobalLogs();
+
+            } catch (e) {
+                console.error("Start Analysis Error:", e);
+                this.notify("Erro ao iniciar: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
         async finishAnalysis() {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
