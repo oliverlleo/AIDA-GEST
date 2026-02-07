@@ -745,6 +745,45 @@ function app() {
             return Number(n) || 0;
         },
 
+        getWorkflowStageLabel(ticket) {
+            if (!ticket) return '';
+            const s = ticket.status;
+
+            if (s === 'Aberto') {
+                return ticket.is_outsourced ? 'Aguardando envio para terceirizado' : 'Aguardando iniciar análise';
+            }
+            if (s === 'Terceirizado') {
+                return 'Aguardando retorno do terceirizado';
+            }
+            if (s === 'Analise Tecnica') {
+                return !ticket.analysis_started_at ? 'Aguardando iniciar análise' : 'Análise em andamento';
+            }
+            if (s === 'Aprovacao') {
+                return ticket.budget_status !== 'Enviado' ? 'Aguardando enviar orçamento' : 'Aguardando decisão do cliente';
+            }
+            if (s === 'Compra Peca') {
+                return ticket.parts_status !== 'Comprado' ? 'Aguardando compra da peça' : 'Aguardando recebimento da peça';
+            }
+            if (s === 'Andamento Reparo') {
+                return !ticket.repair_start_at ? 'Aguardando iniciar execução' : 'Reparo em execução';
+            }
+            if (s === 'Teste Final') {
+                return !ticket.test_start_at ? 'Aguardando iniciar testes' : 'Testes em andamento';
+            }
+            if (s === 'Retirada Cliente') {
+                if (!ticket.pickup_available) return 'Aguardando disponibilizar retirada/envio';
+                if (ticket.delivery_method === 'carrier') {
+                    return !ticket.tracking_code ? 'Aguardando rastreio' : 'Aguardando chegada (transportadora)';
+                }
+                return 'Aguardando retirada do cliente';
+            }
+            if (s === 'Finalizado') {
+                return 'Finalizado';
+            }
+            console.warn('Etapa indefinida para ticket:', ticket);
+            return 'Etapa indefinida';
+        },
+
         toggleAdminView() {
             this.adminDashboardFilters.viewType = this.adminDashboardFilters.viewType === 'data' ? 'chart' : 'data';
             this.requestDashboardMetrics({ reason: 'view_toggle' });
