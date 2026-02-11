@@ -286,6 +286,14 @@ function app() {
         activeQuickFilter: null,
         showFinalized: false,
 
+        // Analytics Filters (Admin)
+        analyticsFilters: {
+            period: 'month', // today | week | month | all
+            deviceModel: 'all',
+            defect: 'all',
+            technician: 'all'
+        },
+
         // Time
         currentTime: new Date(),
 
@@ -3291,6 +3299,182 @@ function app() {
                 .split(',')
                 .map(defect => defect.trim())
                 .filter(Boolean);
+        },
+
+        // --- ANALYTICS HELPERS ---
+        getAnalyticsPeriodStart() {
+            const now = new Date();
+            const start = new Date(now);
+            switch (this.analyticsFilters.period) {
+                case 'today':
+                    start.setHours(0, 0, 0, 0);
+                    return start;
+                case 'week':
+                    start.setDate(now.getDate() - 6);
+                    start.setHours(0, 0, 0, 0);
+                    return start;
+                case 'month':
+                    start.setDate(now.getDate() - 29);
+                    start.setHours(0, 0, 0, 0);
+                    return start;
+                default:
+                    return null;
+            }
+        },
+        formatDurationFromMs(ms) {
+            if (!ms || Number.isNaN(ms)) return '—';
+            const totalMinutes = Math.round(ms / 60000);
+            if (totalMinutes < 60) return `${totalMinutes} min`;
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            if (hours < 24) return `${hours}h ${minutes}m`;
+            const days = Math.floor(hours / 24);
+            const remHours = hours % 24;
+            return `${days}d ${remHours}h`;
+        },
+        applyAnalyticsFilters(tickets, { periodField = 'created_at', usePeriod = true } = {}) {
+            const periodStart = this.getAnalyticsPeriodStart();
+            const selectedDefect = this.analyticsFilters.defect.toLowerCase();
+            return tickets.filter(ticket => {
+                if (this.analyticsFilters.deviceModel !== 'all' && ticket.device_model !== this.analyticsFilters.deviceModel) {
+                    return false;
+                }
+                if (this.analyticsFilters.defect !== 'all') {
+                    const defects = this.getDefectList(ticket.defect_reported).map(defect => defect.toLowerCase());
+                    if (!defects.includes(selectedDefect)) return false;
+                }
+                if (this.analyticsFilters.technician !== 'all' && ticket.technician_id !== this.analyticsFilters.technician) {
+                    return false;
+                }
+                if (periodStart && usePeriod) {
+                    const value = ticket[periodField];
+                    if (!value) return false;
+                    if (new Date(value) < periodStart) return false;
+                }
+                return true;
+            });
+        },
+        getAnalyticsTickets() {
+            return this.applyAnalyticsFilters(this.tickets || []);
+        },
+        getAnalyticsPeriodDays(tickets) {
+            const periodStart = this.getAnalyticsPeriodStart();
+            let start = periodStart;
+            if (!start) {
+                const dates = (tickets || [])
+                    .map(ticket => new Date(ticket.created_at).getTime())
+                    .filter(value => Number.isFinite(value));
+                start = dates.length ? new Date(Math.min(...dates)) : new Date();
+            }
+            const end = new Date();
+            const diff = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+            return diff;
+        },
+        getAnalyticsSuccessRate(tickets) {
+            const withOutcome = tickets.filter(ticket => ticket.repair_successful !== null && ticket.repair_successful !== undefined);
+            const success = withOutcome.filter(ticket => ticket.repair_successful).length;
+            const total = withOutcome.length;
+            const rate = total ? Math.round((success / total) * 100) : 0;
+            return { success, total, rate };
+        },
+        getAverageDuration(tickets, startField, endField) {
+            const durations = tickets
+                .map(ticket => {
+                    const start = ticket[startField];
+                    const end = ticket[endField];
+                    if (!start || !end) return null;
+                    const diff = new Date(end) - new Date(start);
+                    return diff > 0 ? diff : null;
+                })
+                .filter(value => value !== null);
+            if (!durations.length) return null;
+            const average = durations.reduce((sum, value) => sum + value, 0) / durations.length;
+            return average;
+        },
+        getAverageDailyCount(statusList) {
+            const base = this.getAnalyticsTickets();
+            const filtered = base.filter(ticket => statusList.includes(ticket.status));
+            const days = this.getAnalyticsPeriodDays(base);
+            return days ? filtered.length / days : 0;
+        },
+        getDailyCounts(dateField, daysBack) {
+            const now = new Date();
+            const start = new Date(now);
+            start.setDate(now.getDate() - (daysBack - 1));
+            start.setHours(0, 0, 0, 0);
+
+            const tickets = this.applyAnalyticsFilters(this.tickets || [], { usePeriod: false });
+            const labels = [];
+            const counts = {};
+
+            for (let i = 0; i < daysBack; i++) {
+                const date = new Date(start);
+                date.setDate(start.getDate() + i);
+                const key = date.toISOString().slice(0, 10);
+                labels.push({ key, label: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) });
+                counts[key] = 0;
+            }
+
+            tickets.forEach(ticket => {
+                const value = ticket[dateField];
+                if (!value) return;
+                const date = new Date(value);
+                if (date < start || date > now) return;
+                const key = date.toISOString().slice(0, 10);
+                if (counts[key] !== undefined) counts[key] += 1;
+            });
+
+            return labels.map(item => ({ label: item.label, count: counts[item.key] || 0 }));
+        },
+        getTicketsInLastDays(dateField, daysBack) {
+            const now = new Date();
+            const start = new Date(now);
+            start.setDate(now.getDate() - (daysBack - 1));
+            start.setHours(0, 0, 0, 0);
+            const tickets = this.applyAnalyticsFilters(this.tickets || [], { usePeriod: false });
+            return tickets.filter(ticket => {
+                const value = ticket[dateField];
+                if (!value) return false;
+                const date = new Date(value);
+                return date >= start && date <= now;
+            });
+        },
+        getTopModels(tickets, limit = 5) {
+            const counts = {};
+            tickets.forEach(ticket => {
+                const model = ticket.device_model || 'Não informado';
+                counts[model] = (counts[model] || 0) + 1;
+            });
+            return Object.entries(counts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, limit)
+                .map(([name, count]) => ({ name, count }));
+        },
+        getTopDefects(tickets, limit = 5) {
+            const counts = {};
+            tickets.forEach(ticket => {
+                this.getDefectList(ticket.defect_reported).forEach(defect => {
+                    counts[defect] = (counts[defect] || 0) + 1;
+                });
+            });
+            return Object.entries(counts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, limit)
+                .map(([name, count]) => ({ name, count }));
+        },
+        getTechnicianPerformance() {
+            const base = this.getAnalyticsTickets();
+            const technicians = this.getTechnicians();
+            return technicians.map(tech => {
+                const tickets = base.filter(ticket => ticket.technician_id === tech.id);
+                const successData = this.getAnalyticsSuccessRate(tickets);
+                return {
+                    id: tech.id,
+                    name: tech.name,
+                    total: tickets.length,
+                    successRate: successData.total ? successData.rate : 0
+                };
+            }).sort((a, b) => b.total - a.total);
         },
 
         // --- UTILS ---
