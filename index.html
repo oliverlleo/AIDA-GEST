@@ -3553,21 +3553,35 @@
 
                         <!-- 2. Analise -> Aprovação -->
                         <template x-if="selectedTicket.status === 'Analise Tecnica' && modalSource === 'tech'">
-                            <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                                <h4 class="font-bold text-blue-800 mb-2">Conclusão da Análise</h4>
-                                <div class="mb-3">
-                                    <label class="flex items-center space-x-2">
-                                        <input type="checkbox" x-model="analysisForm.needsParts" class="form-checkbox text-blue-600 h-5 w-5">
-                                        <span class="text-sm font-bold text-gray-700">Precisa comprar peças?</span>
-                                    </label>
+                            <div>
+                                <!-- Step 1: Start Analysis (If not started) -->
+                                <div x-show="!selectedTicket.analysis_started_at" class="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-4 text-center">
+                                    <p class="text-sm text-blue-800 mb-3">O aparelho chegou na bancada. Inicie a análise para registrar o tempo.</p>
+                                    <button @click="startAnalysisExecution(selectedTicket)" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 text-sm shadow inline-flex items-center">
+                                        <i class="fa-solid fa-play mr-2"></i> Iniciar Análise
+                                    </button>
                                 </div>
-                                <div x-show="analysisForm.needsParts" class="mb-3">
-                                    <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
-                                    <input type="text" x-model="analysisForm.partsList" class="w-full border rounded p-2 text-sm" placeholder="Ex: Tela, Bateria...">
+
+                                <!-- Step 2: Finish Analysis (If started) -->
+                                <div x-show="selectedTicket.analysis_started_at" class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h4 class="font-bold text-blue-800">Conclusão da Análise</h4>
+                                        <span class="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded font-mono" x-text="'Iniciado: ' + new Date(selectedTicket.analysis_started_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="flex items-center space-x-2">
+                                            <input type="checkbox" x-model="analysisForm.needsParts" class="form-checkbox text-blue-600 h-5 w-5">
+                                            <span class="text-sm font-bold text-gray-700">Precisa comprar peças?</span>
+                                        </label>
+                                    </div>
+                                    <div x-show="analysisForm.needsParts" class="mb-3">
+                                        <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
+                                        <input type="text" x-model="analysisForm.partsList" class="w-full border rounded p-2 text-sm" placeholder="Ex: Tela, Bateria...">
+                                    </div>
+                                    <button @click="finishAnalysis()" class="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 text-sm w-full">
+                                        Finalizar e Enviar para Aprovação
+                                    </button>
                                 </div>
-                                <button @click="finishAnalysis()" class="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 text-sm w-full">
-                                    Finalizar e Enviar para Aprovação
-                                </button>
                             </div>
                         </template>
 

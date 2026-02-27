@@ -2602,6 +2602,30 @@ function app() {
             });
         },
 
+        async startAnalysisExecution(ticket) {
+            this.loading = true;
+            try {
+                const data = await this.supabaseFetch('rpc/start_ticket_analysis', 'POST', {
+                    p_ticket_id: ticket.id
+                });
+
+                // Update local state if successful
+                if (data) {
+                    if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                        this.selectedTicket = { ...this.selectedTicket, ...data };
+                    }
+                    this.notify("Análise iniciada!");
+                    await this.fetchTickets();
+                    // If in dashboard view, logs update automatically via fetchGlobalLogs called by fetchTickets/realtime
+                }
+            } catch(e) {
+                console.error(e);
+                this.notify("Erro ao iniciar análise: " + e.message, "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
         async finishAnalysis() {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
