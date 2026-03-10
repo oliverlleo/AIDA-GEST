@@ -1601,9 +1601,9 @@ function app() {
                         updated_at: new Date().toISOString()
                     });
                 } else {
-                    const wsId = this.session ? this.session.user.id : this.employeeSession.workspace_id;
+                    if (!this.user?.workspace_id) throw new Error("Workspace ID não encontrado.");
                     await this.supabaseFetch('fornecedores', 'POST', {
-                        workspace_id: wsId,
+                        workspace_id: this.user.workspace_id,
                         razao_social: this.fornecedorForm.razao_social,
                         cnpj: this.fornecedorForm.cnpj,
                         fornece: this.fornecedorForm.fornece,
