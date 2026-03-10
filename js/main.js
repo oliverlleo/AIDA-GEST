@@ -127,6 +127,17 @@ function app() {
         searchDebounceTimer: null,
         realtimeDebounceTimer: null,
 
+        // Fornecedores State
+        fornecedores: [],
+        fornecedorForm: { id: null, razao_social: '', cnpj: '', fornece: '', whatsapp: '' },
+
+        // Supplier Purchase Flow State
+        purchaseFlow: {
+            ticketId: null,
+            supplierId: '',
+            items: [{ name: '', quantity: 1 }]
+        },
+
         // Finalized Pagination State
         showFinalized: false,
         finalizedPage: 0,
@@ -291,7 +302,7 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false },
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -510,6 +521,7 @@ function app() {
                     await this.fetchDeviceModels();
                     await this.fetchDefectOptions();
                     await this.fetchOutsourcedCompanies();
+                    await this.fetchFornecedores();
                     this.fetchGlobalLogs();
                     this.setupRealtime();
                     if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'init' });
@@ -1554,6 +1566,82 @@ function app() {
                 this.finalizedPage--; // Revert page on error
             } finally {
                 this.isLoadingFinalized = false;
+            }
+        },
+
+        async fetchFornecedores() {
+            try {
+                const { data, error } = await supabase
+                    .from('fornecedores')
+                    .select('*')
+                    .order('razao_social', { ascending: true });
+                if (error) throw error;
+                this.fornecedores = data;
+            } catch (error) {
+                console.error('Erro ao buscar fornecedores:', error);
+                alert('Erro ao carregar fornecedores: ' + error.message);
+            }
+        },
+
+        openFornecedorModal(fornecedor = null) {
+            if (fornecedor) {
+                this.fornecedorForm = { ...fornecedor };
+            } else {
+                this.fornecedorForm = { id: null, razao_social: '', cnpj: '', fornece: '', whatsapp: '' };
+            }
+            this.modals.fornecedor = true;
+        },
+
+        async saveFornecedor() {
+            this.loading = true;
+            try {
+                if (this.fornecedorForm.id) {
+                    const { error } = await supabase
+                        .from('fornecedores')
+                        .update({
+                            razao_social: this.fornecedorForm.razao_social,
+                            cnpj: this.fornecedorForm.cnpj,
+                            fornece: this.fornecedorForm.fornece,
+                            whatsapp: this.fornecedorForm.whatsapp,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', this.fornecedorForm.id);
+                    if (error) throw error;
+                } else {
+                    const wsId = this.session ? this.session.user.id : this.employeeSession.workspace_id;
+                    const { error } = await supabase
+                        .from('fornecedores')
+                        .insert([{
+                            workspace_id: wsId,
+                            razao_social: this.fornecedorForm.razao_social,
+                            cnpj: this.fornecedorForm.cnpj,
+                            fornece: this.fornecedorForm.fornece,
+                            whatsapp: this.fornecedorForm.whatsapp
+                        }]);
+                    if (error) throw error;
+                }
+                this.modals.fornecedor = false;
+                await this.fetchFornecedores();
+            } catch (error) {
+                console.error('Erro ao salvar fornecedor:', error);
+                alert('Erro ao salvar fornecedor: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async deleteFornecedor(id) {
+            if (!confirm('Tem certeza que deseja excluir este fornecedor?')) return;
+            try {
+                const { error } = await supabase
+                    .from('fornecedores')
+                    .delete()
+                    .eq('id', id);
+                if (error) throw error;
+                await this.fetchFornecedores();
+            } catch (error) {
+                console.error('Erro ao excluir fornecedor:', error);
+                alert('Erro ao excluir fornecedor: ' + error.message);
             }
         },
 
@@ -2764,24 +2852,89 @@ function app() {
              await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: `${ctx.client} reprovou o orçamento do ${ctx.device}.` });
         },
 
-        async markPurchased(ticket = this.selectedTicket) {
-             this.loading = true;
-             try {
-                 const ctx = this.getLogContext(ticket);
-                 const rawPart = ticket.parts_needed || 'peça';
-                 const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
-                 await this.logTicketAction(ticket.id, 'Confirmou Compra', `Compra da peça '${part}' para o ${ctx.device} de ${ctx.client} foi realizada.`);
+        openPurchaseModal(ticket = this.selectedTicket) {
+            this.purchaseFlow = {
+                ticketId: ticket.id,
+                supplierId: '',
+                items: [{ name: ticket.parts_needed || '', quantity: 1 }]
+            };
+            this.modals.supplierPurchase = true;
+        },
 
-                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
+        addPurchaseItem() {
+            this.purchaseFlow.items.push({ name: '', quantity: 1 });
+        },
+
+        removePurchaseItem(index) {
+            this.purchaseFlow.items.splice(index, 1);
+        },
+
+        async submitPurchase() {
+            if (!this.purchaseFlow.supplierId) {
+                alert('Selecione um fornecedor.');
+                return;
+            }
+            if (this.purchaseFlow.items.length === 0 || this.purchaseFlow.items.some(i => !i.name || i.quantity < 1)) {
+                alert('Preencha os itens corretamente.');
+                return;
+            }
+
+            this.loading = true;
+            try {
+                const ticket = this.tickets.find(t => t.id === this.purchaseFlow.ticketId);
+                const supplier = this.fornecedores.find(f => f.id === this.purchaseFlow.supplierId);
+                const ctx = this.getLogContext(ticket);
+
+                const purchaseData = {
+                    supplier_id: supplier.id,
+                    supplier_name: supplier.razao_social,
+                    items: this.purchaseFlow.items,
+                    purchased_at: new Date().toISOString(),
+                    purchased_by: this.employeeSession ? this.employeeSession.employee_id : null
+                };
+
+                const currentPurchases = Array.isArray(ticket.supplier_purchases) ? ticket.supplier_purchases : [];
+                const updatedPurchases = [...currentPurchases, purchaseData];
+
+                let itemsStr = this.purchaseFlow.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+                const itemsHtml = `<span class="text-brand-500 font-bold">${this.escapeHtml(itemsStr)}</span>`;
+
+                await this.logTicketAction(ticket.id, 'Confirmou Compra', `Compra de ${itemsHtml} do fornecedor <b>${this.escapeHtml(supplier.razao_social)}</b> para o ${ctx.device} de ${ctx.client} foi realizada.`);
+
+                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
                     parts_status: 'Comprado',
-                    parts_purchased_at: new Date().toISOString()
+                    parts_purchased_at: new Date().toISOString(),
+                    supplier_purchases: updatedPurchases
                 });
+
+                this.modals.supplierPurchase = false;
                 await this.fetchTickets();
-             } catch(e) {
+
+                // Open WhatsApp
+                if (supplier.whatsapp) {
+                    let phone = supplier.whatsapp.replace(/\D/g, '');
+                    if (phone.length === 10 || phone.length === 11) {
+                        phone = '55' + phone; // Add country code if not present
+                    }
+                    let msg = `Olá! Gostaria de solicitar a compra de: \n`;
+                    this.purchaseFlow.items.forEach(i => {
+                        msg += `- ${i.quantity}x ${i.name}\n`;
+                    });
+                    msg += `\nPara o aparelho: ${ticket.device_model}\nOS: ${ticket.os_number || ticket.id.slice(0, 8)}`;
+
+                    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                }
+
+            } catch(e) {
                  this.notify("Erro: " + e.message, "error");
-             } finally {
+            } finally {
                 this.loading = false;
-             }
+            }
+        },
+
+        async markPurchased(ticket = this.selectedTicket) {
+            // Replaced by openPurchaseModal, kept for compatibility if needed elsewhere
+            this.openPurchaseModal(ticket);
         },
         async confirmReceived(ticket = this.selectedTicket) {
              const ctx = this.getLogContext(ticket);
