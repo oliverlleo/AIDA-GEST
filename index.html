@@ -490,6 +490,17 @@
                                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
                                 </label>
                             </div>
+
+                            <div class="bg-gray-50 p-4 mt-4 rounded-xl border border-gray-200 flex items-center justify-between">
+                                <div>
+                                    <span class="text-sm font-bold text-gray-800 block">Desativar abrir o whatsapp</span>
+                                    <span class="text-xs text-gray-500 block">Impede a abertura automática e oculta atalhos do WhatsApp no painel de chamados.</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" x-model="trackerConfig.disable_whatsapp_actions" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                </label>
+                            </div>
                         </div>
 
                         <!-- Outsourced Toggle & Management -->
@@ -738,7 +749,7 @@
                                                 <button @click="startBudget(t)" class="text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded font-bold hover:bg-yellow-200 transition-colors">
                                                     Abrir
                                                 </button>
-                                                <button @click="openWhatsApp(t.contact_info)" class="text-green-500 hover:text-green-700 p-1" title="WhatsApp">
+                                                <button x-show="!trackerConfig.disable_whatsapp_actions" @click="openWhatsApp(t.contact_info)" class="text-green-500 hover:text-green-700 p-1" title="WhatsApp">
                                                     <i class="fa-brands fa-whatsapp text-lg"></i>
                                                 </button>
                                             </div>
@@ -778,7 +789,7 @@
                                                 <button @click="viewTicketDetails(t)" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-200 transition-colors">
                                                     Ver
                                                 </button>
-                                                <button @click="openWhatsApp(t.contact_info)" class="text-green-500 hover:text-green-700 p-1" title="WhatsApp">
+                                                <button x-show="!trackerConfig.disable_whatsapp_actions" @click="openWhatsApp(t.contact_info)" class="text-green-500 hover:text-green-700 p-1" title="WhatsApp">
                                                     <i class="fa-brands fa-whatsapp text-lg"></i>
                                                 </button>
                                             </div>
@@ -813,7 +824,7 @@
                                                 <button @click="trackerConfig.enable_logistics ? openLogisticsModal(t) : viewTicketDetails(t)" class="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded font-bold hover:bg-blue-200 transition-colors">
                                                     <span x-text="trackerConfig.enable_logistics ? 'Expedir' : 'Ver'"></span>
                                                 </button>
-                                                <button @click="openWhatsApp(t.contact_info)" class="text-green-500 hover:text-green-700 p-1" title="WhatsApp">
+                                                <button x-show="!trackerConfig.disable_whatsapp_actions" @click="openWhatsApp(t.contact_info)" class="text-green-500 hover:text-green-700 p-1" title="WhatsApp">
                                                     <i class="fa-brands fa-whatsapp text-lg"></i>
                                                 </button>
                                             </div>
