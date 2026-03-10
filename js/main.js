@@ -53,6 +53,7 @@ function app() {
             logo_url: '',
             logo_size: 64, // Default size in px
             enable_logistics: false,
+            disable_whatsapp_actions: false, // Disables automatic whatsapp opening and card icons
             enable_outsourced: false, // Outsourced Workflow Toggle
             test_flow: 'kanban', // 'kanban', 'technician', 'tester'
             custom_labels: {}, // Custom overrides for stage names
@@ -2388,6 +2389,7 @@ function app() {
         },
 
         sendTrackingWhatsApp() {
+            if (this.trackerConfig.disable_whatsapp_actions) return;
             if (!this.selectedTicket || !this.selectedTicket.contact_info) return this.notify("Sem contato cadastrado", "error");
 
             const link = this.getTrackingLink(this.selectedTicket);
@@ -2400,6 +2402,7 @@ function app() {
         },
 
         sendCarrierWhatsApp(ticket, carrier, trackingCode) {
+            if (this.trackerConfig.disable_whatsapp_actions) return;
             if (!ticket || !ticket.contact_info) return;
 
             const link = this.getTrackingLink(ticket);
@@ -2712,7 +2715,6 @@ function app() {
 
         async startBudget(ticket) {
             this.viewTicketDetails(ticket);
-            this.openWhatsApp(ticket.contact_info);
         },
 
         async sendBudget(ticket = this.selectedTicket) {
@@ -2731,12 +2733,20 @@ function app() {
 
                 let number = ticket.contact_info.replace(/\D/g, '');
                 if (number.length <= 11) number = '55' + number;
-                window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+
+                if (!this.trackerConfig.disable_whatsapp_actions) {
+                    window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
+                }
 
                 if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
                     this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
                 }
-                this.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
+
+                if (this.trackerConfig.disable_whatsapp_actions) {
+                    this.notify("Orçamento marcado como Enviado.");
+                } else {
+                    this.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
+                }
                 await this.fetchTickets();
             } catch(e) {
                  this.notify("Erro: " + e.message, "error");
