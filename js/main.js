@@ -1570,13 +1570,10 @@ function app() {
         },
 
         async fetchFornecedores() {
+            if (!this.user?.workspace_id) return;
             try {
-                const { data, error } = await supabase
-                    .from('fornecedores')
-                    .select('*')
-                    .order('razao_social', { ascending: true });
-                if (error) throw error;
-                this.fornecedores = data;
+                const data = await this.supabaseFetch(`fornecedores?select=*&workspace_id=eq.${this.user.workspace_id}&order=razao_social.asc`);
+                if (data) this.fornecedores = data;
             } catch (error) {
                 console.error('Erro ao buscar fornecedores:', error);
                 alert('Erro ao carregar fornecedores: ' + error.message);
@@ -1596,29 +1593,22 @@ function app() {
             this.loading = true;
             try {
                 if (this.fornecedorForm.id) {
-                    const { error } = await supabase
-                        .from('fornecedores')
-                        .update({
-                            razao_social: this.fornecedorForm.razao_social,
-                            cnpj: this.fornecedorForm.cnpj,
-                            fornece: this.fornecedorForm.fornece,
-                            whatsapp: this.fornecedorForm.whatsapp,
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', this.fornecedorForm.id);
-                    if (error) throw error;
+                    await this.supabaseFetch(`fornecedores?id=eq.${this.fornecedorForm.id}`, 'PATCH', {
+                        razao_social: this.fornecedorForm.razao_social,
+                        cnpj: this.fornecedorForm.cnpj,
+                        fornece: this.fornecedorForm.fornece,
+                        whatsapp: this.fornecedorForm.whatsapp,
+                        updated_at: new Date().toISOString()
+                    });
                 } else {
                     const wsId = this.session ? this.session.user.id : this.employeeSession.workspace_id;
-                    const { error } = await supabase
-                        .from('fornecedores')
-                        .insert([{
-                            workspace_id: wsId,
-                            razao_social: this.fornecedorForm.razao_social,
-                            cnpj: this.fornecedorForm.cnpj,
-                            fornece: this.fornecedorForm.fornece,
-                            whatsapp: this.fornecedorForm.whatsapp
-                        }]);
-                    if (error) throw error;
+                    await this.supabaseFetch('fornecedores', 'POST', {
+                        workspace_id: wsId,
+                        razao_social: this.fornecedorForm.razao_social,
+                        cnpj: this.fornecedorForm.cnpj,
+                        fornece: this.fornecedorForm.fornece,
+                        whatsapp: this.fornecedorForm.whatsapp
+                    });
                 }
                 this.modals.fornecedor = false;
                 await this.fetchFornecedores();
@@ -1633,11 +1623,7 @@ function app() {
         async deleteFornecedor(id) {
             if (!confirm('Tem certeza que deseja excluir este fornecedor?')) return;
             try {
-                const { error } = await supabase
-                    .from('fornecedores')
-                    .delete()
-                    .eq('id', id);
-                if (error) throw error;
+                await this.supabaseFetch(`fornecedores?id=eq.${id}`, 'DELETE');
                 await this.fetchFornecedores();
             } catch (error) {
                 console.error('Erro ao excluir fornecedor:', error);
