@@ -2712,7 +2712,6 @@ function app() {
 
         async startBudget(ticket) {
             this.viewTicketDetails(ticket);
-            this.openWhatsApp(ticket.contact_info);
         },
 
         async sendBudget(ticket = this.selectedTicket) {
