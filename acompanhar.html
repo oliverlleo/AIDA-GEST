@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>Acompanhe seu Reparo | CentralOS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#FF6B00',
+                            600: '#E65100',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="text-gray-900 font-sans min-h-screen flex items-center justify-center p-4 transition-colors duration-500"
+      x-data="tracker()"
+      :style="`background-color: ${config.colors.background}`">
+
+    <!-- Loading State -->
+    <div x-show="loading" class="text-center" x-transition>
+        <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-brand-500 mx-auto mb-4"
+             :style="`border-top-color: ${config.colors.progress_bar}`"></div>
+        <p class="font-bold animate-pulse" :style="`color: ${config.colors.status_label}`">Buscando seu aparelho...</p>
+    </div>
+
+    <!-- Error State -->
+    <div x-show="!loading && error" class="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full border-l-4 border-red-500" x-cloak>
+        <i class="fa-solid fa-circle-exclamation text-4xl text-red-500 mb-4"></i>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Ops! Algo deu errado.</h2>
+        <p class="text-gray-500 mb-6" x-text="error"></p>
+        <a href="#" @click.prevent="window.location.reload()" class="font-bold hover:underline" :style="`color: ${config.colors.status_label}`">Tentar novamente</a>
+    </div>
+
+    <!-- Main Content -->
+    <template x-if="!loading && !error && ticket">
+        <div class="w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden relative transition-all duration-300"
+             :style="`background-color: ${config.colors.card_bg}`"
+             x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+
+            <!-- Top Decoration -->
+        <div class="h-2 w-full transition-colors" :style="`background-color: ${config.colors.header_bg}`"></div>
+
+        <!-- Header -->
+        <div class="p-8 pb-4 text-center">
+            <!-- Dynamic Logo -->
+            <div class="mb-4 flex justify-center">
+                <template x-if="config.logo_url">
+                    <img :src="config.logo_url" class="object-contain" :style="`height: ${config.logo_size}px`" alt="Logo">
+                </template>
+                <template x-if="!config.logo_url">
+                    <div class="inline-flex items-center justify-center rounded-full shadow-sm"
+                         :style="`width: ${config.logo_size}px; height: ${config.logo_size}px; background-color: ${config.colors.background}; color: ${config.colors.icon_active}`">
+                        <i class="fa-solid fa-mobile-screen-button text-3xl"></i>
+                    </div>
+                </template>
+            </div>
+
+            <h1 class="text-2xl font-bold mb-1 transition-colors" :style="`color: ${config.colors.text_primary}`" x-text="ticket.device_model"></h1>
+            <div class="flex items-center justify-center space-x-2 text-sm transition-colors" :style="`color: ${config.colors.text_secondary}`">
+                <span class="bg-gray-100 px-2 py-1 rounded font-mono font-bold tracking-wider" x-text="'OS #' + ticket.os_number"></span>
+                <span>&bull;</span>
+                <span x-text="new Date(ticket.created_at).toLocaleDateString('pt-BR')"></span>
+            </div>
+        </div>
+
+        <!-- GOOD NEWS CARD (Conditional) -->
+        <template x-if="isReady">
+            <div class="mx-6 mt-2 bg-green-50 border border-green-200 rounded-xl p-6 text-center shadow-inner relative overflow-hidden">
+                <div class="absolute -right-4 -top-4 text-green-100 opacity-50 transform rotate-12">
+                    <i class="fa-solid" :class="ticket.delivery_method === 'carrier' ? 'fa-truck-fast' : 'fa-gift'" class="text-9xl"></i>
+                </div>
+                <div class="relative z-10">
+                    <i class="fa-solid fa-circle-check text-4xl text-green-500 mb-3 bounce"></i>
+                    <h3 class="text-lg font-bold text-green-800 mb-1">Boa notícia!</h3>
+
+                    <template x-if="ticket.delivery_method === 'carrier'">
+                        <div>
+                            <p class="text-green-700 text-sm leading-relaxed mb-2">
+                                Seu aparelho foi enviado via <span class="font-bold" x-text="ticket.carrier_name || 'Transportadora'"></span>.
+                            </p>
+                            <template x-if="ticket.tracking_code">
+                                <div class="bg-white bg-opacity-60 rounded p-2 inline-block">
+                                    <span class="text-xs font-bold text-green-800 uppercase block">Código de Rastreio</span>
+                                    <span class="font-mono text-lg font-bold text-green-900" x-text="ticket.tracking_code"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <template x-if="ticket.delivery_method !== 'carrier'">
+                        <p class="text-green-700 text-sm leading-relaxed">
+                            Seu aparelho está pronto e testado. <br>
+                            <span class="font-bold">Pode vir buscá-lo quando quiser!</span>
+                        </p>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- Timeline Section -->
+        <div class="p-8">
+            <h2 class="text-xs font-bold uppercase tracking-widest mb-10 text-center" :style="`color: ${config.colors.text_secondary}`">Status do Serviço</h2>
+
+            <!-- Progress Bar Container -->
+            <div class="relative mb-8 px-2">
+                <!-- Background Line -->
+                <div class="absolute top-1/2 left-0 w-full h-1 rounded-full -translate-y-1/2 z-0 transition-colors"
+                     :style="`background-color: ${config.colors.progress_bg}`"></div>
+
+                <!-- Active Progress Line -->
+                <div class="absolute top-1/2 left-0 h-1 rounded-full -translate-y-1/2 z-0 transition-all duration-1000 ease-out"
+                     :style="`width: ${getProgressPercent()}%; background-color: ${config.colors.progress_bar}`"></div>
+
+                <!-- Steps (Dots) -->
+                <div class="flex justify-between relative z-10 w-full">
+                    <template x-for="(step, index) in steps" :key="index">
+                        <div class="relative flex flex-col items-center group">
+                             <!-- Dot -->
+                            <div class="w-4 h-4 rounded-full border-2 transition-all duration-500 ease-in-out z-10 bg-white"
+                                 :style="index <= currentStepIndex ? `border-color: ${config.colors.progress_bar}; background-color: ${config.colors.progress_bar}` : `border-color: ${config.colors.icon_inactive}`">
+                            </div>
+
+                            <!-- Animated Icon (Only for current step) -->
+                            <template x-if="index === currentStepIndex && !isReady">
+                                <div class="absolute -top-8 animate-bounce" :style="`color: ${config.colors.icon_active}`">
+                                    <i class="fa-solid fa-screwdriver-wrench"></i>
+                                </div>
+                            </template>
+
+                             <!-- Ready Icon -->
+                            <template x-if="index === currentStepIndex && isReady">
+                                <div class="absolute -top-8 text-green-600 animate-bounce">
+                                    <i class="fa-solid fa-gift text-xl"></i>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Current Status Text -->
+            <div class="text-center mb-8">
+                <p class="text-sm font-medium uppercase mb-1" :style="`color: ${config.colors.text_secondary}`">Fase Atual</p>
+                <div class="text-xl font-bold transition-all"
+                     :style="`color: ${config.colors.status_label}`"
+                     x-text="getStatusLabel(displayedStatus)"></div>
+
+                <template x-if="ticket.deadline && !isReady && ticket.status !== 'Finalizado'">
+                    <p class="text-xs mt-2 inline-block px-3 py-1 rounded-full bg-gray-50" :style="`color: ${config.colors.text_secondary}`">
+                        <i class="fa-regular fa-clock mr-1"></i>
+                        Previsão de conclusão: <span class="font-bold" x-text="new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                    </p>
+                </template>
+            </div>
+
+            <!-- Help Button -->
+             <div class="text-center">
+                 <a :href="getWhatsAppLink()" target="_blank" rel="noopener noreferrer"
+                    class="inline-flex items-center justify-center space-x-2 text-green-600 bg-green-50 hover:bg-green-100 border border-green-200 px-6 py-3 rounded-xl font-bold transition-all w-full">
+                     <i class="fa-brands fa-whatsapp text-xl"></i>
+                     <span>Precisa de ajuda?</span>
+                 </a>
+             </div>
+        </div>
+
+            <!-- Footer -->
+            <div class="p-4 text-center border-t border-gray-100 bg-gray-50">
+                <p class="text-xs font-medium" :style="`color: ${config.colors.text_secondary}`">CentralOSt &copy; 2024</p>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
+
+        const ALL_POSSIBLE_STEPS = [
+            'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
+            'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
+        ];
+
+        function tracker() {
+            return {
+                loading: true,
+                error: null,
+                ticket: null,
+
+                // Default Config (Overwritten by backend)
+                config: {
+                    logo_url: '',
+                    logo_size: 64,
+                    custom_labels: {},
+                    visible_stages: ALL_POSSIBLE_STEPS,
+                    colors: {
+                        background: '#FFF7ED',
+                        card_bg: '#FFFFFF',
+                        header_bg: '#000000',
+                        text_primary: '#1a1a1a',
+                        text_secondary: '#6B7280',
+                        progress_bar: '#FF6B00',
+                        progress_bg: '#E5E7EB',
+                        icon_active: '#FF6B00',
+                        icon_inactive: '#D1D5DB',
+                        status_label: '#FF6B00'
+                    }
+                },
+
+                // Computed: Active Steps List
+                get steps() {
+                    return this.config.visible_stages.length > 0 ? this.config.visible_stages : ALL_POSSIBLE_STEPS;
+                },
+
+                // Computed: Calculated Status to Display
+                get displayedStatus() {
+                    if (!this.ticket) return 'Aberto';
+
+                    const currentStatus = this.ticket.status;
+                    const visibleSteps = this.steps;
+
+                    // If status is visible, show it
+                    if (visibleSteps.includes(currentStatus)) {
+                        return currentStatus;
+                    }
+
+                    // If status is hidden (e.g. 'Analise Tecnica' is hidden, but ticket is there)
+                    // Find the actual index in the full list
+                    const actualIdx = ALL_POSSIBLE_STEPS.indexOf(currentStatus);
+                    if (actualIdx === -1) return currentStatus; // Unknown status
+
+                    // Loop backwards to find the nearest visible previous step
+                    for (let i = actualIdx - 1; i >= 0; i--) {
+                        if (visibleSteps.includes(ALL_POSSIBLE_STEPS[i])) {
+                            return ALL_POSSIBLE_STEPS[i];
+                        }
+                    }
+
+                    // Fallback: Default to the first visible step (likely 'Aberto')
+                    // This handles the case where multiple initial steps are hidden.
+                    return visibleSteps[0] || 'Aberto';
+                },
+
+                get currentStepIndex() {
+                    if (!this.ticket) return 0;
+                    return this.steps.indexOf(this.displayedStatus);
+                },
+
+                get isReady() {
+                    return this.ticket && this.ticket.status === 'Retirada Cliente' && this.ticket.pickup_available;
+                },
+
+                async init() {
+                    const params = new URLSearchParams(window.location.search);
+                    const id = params.get('id');
+                    const token = params.get('token');
+
+                    if (!id || !token) {
+                        this.error = "Link inválido ou desatualizado. Solicite um novo link de acompanhamento.";
+                        this.loading = false;
+                        return;
+                    }
+
+                    // Remove token from URL to prevent leakage
+                    try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('token');
+                        window.history.replaceState({}, document.title, url.toString());
+                    } catch (e) {
+                        console.warn("Could not clean URL", e);
+                    }
+
+                    try {
+                        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_client_ticket_details_public`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': SUPABASE_KEY,
+                                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ p_ticket_id: id, p_public_token: token })
+                        });
+
+                        if (!response.ok) throw new Error("Erro ao buscar dados.");
+
+                        const data = await response.json();
+
+                        if (!data || data.length === 0) {
+                            this.error = "Link expirado ou chamado não encontrado.";
+                        } else {
+                            this.ticket = data[0];
+
+                            // Merge Configuration if available
+                            if (this.ticket.tracker_config) {
+                                // Deep merge colors to avoid undefined errors if partial config
+                                this.config = {
+                                    logo_url: this.ticket.tracker_config.logo_url || '',
+                                    logo_size: this.ticket.tracker_config.logo_size || 64,
+                                    custom_labels: this.ticket.tracker_config.custom_labels || {},
+                                    visible_stages: this.ticket.tracker_config.visible_stages || ALL_POSSIBLE_STEPS,
+                                    colors: {
+                                        ...this.config.colors,
+                                        ...(this.ticket.tracker_config.colors || {})
+                                    }
+                                };
+                            }
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        this.error = "Não foi possível carregar as informações. Tente novamente.";
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                getStatusLabel(status) {
+                    // Check for custom overrides first
+                    if (this.config.custom_labels && this.config.custom_labels[status]) {
+                        return this.config.custom_labels[status];
+                    }
+
+                    const labels = {
+                        'Aberto': 'Aberto',
+                        'Analise Tecnica': 'Em Análise Técnica',
+                        'Aprovacao': 'Aguardando Aprovação',
+                        'Compra Peca': 'Aguardando Peças',
+                        'Andamento Reparo': 'Em Reparo',
+                        'Teste Final': 'Testes Finais',
+                        'Retirada Cliente': 'Pronto para Retirada',
+                        'Finalizado': 'Finalizado'
+                    };
+
+                    // Special case for Ready logic override
+                    if (status === 'Retirada Cliente' && this.ticket && this.ticket.pickup_available) {
+                        if (this.ticket.delivery_method === 'carrier') {
+                            return 'Enviado / Em Trânsito';
+                        }
+                        return 'Pronto para Retirada';
+                    }
+                    if (status === 'Retirada Cliente' && this.ticket && !this.ticket.pickup_available) {
+                        if (this.config.enable_logistics) return 'Expedição / Logística';
+                        return 'Aguardando Liberação';
+                    }
+
+                    return labels[status] || status;
+                },
+
+                getProgressPercent() {
+                    const idx = this.currentStepIndex;
+                    if (idx === -1) return 0;
+                    return (idx / (this.steps.length - 1)) * 100;
+                },
+
+                getWhatsAppLink() {
+                    // Use workspace WA number if available, else fallback
+                    let number = this.ticket?.whatsapp_number || '';
+
+                    if (!number) return '#';
+
+                    number = number.replace(/\D/g, '');
+                    if (number.length <= 11) number = '55' + number;
+                    const text = `Olá, estou acompanhando a OS ${this.ticket.os_number} e gostaria de tirar uma dúvida.`;
+                    return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
