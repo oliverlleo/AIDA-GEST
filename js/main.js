@@ -2314,7 +2314,7 @@ function app() {
                 analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
             };
 
-            const success = await this.mutateTicket(ticket, 'SaveDeadlines', updates, actionLog, { showNotify: true, notifyMessage: 'Prazos atualizados!', fetchTickets: true });
+            const success = await this.mutateTicket(ticket, 'saveDeadlines', updates, actionLog, { showNotify: true, notifyMessage: 'Prazos atualizados!', fetchTickets: true });
 
             if (success) {
                 this.editingDeadlines = false;
@@ -2324,7 +2324,7 @@ function app() {
         async saveTicketChanges() {
              const ticket = this.resolveTicket();
              if (!ticket) return;
-             await this.mutateTicket(ticket, 'SaveTicketChanges', {
+             await this.mutateTicket(ticket, 'saveTicketChanges', {
                  // For editable fields that are bound to selectedTicket in UI,
                  // we must use selectedTicket to grab the user's unsaved input.
                  // The *target* of the mutation is the strictly resolved ticket.
@@ -2821,6 +2821,9 @@ function app() {
                 case 'submitPurchase':
                     if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
                     return isAdmin || isAttendant;
+                case 'updateStatus':
+                    // Generic status update wrapper validation
+                    return isAdmin || isTech || isAttendant || isTester;
                 default:
                     return true;
             }
@@ -2828,6 +2831,13 @@ function app() {
 
         // --- 2. CENTRALIZED MUTATION LAYER ---
         async mutateTicket(ticket, actionName, updates = {}, actionLog = null, options = { showNotify: true, closeViewModal: false, fetchTickets: true }) {
+            // JS-Level enforcement
+            if (!this.canExecuteAction(ticket, actionName)) {
+                console.warn(`[Workflow Engine] Mutation prevented. Action '${actionName}' is not allowed on ticket ${ticket.id} (${ticket.status})`);
+                this.notify("Ação não permitida para o estado atual.", "error");
+                return false;
+            }
+
             this.loading = true;
             try {
                 // Determine payload
@@ -2877,7 +2887,7 @@ function app() {
         // --- 3. WRAPPERS & ACTIONS ---
         async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
             const updates = { status: newStatus, ...additionalUpdates };
-            await this.mutateTicket(ticket, 'UpdateStatus', updates, actionLog, { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true });
+            await this.mutateTicket(ticket, 'updateStatus', updates, actionLog, { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true });
         },
 
         async startAnalysis(ticket) {
@@ -2976,7 +2986,7 @@ function app() {
                 budget_sent_at: new Date().toISOString()
             };
 
-            const success = await this.mutateTicket(ticket, 'SendBudget', updates, actionLog, { showNotify: false, fetchTickets: true });
+            const success = await this.mutateTicket(ticket, 'sendBudget', updates, actionLog, { showNotify: false, fetchTickets: true });
 
             if (success) {
                 const link = this.getTrackingLink(ticket);
@@ -3066,7 +3076,7 @@ function app() {
                 supplier_purchases: updatedPurchases
             };
 
-            const success = await this.mutateTicket(ticket, 'SubmitPurchase', updates, actionLog, { showNotify: false, fetchTickets: true });
+            const success = await this.mutateTicket(ticket, 'submitPurchase', updates, actionLog, { showNotify: false, fetchTickets: true });
 
             if (success) {
                 this.modals.supplierPurchase = false;
@@ -3113,7 +3123,7 @@ function app() {
                 details: `Reparo iniciado do ${ctx.device} de ${ctx.client}.`
             };
             const now = new Date().toISOString();
-            await this.mutateTicket(ticket, 'StartRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
+            await this.mutateTicket(ticket, 'startRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
         },
 
         openOutcomeModal(mode, ticketOrId) {
@@ -3160,7 +3170,7 @@ function app() {
                 details: `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`
             };
             const now = new Date().toISOString();
-            await this.mutateTicket(ticket, 'StartTest', { test_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
+            await this.mutateTicket(ticket, 'startTest', { test_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
         },
 
         async concludeTest(success) {
@@ -3360,7 +3370,7 @@ function app() {
                     delivery_method: 'pickup'
                 };
 
-                const success = await this.mutateTicket(ticket, 'ConfirmLogisticsPickup', updates, actionLog, { showNotify: true, notifyMessage: "Disponibilizado para retirada.", closeViewModal: true, fetchTickets: true });
+                const success = await this.mutateTicket(ticket, 'confirmLogisticsOption', updates, actionLog, { showNotify: true, notifyMessage: "Disponibilizado para retirada.", closeViewModal: true, fetchTickets: true });
                 if (success) {
                     this.modals.logistics = false;
                     this.sendTrackingWhatsApp();
@@ -3405,7 +3415,7 @@ function app() {
                 };
             }
 
-            const success = await this.mutateTicket(ticket, 'ConfirmCarrier', updates, actionLog, { showNotify: true, notifyMessage: "Informações de envio atualizadas!", closeViewModal: true, fetchTickets: true });
+            const success = await this.mutateTicket(ticket, 'confirmCarrier', updates, actionLog, { showNotify: true, notifyMessage: "Informações de envio atualizadas!", closeViewModal: true, fetchTickets: true });
 
             if (success) {
                 this.modals.logistics = false;
@@ -3461,7 +3471,7 @@ function app() {
                  details: `O ${ctx.device} de ${ctx.client} foi disponibilizado.`
              };
 
-             const success = await this.mutateTicket(ticket, 'MarkAvailable', {
+             const success = await this.mutateTicket(ticket, 'markAvailable', {
                  pickup_available: true,
                  pickup_available_at: new Date().toISOString()
              }, actionLog, { showNotify: false, fetchTickets: true });
@@ -3479,7 +3489,7 @@ function app() {
                 details: `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`
             };
 
-            await this.mutateTicket(ticket, 'RequestPriority', {
+            await this.mutateTicket(ticket, 'requestPriority', {
                 priority_requested: true
             }, actionLog, { showNotify: true, notifyMessage: "Prioridade solicitada com sucesso!", fetchTickets: true });
         },
@@ -4092,7 +4102,7 @@ function app() {
                 details: `Chamado movido para a lixeira por ${this.user.name}.`
             };
 
-            await this.mutateTicket(ticket, 'DeleteTicket', {
+            await this.mutateTicket(ticket, 'deleteTicket', {
                 deleted_at: new Date().toISOString()
             }, actionLog, { showNotify: true, notifyMessage: 'Chamado movido para a Lixeira.', closeViewModal: true, fetchTickets: true });
         },
@@ -4128,7 +4138,7 @@ function app() {
                     details: `Chamado restaurado da lixeira por ${this.user.name}.`
                 };
 
-                await this.mutateTicket(ticketToRestore, 'RestoreTicket', {
+                await this.mutateTicket(ticketToRestore, 'restoreItem', {
                     deleted_at: null
                 }, actionLog, { showNotify: true, notifyMessage: "Item restaurado!", fetchTickets: true });
 
