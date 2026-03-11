@@ -296,7 +296,6 @@ function app() {
         // Search
         searchQuery: '', // Global search
         activeQuickFilter: null,
-        showFinalized: false,
 
         // Time
         currentTime: new Date(),
@@ -319,7 +318,7 @@ function app() {
             'Andamento Reparo', 'Teste Final', 'Retirada Cliente', 'Finalizado'
         ],
         STATUS_LABELS: {
-            'Aberto': 'Aberto', 'Terceirizado': 'Terceirizado',
+            'Aberto': 'Aberto',
             'Terceirizado': 'Terceirizado',
             'Analise Tecnica': 'Análise Técnica',
             'Aprovacao': 'Aprovação',
@@ -2229,70 +2228,47 @@ function app() {
                 }
             }
 
-            this.loading = true;
-            try {
-                const oldDeadline = this.selectedTicket.deadline ? new Date(this.selectedTicket.deadline).toLocaleString() : 'Não definido';
-                const newDeadline = this.editDeadlineForm.deadline ? new Date(this.editDeadlineForm.deadline).toLocaleString() : 'Não definido';
+            const oldDeadline = this.selectedTicket.deadline ? new Date(this.selectedTicket.deadline).toLocaleString() : 'Não definido';
+            const newDeadline = this.editDeadlineForm.deadline ? new Date(this.editDeadlineForm.deadline).toLocaleString() : 'Não definido';
 
-                const oldAnalysis = this.selectedTicket.analysis_deadline ? new Date(this.selectedTicket.analysis_deadline).toLocaleString() : 'Não definido';
-                const newAnalysis = this.editDeadlineForm.analysis_deadline ? new Date(this.editDeadlineForm.analysis_deadline).toLocaleString() : 'Não definido';
+            const oldAnalysis = this.selectedTicket.analysis_deadline ? new Date(this.selectedTicket.analysis_deadline).toLocaleString() : 'Não definido';
+            const newAnalysis = this.editDeadlineForm.analysis_deadline ? new Date(this.editDeadlineForm.analysis_deadline).toLocaleString() : 'Não definido';
 
-                if (oldDeadline !== newDeadline) {
-                    const ctx = this.getLogContext(this.selectedTicket);
-                    await this.logTicketAction(
-                        this.selectedTicket.id,
-                        'Alterou Prazo',
-                        `${this.user.name} alterou o prazo do ${ctx.device} de ${ctx.client} de ${oldDeadline} para ${newDeadline}`
-                    );
-                }
+            const ctx = this.getLogContext(this.selectedTicket);
+            let actionDetails = [];
+            if (oldDeadline !== newDeadline) {
+                actionDetails.push(`de ${oldDeadline} para ${newDeadline} (Prazo)`);
+            }
+            if (oldAnalysis !== newAnalysis) {
+                actionDetails.push(`de ${oldAnalysis} para ${newAnalysis} (Análise)`);
+            }
 
-                if (oldAnalysis !== newAnalysis) {
-                    const ctx = this.getLogContext(this.selectedTicket);
-                    await this.logTicketAction(
-                        this.selectedTicket.id,
-                        'Alterou Prazo Análise',
-                        `${this.user.name} alterou o prazo de análise do ${ctx.device} de ${ctx.client} de ${oldAnalysis} para ${newAnalysis}`
-                    );
-                }
+            const actionLog = actionDetails.length > 0 ? {
+                action: 'Alterou Prazo',
+                details: `${this.user.name} alterou prazos do ${ctx.device} de ${ctx.client}: ${actionDetails.join(', ')}`
+            } : null;
 
-                const updates = {
-                    deadline: this.toUTC(this.editDeadlineForm.deadline) || null,
-                    analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
-                };
+            const updates = {
+                deadline: this.toUTC(this.editDeadlineForm.deadline) || null,
+                analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
+            };
 
-                await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', updates);
+            const success = await this.mutateTicket(this.selectedTicket, 'SaveDeadlines', updates, actionLog, { showNotify: true, notifyMessage: 'Prazos atualizados!', fetchTickets: true });
 
-                this.selectedTicket.deadline = updates.deadline;
-                this.selectedTicket.analysis_deadline = updates.analysis_deadline;
-
-                this.notify("Prazos atualizados!");
+            if (success) {
                 this.editingDeadlines = false;
-                await this.fetchTickets();
-            } catch (e) {
-                this.notify("Erro ao salvar prazos: " + e.message, "error");
-            } finally {
-                this.loading = false;
             }
         },
 
         async saveTicketChanges() {
              if (!this.selectedTicket) return;
-             this.loading = true;
-             try {
-                 await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', {
-                     tech_notes: this.selectedTicket.tech_notes,
-                     parts_needed: this.selectedTicket.parts_needed,
-                     checklist_data: this.selectedTicket.checklist_data,
-                     checklist_final_data: this.selectedTicket.checklist_final_data,
-                     photos_urls: this.selectedTicket.photos_urls
-                 });
-                 this.notify("Alterações salvas!");
-                 await this.fetchTickets();
-             } catch (e) {
-                 this.notify("Erro ao salvar: " + e.message, "error");
-             } finally {
-                 this.loading = false;
-             }
+             await this.mutateTicket(this.selectedTicket, 'SaveTicketChanges', {
+                 tech_notes: this.selectedTicket.tech_notes,
+                 parts_needed: this.selectedTicket.parts_needed,
+                 checklist_data: this.selectedTicket.checklist_data,
+                 checklist_final_data: this.selectedTicket.checklist_final_data,
+                 photos_urls: this.selectedTicket.photos_urls
+             }, null, { showNotify: true, notifyMessage: "Alterações salvas!", fetchTickets: true });
         },
 
         async uploadTicketPhoto(file, ticketId) {
@@ -2691,28 +2667,108 @@ function app() {
             }
         },
 
-        // --- WORKFLOW ACTIONS ---
+        // ==========================================
+        // WORKFLOW RULES AND MUTATION MODULE (PREPARATION)
+        // ==========================================
+        // This entire block contains centralized logic for ticket
+        // lifecycle and should be considered for extraction into
+        // a standalone helper file (e.g. ticket-workflow.js)
 
-        async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
+        // --- WORKFLOW RULES ---
+        canExecuteAction(ticket, action) {
+            if (!ticket) return false;
+
+            const isOutsourced = ticket.is_outsourced;
+            const status = ticket.status;
+
+            switch (action) {
+                case 'startAnalysis':
+                    return status === 'Aberto' && !isOutsourced;
+                case 'sendToOutsourced':
+                    return status === 'Aberto' && isOutsourced;
+                case 'finishAnalysis':
+                    return status === 'Analise Tecnica' && ticket.analysis_started_at;
+                case 'sendBudget':
+                    return status === 'Aprovacao' && ticket.budget_status !== 'Enviado';
+                case 'approveRepair':
+                case 'denyRepair':
+                    return status === 'Aprovacao' && ticket.budget_status === 'Enviado';
+                case 'markPurchased':
+                    return status === 'Compra Peca' && ticket.parts_status !== 'Comprado';
+                case 'confirmReceived':
+                    return status === 'Compra Peca' && ticket.parts_status === 'Comprado';
+                case 'startRepair':
+                    return status === 'Andamento Reparo' && !ticket.repair_start_at;
+                case 'finishRepair':
+                    return status === 'Andamento Reparo' && ticket.repair_start_at;
+                case 'startTest':
+                    return status === 'Teste Final' && !ticket.test_start_at;
+                case 'concludeTest':
+                    return status === 'Teste Final' && ticket.test_start_at;
+                case 'markAvailable':
+                    return status === 'Retirada Cliente' && !ticket.pickup_available;
+                case 'markDelivered':
+                    return status === 'Retirada Cliente' && ticket.pickup_available;
+                case 'receiveFromOutsourced':
+                case 'cobrarOutsourced':
+                    return status === 'Terceirizado';
+                default:
+                    return true;
+            }
+        },
+
+        // CENTRALIZED TICKET MUTATION
+        async mutateTicket(ticket, actionName, updates = {}, actionLog = null, options = { showNotify: true, closeViewModal: false, fetchTickets: true }) {
             this.loading = true;
             try {
+                // Determine payload
+                const finalUpdates = {
+                    ...updates,
+                    updated_at: new Date().toISOString()
+                };
+
+                // Send to backend
+                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', finalUpdates);
+
+                // Update selectedTicket directly to avoid flashing/stale data
+                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
+                    this.selectedTicket = { ...this.selectedTicket, ...finalUpdates };
+                }
+
+                // Log Action
                 if (actionLog) {
                      await this.logTicketAction(ticket.id, actionLog.action, actionLog.details);
                 }
 
-                const updates = { status: newStatus, updated_at: new Date().toISOString(), ...additionalUpdates };
+                // UI Feedback
+                if (options.showNotify) {
+                    this.notify(options.notifyMessage || "Atualizado com sucesso!");
+                }
 
-                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
+                // Refresh Lists if needed
+                if (options.fetchTickets) {
+                     await this.fetchTickets();
+                }
 
-                this.notify("Status atualizado");
-                await this.fetchTickets();
-                this.modals.viewTicket = false;
+                // Modal management
+                if (options.closeViewModal) {
+                    this.modals.viewTicket = false;
+                }
+
+                return true;
             } catch (error) {
-                console.error(error);
+                console.error("Mutation Error:", error);
                 this.notify("Erro ao atualizar: " + (error.message || error), "error");
+                return false;
             } finally {
                 this.loading = false;
             }
+        },
+
+        // WRAPPER TO PRESERVE COMPATIBILITY
+        async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
+            const updates = { status: newStatus, ...additionalUpdates };
+            await this.mutateTicket(ticket, 'UpdateStatus', updates, actionLog, { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true });
         },
 
         async startAnalysis(ticket) {
@@ -2759,17 +2815,17 @@ function app() {
                 return this.notify("Liste as peças necessárias.", "error");
             }
             this.modals.finishAnalysis = false;
-            await this.finishAnalysis();
+            await this.finishAnalysis(this.selectedTicket);
         },
 
-        async finishAnalysis() {
+        async finishAnalysis(ticket = this.selectedTicket) {
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
-            const ctx = this.getLogContext(this.selectedTicket);
-            await this.updateStatus(this.selectedTicket, 'Aprovacao', {
+            const ctx = this.getLogContext(ticket);
+            await this.updateStatus(ticket, 'Aprovacao', {
                 parts_needed: this.analysisForm.partsList,
-                tech_notes: this.selectedTicket.tech_notes
+                tech_notes: ticket.tech_notes
             }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
         },
 
@@ -2792,16 +2848,20 @@ function app() {
         },
 
         async sendBudget(ticket = this.selectedTicket) {
-            this.loading = true;
-            try {
-                const ctx = this.getLogContext(ticket);
-                await this.logTicketAction(ticket.id, 'Enviou Orçamento', `Orçamento para o ${ctx.device} de ${ctx.client} foi enviado para o cliente.`);
+            const ctx = this.getLogContext(ticket);
+            const actionLog = {
+                action: 'Enviou Orçamento',
+                details: `Orçamento para o ${ctx.device} de ${ctx.client} foi enviado para o cliente.`
+            };
 
-                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                    budget_status: 'Enviado',
-                    budget_sent_at: new Date().toISOString()
-                });
+            const updates = {
+                budget_status: 'Enviado',
+                budget_sent_at: new Date().toISOString()
+            };
 
+            const success = await this.mutateTicket(ticket, 'SendBudget', updates, actionLog, { showNotify: false, fetchTickets: true });
+
+            if (success) {
                 const link = this.getTrackingLink(ticket);
                 const msg = `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`;
 
@@ -2810,22 +2870,10 @@ function app() {
 
                 if (!this.trackerConfig.disable_whatsapp_actions) {
                     window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
-                }
-
-                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                    this.selectedTicket = { ...this.selectedTicket, budget_status: 'Enviado' };
-                }
-
-                if (this.trackerConfig.disable_whatsapp_actions) {
-                    this.notify("Orçamento marcado como Enviado.");
-                } else {
                     this.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
+                } else {
+                    this.notify("Orçamento marcado como Enviado.");
                 }
-                await this.fetchTickets();
-            } catch(e) {
-                 this.notify("Erro: " + e.message, "error");
-            } finally {
-                this.loading = false;
             }
         },
         async approveRepair(ticket = this.selectedTicket) {
@@ -2865,36 +2913,39 @@ function app() {
                 return;
             }
 
-            this.loading = true;
-            try {
-                const ticket = this.tickets.find(t => t.id === this.purchaseFlow.ticketId);
-                const supplier = this.fornecedores.find(f => f.id === this.purchaseFlow.supplierId);
-                const ctx = this.getLogContext(ticket);
+            const ticket = this.tickets.find(t => t.id === this.purchaseFlow.ticketId);
+            const supplier = this.fornecedores.find(f => f.id === this.purchaseFlow.supplierId);
+            const ctx = this.getLogContext(ticket);
 
-                const purchaseData = {
-                    supplier_id: supplier.id,
-                    supplier_name: supplier.razao_social,
-                    items: this.purchaseFlow.items,
-                    purchased_at: new Date().toISOString(),
-                    purchased_by: this.employeeSession ? this.employeeSession.employee_id : null
-                };
+            const purchaseData = {
+                supplier_id: supplier.id,
+                supplier_name: supplier.razao_social,
+                items: this.purchaseFlow.items,
+                purchased_at: new Date().toISOString(),
+                purchased_by: this.employeeSession ? this.employeeSession.employee_id : null
+            };
 
-                const currentPurchases = Array.isArray(ticket.supplier_purchases) ? ticket.supplier_purchases : [];
-                const updatedPurchases = [...currentPurchases, purchaseData];
+            const currentPurchases = Array.isArray(ticket.supplier_purchases) ? ticket.supplier_purchases : [];
+            const updatedPurchases = [...currentPurchases, purchaseData];
 
-                let itemsStr = this.purchaseFlow.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
-                const itemsHtml = `<span class="text-brand-500 font-bold">${this.escapeHtml(itemsStr)}</span>`;
+            let itemsStr = this.purchaseFlow.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+            const itemsHtml = `<span class="text-brand-500 font-bold">${this.escapeHtml(itemsStr)}</span>`;
 
-                await this.logTicketAction(ticket.id, 'Confirmou Compra', `Compra de ${itemsHtml} do fornecedor <b>${this.escapeHtml(supplier.razao_social)}</b> para o ${ctx.device} de ${ctx.client} foi realizada.`);
+            const actionLog = {
+                action: 'Confirmou Compra',
+                details: `Compra de ${itemsHtml} do fornecedor <b>${this.escapeHtml(supplier.razao_social)}</b> para o ${ctx.device} de ${ctx.client} foi realizada.`
+            };
 
-                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                    parts_status: 'Comprado',
-                    parts_purchased_at: new Date().toISOString(),
-                    supplier_purchases: updatedPurchases
-                });
+            const updates = {
+                parts_status: 'Comprado',
+                parts_purchased_at: new Date().toISOString(),
+                supplier_purchases: updatedPurchases
+            };
 
+            const success = await this.mutateTicket(ticket, 'SubmitPurchase', updates, actionLog, { showNotify: false, fetchTickets: true });
+
+            if (success) {
                 this.modals.supplierPurchase = false;
-                await this.fetchTickets();
 
                 // Open WhatsApp
                 if (supplier.whatsapp) {
@@ -2910,11 +2961,6 @@ function app() {
 
                     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
                 }
-
-            } catch(e) {
-                 this.notify("Erro: " + e.message, "error");
-            } finally {
-                this.loading = false;
             }
         },
 
@@ -2933,25 +2979,13 @@ function app() {
         },
 
         async startRepair(ticket = this.selectedTicket) {
-             this.loading = true;
-             try {
-                 const ctx = this.getLogContext(ticket);
-                 await this.logTicketAction(ticket.id, 'Iniciou Execução', `Reparo iniciado do ${ctx.device} de ${ctx.client}.`);
-
-                 const now = new Date().toISOString();
-                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                    repair_start_at: now
-                });
-
-                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                    this.selectedTicket = { ...this.selectedTicket, repair_start_at: now };
-                }
-                await this.fetchTickets();
-             } catch(e) {
-                 this.notify("Erro: " + e.message, "error");
-             } finally {
-                 this.loading = false;
-             }
+            const ctx = this.getLogContext(ticket);
+            const actionLog = {
+                action: 'Iniciou Execução',
+                details: `Reparo iniciado do ${ctx.device} de ${ctx.client}.`
+            };
+            const now = new Date().toISOString();
+            await this.mutateTicket(ticket, 'StartRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
         },
 
         openOutcomeModal(mode, ticket = this.selectedTicket) {
@@ -2985,26 +3019,13 @@ function app() {
         },
 
         async startTest(ticket = this.selectedTicket) {
-             this.loading = true;
-             try {
-                 const ctx = this.getLogContext(ticket);
-                 await this.logTicketAction(ticket.id, 'Iniciou Testes', `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`);
-
-                 const now = new Date().toISOString();
-                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                    test_start_at: now
-                });
-
-                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                    this.selectedTicket = { ...this.selectedTicket, test_start_at: now };
-                }
-
-                await this.fetchTickets();
-             } catch(e) {
-                 this.notify("Erro: " + e.message, "error");
-             } finally {
-                this.loading = false;
-             }
+            const ctx = this.getLogContext(ticket);
+            const actionLog = {
+                action: 'Iniciou Testes',
+                details: `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`
+            };
+            const now = new Date().toISOString();
+            await this.mutateTicket(ticket, 'StartTest', { test_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
         },
 
         async concludeTest(success) {
@@ -3096,15 +3117,22 @@ function app() {
 
         async sendToOutsourced() {
              if (!this.outsourcedForm.deadline) return this.notify("Informe o prazo.", "error");
+             if (!this.outsourcedForm.company_id) return this.notify("Selecione a empresa parceira.", "error");
 
              this.loading = true;
              try {
                  const ticket = this.selectedTicket;
-                 const ctx = this.getLogContext(ticket);
-                 const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
+                 const companyId = this.outsourcedForm.company_id;
+
+                 // Update ticket context with the selected company before generating log
+                 const tempTicketContext = { ...ticket, outsourced_company_id: companyId };
+                 const ctx = this.getLogContext(tempTicketContext);
+                 const companyName = this.getOutsourcedCompany(companyId);
 
                  await this.updateStatus(ticket, 'Terceirizado', {
                      outsourced_deadline: this.toUTC(this.outsourcedForm.deadline),
+                     outsourced_company_id: companyId,
+                     is_outsourced: true,
                      // If moving from Aberto, ensure analysis logic is skipped or marked as handled externally
                      status: 'Terceirizado'
                  }, {
@@ -3170,30 +3198,23 @@ function app() {
         async confirmLogisticsOption(type) {
             if (type === 'pickup') {
                 // Execute standard "Disponibilizar" logic for Client Pickup
-                this.loading = true;
-                try {
-                    const ticket = this.selectedTicket;
-                    const ctx = this.getLogContext(ticket);
+                const ticket = this.selectedTicket;
+                const ctx = this.getLogContext(ticket);
+                const actionLog = {
+                    action: 'Disponibilizou Retirada',
+                    details: `O ${ctx.device} de ${ctx.client} foi disponibilizado.`
+                };
 
-                    await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', `O ${ctx.device} de ${ctx.client} foi disponibilizado.`);
+                const updates = {
+                    pickup_available: true,
+                    pickup_available_at: new Date().toISOString(),
+                    delivery_method: 'pickup'
+                };
 
-                    await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                        pickup_available: true,
-                        pickup_available_at: new Date().toISOString(),
-                        delivery_method: 'pickup'
-                    });
-
-                    this.notify("Disponibilizado para retirada.");
+                const success = await this.mutateTicket(ticket, 'ConfirmLogisticsPickup', updates, actionLog, { showNotify: true, notifyMessage: "Disponibilizado para retirada.", closeViewModal: true, fetchTickets: true });
+                if (success) {
                     this.modals.logistics = false;
-                    this.modals.viewTicket = false;
-                    await this.fetchTickets();
-
-                    // Open WhatsApp automatically as per standard flow
                     this.sendTrackingWhatsApp();
-                } catch(e) {
-                    this.notify("Erro: " + e.message, "error");
-                } finally {
-                    this.loading = false;
                 }
             }
         },
@@ -3208,47 +3229,39 @@ function app() {
                  return this.notify("Informe a transportadora.", "error");
             }
 
-            this.loading = true;
-            try {
-                const ticket = this.selectedTicket;
-                const ctx = this.getLogContext(ticket);
-                const updates = {};
-                let logMsg = '';
+            const ticket = this.selectedTicket;
+            const ctx = this.getLogContext(ticket);
+            const updates = {};
+            let actionLog = null;
 
-                if (this.logisticsMode === 'add_tracking') {
-                    // Updating existing carrier delivery
-                    updates.tracking_code = form.tracking;
-                    // User requested specific text for this action:
-                    logMsg = `Código de rastreio do cliente foi adicionado e o numero do rastrio ${form.tracking}`;
-                    await this.logTicketAction(ticket.id, 'Adicionou Rastreio', logMsg);
-                } else {
-                    // Initial Carrier Setup
-                    updates.delivery_method = 'carrier';
-                    updates.carrier_name = form.carrier;
-                    updates.tracking_code = form.tracking || null;
-                    updates.pickup_available = true; // Mark as "moved forward" conceptually
-                    updates.pickup_available_at = new Date().toISOString();
+            if (this.logisticsMode === 'add_tracking') {
+                updates.tracking_code = form.tracking;
+                actionLog = {
+                    action: 'Adicionou Rastreio',
+                    details: `Código de rastreio do cliente foi adicionado e o numero do rastrio ${form.tracking}`
+                };
+            } else {
+                updates.delivery_method = 'carrier';
+                updates.carrier_name = form.carrier;
+                updates.tracking_code = form.tracking || null;
+                updates.pickup_available = true;
+                updates.pickup_available_at = new Date().toISOString();
 
-                    logMsg = `Aparelho ${ctx.device} de ${ctx.client} foi enviado por transportadora.`;
-                    if (form.tracking) {
-                        logMsg += ` Código de Rastreio ${form.tracking}.`;
-                    }
-                    await this.logTicketAction(ticket.id, 'Enviou Transportadora', logMsg);
+                let logMsg = `Aparelho ${ctx.device} de ${ctx.client} foi enviado por transportadora.`;
+                if (form.tracking) logMsg += ` Código de Rastreio ${form.tracking}.`;
+                actionLog = {
+                    action: 'Enviou Transportadora',
+                    details: logMsg
+                };
+            }
 
-                    // Send specific WhatsApp for Carrier
+            const success = await this.mutateTicket(ticket, 'ConfirmCarrier', updates, actionLog, { showNotify: true, notifyMessage: "Informações de envio atualizadas!", closeViewModal: true, fetchTickets: true });
+
+            if (success) {
+                this.modals.logistics = false;
+                if (this.logisticsMode !== 'add_tracking') {
                     this.sendCarrierWhatsApp(ticket, form.carrier, form.tracking);
                 }
-
-                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', updates);
-
-                this.notify("Informações de envio atualizadas!");
-                this.modals.logistics = false;
-                this.modals.viewTicket = false;
-                await this.fetchTickets();
-            } catch(e) {
-                this.notify("Erro ao salvar envio: " + e.message, "error");
-            } finally {
-                this.loading = false;
             }
         },
 
@@ -3283,50 +3296,36 @@ function app() {
              }
 
              // Legacy Flow
-             this.loading = true;
-             try {
-                 const ctx = this.getLogContext(ticket);
-                 await this.logTicketAction(ticket.id, 'Disponibilizou Retirada', `O ${ctx.device} de ${ctx.client} foi disponibilizado.`);
+             const ctx = this.getLogContext(ticket);
+             const actionLog = {
+                 action: 'Disponibilizou Retirada',
+                 details: `O ${ctx.device} de ${ctx.client} foi disponibilizado.`
+             };
 
-                 await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                    pickup_available: true,
-                    pickup_available_at: new Date().toISOString()
-                });
-                await this.fetchTickets();
+             const success = await this.mutateTicket(ticket, 'MarkAvailable', {
+                 pickup_available: true,
+                 pickup_available_at: new Date().toISOString()
+             }, actionLog, { showNotify: false, fetchTickets: true });
 
-                // Open WhatsApp
-                this.sendTrackingWhatsApp();
-             } catch(e) {
-                 this.notify("Erro: " + e.message, "error");
-             } finally {
-                this.loading = false;
+             if (success) {
+                 this.sendTrackingWhatsApp();
              }
         },
-        async confirmPickup(ticket = this.selectedTicket) {
-            const ctx = this.getLogContext(ticket);
-            await this.updateStatus(ticket, 'Finalizado', {
-                delivered_at: new Date().toISOString()
-            }, { action: 'Finalizou Entrega', details: `${ctx.client} retirou o ${ctx.device}.` });
-        },
-
         async requestPriority(ticket) {
-            this.loading = true;
-            try {
-                const ctx = this.getLogContext(ticket);
-                await this.logTicketAction(ticket.id, 'Solicitou Prioridade', `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`);
+            const ctx = this.getLogContext(ticket);
+            const actionLog = {
+                action: 'Solicitou Prioridade',
+                details: `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`
+            };
 
-                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', {
-                    priority_requested: true
-                });
-
-                this.notify("Prioridade solicitada com sucesso!");
-                await this.fetchTickets();
-            } catch(e) {
-                this.notify("Erro: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            await this.mutateTicket(ticket, 'RequestPriority', {
+                priority_requested: true
+            }, actionLog, { showNotify: true, notifyMessage: "Prioridade solicitada com sucesso!", fetchTickets: true });
         },
+
+        // ==========================================
+        // END WORKFLOW MODULE
+        // ==========================================
 
         // --- CALENDAR HELPERS ---
         getCalendarTickets() {
@@ -3926,19 +3925,14 @@ function app() {
             if (!this.selectedTicket) return;
             if (!confirm('Tem certeza que deseja excluir este chamado? Ele irá para a Lixeira e não aparecerá nas listagens.')) return;
 
-            this.loading = true;
-            try {
-                await this.supabaseFetch(`tickets?id=eq.${this.selectedTicket.id}`, 'PATCH', {
-                    deleted_at: new Date().toISOString()
-                });
-                this.notify('Chamado movido para a Lixeira.');
-                this.modals.viewTicket = false;
-                await this.fetchTickets();
-            } catch(e) {
-                this.notify('Erro ao excluir: ' + e.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+            const actionLog = {
+                action: 'Excluiu Chamado',
+                details: `Chamado movido para a lixeira por ${this.user.name}.`
+            };
+
+            await this.mutateTicket(this.selectedTicket, 'DeleteTicket', {
+                deleted_at: new Date().toISOString()
+            }, actionLog, { showNotify: true, notifyMessage: 'Chamado movido para a Lixeira.', closeViewModal: true, fetchTickets: true });
         },
 
         async fetchDeletedItems() {
@@ -3964,17 +3958,31 @@ function app() {
 
         async restoreItem(type, id) {
             if (!confirm("Deseja restaurar este item?")) return;
+
+            if (type === 'ticket') {
+                const ticketToRestore = this.deletedTickets.find(t => t.id === id) || { id };
+                const actionLog = {
+                    action: 'Restaurou Chamado',
+                    details: `Chamado restaurado da lixeira por ${this.user.name}.`
+                };
+
+                await this.mutateTicket(ticketToRestore, 'RestoreTicket', {
+                    deleted_at: null
+                }, actionLog, { showNotify: true, notifyMessage: "Item restaurado!", fetchTickets: true });
+
+                await this.fetchDeletedItems();
+                return;
+            }
+
             this.loading = true;
             try {
-                const endpoint = type === 'ticket' ? 'tickets' : 'employees';
-                await this.supabaseFetch(`${endpoint}?id=eq.${id}`, 'PATCH', {
+                await this.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
                     deleted_at: null
                 });
                 this.notify("Item restaurado!");
 
                 await this.fetchDeletedItems();
-                if (type === 'ticket') await this.fetchTickets();
-                if (type === 'employee') await this.fetchEmployees();
+                await this.fetchEmployees();
 
             } catch(e) {
                 this.notify("Erro ao restaurar: " + e.message, "error");
