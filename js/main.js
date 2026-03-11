@@ -215,6 +215,7 @@ function app() {
         dailyReport: null,
         dailyReportLoading: false,
         dailyReportError: null,
+        dailyReportUpdatedAt: null,
 
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
@@ -734,6 +735,7 @@ function app() {
                 const data = await this.supabaseFetch('rpc/get_daily_report', 'POST', params);
                 if (data) {
                     this.dailyReport = data;
+                    this.dailyReportUpdatedAt = new Date();
                 } else {
                     this.dailyReportError = "Nenhum dado retornado.";
                 }
@@ -743,6 +745,56 @@ function app() {
             } finally {
                 this.dailyReportLoading = false;
             }
+        },
+
+        getDailyPercent(part, total) {
+            const p = Number(part) || 0;
+            const t = Number(total) || 0;
+            if (t === 0) return 0;
+            return Math.round((p / t) * 100);
+        },
+
+        safeNum(n) {
+            return Number(n) || 0;
+        },
+
+        getWorkflowStageLabel(ticket) {
+            if (!ticket) return '';
+            const s = ticket.status;
+
+            if (s === 'Aberto') {
+                return ticket.is_outsourced ? 'Aguardando envio para terceirizado' : 'Aguardando iniciar análise';
+            }
+            if (s === 'Terceirizado') {
+                return 'Aguardando retorno do terceirizado';
+            }
+            if (s === 'Analise Tecnica') {
+                return !ticket.analysis_started_at ? 'Aguardando iniciar análise' : 'Análise em andamento';
+            }
+            if (s === 'Aprovacao') {
+                return ticket.budget_status !== 'Enviado' ? 'Aguardando enviar orçamento' : 'Aguardando decisão do cliente';
+            }
+            if (s === 'Compra Peca') {
+                return ticket.parts_status !== 'Comprado' ? 'Aguardando compra da peça' : 'Aguardando recebimento da peça';
+            }
+            if (s === 'Andamento Reparo') {
+                return !ticket.repair_start_at ? 'Aguardando iniciar execução' : 'Reparo em execução';
+            }
+            if (s === 'Teste Final') {
+                return !ticket.test_start_at ? 'Aguardando iniciar testes' : 'Testes em andamento';
+            }
+            if (s === 'Retirada Cliente') {
+                if (!ticket.pickup_available) return 'Aguardando disponibilizar retirada/envio';
+                if (ticket.delivery_method === 'carrier') {
+                    return !ticket.tracking_code ? 'Aguardando rastreio' : 'Aguardando chegada (transportadora)';
+                }
+                return 'Aguardando retirada do cliente';
+            }
+            if (s === 'Finalizado') {
+                return 'Finalizado';
+            }
+            console.warn('Etapa indefinida para ticket:', ticket);
+            return 'Etapa indefinida';
         },
 
         toggleAdminView() {

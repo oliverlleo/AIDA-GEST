@@ -42,7 +42,7 @@ BEGIN
         v_end := (p_date_end || ' 23:59:59')::TIMESTAMP;
     END IF;
 
-    -- 3. Aggregation
+    -- 3. Aggregation (Updated to select all fields needed for getWorkflowStageLabel)
     SELECT jsonb_build_object(
         'counts', (
             SELECT jsonb_build_object(
@@ -62,7 +62,7 @@ BEGIN
                 'arrivals', (
                     SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
                     FROM (
-                        SELECT id, client_name, device_model, os_number, created_at, status
+                        SELECT id, client_name, device_model, os_number, created_at, status, is_outsourced, budget_status, parts_status, repair_start_at, test_start_at, pickup_available, delivery_method, tracking_code, outsourced_deadline, outsourced_company_id, analysis_started_at
                         FROM tickets
                         WHERE workspace_id = v_workspace_id AND created_at BETWEEN v_start AND v_end
                         ORDER BY created_at DESC
@@ -71,7 +71,7 @@ BEGIN
                 'delivered', (
                     SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
                     FROM (
-                        SELECT id, client_name, device_model, os_number, delivered_at
+                        SELECT id, client_name, device_model, os_number, delivered_at, status, is_outsourced, budget_status, parts_status, repair_start_at, test_start_at, pickup_available, delivery_method, tracking_code, outsourced_deadline, outsourced_company_id, analysis_started_at
                         FROM tickets
                         WHERE workspace_id = v_workspace_id AND delivered_at BETWEEN v_start AND v_end
                         ORDER BY delivered_at DESC
@@ -80,7 +80,7 @@ BEGIN
                 'overdue_analysis', (
                     SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
                     FROM (
-                        SELECT id, client_name, device_model, os_number, analysis_deadline
+                        SELECT id, client_name, device_model, os_number, analysis_deadline, status, is_outsourced, budget_status, parts_status, repair_start_at, test_start_at, pickup_available, delivery_method, tracking_code, outsourced_deadline, outsourced_company_id, analysis_started_at
                         FROM tickets
                         WHERE workspace_id = v_workspace_id
                           AND status = 'Analise Tecnica'
@@ -91,7 +91,7 @@ BEGIN
                 'overdue_repair', (
                     SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb)
                     FROM (
-                        SELECT id, client_name, device_model, os_number, deadline
+                        SELECT id, client_name, device_model, os_number, deadline, status, is_outsourced, budget_status, parts_status, repair_start_at, test_start_at, pickup_available, delivery_method, tracking_code, outsourced_deadline, outsourced_company_id, analysis_started_at
                         FROM tickets
                         WHERE workspace_id = v_workspace_id
                           AND status = 'Andamento Reparo'
@@ -114,7 +114,6 @@ BEGIN
                         JOIN tickets t ON t.technician_id = e.id
                         WHERE e.workspace_id = v_workspace_id
                           AND t.repair_end_at BETWEEN v_start AND v_end
-                          -- Safe filter for roles (handles JSONB or TEXT representation to avoid casting errors)
                           AND e.roles::text ILIKE '%tecnico%'
                         GROUP BY e.id, e.name
                     ) stat
