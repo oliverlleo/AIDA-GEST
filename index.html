@@ -3843,12 +3843,12 @@
                         <!-- 1. Aberto -> Analise (ou Terceirizado) -->
                         <template x-if="selectedTicket.status === 'Aberto'">
                             <div>
-                                <template x-if="!selectedTicket.is_outsourced">
+                                <template x-if="canExecuteAction(selectedTicket, 'startAnalysis')">
                                     <button @click="startAnalysis(selectedTicket)" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 text-sm shadow flex items-center">
                                         <i class="fa-solid fa-microscope mr-2"></i> Iniciar Atendimento (Ir para Análise)
                                     </button>
                                 </template>
-                                <template x-if="selectedTicket.is_outsourced">
+                                <template x-if="canExecuteAction(selectedTicket, 'sendToOutsourced')">
                                     <button @click="openOutsourcedModal(selectedTicket)" class="bg-purple-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-purple-700 text-sm shadow flex items-center">
                                         <i class="fa-solid fa-paper-plane mr-2"></i> Enviar Terceirizado
                                     </button>
@@ -3869,7 +3869,7 @@
                                 </div>
 
                                 <!-- Step 2.2: Finish Analysis (Only if started) -->
-                                <div x-show="selectedTicket.analysis_started_at" class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                <div x-show="canExecuteAction(selectedTicket, 'finishAnalysis')" class="bg-blue-50 p-4 rounded-lg border border-blue-200">
                                     <div class="flex justify-between items-center mb-3 border-b border-blue-200 pb-2">
                                         <h4 class="font-bold text-blue-800">Conclusão da Análise</h4>
                                         <div class="text-[10px] text-blue-600 font-mono bg-blue-100 px-2 py-1 rounded">
@@ -3886,7 +3886,7 @@
                                         <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
                                         <input type="text" x-model="analysisForm.partsList" class="w-full border rounded p-2 text-sm" placeholder="Ex: Tela, Bateria...">
                                     </div>
-                                    <button @click="finishAnalysis()" class="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 text-sm w-full">
+                                    <button @click="finishAnalysis(selectedTicket)" class="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 text-sm w-full">
                                         Finalizar e Enviar para Aprovação
                                     </button>
                                 </div>
@@ -3897,10 +3897,10 @@
                         <template x-if="selectedTicket.status === 'Aprovacao'">
                             <div class="flex space-x-3 items-center">
                                 <!-- Send Budget Button -->
-                                <button @click="sendBudget()"
-                                        :disabled="selectedTicket.budget_status === 'Enviado'"
+                                <button @click="sendBudget(selectedTicket)"
+                                        :disabled="!canExecuteAction(selectedTicket, 'sendBudget')"
                                         class="px-4 py-2 rounded font-bold text-sm shadow transition-colors"
-                                        :class="selectedTicket.budget_status === 'Enviado' ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-yellow-500 text-white hover:bg-yellow-600'">
+                                        :class="!canExecuteAction(selectedTicket, 'sendBudget') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-yellow-500 text-white hover:bg-yellow-600'">
                                     <i class="fa-solid fa-file-invoice-dollar mr-2"></i>
                                     <span x-text="selectedTicket.budget_status === 'Enviado' ? 'Orçamento Enviado' : 'Enviar Orçamento'"></span>
                                 </button>
@@ -3908,17 +3908,17 @@
                                 <div class="h-8 w-px bg-gray-300 mx-2"></div>
 
                                 <!-- Approve/Deny (Locked until budget sent) -->
-                                <button @click="approveRepair()"
-                                        :disabled="selectedTicket.budget_status !== 'Enviado'"
+                                <button @click="approveRepair(selectedTicket)"
+                                        :disabled="!canExecuteAction(selectedTicket, 'approveRepair')"
                                         class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                        :class="selectedTicket.budget_status !== 'Enviado' ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'">
+                                        :class="!canExecuteAction(selectedTicket, 'approveRepair') ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'">
                                     <i class="fa-solid fa-check mr-1"></i> Aprovar
                                 </button>
 
-                                <button @click="denyRepair()"
-                                        :disabled="selectedTicket.budget_status !== 'Enviado'"
+                                <button @click="denyRepair(selectedTicket)"
+                                        :disabled="!canExecuteAction(selectedTicket, 'denyRepair')"
                                         class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                        :class="selectedTicket.budget_status !== 'Enviado' ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'">
+                                        :class="!canExecuteAction(selectedTicket, 'denyRepair') ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'">
                                     <i class="fa-solid fa-xmark mr-1"></i> Negar
                                 </button>
                             </div>
@@ -3945,20 +3945,20 @@
                         <!-- 4. Compra Flow -->
                         <template x-if="selectedTicket.status === 'Compra Peca'">
                             <div class="flex space-x-3 items-center">
-                                <button @click="markPurchased()"
-                                        :disabled="selectedTicket.parts_status === 'Comprado'"
+                                <button @click="markPurchased(selectedTicket)"
+                                        :disabled="!canExecuteAction(selectedTicket, 'markPurchased')"
                                         class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                        :class="selectedTicket.parts_status === 'Comprado' ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'">
+                                        :class="!canExecuteAction(selectedTicket, 'markPurchased') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'">
                                     <i class="fa-solid fa-cart-shopping mr-2"></i>
                                     <span x-text="selectedTicket.parts_status === 'Comprado' ? 'Peça Comprada' : 'Confirmar Compra'"></span>
                                 </button>
 
                                 <div class="h-8 w-px bg-gray-300 mx-2"></div>
 
-                                <button @click="confirmReceived()"
-                                        :disabled="selectedTicket.parts_status !== 'Comprado'"
+                                <button @click="confirmReceived(selectedTicket)"
+                                        :disabled="!canExecuteAction(selectedTicket, 'confirmReceived')"
                                         class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                        :class="selectedTicket.parts_status !== 'Comprado' ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-teal-600 text-white hover:bg-teal-700'">
+                                        :class="!canExecuteAction(selectedTicket, 'confirmReceived') ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-teal-600 text-white hover:bg-teal-700'">
                                     <i class="fa-solid fa-box-open mr-1"></i> Recebido (Iniciar Reparo)
                                 </button>
                             </div>
@@ -3968,14 +3968,14 @@
                         <template x-if="selectedTicket.status === 'Andamento Reparo' && modalSource === 'tech'">
                             <div class="w-full">
                                 <div class="flex space-x-3 mb-2">
-                                    <button @click="startRepair()"
-                                            x-show="!selectedTicket.repair_start_at"
+                                    <button @click="startRepair(selectedTicket)"
+                                            x-show="canExecuteAction(selectedTicket, 'startRepair')"
                                             class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 text-sm shadow flex-grow">
                                         <i class="fa-solid fa-screwdriver-wrench mr-2"></i> Iniciar Execução
                                     </button>
 
-                                    <button @click="openOutcomeModal('repair')"
-                                            x-show="selectedTicket.repair_start_at"
+                                    <button @click="openOutcomeModal('repair', selectedTicket)"
+                                            x-show="canExecuteAction(selectedTicket, 'finishRepair')"
                                             class="bg-orange-500 text-white px-4 py-2 rounded font-bold hover:bg-orange-600 text-sm shadow flex-grow">
                                         <i class="fa-solid fa-flag-checkered mr-2"></i> Finalizar Reparo
                                     </button>
@@ -3990,14 +3990,14 @@
                         <!-- 6. Teste Final Flow -->
                          <template x-if="selectedTicket.status === 'Teste Final'">
                             <div class="flex space-x-3">
-                                 <button @click="startTest()"
-                                         x-show="!selectedTicket.test_start_at"
+                                 <button @click="startTest(selectedTicket)"
+                                         x-show="canExecuteAction(selectedTicket, 'startTest')"
                                          class="bg-indigo-500 text-white px-4 py-2 rounded font-bold hover:bg-indigo-600 text-sm shadow">
                                     <i class="fa-solid fa-vial mr-2"></i> Iniciar Testes
                                 </button>
 
-                                <button @click="openOutcomeModal('test')"
-                                        x-show="selectedTicket.test_start_at"
+                                <button @click="openOutcomeModal('test', selectedTicket)"
+                                        x-show="canExecuteAction(selectedTicket, 'concludeTest')"
                                         class="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700 text-sm shadow">
                                     <i class="fa-solid fa-clipboard-check mr-2"></i> Concluir Testes
                                 </button>
@@ -4007,10 +4007,10 @@
                         <!-- 7. Retirada Flow -->
                         <template x-if="selectedTicket.status === 'Retirada Cliente'">
                              <div class="flex space-x-3 items-center">
-                                <button @click="markAvailable()"
-                                        :disabled="selectedTicket.pickup_available"
+                                <button @click="markAvailable(selectedTicket)"
+                                        :disabled="!canExecuteAction(selectedTicket, 'markAvailable')"
                                         class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                        :class="selectedTicket.pickup_available ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'">
+                                        :class="!canExecuteAction(selectedTicket, 'markAvailable') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'">
                                     <i class="fa-solid fa-bell mr-2"></i>
                                     <span x-text="selectedTicket.pickup_available ? 'Disponível (Ok)' : 'Disponibilizar'"></span>
                                 </button>
@@ -4875,6 +4875,16 @@
         <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.outsourced = false"></div>
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm z-10 relative">
             <h3 class="text-lg font-bold mb-4">Enviar para Terceirizado</h3>
+
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-gray-500 mb-1">Empresa Parceira</label>
+                <select x-model="outsourcedForm.company_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all">
+                    <option value="">-- Selecione a Empresa --</option>
+                    <template x-for="comp in outsourcedCompanies" :key="comp.id">
+                        <option :value="comp.id" x-text="comp.name"></option>
+                    </template>
+                </select>
+            </div>
 
             <div class="mb-4">
                 <label class="block text-xs font-bold text-gray-500 mb-1">Prazo do Fornecedor</label>
