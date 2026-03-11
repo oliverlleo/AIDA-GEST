@@ -2665,7 +2665,7 @@
                     </div>
 
                     <!-- Split Columns -->
-                    <div class="grid grid-cols-1 gap-6 flex-grow overflow-hidden" :class="trackerConfig.test_flow === 'technician' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'">
+                    <div class="grid grid-cols-1 gap-6 flex-grow overflow-hidden" :class="getTestFlowMode() === 'technician' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'">
 
                         <!-- Col 1: Analise Tecnica -->
                         <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
@@ -2677,7 +2677,7 @@
                                 <template x-for="ticket in techTickets.filter(t => t.status === 'Analise Tecnica' && matchesSearch(t))" :key="ticket.id">
                                     <!-- Card Component (Reused logic) -->
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
-                                          @click="viewTicketDetails(ticket, 'tech')"
+                                          @click="viewTicketDetails(ticket)"
                                           :class="[
                                               ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
@@ -2761,7 +2761,7 @@
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
                                 <template x-for="ticket in techTickets.filter(t => t.status === 'Andamento Reparo' && matchesSearch(t))" :key="ticket.id">
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
-                                          @click="viewTicketDetails(ticket, 'tech')"
+                                          @click="viewTicketDetails(ticket)"
                                           :class="[
                                               ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
@@ -2845,7 +2845,7 @@
                         </div>
 
                         <!-- Col 3: Teste Final (Conditional) -->
-                        <div x-show="trackerConfig.test_flow === 'technician'" class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
+                        <div x-show="getTestFlowMode() === 'technician'" class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
                              <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                                 <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Teste Final</h3>
                                 <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Teste Final').length"></span>
@@ -2853,7 +2853,7 @@
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
                                 <template x-for="ticket in techTickets.filter(t => t.status === 'Teste Final' && matchesSearch(t))" :key="ticket.id">
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
-                                          @click="viewTicketDetails(ticket, 'tech')"
+                                          @click="viewTicketDetails(ticket)"
                                           :class="[
                                               ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
@@ -2904,7 +2904,7 @@
                             <template x-for="ticket in tickets.filter(t => t.status === 'Teste Final')" :key="ticket.id">
                                  <!-- Reusing Card Design but Wider -->
                                  <div class="bg-white rounded-xl shadow border-t-4 border-purple-500 p-6 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
-                                      @click="viewTicketDetails(ticket, 'tester')">
+                                      @click="viewTicketDetails(ticket)">
 
                                     <div class="flex justify-between items-start mb-4">
                                         <div>
@@ -3339,7 +3339,7 @@
                                     <input type="checkbox" value="admin" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 h-4 w-4">
                                     <span class="text-sm">Admin</span>
                                 </label>
-                                <label x-show="trackerConfig.test_flow === 'tester'" class="flex items-center space-x-2">
+                                <label x-show="getTestFlowMode() === 'tester'" class="flex items-center space-x-2">
                                     <input type="checkbox" value="tester" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 h-4 w-4">
                                     <span class="text-sm">Tester</span>
                                 </label>
@@ -3402,7 +3402,7 @@
                                     <input type="checkbox" value="admin" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 h-4 w-4">
                                     <span class="text-sm">Admin</span>
                                 </label>
-                                <label x-show="trackerConfig.test_flow === 'tester'" class="flex items-center space-x-2">
+                                <label x-show="getTestFlowMode() === 'tester'" class="flex items-center space-x-2">
                                     <input type="checkbox" value="tester" x-model="employeeForm.roles" class="text-brand-600 focus:ring-brand-500 h-4 w-4">
                                     <span class="text-sm">Tester</span>
                                 </label>
@@ -3857,10 +3857,10 @@
                         </template>
 
                         <!-- 2. Analise -> Aprovação -->
-                        <template x-if="selectedTicket.status === 'Analise Tecnica' && modalSource === 'tech'">
+                        <template x-if="selectedTicket.status === 'Analise Tecnica'">
                             <div class="w-full space-y-4">
                                 <!-- Step 2.1: Start Analysis (If not started) -->
-                                <div x-show="!selectedTicket.analysis_started_at" class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-center">
+                                <div x-show="!selectedTicket.analysis_started_at && canExecuteAction(selectedTicket, 'startAnalysis')" class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-center">
                                     <h4 class="font-bold text-yellow-800 mb-2">Iniciar Procedimento</h4>
                                     <p class="text-xs text-yellow-700 mb-3">Clique abaixo para registrar o início oficial da análise técnica.</p>
                                     <button @click="startTicketAnalysis(selectedTicket)" class="bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-yellow-700 text-sm shadow flex items-center justify-center w-full">
@@ -3965,7 +3965,7 @@
                         </template>
 
                         <!-- 5. Reparo Flow -->
-                        <template x-if="selectedTicket.status === 'Andamento Reparo' && modalSource === 'tech'">
+                        <template x-if="selectedTicket.status === 'Andamento Reparo'">
                             <div class="w-full">
                                 <div class="flex space-x-3 mb-2">
                                     <button @click="startRepair(selectedTicket)"
