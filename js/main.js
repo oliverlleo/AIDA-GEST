@@ -256,6 +256,7 @@ function app() {
 
         // Selected Ticket & Modal Context
         activeTicketId: null,
+        activeModalContext: { name: null, ticketId: null },
         selectedTicket: null, // Kept primarily for Alpine.js UI bindings
         ticketLogs: [],
         dashboardLogs: [],
@@ -364,6 +365,9 @@ function app() {
         },
         isWhatsAppDisabled() {
             return !!this.trackerConfig?.disable_whatsapp_actions;
+        },
+        isRequiredFieldsEnabled() {
+            return !!this.trackerConfig?.enable_required_ticket_fields;
         },
 
         // ==========================================
@@ -1539,6 +1543,13 @@ function app() {
             if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
                 this.selectedTicket = { ...this.selectedTicket, ...payload.new };
             }
+            if (payload.new && payload.new.id === this.activeTicketId) {
+                // Ensure state array stays fresh too
+                const idx = this.tickets.findIndex(t => t.id === payload.new.id);
+                if (idx > -1) {
+                     this.tickets[idx] = { ...this.tickets[idx], ...payload.new };
+                }
+            }
 
             // 2. Optimized Dashboard Refresh (Throttle + Relevance Check)
             if (this.view === 'dashboard') {
@@ -2228,6 +2239,7 @@ function app() {
         viewTicketDetails(ticket) {
             // Establish Secure Context
             this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'viewTicket', ticketId: ticket.id };
             this.selectedTicket = ticket;
 
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
@@ -2436,11 +2448,13 @@ function app() {
                 ticketId = this.ticketForm.id;
                 targetArray = this.ticketForm.photos;
             } else {
-                if (!this.selectedTicket || !this.selectedTicket.id) {
+                const ticket = this.resolveTicket();
+                if (!ticket || !ticket.id) {
                     this.notify("Erro: Ticket inválido.", "error");
                     return;
                 }
-                ticketId = this.selectedTicket.id;
+                ticketId = ticket.id;
+                // Important: modify the view model too since it's an un-saved state array sometimes
                 if (!this.selectedTicket.photos_urls) this.selectedTicket.photos_urls = [];
                 targetArray = this.selectedTicket.photos_urls;
             }
@@ -2459,7 +2473,9 @@ function app() {
              if (targetList === 'new') {
                  this.ticketForm.photos.splice(index, 1);
              } else {
-                 this.selectedTicket.photos_urls.splice(index, 1);
+                 if (this.selectedTicket && this.selectedTicket.photos_urls) {
+                     this.selectedTicket.photos_urls.splice(index, 1);
+                 }
              }
         },
 
@@ -2783,9 +2799,11 @@ function app() {
                     if (this.getTestFlowMode() === 'tester') return isAdmin || isTester;
                     return isAdmin || isTech;
                 case 'markAvailable':
+                case 'confirmLogisticsOption': // Equivalent to make available but logistics flow
                     if (status !== 'Retirada Cliente' || ticket.pickup_available) return false;
                     return isAdmin || isAttendant || isTech;
                 case 'markDelivered':
+                case 'confirmCarrier': // Equivalent to final mile in logistics
                     if (status !== 'Retirada Cliente' || !ticket.pickup_available) return false;
                     return isAdmin || isAttendant;
                 case 'receiveFromOutsourced':
@@ -2800,6 +2818,9 @@ function app() {
                 case 'saveTicketChanges':
                 case 'saveDeadlines':
                     return isAdmin || isTech || isAttendant;
+                case 'submitPurchase':
+                    if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
+                    return isAdmin || isAttendant;
                 default:
                     return true;
             }
@@ -2941,7 +2962,9 @@ function app() {
             this.viewTicketDetails(ticket);
         },
 
-        async sendBudget(ticket = this.selectedTicket) {
+        async sendBudget(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
             const ctx = this.getLogContext(ticket);
             const actionLog = {
                 action: 'Enviou Orçamento',
@@ -3097,6 +3120,7 @@ function app() {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
             this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'outcome', ticketId: ticket.id };
             this.selectedTicket = ticket; // Keep for UI bindings
             this.outcomeMode = mode;
             this.showTestFailureForm = false;
@@ -3225,6 +3249,7 @@ function app() {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
             this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'outsourced', ticketId: ticket.id };
             this.selectedTicket = ticket; // Keep for UI bindings
             this.outsourcedForm = { company_id: ticket.outsourced_company_id, deadline: '', price: '' };
             this.modals.outsourced = true;
@@ -3311,6 +3336,7 @@ function app() {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
             this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'logistics', ticketId: ticket.id };
             this.selectedTicket = ticket; // Keep for UI bindings
             this.logisticsMode = 'initial';
             this.logisticsForm = { carrier: '', tracking: '' };
@@ -3393,6 +3419,7 @@ function app() {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
             this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'logistics', ticketId: ticket.id };
             this.selectedTicket = ticket; // Keep for UI bindings
             this.logisticsMode = 'add_tracking';
             this.logisticsForm = { carrier: ticket.carrier_name || '', tracking: '' };
