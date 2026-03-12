@@ -2153,80 +2153,6 @@ function app() {
             };
         },
 
-        async createTicket() {
-             // Basic Integrity Checks
-             if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
-                 return this.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
-             }
-
-             if (this.ticketForm.deadline && this.ticketForm.analysis_deadline) {
-                 const deadline = new Date(this.ticketForm.deadline);
-                 const analysis = new Date(this.ticketForm.analysis_deadline);
-                 if (analysis > deadline) {
-                     return this.notify("O Prazo de Análise não pode ser maior que o Prazo de Entrega.", "error");
-                 }
-             }
-
-             this.loading = true;
-
-             try {
-                 let techId = this.ticketForm.technician_id;
-                 if (techId === 'all') techId = null;
-
-                 const isOsAuto = this.isAutoOSGenerationEnabled();
-
-                 const ticketData = {
-                     id: this.ticketForm.id,
-                     workspace_id: this.user.workspace_id,
-                    client_name: this.ticketForm.client_name,
-                    os_number: isOsAuto ? null : this.ticketForm.os_number, // Send null if auto
-                    device_model: this.ticketForm.model,
-                    serial_number: this.ticketForm.serial,
-                    defect_reported: this.ticketForm.defects.length ? this.ticketForm.defects.join(', ') : null,
-                    priority: this.ticketForm.priority,
-                    contact_info: this.ticketForm.contact,
-                     deadline: this.toUTC(this.ticketForm.deadline) || null,
-                     analysis_deadline: this.toUTC(this.ticketForm.analysis_deadline) || null,
-                     device_condition: this.ticketForm.device_condition,
-                     technician_id: this.ticketForm.is_outsourced ? null : techId,
-                     is_outsourced: this.ticketForm.is_outsourced,
-                     outsourced_company_id: (this.ticketForm.is_outsourced && this.ticketForm.outsourced_company_id && this.ticketForm.outsourced_company_id !== '') ? this.ticketForm.outsourced_company_id : null,
-                     checklist_data: this.ticketForm.checklist,
-                     checklist_final_data: this.ticketForm.checklist_final,
-                     photos_urls: this.ticketForm.photos,
-                     status: 'Aberto',
-                     created_by_name: this.user.name
-                 };
-
-                 // Configurable Validation
-                 const validation = this.validateTicketRequirements(ticketData);
-                 if (!validation.valid) {
-                     this.loading = false;
-                     return this.notify("Preencha os campos obrigatórios: " + validation.missing.join(', '), "error");
-                 }
-
-                 const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
-                 let createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
-
-                 // Ensure we have the public_token (if backend generated it and frontend didn't get it back fully populated)
-                 if (!createdTicket.public_token) {
-                     const fresh = await this.supabaseFetch(`tickets?id=eq.${createdTicket.id}&select=*`);
-                     if (fresh && fresh.length > 0) createdTicket = fresh[0];
-                 }
-
-                 const ctx = this.getLogContext(createdTicket);
-                 await this.logTicketAction(createdTicket.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
-
-                 this.notify("Chamado criado!");
-                 this.modals.ticket = false;
-                 await this.fetchTickets();
-             } catch (err) {
-                 this.notify("Erro ao criar: " + err.message, "error");
-             } finally {
-                 this.loading = false;
-             }
-        },
-
         viewTicketDetails(ticket) {
             // Establish Secure Context via Module
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'viewTicket');
@@ -2266,65 +2192,6 @@ function app() {
         cancelEditingDeadlines() {
             this.editingDeadlines = false;
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
-        },
-
-        async saveDeadlines() {
-            const ticket = this.resolveTicket();
-            if (!ticket) return;
-
-            if (this.editDeadlineForm.deadline && this.editDeadlineForm.analysis_deadline) {
-                const deadline = new Date(this.editDeadlineForm.deadline);
-                const analysis = new Date(this.editDeadlineForm.analysis_deadline);
-                if (analysis > deadline) {
-                    return this.notify("O Prazo de Análise não pode ser maior que o Prazo de Entrega.", "error");
-                }
-            }
-
-            const oldDeadline = ticket.deadline ? new Date(ticket.deadline).toLocaleString() : 'Não definido';
-            const newDeadline = this.editDeadlineForm.deadline ? new Date(this.editDeadlineForm.deadline).toLocaleString() : 'Não definido';
-
-            const oldAnalysis = ticket.analysis_deadline ? new Date(ticket.analysis_deadline).toLocaleString() : 'Não definido';
-            const newAnalysis = this.editDeadlineForm.analysis_deadline ? new Date(this.editDeadlineForm.analysis_deadline).toLocaleString() : 'Não definido';
-
-            const ctx = this.getLogContext(ticket);
-            let actionDetails = [];
-            if (oldDeadline !== newDeadline) {
-                actionDetails.push(`de ${oldDeadline} para ${newDeadline} (Prazo)`);
-            }
-            if (oldAnalysis !== newAnalysis) {
-                actionDetails.push(`de ${oldAnalysis} para ${newAnalysis} (Análise)`);
-            }
-
-            const actionLog = actionDetails.length > 0 ? {
-                action: 'Alterou Prazo',
-                details: `${this.user.name} alterou prazos do ${ctx.device} de ${ctx.client}: ${actionDetails.join(', ')}`
-            } : null;
-
-            const updates = {
-                deadline: this.toUTC(this.editDeadlineForm.deadline) || null,
-                analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
-            };
-
-            const success = await this.mutateTicket(ticket, 'saveDeadlines', updates, actionLog, { showNotify: true, notifyMessage: 'Prazos atualizados!', fetchTickets: true });
-
-            if (success) {
-                this.editingDeadlines = false;
-            }
-        },
-
-        async saveTicketChanges() {
-             const ticket = this.resolveTicket();
-             if (!ticket) return;
-             await this.mutateTicket(ticket, 'saveTicketChanges', {
-                 // For editable fields that are bound to selectedTicket in UI,
-                 // we must use selectedTicket to grab the user's unsaved input.
-                 // The *target* of the mutation is the strictly resolved ticket.
-                 tech_notes: this.selectedTicket.tech_notes,
-                 parts_needed: this.selectedTicket.parts_needed,
-                 checklist_data: this.selectedTicket.checklist_data,
-                 checklist_final_data: this.selectedTicket.checklist_final_data,
-                 photos_urls: this.selectedTicket.photos_urls
-             }, null, { showNotify: true, notifyMessage: "Alterações salvas!", fetchTickets: true });
         },
 
         async uploadTicketPhoto(file, ticketId) {
@@ -2779,6 +2646,40 @@ function app() {
         },
 
         // --- 3. WRAPPERS & ACTIONS ---
+
+        // Helper to provide comprehensive dependencies to ticket-actions module
+        _getActionDeps() {
+            return {
+                state: this, // Pass the whole Alpine component as state (read-only where possible, mutable for specific deep bindings)
+                notify: (msg, type) => this.notify(msg, type),
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                resolveTicket: (t) => this.resolveTicket(t),
+                mutateTicket: (t, act, upd, log, opts) => this.mutateTicket(t, act, upd, log, opts),
+                updateStatus: (t, st, upd, log) => this.updateStatus(t, st, upd, log),
+                logTicketAction: (id, act, det) => this.logTicketAction(id, act, det),
+                fetchTickets: () => this.fetchTickets(),
+                fetchGlobalLogs: () => this.fetchGlobalLogs(),
+                fetchDeletedItems: () => this.fetchDeletedItems(),
+                fetchEmployees: () => this.fetchEmployees(),
+                getLogContext: (t) => this.getLogContext(t),
+                escapeHtml: (str) => this.escapeHtml(str),
+                toUTC: (date) => this.toUTC(date),
+                isAutoOSGenerationEnabled: () => this.isAutoOSGenerationEnabled(),
+                isWhatsAppDisabled: () => this.isWhatsAppDisabled(),
+                isLogisticsEnabled: () => this.isLogisticsEnabled(),
+                getOutsourcedCompany: (id) => this.getOutsourcedCompany(id),
+                getOutsourcedPhone: (id) => this.getOutsourcedPhone(id),
+                getTrackingLink: (t) => this.getTrackingLink(t),
+                sendTrackingWhatsApp: () => this.sendTrackingWhatsApp(),
+                sendCarrierWhatsApp: (t, c, tr) => this.sendCarrierWhatsApp(t, c, tr),
+                validateTicketRequirements: (data) => this.validateTicketRequirements(data),
+                setLoading: (val) => { this.loading = val; },
+                closeModal: (name) => { this.modals[name] = false; },
+                openLogisticsModal: (t) => this.openLogisticsModal(t),
+                setEditingDeadlines: (val) => { this.editingDeadlines = val; }
+            };
+        },
+
         async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
             return await window.AIDATicketMutations.updateStatus(
                 ticket,
@@ -2789,38 +2690,81 @@ function app() {
             );
         },
 
+        // == SUBFASE 1 — FLUXO ADMINISTRATIVO BASE ==
+
+        async createTicket() {
+            return await window.AIDATicketActions.createTicket(this._getActionDeps());
+        },
+
+        async finishAnalysis(ticketOrId) {
+            return await window.AIDATicketActions.finishAnalysis(ticketOrId, this._getActionDeps());
+        },
+
+        async approveRepair(ticketOrId) {
+            return await window.AIDATicketActions.approveRepair(ticketOrId, this._getActionDeps());
+        },
+
+        async denyRepair(ticketOrId) {
+            return await window.AIDATicketActions.denyRepair(ticketOrId, this._getActionDeps());
+        },
+
+        async confirmReceived(ticketOrId) {
+            return await window.AIDATicketActions.confirmReceived(ticketOrId, this._getActionDeps());
+        },
+
+        async markDelivered(ticketOrId) {
+            return await window.AIDATicketActions.markDelivered(ticketOrId, this._getActionDeps());
+        },
+
+        async saveDeadlines() {
+            return await window.AIDATicketActions.saveDeadlines(this._getActionDeps());
+        },
+
+        async saveTicketChanges() {
+            return await window.AIDATicketActions.saveTicketChanges(this._getActionDeps());
+        },
+
+        async deleteTicket(ticketOrId) {
+            return await window.AIDATicketActions.deleteTicket(ticketOrId, this._getActionDeps());
+        },
+
+        async restoreItem(type, id) {
+            return await window.AIDATicketActions.restoreItem(type, id, this._getActionDeps());
+        },
+
+        // == FIM SUBFASE 1 ==
+
+        // == SUBFASE 2 — FLUXO TÉCNICO ==
+
         async startAnalysis(ticket) {
-            const ctx = this.getLogContext(ticket);
-            await this.updateStatus(ticket, 'Analise Tecnica', {}, {
-                action: 'Iniciou Atendimento',
-                details: `${ctx.device} de ${ctx.client} enviado para análise do técnico.`
-            });
+            return await window.AIDATicketActions.startAnalysis(ticket, this._getActionDeps());
         },
 
         async startTicketAnalysis(ticket) {
-            this.loading = true;
-            try {
-                // Call RPC
-                await this.supabaseFetch('rpc/start_ticket_analysis', 'POST', {
-                    p_ticket_id: ticket.id
-                });
-
-                // Update Local State
-                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                    this.selectedTicket.analysis_started_at = new Date().toISOString();
-                }
-
-                this.notify("Análise iniciada com sucesso!");
-                await this.fetchTickets();
-                if (this.view === 'dashboard') this.fetchGlobalLogs();
-
-            } catch (e) {
-                console.error("Start Analysis Error:", e);
-                this.notify("Erro ao iniciar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDATicketActions.startTicketAnalysis(ticket, this._getActionDeps());
         },
+
+        async startRepair(ticketOrId) {
+            return await window.AIDATicketActions.startRepair(ticketOrId, this._getActionDeps());
+        },
+
+        async finishRepair(success) {
+            return await window.AIDATicketActions.finishRepair(success, this._getActionDeps());
+        },
+
+        async startTest(ticketOrId) {
+            return await window.AIDATicketActions.startTest(ticketOrId, this._getActionDeps());
+        },
+
+        async concludeTest(success) {
+            return await window.AIDATicketActions.concludeTest(success, this._getActionDeps());
+        },
+
+        async requestPriority(ticketOrId) {
+            return await window.AIDATicketActions.requestPriority(ticketOrId, this._getActionDeps());
+        },
+
+        // == FIM SUBFASE 2 ==
 
         finishAnalysisFromKanban(ticket) {
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'finishAnalysis');
@@ -2836,22 +2780,6 @@ function app() {
             }
             this.modals.finishAnalysis = false;
             await this.finishAnalysis(this.resolveTicket());
-        },
-
-        async finishAnalysis(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-
-            if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
-                return this.notify("Liste as peças necessárias.", "error");
-            }
-            const ctx = this.getLogContext(ticket);
-            await this.updateStatus(ticket, 'Aprovacao', {
-                parts_needed: this.analysisForm.partsList,
-                // Make sure to take tech_notes from selectedTicket if editing in same view,
-                // but ideally here we just use whatever ticket has
-                tech_notes: this.selectedTicket && this.selectedTicket.id === ticket.id ? this.selectedTicket.tech_notes : ticket.tech_notes
-            }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
         },
 
         openWhatsApp(phone) {
@@ -2870,51 +2798,6 @@ function app() {
 
         async startBudget(ticket) {
             this.viewTicketDetails(ticket);
-        },
-
-        async sendBudget(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const actionLog = {
-                action: 'Enviou Orçamento',
-                details: `Orçamento para o ${ctx.device} de ${ctx.client} foi enviado para o cliente.`
-            };
-
-            const updates = {
-                budget_status: 'Enviado',
-                budget_sent_at: new Date().toISOString()
-            };
-
-            const success = await this.mutateTicket(ticket, 'sendBudget', updates, actionLog, { showNotify: false, fetchTickets: true });
-
-            if (success) {
-                const link = this.getTrackingLink(ticket);
-                const msg = `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`;
-
-                let number = ticket.contact_info.replace(/\D/g, '');
-                if (number.length <= 11) number = '55' + number;
-
-                if (!this.isWhatsAppDisabled()) {
-                    window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
-                    this.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
-                } else {
-                    this.notify("Orçamento marcado como Enviado.");
-                }
-            }
-        },
-        async approveRepair(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
-            const ctx = this.getLogContext(ticket);
-            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: `${ctx.client} aprovou o orçamento do ${ctx.device}.` });
-        },
-        async denyRepair(ticketOrId) {
-             const ticket = this.resolveTicket(ticketOrId);
-             if (!ticket) return;
-             const ctx = this.getLogContext(ticket);
-             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: `${ctx.client} reprovou o orçamento do ${ctx.device}.` });
         },
 
         openPurchaseModal(ticketOrId) {
@@ -3003,30 +2886,6 @@ function app() {
             // Replaced by openPurchaseModal, kept for compatibility if needed elsewhere
             this.openPurchaseModal(ticketOrId);
         },
-        async confirmReceived(ticketOrId) {
-             const ticket = this.resolveTicket(ticketOrId);
-             if (!ticket) return;
-             const ctx = this.getLogContext(ticket);
-             const rawPart = ticket.parts_needed || 'peça';
-             const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
-             await this.updateStatus(ticket, 'Andamento Reparo', {
-                 parts_status: 'Recebido',
-                 parts_received_at: new Date().toISOString()
-             }, { action: 'Recebeu Peças', details: `Peça ${part} recebida para o ${ctx.device} de ${ctx.client}. Reparo liberado.` });
-        },
-
-        async startRepair(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const actionLog = {
-                action: 'Iniciou Execução',
-                details: `Reparo iniciado do ${ctx.device} de ${ctx.client}.`
-            };
-            const now = new Date().toISOString();
-            await this.mutateTicket(ticket, 'startRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
-        },
-
         openOutcomeModal(mode, ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
@@ -3038,113 +2897,41 @@ function app() {
             this.modals.outcome = true;
         },
 
-        async finishRepair(success) {
-            const ticket = this.resolveTicket();
-            if (!ticket) return;
-            const nextStatus = success ? 'Teste Final' : 'Retirada Cliente';
-            const updates = {
-                repair_successful: success,
-                repair_end_at: new Date().toISOString()
-            };
+        // == SUBFASE 3 — TERCEIRIZAÇÃO / COMPRA / LOGÍSTICA ==
 
-            // Calculate Duration
-            const duration = this.getDuration(ticket.repair_start_at);
-            const ctx = this.getLogContext(ticket);
-
-            const detailMsg = success
-                ? `O reparo do ${ctx.device} de ${ctx.client} foi finalizado com sucesso.`
-                : `O ${ctx.device} de ${ctx.client} não teve reparo.`;
-
-            this.modals.outcome = false;
-            await this.updateStatus(ticket, nextStatus, updates, {
-                action: 'Finalizou Reparo',
-                details: detailMsg
-            });
+        async sendToOutsourced() {
+            return await window.AIDATicketActions.sendToOutsourced(this._getActionDeps());
         },
 
-        async startTest(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const actionLog = {
-                action: 'Iniciou Testes',
-                details: `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`
-            };
-            const now = new Date().toISOString();
-            await this.mutateTicket(ticket, 'startTest', { test_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
+        async receiveFromOutsourced(ticketOrId) {
+            return await window.AIDATicketActions.receiveFromOutsourced(ticketOrId, this._getActionDeps());
         },
 
-        async concludeTest(success) {
-            const ticket = this.resolveTicket();
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-
-            if (success) {
-                this.modals.outcome = false;
-                // Redirect logic based on Logistics Mode
-                // If standard mode, it goes to "Retirada Cliente" which matches current DB/UI logic.
-                await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
-            } else {
-                // FAILURE LOGIC
-                if (!this.testFailureData.reason) return this.notify("Descreva o defeito apresentado", "error");
-
-                // Outsourced Flow Logic
-                if (ticket.is_outsourced) {
-                     if (!this.testFailureData.action) return this.notify("Selecione a ação (Devolver ou Reparo)", "error");
-
-                     if (this.testFailureData.action === 'return') {
-                         if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
-
-                         const count = (ticket.outsourced_return_count || 0) + 1;
-                         const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
-
-                         // Add note to history
-                         const newNote = {
-                             date: new Date().toISOString(),
-                             text: this.testFailureData.reason,
-                             user: this.user.name,
-                             context: `Retorno ${count}x`
-                         };
-                         const updatedNotes = [...(ticket.outsourced_notes || []), newNote];
-
-                         this.modals.outcome = false;
-                         await this.updateStatus(ticket, 'Terceirizado', {
-                             outsourced_deadline: this.toUTC(this.testFailureData.newDeadline),
-                             outsourced_return_count: count,
-                             test_start_at: null,
-                             outsourced_notes: updatedNotes
-                         }, {
-                             action: 'Devolveu para Terceiro',
-                             details: `${ctx.device} retornado para ${companyName} (${count}ª vez). Motivo: ${this.testFailureData.reason}`
-                         });
-                         return;
-                     }
-                }
-
-                if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
-
-                const newNote = {
-                    date: new Date().toISOString(),
-                    text: this.testFailureData.reason,
-                    user: this.user.name,
-                    context: ticket.is_outsourced && this.testFailureData.action === 'repair' ? 'Falha de Terceiro' : 'Reprova em Teste'
-                };
-
-                const existingNotes = Array.isArray(ticket.test_notes) ? ticket.test_notes : [];
-                const updatedNotes = [...existingNotes, newNote];
-
-                this.modals.outcome = false;
-                await this.updateStatus(ticket, 'Andamento Reparo', {
-                    deadline: this.toUTC(this.testFailureData.newDeadline),
-                    priority: this.testFailureData.newPriority,
-                    repair_start_at: null,
-                    test_start_at: null,
-                    status: 'Andamento Reparo',
-                    test_notes: updatedNotes
-                }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Defeito: ' + this.testFailureData.reason });
-                this.notify("Retornado para reparo com urgência!");
-            }
+        cobrarOutsourced(ticket) {
+            return window.AIDATicketActions.cobrarOutsourced(ticket, this._getActionDeps());
         },
+
+        async submitPurchase() {
+            return await window.AIDATicketActions.submitPurchase(this._getActionDeps());
+        },
+
+        async confirmLogisticsOption(type) {
+            return await window.AIDATicketActions.confirmLogisticsOption(type, this._getActionDeps());
+        },
+
+        async confirmCarrier() {
+            return await window.AIDATicketActions.confirmCarrier(this._getActionDeps());
+        },
+
+        async markAvailable(ticketOrId) {
+            return await window.AIDATicketActions.markAvailable(ticketOrId, this._getActionDeps());
+        },
+
+        async sendBudget(ticketOrId) {
+            return await window.AIDATicketActions.sendBudget(ticketOrId, this._getActionDeps());
+        },
+
+        // == FIM SUBFASE 3 ==
 
         // --- OUTSOURCED FUNCTIONS ---
         getOutsourcedCompany(id) {
@@ -3166,82 +2953,6 @@ function app() {
             this.modals.outsourced = true;
         },
 
-        async sendToOutsourced() {
-             if (!this.outsourcedForm.deadline) return this.notify("Informe o prazo.", "error");
-             if (!this.outsourcedForm.company_id) return this.notify("Selecione a empresa parceira.", "error");
-
-             const ticket = this.resolveTicket();
-             if (!ticket) return;
-
-             this.loading = true;
-             try {
-                 const companyId = this.outsourcedForm.company_id;
-
-                 // Update ticket context with the selected company before generating log
-                 const tempTicketContext = { ...ticket, outsourced_company_id: companyId };
-                 const ctx = this.getLogContext(tempTicketContext);
-                 const companyName = this.getOutsourcedCompany(companyId);
-
-                 await this.updateStatus(ticket, 'Terceirizado', {
-                     outsourced_deadline: this.toUTC(this.outsourcedForm.deadline),
-                     outsourced_company_id: companyId,
-                     is_outsourced: true,
-                     // If moving from Aberto, ensure analysis logic is skipped or marked as handled externally
-                     status: 'Terceirizado'
-                 }, {
-                     action: 'Enviou Terceirizado',
-                     details: `${ctx.device} de ${ctx.client} enviado para ${companyName}. Prazo: ${new Date(this.outsourcedForm.deadline).toLocaleDateString('pt-BR')}.`
-                 });
-
-                 this.modals.outsourced = false;
-                 this.modals.viewTicket = false; // Close detail view if open
-             } catch(e) {
-                 this.notify("Erro: " + e.message, "error");
-                 this.loading = false;
-             }
-        },
-
-        async receiveFromOutsourced(ticketOrId) {
-             const ticket = this.resolveTicket(ticketOrId);
-             if (!ticket) return;
-             // For this specific action, we don't want the (Terceirizado: X) suffix in the context
-             // because the log message already says "recebido da X".
-             const safeClientName = this.escapeHtml(ticket.client_name);
-             const safeOsNumber = this.escapeHtml(ticket.os_number);
-             const safeDevice = this.escapeHtml(ticket.device_model);
-
-             // Custom context without duplication
-             const cleanContext = {
-                 client: `<b>${safeClientName} da OS ${safeOsNumber}</b>`,
-                 device: `<b>${safeDevice}</b>`
-             };
-
-             const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
-
-             await this.updateStatus(ticket, 'Teste Final', {
-                 test_start_at: null // Reset test status to ensure "Start Test" appears
-             }, {
-                 action: 'Recebeu de Terceiro',
-                 details: `${cleanContext.device} de ${cleanContext.client} recebido da ${companyName}. Enviado para testes.`
-             });
-        },
-
-        cobrarOutsourced(ticket) {
-            const phone = this.getOutsourcedPhone(ticket.outsourced_company_id);
-            if (!phone) return this.notify("Telefone não cadastrado.", "error");
-
-            // Context requested by user
-            const msg = `Olá, gostaria de saber sobre o andamento do aparelho ${ticket.device_model} (OS ${ticket.os_number}) enviado para vocês.`;
-
-            let number = phone.replace(/\D/g, '');
-            // Ensure 55 prefix if not present (assuming BR number logic generally)
-            if (!number.startsWith('55') && number.length >= 10) {
-                number = '55' + number;
-            }
-
-            window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
-        },
-
         // --- LOGISTICS FUNCTIONS ---
         openLogisticsModal(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
@@ -3254,78 +2965,6 @@ function app() {
             this.modals.logistics = true;
         },
 
-        async confirmLogisticsOption(type) {
-            if (type === 'pickup') {
-                // Execute standard "Disponibilizar" logic for Client Pickup
-                const ticket = this.resolveTicket();
-                if (!ticket) return;
-                const ctx = this.getLogContext(ticket);
-                const actionLog = {
-                    action: 'Disponibilizou Retirada',
-                    details: `O ${ctx.device} de ${ctx.client} foi disponibilizado.`
-                };
-
-                const updates = {
-                    pickup_available: true,
-                    pickup_available_at: new Date().toISOString(),
-                    delivery_method: 'pickup'
-                };
-
-                const success = await this.mutateTicket(ticket, 'confirmLogisticsOption', updates, actionLog, { showNotify: true, notifyMessage: "Disponibilizado para retirada.", closeViewModal: true, fetchTickets: true });
-                if (success) {
-                    this.modals.logistics = false;
-                    this.sendTrackingWhatsApp();
-                }
-            }
-        },
-
-        async confirmCarrier() {
-            const form = this.logisticsForm;
-            // Validation: If tracking exists, carrier is mandatory.
-            if (form.tracking && !form.carrier) {
-                return this.notify("Transportadora é obrigatória se houver código de rastreio.", "error");
-            }
-            if (this.logisticsMode === 'carrier_form' && !form.carrier) {
-                 return this.notify("Informe a transportadora.", "error");
-            }
-
-            const ticket = this.resolveTicket();
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const updates = {};
-            let actionLog = null;
-
-            if (this.logisticsMode === 'add_tracking') {
-                updates.tracking_code = form.tracking;
-                actionLog = {
-                    action: 'Adicionou Rastreio',
-                    details: `Código de rastreio do cliente foi adicionado e o numero do rastrio ${form.tracking}`
-                };
-            } else {
-                updates.delivery_method = 'carrier';
-                updates.carrier_name = form.carrier;
-                updates.tracking_code = form.tracking || null;
-                updates.pickup_available = true;
-                updates.pickup_available_at = new Date().toISOString();
-
-                let logMsg = `Aparelho ${ctx.device} de ${ctx.client} foi enviado por transportadora.`;
-                if (form.tracking) logMsg += ` Código de Rastreio ${form.tracking}.`;
-                actionLog = {
-                    action: 'Enviou Transportadora',
-                    details: logMsg
-                };
-            }
-
-            const success = await this.mutateTicket(ticket, 'confirmCarrier', updates, actionLog, { showNotify: true, notifyMessage: "Informações de envio atualizadas!", closeViewModal: true, fetchTickets: true });
-
-            if (success) {
-                this.modals.logistics = false;
-                if (this.logisticsMode !== 'add_tracking') {
-                    this.sendCarrierWhatsApp(ticket, form.carrier, form.tracking);
-                }
-            }
-        },
-
         addTrackingCode(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
@@ -3336,65 +2975,6 @@ function app() {
             this.logisticsForm = { carrier: ticket.carrier_name || '', tracking: '' };
             this.modals.logistics = true;
         },
-
-        async markDelivered(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            // Equivalent to "Chegou" or "Retirado (Finalizar)"
-            const ctx = this.getLogContext(ticket);
-            let action = 'Finalizou Entrega';
-            let details = `${ctx.device} de ${ctx.client} foi retirado.`;
-
-            if (ticket.delivery_method === 'carrier') {
-                action = 'Entrega Confirmada';
-                // Specific text requested: "[Model] do [Client] da OS [Number] chegou ao seu destino."
-                details = `${ctx.device} do ${ctx.client} chegou ao seu destino.`;
-            }
-
-            await this.updateStatus(ticket, 'Finalizado', {
-                delivered_at: new Date().toISOString()
-            }, { action, details });
-        },
-
-        async markAvailable(ticketOrId) {
-             const ticket = this.resolveTicket(ticketOrId);
-             if (!ticket) return;
-
-             if (this.isLogisticsEnabled()) {
-                 this.openLogisticsModal(ticket);
-                 return;
-             }
-
-             // Legacy Flow
-             const ctx = this.getLogContext(ticket);
-             const actionLog = {
-                 action: 'Disponibilizou Retirada',
-                 details: `O ${ctx.device} de ${ctx.client} foi disponibilizado.`
-             };
-
-             const success = await this.mutateTicket(ticket, 'markAvailable', {
-                 pickup_available: true,
-                 pickup_available_at: new Date().toISOString()
-             }, actionLog, { showNotify: false, fetchTickets: true });
-
-             if (success) {
-                 this.sendTrackingWhatsApp();
-             }
-        },
-        async requestPriority(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const actionLog = {
-                action: 'Solicitou Prioridade',
-                details: `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`
-            };
-
-            await this.mutateTicket(ticket, 'requestPriority', {
-                priority_requested: true
-            }, actionLog, { showNotify: true, notifyMessage: "Prioridade solicitada com sucesso!", fetchTickets: true });
-        },
-
         // ==========================================
         // END WORKFLOW MODULE
         // ==========================================
@@ -3993,21 +3573,6 @@ function app() {
             }
         },
 
-        async deleteTicket(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            if (!confirm('Tem certeza que deseja excluir este chamado? Ele irá para a Lixeira e não aparecerá nas listagens.')) return;
-
-            const actionLog = {
-                action: 'Excluiu Chamado',
-                details: `Chamado movido para a lixeira por ${this.user.name}.`
-            };
-
-            await this.mutateTicket(ticket, 'deleteTicket', {
-                deleted_at: new Date().toISOString()
-            }, actionLog, { showNotify: true, notifyMessage: 'Chamado movido para a Lixeira.', closeViewModal: true, fetchTickets: true });
-        },
-
         async fetchDeletedItems() {
             if (!this.user?.workspace_id || !this.hasRole('admin')) return;
             this.loading = true;
@@ -4024,41 +3589,6 @@ function app() {
 
             } catch(e) {
                 this.notify("Erro ao buscar lixeira: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
-        },
-
-        async restoreItem(type, id) {
-            if (!confirm("Deseja restaurar este item?")) return;
-
-            if (type === 'ticket') {
-                const ticketToRestore = this.deletedTickets.find(t => t.id === id) || { id };
-                const actionLog = {
-                    action: 'Restaurou Chamado',
-                    details: `Chamado restaurado da lixeira por ${this.user.name}.`
-                };
-
-                await this.mutateTicket(ticketToRestore, 'restoreItem', {
-                    deleted_at: null
-                }, actionLog, { showNotify: true, notifyMessage: "Item restaurado!", fetchTickets: true });
-
-                await this.fetchDeletedItems();
-                return;
-            }
-
-            this.loading = true;
-            try {
-                await this.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
-                    deleted_at: null
-                });
-                this.notify("Item restaurado!");
-
-                await this.fetchDeletedItems();
-                await this.fetchEmployees();
-
-            } catch(e) {
-                this.notify("Erro ao restaurar: " + e.message, "error");
             } finally {
                 this.loading = false;
             }
