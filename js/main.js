@@ -352,48 +352,40 @@ function app() {
         // CONFIG HELPERS (TRACKER / FEATURES)
         // ==========================================
         isLogisticsEnabled() {
-            return !!this.trackerConfig?.enable_logistics;
+            return window.AIDAConfigHelpers.isLogisticsEnabled(this.trackerConfig);
         },
         isOutsourcedEnabled() {
-            return !!this.trackerConfig?.enable_outsourced;
+            return window.AIDAConfigHelpers.isOutsourcedEnabled(this.trackerConfig);
         },
         getTestFlowMode() {
-            return this.trackerConfig?.test_flow || 'kanban';
+            return window.AIDAConfigHelpers.getTestFlowMode(this.trackerConfig);
         },
         isAutoOSGenerationEnabled() {
-            return !!this.trackerConfig?.os_generation?.enabled;
+            return window.AIDAConfigHelpers.isAutoOSGenerationEnabled(this.trackerConfig);
         },
         isWhatsAppDisabled() {
-            return !!this.trackerConfig?.disable_whatsapp_actions;
+            return window.AIDAConfigHelpers.isWhatsAppDisabled(this.trackerConfig);
         },
         isRequiredFieldsEnabled() {
-            return !!this.trackerConfig?.enable_required_ticket_fields;
+            return window.AIDAConfigHelpers.isRequiredFieldsEnabled(this.trackerConfig);
         },
 
         // ==========================================
         // MODAL CONTEXT / ACTIVE TICKET HELPER
         // ==========================================
+
+        // Wrapper for context actions
+        _applyContext(contextState) {
+            this.activeTicketId = contextState.activeTicketId;
+            this.activeModalContext = contextState.activeModalContext;
+        },
+
         resolveTicket(ticketOrId) {
-            if (!ticketOrId) {
-                // Fallback to activeTicketId if no explicit argument was passed
-                if (!this.activeTicketId) return null;
-                const found = this.tickets.find(t => t.id === this.activeTicketId);
-                return found || this.selectedTicket; // Ultimate fallback
-            }
-
-            // If it's an object with an ID
-            if (typeof ticketOrId === 'object' && ticketOrId.id) {
-                // Refresh from main array to prevent stale data
-                const found = this.tickets.find(t => t.id === ticketOrId.id);
-                return found || ticketOrId;
-            }
-
-            // If it's just an ID string
-            if (typeof ticketOrId === 'string') {
-                return this.tickets.find(t => t.id === ticketOrId);
-            }
-
-            return null;
+            return window.AIDATicketContext.resolveTicket(
+                ticketOrId,
+                this.tickets,
+                this.selectedTicket
+            );
         },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
@@ -1156,6 +1148,10 @@ function app() {
             this.session = null;
             this.notificationsList = [];
             localStorage.removeItem('techassist_employee');
+
+            // Clear context globally
+            this._applyContext(window.AIDATicketContext.clearContext());
+
             this.view = 'dashboard';
             this.loading = false;
             window.location.reload();
@@ -2099,12 +2095,7 @@ function app() {
         },
 
         isFieldRequired(key) {
-            if (!this.isRequiredFieldsEnabled()) {
-                // Default legacy requirements (Updated to include Deadlines)
-                const defaults = ['client_name', 'os_number', 'device_model', 'defect_reported', 'responsible', 'analysis_deadline', 'deadline'];
-                return defaults.includes(key);
-            }
-            return !!this.trackerConfig?.required_ticket_fields?.[key];
+            return window.AIDAConfigHelpers.isFieldRequired(this.trackerConfig, key);
         },
 
         validateTicketRequirements(ticketData) {
@@ -2237,9 +2228,9 @@ function app() {
         },
 
         viewTicketDetails(ticket) {
-            // Establish Secure Context
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'viewTicket', ticketId: ticket.id };
+            // Establish Secure Context via Module
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'viewTicket');
+            this._applyContext(newContext);
             this.selectedTicket = ticket;
 
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
@@ -2748,146 +2739,54 @@ function app() {
 
         // --- 1. WORKFLOW RULES ENGINE ---
         canExecuteAction(ticket, action) {
-            if (!ticket) return false;
-
-            const isOutsourced = ticket.is_outsourced;
-            const status = ticket.status;
-
-            // Check roles
-            const isAdmin = this.hasRole('admin');
-            const isTech = this.hasRole('tecnico');
-            const isAttendant = this.hasRole('atendente');
-            const isTester = this.hasRole('tester');
-
-            switch (action) {
-                case 'createTicket':
-                    return isAdmin || isAttendant || isTech;
-                case 'startAnalysis':
-                    if (isOutsourced || status !== 'Aberto') return false;
-                    return isAdmin || isTech;
-                case 'sendToOutsourced':
-                    if (!isOutsourced || status !== 'Aberto') return false;
-                    return isAdmin || isAttendant || isTech;
-                case 'finishAnalysis':
-                    if (status !== 'Analise Tecnica' || !ticket.analysis_started_at) return false;
-                    return isAdmin || isTech;
-                case 'sendBudget':
-                    if (status !== 'Aprovacao' || ticket.budget_status === 'Enviado') return false;
-                    return isAdmin || isAttendant;
-                case 'approveRepair':
-                case 'denyRepair':
-                    if (status !== 'Aprovacao' || ticket.budget_status !== 'Enviado') return false;
-                    return isAdmin || isAttendant;
-                case 'markPurchased':
-                    if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
-                    return isAdmin || isAttendant;
-                case 'confirmReceived':
-                    if (status !== 'Compra Peca' || ticket.parts_status !== 'Comprado') return false;
-                    return isAdmin || isAttendant;
-                case 'startRepair':
-                    if (status !== 'Andamento Reparo' || ticket.repair_start_at) return false;
-                    return isAdmin || isTech;
-                case 'finishRepair':
-                    if (status !== 'Andamento Reparo' || !ticket.repair_start_at) return false;
-                    return isAdmin || isTech;
-                case 'startTest':
-                    if (status !== 'Teste Final' || ticket.test_start_at) return false;
-                    if (this.getTestFlowMode() === 'tester') return isAdmin || isTester;
-                    return isAdmin || isTech;
-                case 'concludeTest':
-                    if (status !== 'Teste Final' || !ticket.test_start_at) return false;
-                    if (this.getTestFlowMode() === 'tester') return isAdmin || isTester;
-                    return isAdmin || isTech;
-                case 'markAvailable':
-                case 'confirmLogisticsOption': // Equivalent to make available but logistics flow
-                    if (status !== 'Retirada Cliente' || ticket.pickup_available) return false;
-                    return isAdmin || isAttendant || isTech;
-                case 'markDelivered':
-                case 'confirmCarrier': // Equivalent to final mile in logistics
-                    if (status !== 'Retirada Cliente' || !ticket.pickup_available) return false;
-                    return isAdmin || isAttendant;
-                case 'receiveFromOutsourced':
-                case 'cobrarOutsourced':
-                    if (status !== 'Terceirizado') return false;
-                    return isAdmin || isAttendant || isTech;
-                case 'requestPriority':
-                    return !ticket.priority_requested;
-                case 'deleteTicket':
-                case 'restoreItem':
-                    return isAdmin;
-                case 'saveTicketChanges':
-                case 'saveDeadlines':
-                    return isAdmin || isTech || isAttendant;
-                case 'submitPurchase':
-                    if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
-                    return isAdmin || isAttendant;
-                case 'updateStatus':
-                    // Generic status update wrapper validation
-                    return isAdmin || isTech || isAttendant || isTester;
-                default:
-                    return true;
-            }
+            return window.AIDAWorkflowRules.canExecuteAction(
+                ticket,
+                action,
+                (role) => this.hasRole(role),
+                this.trackerConfig
+            );
         },
 
         // --- 2. CENTRALIZED MUTATION LAYER ---
+
+        // Helper to bundle dependencies for the mutation module
+        _getMutationDeps() {
+            return {
+                canExecuteAction: (t, a) => this.canExecuteAction(t, a),
+                setLoading: (val) => { this.loading = val; },
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                updateSelectedTicket: (id, updates) => {
+                    if (this.selectedTicket && this.selectedTicket.id === id) {
+                        this.selectedTicket = { ...this.selectedTicket, ...updates };
+                    }
+                },
+                logTicketAction: (id, act, det) => this.logTicketAction(id, act, det),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTickets: () => this.fetchTickets(),
+                closeViewModal: () => { this.modals.viewTicket = false; }
+            };
+        },
+
         async mutateTicket(ticket, actionName, updates = {}, actionLog = null, options = { showNotify: true, closeViewModal: false, fetchTickets: true }) {
-            // JS-Level enforcement
-            if (!this.canExecuteAction(ticket, actionName)) {
-                console.warn(`[Workflow Engine] Mutation prevented. Action '${actionName}' is not allowed on ticket ${ticket.id} (${ticket.status})`);
-                this.notify("Ação não permitida para o estado atual.", "error");
-                return false;
-            }
-
-            this.loading = true;
-            try {
-                // Determine payload
-                const finalUpdates = {
-                    ...updates,
-                    updated_at: new Date().toISOString()
-                };
-
-                // Send to backend
-                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', finalUpdates);
-
-                // Update selectedTicket directly to avoid flashing/stale data
-                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                    this.selectedTicket = { ...this.selectedTicket, ...finalUpdates };
-                }
-
-                // Log Action
-                if (actionLog) {
-                     await this.logTicketAction(ticket.id, actionLog.action, actionLog.details);
-                }
-
-                // UI Feedback
-                if (options.showNotify) {
-                    this.notify(options.notifyMessage || "Atualizado com sucesso!");
-                }
-
-                // Refresh Lists if needed
-                if (options.fetchTickets) {
-                     await this.fetchTickets();
-                }
-
-                // Modal management
-                if (options.closeViewModal) {
-                    this.modals.viewTicket = false;
-                }
-
-                return true;
-            } catch (error) {
-                console.error("Mutation Error:", error);
-                this.notify("Erro ao atualizar: " + (error.message || error), "error");
-                return false;
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDATicketMutations.mutateTicket(
+                ticket,
+                actionName,
+                updates,
+                actionLog,
+                options,
+                this._getMutationDeps()
+            );
         },
 
         // --- 3. WRAPPERS & ACTIONS ---
         async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
-            const updates = { status: newStatus, ...additionalUpdates };
-            await this.mutateTicket(ticket, 'updateStatus', updates, actionLog, { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true });
+            return await window.AIDATicketMutations.updateStatus(
+                ticket,
+                newStatus,
+                additionalUpdates,
+                actionLog,
+                this._getMutationDeps()
+            );
         },
 
         async startAnalysis(ticket) {
@@ -2924,7 +2823,8 @@ function app() {
         },
 
         finishAnalysisFromKanban(ticket) {
-            this.activeTicketId = ticket.id;
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'finishAnalysis');
+            this._applyContext(newContext);
             this.selectedTicket = ticket;
             this.analysisForm = { needsParts: false, partsList: '' };
             this.modals.finishAnalysis = true;
@@ -3020,7 +2920,8 @@ function app() {
         openPurchaseModal(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'supplierPurchase');
+            this._applyContext(newContext);
             this.purchaseFlow = {
                 ticketId: ticket.id,
                 supplierId: '',
@@ -3129,8 +3030,8 @@ function app() {
         openOutcomeModal(mode, ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'outcome', ticketId: ticket.id };
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'outcome');
+            this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
             this.outcomeMode = mode;
             this.showTestFailureForm = false;
@@ -3258,8 +3159,8 @@ function app() {
         openOutsourcedModal(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'outsourced', ticketId: ticket.id };
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'outsourced');
+            this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
             this.outsourcedForm = { company_id: ticket.outsourced_company_id, deadline: '', price: '' };
             this.modals.outsourced = true;
@@ -3345,8 +3246,8 @@ function app() {
         openLogisticsModal(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'logistics', ticketId: ticket.id };
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'logistics');
+            this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
             this.logisticsMode = 'initial';
             this.logisticsForm = { carrier: '', tracking: '' };
@@ -3428,8 +3329,8 @@ function app() {
         addTrackingCode(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'logistics', ticketId: ticket.id };
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'logistics');
+            this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
             this.logisticsMode = 'add_tracking';
             this.logisticsForm = { carrier: ticket.carrier_name || '', tracking: '' };
