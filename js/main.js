@@ -254,12 +254,13 @@ function app() {
         editingDeadlines: false,
         editDeadlineForm: { deadline: '', analysis_deadline: '' },
 
-        // Selected Ticket
-        selectedTicket: null,
+        // Selected Ticket & Modal Context
+        activeTicketId: null,
+        activeModalContext: { name: null, ticketId: null },
+        selectedTicket: null, // Kept primarily for Alpine.js UI bindings
         ticketLogs: [],
         dashboardLogs: [],
         logViewMode: 'timeline',
-        modalSource: '',
         showShareModal: false,
 
         // Notes System State
@@ -346,6 +347,54 @@ function app() {
             { key: 'checklist_exit', label: 'Checklist de Saída', col: 'checklist_final_data', type: 'array' },
             { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' }
         ],
+
+        // ==========================================
+        // CONFIG HELPERS (TRACKER / FEATURES)
+        // ==========================================
+        isLogisticsEnabled() {
+            return !!this.trackerConfig?.enable_logistics;
+        },
+        isOutsourcedEnabled() {
+            return !!this.trackerConfig?.enable_outsourced;
+        },
+        getTestFlowMode() {
+            return this.trackerConfig?.test_flow || 'kanban';
+        },
+        isAutoOSGenerationEnabled() {
+            return !!this.trackerConfig?.os_generation?.enabled;
+        },
+        isWhatsAppDisabled() {
+            return !!this.trackerConfig?.disable_whatsapp_actions;
+        },
+        isRequiredFieldsEnabled() {
+            return !!this.trackerConfig?.enable_required_ticket_fields;
+        },
+
+        // ==========================================
+        // MODAL CONTEXT / ACTIVE TICKET HELPER
+        // ==========================================
+        resolveTicket(ticketOrId) {
+            if (!ticketOrId) {
+                // Fallback to activeTicketId if no explicit argument was passed
+                if (!this.activeTicketId) return null;
+                const found = this.tickets.find(t => t.id === this.activeTicketId);
+                return found || this.selectedTicket; // Ultimate fallback
+            }
+
+            // If it's an object with an ID
+            if (typeof ticketOrId === 'object' && ticketOrId.id) {
+                // Refresh from main array to prevent stale data
+                const found = this.tickets.find(t => t.id === ticketOrId.id);
+                return found || ticketOrId;
+            }
+
+            // If it's just an ID string
+            if (typeof ticketOrId === 'string') {
+                return this.tickets.find(t => t.id === ticketOrId);
+            }
+
+            return null;
+        },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
         async supabaseFetch(endpoint, method = 'GET', body = null) {
@@ -1494,6 +1543,13 @@ function app() {
             if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
                 this.selectedTicket = { ...this.selectedTicket, ...payload.new };
             }
+            if (payload.new && payload.new.id === this.activeTicketId) {
+                // Ensure state array stays fresh too
+                const idx = this.tickets.findIndex(t => t.id === payload.new.id);
+                if (idx > -1) {
+                     this.tickets[idx] = { ...this.tickets[idx], ...payload.new };
+                }
+            }
 
             // 2. Optimized Dashboard Refresh (Throttle + Relevance Check)
             if (this.view === 'dashboard') {
@@ -2043,19 +2099,19 @@ function app() {
         },
 
         isFieldRequired(key) {
-            if (!this.trackerConfig.enable_required_ticket_fields) {
+            if (!this.isRequiredFieldsEnabled()) {
                 // Default legacy requirements (Updated to include Deadlines)
                 const defaults = ['client_name', 'os_number', 'device_model', 'defect_reported', 'responsible', 'analysis_deadline', 'deadline'];
                 return defaults.includes(key);
             }
-            return !!this.trackerConfig.required_ticket_fields[key];
+            return !!this.trackerConfig?.required_ticket_fields?.[key];
         },
 
         validateTicketRequirements(ticketData) {
             // If OS Generation is enabled, skip OS validation (server will fill it)
-            const isOsAuto = this.trackerConfig.os_generation && this.trackerConfig.os_generation.enabled;
+            const isOsAuto = this.isAutoOSGenerationEnabled();
 
-            if (!this.trackerConfig.enable_required_ticket_fields) {
+            if (!this.isRequiredFieldsEnabled()) {
                 // Legacy Validation (Hardcoded + Deadlines)
                 if (!ticketData.client_name || (!isOsAuto && !ticketData.os_number) || !ticketData.device_model || !ticketData.defect_reported) {
                     return { valid: false, missing: ['Campos Padrão (*)'] };
@@ -2126,7 +2182,7 @@ function app() {
                  let techId = this.ticketForm.technician_id;
                  if (techId === 'all') techId = null;
 
-                 const isOsAuto = this.trackerConfig.os_generation && this.trackerConfig.os_generation.enabled;
+                 const isOsAuto = this.isAutoOSGenerationEnabled();
 
                  const ticketData = {
                      id: this.ticketForm.id,
@@ -2180,9 +2236,12 @@ function app() {
              }
         },
 
-        viewTicketDetails(ticket, source = 'kanban') {
+        viewTicketDetails(ticket) {
+            // Establish Secure Context
+            this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'viewTicket', ticketId: ticket.id };
             this.selectedTicket = ticket;
-            this.modalSource = source;
+
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
             if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
             if (!Array.isArray(this.selectedTicket.photos_urls)) this.selectedTicket.photos_urls = [];
@@ -2199,7 +2258,8 @@ function app() {
         },
 
         startEditingDeadlines() {
-            if (!this.selectedTicket) return;
+            const ticket = this.resolveTicket();
+            if (!ticket) return;
             const formatForInput = (dateStr) => {
                 if (!dateStr) return '';
                 const d = new Date(dateStr);
@@ -2207,8 +2267,8 @@ function app() {
                 return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
             };
 
-            this.editDeadlineForm.deadline = formatForInput(this.selectedTicket.deadline);
-            this.editDeadlineForm.analysis_deadline = formatForInput(this.selectedTicket.analysis_deadline);
+            this.editDeadlineForm.deadline = formatForInput(ticket.deadline);
+            this.editDeadlineForm.analysis_deadline = formatForInput(ticket.analysis_deadline);
             this.editingDeadlines = true;
         },
 
@@ -2218,7 +2278,8 @@ function app() {
         },
 
         async saveDeadlines() {
-            if (!this.selectedTicket) return;
+            const ticket = this.resolveTicket();
+            if (!ticket) return;
 
             if (this.editDeadlineForm.deadline && this.editDeadlineForm.analysis_deadline) {
                 const deadline = new Date(this.editDeadlineForm.deadline);
@@ -2228,13 +2289,13 @@ function app() {
                 }
             }
 
-            const oldDeadline = this.selectedTicket.deadline ? new Date(this.selectedTicket.deadline).toLocaleString() : 'Não definido';
+            const oldDeadline = ticket.deadline ? new Date(ticket.deadline).toLocaleString() : 'Não definido';
             const newDeadline = this.editDeadlineForm.deadline ? new Date(this.editDeadlineForm.deadline).toLocaleString() : 'Não definido';
 
-            const oldAnalysis = this.selectedTicket.analysis_deadline ? new Date(this.selectedTicket.analysis_deadline).toLocaleString() : 'Não definido';
+            const oldAnalysis = ticket.analysis_deadline ? new Date(ticket.analysis_deadline).toLocaleString() : 'Não definido';
             const newAnalysis = this.editDeadlineForm.analysis_deadline ? new Date(this.editDeadlineForm.analysis_deadline).toLocaleString() : 'Não definido';
 
-            const ctx = this.getLogContext(this.selectedTicket);
+            const ctx = this.getLogContext(ticket);
             let actionDetails = [];
             if (oldDeadline !== newDeadline) {
                 actionDetails.push(`de ${oldDeadline} para ${newDeadline} (Prazo)`);
@@ -2253,7 +2314,7 @@ function app() {
                 analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
             };
 
-            const success = await this.mutateTicket(this.selectedTicket, 'SaveDeadlines', updates, actionLog, { showNotify: true, notifyMessage: 'Prazos atualizados!', fetchTickets: true });
+            const success = await this.mutateTicket(ticket, 'saveDeadlines', updates, actionLog, { showNotify: true, notifyMessage: 'Prazos atualizados!', fetchTickets: true });
 
             if (success) {
                 this.editingDeadlines = false;
@@ -2261,8 +2322,12 @@ function app() {
         },
 
         async saveTicketChanges() {
-             if (!this.selectedTicket) return;
-             await this.mutateTicket(this.selectedTicket, 'SaveTicketChanges', {
+             const ticket = this.resolveTicket();
+             if (!ticket) return;
+             await this.mutateTicket(ticket, 'saveTicketChanges', {
+                 // For editable fields that are bound to selectedTicket in UI,
+                 // we must use selectedTicket to grab the user's unsaved input.
+                 // The *target* of the mutation is the strictly resolved ticket.
                  tech_notes: this.selectedTicket.tech_notes,
                  parts_needed: this.selectedTicket.parts_needed,
                  checklist_data: this.selectedTicket.checklist_data,
@@ -2383,11 +2448,13 @@ function app() {
                 ticketId = this.ticketForm.id;
                 targetArray = this.ticketForm.photos;
             } else {
-                if (!this.selectedTicket || !this.selectedTicket.id) {
+                const ticket = this.resolveTicket();
+                if (!ticket || !ticket.id) {
                     this.notify("Erro: Ticket inválido.", "error");
                     return;
                 }
-                ticketId = this.selectedTicket.id;
+                ticketId = ticket.id;
+                // Important: modify the view model too since it's an un-saved state array sometimes
                 if (!this.selectedTicket.photos_urls) this.selectedTicket.photos_urls = [];
                 targetArray = this.selectedTicket.photos_urls;
             }
@@ -2406,7 +2473,9 @@ function app() {
              if (targetList === 'new') {
                  this.ticketForm.photos.splice(index, 1);
              } else {
-                 this.selectedTicket.photos_urls.splice(index, 1);
+                 if (this.selectedTicket && this.selectedTicket.photos_urls) {
+                     this.selectedTicket.photos_urls.splice(index, 1);
+                 }
              }
         },
 
@@ -2417,12 +2486,13 @@ function app() {
         },
 
         openShareModal() {
-            if (this.selectedTicket) {
+            const ticket = this.resolveTicket();
+            if (ticket) {
                 // Ensure public_token is available
-                if (!this.selectedTicket.public_token) {
+                if (!ticket.public_token) {
                     // Fallback refresh logic if missing (should not happen often)
                     this.fetchTickets().then(() => {
-                        const updated = this.tickets.find(t => t.id === this.selectedTicket.id);
+                        const updated = this.tickets.find(t => t.id === ticket.id);
                         if(updated) this.selectedTicket = updated;
                     });
                 }
@@ -2431,28 +2501,30 @@ function app() {
         },
 
         copyTrackingLink() {
-             if (!this.selectedTicket) return;
-             const link = this.getTrackingLink(this.selectedTicket);
+             const ticket = this.resolveTicket();
+             if (!ticket) return;
+             const link = this.getTrackingLink(ticket);
              navigator.clipboard.writeText(link).then(() => {
                  this.notify("Link copiado!");
              });
         },
 
         sendTrackingWhatsApp() {
-            if (this.trackerConfig.disable_whatsapp_actions) return;
-            if (!this.selectedTicket || !this.selectedTicket.contact_info) return this.notify("Sem contato cadastrado", "error");
+            if (this.isWhatsAppDisabled()) return;
+            const ticket = this.resolveTicket();
+            if (!ticket || !ticket.contact_info) return this.notify("Sem contato cadastrado", "error");
 
-            const link = this.getTrackingLink(this.selectedTicket);
-            const msg = `Olá ${this.selectedTicket.client_name}, acompanhe o progresso do seu reparo em tempo real aqui: ${link}`;
+            const link = this.getTrackingLink(ticket);
+            const msg = `Olá ${ticket.client_name}, acompanhe o progresso do seu reparo em tempo real aqui: ${link}`;
 
-            let number = this.selectedTicket.contact_info.replace(/\D/g, '');
+            let number = ticket.contact_info.replace(/\D/g, '');
             if (number.length <= 11) number = '55' + number;
 
             window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
         },
 
         sendCarrierWhatsApp(ticket, carrier, trackingCode) {
-            if (this.trackerConfig.disable_whatsapp_actions) return;
+            if (this.isWhatsAppDisabled()) return;
             if (!ticket || !ticket.contact_info) return;
 
             const link = this.getTrackingLink(ticket);
@@ -2668,57 +2740,104 @@ function app() {
         },
 
         // ==========================================
-        // WORKFLOW RULES AND MUTATION MODULE (PREPARATION)
+        // [MODULE PREPARATION] WORKFLOW & MUTATIONS
         // ==========================================
-        // This entire block contains centralized logic for ticket
-        // lifecycle and should be considered for extraction into
-        // a standalone helper file (e.g. ticket-workflow.js)
+        // The following section is fully decoupled from global
+        // isolated state (except activeTicketId resolution) and
+        // is ready for extraction into `ticket-workflow.js`.
 
-        // --- WORKFLOW RULES ---
+        // --- 1. WORKFLOW RULES ENGINE ---
         canExecuteAction(ticket, action) {
             if (!ticket) return false;
 
             const isOutsourced = ticket.is_outsourced;
             const status = ticket.status;
 
+            // Check roles
+            const isAdmin = this.hasRole('admin');
+            const isTech = this.hasRole('tecnico');
+            const isAttendant = this.hasRole('atendente');
+            const isTester = this.hasRole('tester');
+
             switch (action) {
+                case 'createTicket':
+                    return isAdmin || isAttendant || isTech;
                 case 'startAnalysis':
-                    return status === 'Aberto' && !isOutsourced;
+                    if (isOutsourced || status !== 'Aberto') return false;
+                    return isAdmin || isTech;
                 case 'sendToOutsourced':
-                    return status === 'Aberto' && isOutsourced;
+                    if (!isOutsourced || status !== 'Aberto') return false;
+                    return isAdmin || isAttendant || isTech;
                 case 'finishAnalysis':
-                    return status === 'Analise Tecnica' && ticket.analysis_started_at;
+                    if (status !== 'Analise Tecnica' || !ticket.analysis_started_at) return false;
+                    return isAdmin || isTech;
                 case 'sendBudget':
-                    return status === 'Aprovacao' && ticket.budget_status !== 'Enviado';
+                    if (status !== 'Aprovacao' || ticket.budget_status === 'Enviado') return false;
+                    return isAdmin || isAttendant;
                 case 'approveRepair':
                 case 'denyRepair':
-                    return status === 'Aprovacao' && ticket.budget_status === 'Enviado';
+                    if (status !== 'Aprovacao' || ticket.budget_status !== 'Enviado') return false;
+                    return isAdmin || isAttendant;
                 case 'markPurchased':
-                    return status === 'Compra Peca' && ticket.parts_status !== 'Comprado';
+                    if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
+                    return isAdmin || isAttendant;
                 case 'confirmReceived':
-                    return status === 'Compra Peca' && ticket.parts_status === 'Comprado';
+                    if (status !== 'Compra Peca' || ticket.parts_status !== 'Comprado') return false;
+                    return isAdmin || isAttendant;
                 case 'startRepair':
-                    return status === 'Andamento Reparo' && !ticket.repair_start_at;
+                    if (status !== 'Andamento Reparo' || ticket.repair_start_at) return false;
+                    return isAdmin || isTech;
                 case 'finishRepair':
-                    return status === 'Andamento Reparo' && ticket.repair_start_at;
+                    if (status !== 'Andamento Reparo' || !ticket.repair_start_at) return false;
+                    return isAdmin || isTech;
                 case 'startTest':
-                    return status === 'Teste Final' && !ticket.test_start_at;
+                    if (status !== 'Teste Final' || ticket.test_start_at) return false;
+                    if (this.getTestFlowMode() === 'tester') return isAdmin || isTester;
+                    return isAdmin || isTech;
                 case 'concludeTest':
-                    return status === 'Teste Final' && ticket.test_start_at;
+                    if (status !== 'Teste Final' || !ticket.test_start_at) return false;
+                    if (this.getTestFlowMode() === 'tester') return isAdmin || isTester;
+                    return isAdmin || isTech;
                 case 'markAvailable':
-                    return status === 'Retirada Cliente' && !ticket.pickup_available;
+                case 'confirmLogisticsOption': // Equivalent to make available but logistics flow
+                    if (status !== 'Retirada Cliente' || ticket.pickup_available) return false;
+                    return isAdmin || isAttendant || isTech;
                 case 'markDelivered':
-                    return status === 'Retirada Cliente' && ticket.pickup_available;
+                case 'confirmCarrier': // Equivalent to final mile in logistics
+                    if (status !== 'Retirada Cliente' || !ticket.pickup_available) return false;
+                    return isAdmin || isAttendant;
                 case 'receiveFromOutsourced':
                 case 'cobrarOutsourced':
-                    return status === 'Terceirizado';
+                    if (status !== 'Terceirizado') return false;
+                    return isAdmin || isAttendant || isTech;
+                case 'requestPriority':
+                    return !ticket.priority_requested;
+                case 'deleteTicket':
+                case 'restoreItem':
+                    return isAdmin;
+                case 'saveTicketChanges':
+                case 'saveDeadlines':
+                    return isAdmin || isTech || isAttendant;
+                case 'submitPurchase':
+                    if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
+                    return isAdmin || isAttendant;
+                case 'updateStatus':
+                    // Generic status update wrapper validation
+                    return isAdmin || isTech || isAttendant || isTester;
                 default:
                     return true;
             }
         },
 
-        // CENTRALIZED TICKET MUTATION
+        // --- 2. CENTRALIZED MUTATION LAYER ---
         async mutateTicket(ticket, actionName, updates = {}, actionLog = null, options = { showNotify: true, closeViewModal: false, fetchTickets: true }) {
+            // JS-Level enforcement
+            if (!this.canExecuteAction(ticket, actionName)) {
+                console.warn(`[Workflow Engine] Mutation prevented. Action '${actionName}' is not allowed on ticket ${ticket.id} (${ticket.status})`);
+                this.notify("Ação não permitida para o estado atual.", "error");
+                return false;
+            }
+
             this.loading = true;
             try {
                 // Determine payload
@@ -2765,10 +2884,10 @@ function app() {
             }
         },
 
-        // WRAPPER TO PRESERVE COMPATIBILITY
+        // --- 3. WRAPPERS & ACTIONS ---
         async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
             const updates = { status: newStatus, ...additionalUpdates };
-            await this.mutateTicket(ticket, 'UpdateStatus', updates, actionLog, { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true });
+            await this.mutateTicket(ticket, 'updateStatus', updates, actionLog, { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true });
         },
 
         async startAnalysis(ticket) {
@@ -2805,6 +2924,7 @@ function app() {
         },
 
         finishAnalysisFromKanban(ticket) {
+            this.activeTicketId = ticket.id;
             this.selectedTicket = ticket;
             this.analysisForm = { needsParts: false, partsList: '' };
             this.modals.finishAnalysis = true;
@@ -2815,17 +2935,22 @@ function app() {
                 return this.notify("Liste as peças necessárias.", "error");
             }
             this.modals.finishAnalysis = false;
-            await this.finishAnalysis(this.selectedTicket);
+            await this.finishAnalysis(this.resolveTicket());
         },
 
-        async finishAnalysis(ticket = this.selectedTicket) {
+        async finishAnalysis(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
+
             if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
             const ctx = this.getLogContext(ticket);
             await this.updateStatus(ticket, 'Aprovacao', {
                 parts_needed: this.analysisForm.partsList,
-                tech_notes: ticket.tech_notes
+                // Make sure to take tech_notes from selectedTicket if editing in same view,
+                // but ideally here we just use whatever ticket has
+                tech_notes: this.selectedTicket && this.selectedTicket.id === ticket.id ? this.selectedTicket.tech_notes : ticket.tech_notes
             }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
         },
 
@@ -2847,7 +2972,9 @@ function app() {
             this.viewTicketDetails(ticket);
         },
 
-        async sendBudget(ticket = this.selectedTicket) {
+        async sendBudget(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
             const ctx = this.getLogContext(ticket);
             const actionLog = {
                 action: 'Enviou Orçamento',
@@ -2859,7 +2986,7 @@ function app() {
                 budget_sent_at: new Date().toISOString()
             };
 
-            const success = await this.mutateTicket(ticket, 'SendBudget', updates, actionLog, { showNotify: false, fetchTickets: true });
+            const success = await this.mutateTicket(ticket, 'sendBudget', updates, actionLog, { showNotify: false, fetchTickets: true });
 
             if (success) {
                 const link = this.getTrackingLink(ticket);
@@ -2868,7 +2995,7 @@ function app() {
                 let number = ticket.contact_info.replace(/\D/g, '');
                 if (number.length <= 11) number = '55' + number;
 
-                if (!this.trackerConfig.disable_whatsapp_actions) {
+                if (!this.isWhatsAppDisabled()) {
                     window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
                     this.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
                 } else {
@@ -2876,17 +3003,24 @@ function app() {
                 }
             }
         },
-        async approveRepair(ticket = this.selectedTicket) {
+        async approveRepair(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
             const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
             const ctx = this.getLogContext(ticket);
             await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: `${ctx.client} aprovou o orçamento do ${ctx.device}.` });
         },
-        async denyRepair(ticket = this.selectedTicket) {
+        async denyRepair(ticketOrId) {
+             const ticket = this.resolveTicket(ticketOrId);
+             if (!ticket) return;
              const ctx = this.getLogContext(ticket);
              await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: `${ctx.client} reprovou o orçamento do ${ctx.device}.` });
         },
 
-        openPurchaseModal(ticket = this.selectedTicket) {
+        openPurchaseModal(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
+            this.activeTicketId = ticket.id;
             this.purchaseFlow = {
                 ticketId: ticket.id,
                 supplierId: '',
@@ -2942,7 +3076,7 @@ function app() {
                 supplier_purchases: updatedPurchases
             };
 
-            const success = await this.mutateTicket(ticket, 'SubmitPurchase', updates, actionLog, { showNotify: false, fetchTickets: true });
+            const success = await this.mutateTicket(ticket, 'submitPurchase', updates, actionLog, { showNotify: false, fetchTickets: true });
 
             if (success) {
                 this.modals.supplierPurchase = false;
@@ -2964,11 +3098,13 @@ function app() {
             }
         },
 
-        async markPurchased(ticket = this.selectedTicket) {
+        async markPurchased(ticketOrId) {
             // Replaced by openPurchaseModal, kept for compatibility if needed elsewhere
-            this.openPurchaseModal(ticket);
+            this.openPurchaseModal(ticketOrId);
         },
-        async confirmReceived(ticket = this.selectedTicket) {
+        async confirmReceived(ticketOrId) {
+             const ticket = this.resolveTicket(ticketOrId);
+             if (!ticket) return;
              const ctx = this.getLogContext(ticket);
              const rawPart = ticket.parts_needed || 'peça';
              const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
@@ -2978,25 +3114,32 @@ function app() {
              }, { action: 'Recebeu Peças', details: `Peça ${part} recebida para o ${ctx.device} de ${ctx.client}. Reparo liberado.` });
         },
 
-        async startRepair(ticket = this.selectedTicket) {
+        async startRepair(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
             const ctx = this.getLogContext(ticket);
             const actionLog = {
                 action: 'Iniciou Execução',
                 details: `Reparo iniciado do ${ctx.device} de ${ctx.client}.`
             };
             const now = new Date().toISOString();
-            await this.mutateTicket(ticket, 'StartRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
+            await this.mutateTicket(ticket, 'startRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
         },
 
-        openOutcomeModal(mode, ticket = this.selectedTicket) {
-            this.selectedTicket = ticket;
+        openOutcomeModal(mode, ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
+            this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'outcome', ticketId: ticket.id };
+            this.selectedTicket = ticket; // Keep for UI bindings
             this.outcomeMode = mode;
             this.showTestFailureForm = false;
             this.modals.outcome = true;
         },
 
         async finishRepair(success) {
-            const ticket = this.selectedTicket;
+            const ticket = this.resolveTicket();
+            if (!ticket) return;
             const nextStatus = success ? 'Teste Final' : 'Retirada Cliente';
             const updates = {
                 repair_successful: success,
@@ -3018,18 +3161,21 @@ function app() {
             });
         },
 
-        async startTest(ticket = this.selectedTicket) {
+        async startTest(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
             const ctx = this.getLogContext(ticket);
             const actionLog = {
                 action: 'Iniciou Testes',
                 details: `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`
             };
             const now = new Date().toISOString();
-            await this.mutateTicket(ticket, 'StartTest', { test_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
+            await this.mutateTicket(ticket, 'startTest', { test_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
         },
 
         async concludeTest(success) {
-            const ticket = this.selectedTicket;
+            const ticket = this.resolveTicket();
+            if (!ticket) return;
             const ctx = this.getLogContext(ticket);
 
             if (success) {
@@ -3109,8 +3255,12 @@ function app() {
              return c ? c.phone : '';
         },
 
-        openOutsourcedModal(ticket) {
-            this.selectedTicket = ticket;
+        openOutsourcedModal(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
+            this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'outsourced', ticketId: ticket.id };
+            this.selectedTicket = ticket; // Keep for UI bindings
             this.outsourcedForm = { company_id: ticket.outsourced_company_id, deadline: '', price: '' };
             this.modals.outsourced = true;
         },
@@ -3119,9 +3269,11 @@ function app() {
              if (!this.outsourcedForm.deadline) return this.notify("Informe o prazo.", "error");
              if (!this.outsourcedForm.company_id) return this.notify("Selecione a empresa parceira.", "error");
 
+             const ticket = this.resolveTicket();
+             if (!ticket) return;
+
              this.loading = true;
              try {
-                 const ticket = this.selectedTicket;
                  const companyId = this.outsourcedForm.company_id;
 
                  // Update ticket context with the selected company before generating log
@@ -3148,7 +3300,9 @@ function app() {
              }
         },
 
-        async receiveFromOutsourced(ticket) {
+        async receiveFromOutsourced(ticketOrId) {
+             const ticket = this.resolveTicket(ticketOrId);
+             if (!ticket) return;
              // For this specific action, we don't want the (Terceirizado: X) suffix in the context
              // because the log message already says "recebido da X".
              const safeClientName = this.escapeHtml(ticket.client_name);
@@ -3188,8 +3342,12 @@ function app() {
         },
 
         // --- LOGISTICS FUNCTIONS ---
-        openLogisticsModal(ticket) {
-            this.selectedTicket = ticket;
+        openLogisticsModal(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
+            this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'logistics', ticketId: ticket.id };
+            this.selectedTicket = ticket; // Keep for UI bindings
             this.logisticsMode = 'initial';
             this.logisticsForm = { carrier: '', tracking: '' };
             this.modals.logistics = true;
@@ -3198,7 +3356,8 @@ function app() {
         async confirmLogisticsOption(type) {
             if (type === 'pickup') {
                 // Execute standard "Disponibilizar" logic for Client Pickup
-                const ticket = this.selectedTicket;
+                const ticket = this.resolveTicket();
+                if (!ticket) return;
                 const ctx = this.getLogContext(ticket);
                 const actionLog = {
                     action: 'Disponibilizou Retirada',
@@ -3211,7 +3370,7 @@ function app() {
                     delivery_method: 'pickup'
                 };
 
-                const success = await this.mutateTicket(ticket, 'ConfirmLogisticsPickup', updates, actionLog, { showNotify: true, notifyMessage: "Disponibilizado para retirada.", closeViewModal: true, fetchTickets: true });
+                const success = await this.mutateTicket(ticket, 'confirmLogisticsOption', updates, actionLog, { showNotify: true, notifyMessage: "Disponibilizado para retirada.", closeViewModal: true, fetchTickets: true });
                 if (success) {
                     this.modals.logistics = false;
                     this.sendTrackingWhatsApp();
@@ -3229,7 +3388,8 @@ function app() {
                  return this.notify("Informe a transportadora.", "error");
             }
 
-            const ticket = this.selectedTicket;
+            const ticket = this.resolveTicket();
+            if (!ticket) return;
             const ctx = this.getLogContext(ticket);
             const updates = {};
             let actionLog = null;
@@ -3255,7 +3415,7 @@ function app() {
                 };
             }
 
-            const success = await this.mutateTicket(ticket, 'ConfirmCarrier', updates, actionLog, { showNotify: true, notifyMessage: "Informações de envio atualizadas!", closeViewModal: true, fetchTickets: true });
+            const success = await this.mutateTicket(ticket, 'confirmCarrier', updates, actionLog, { showNotify: true, notifyMessage: "Informações de envio atualizadas!", closeViewModal: true, fetchTickets: true });
 
             if (success) {
                 this.modals.logistics = false;
@@ -3265,14 +3425,20 @@ function app() {
             }
         },
 
-        addTrackingCode(ticket) {
-            this.selectedTicket = ticket;
+        addTrackingCode(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
+            this.activeTicketId = ticket.id;
+            this.activeModalContext = { name: 'logistics', ticketId: ticket.id };
+            this.selectedTicket = ticket; // Keep for UI bindings
             this.logisticsMode = 'add_tracking';
             this.logisticsForm = { carrier: ticket.carrier_name || '', tracking: '' };
             this.modals.logistics = true;
         },
 
-        async markDelivered(ticket) {
+        async markDelivered(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
             // Equivalent to "Chegou" or "Retirado (Finalizar)"
             const ctx = this.getLogContext(ticket);
             let action = 'Finalizou Entrega';
@@ -3289,8 +3455,11 @@ function app() {
             }, { action, details });
         },
 
-        async markAvailable(ticket = this.selectedTicket) {
-             if (this.trackerConfig.enable_logistics) {
+        async markAvailable(ticketOrId) {
+             const ticket = this.resolveTicket(ticketOrId);
+             if (!ticket) return;
+
+             if (this.isLogisticsEnabled()) {
                  this.openLogisticsModal(ticket);
                  return;
              }
@@ -3302,7 +3471,7 @@ function app() {
                  details: `O ${ctx.device} de ${ctx.client} foi disponibilizado.`
              };
 
-             const success = await this.mutateTicket(ticket, 'MarkAvailable', {
+             const success = await this.mutateTicket(ticket, 'markAvailable', {
                  pickup_available: true,
                  pickup_available_at: new Date().toISOString()
              }, actionLog, { showNotify: false, fetchTickets: true });
@@ -3311,14 +3480,16 @@ function app() {
                  this.sendTrackingWhatsApp();
              }
         },
-        async requestPriority(ticket) {
+        async requestPriority(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
             const ctx = this.getLogContext(ticket);
             const actionLog = {
                 action: 'Solicitou Prioridade',
                 details: `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`
             };
 
-            await this.mutateTicket(ticket, 'RequestPriority', {
+            await this.mutateTicket(ticket, 'requestPriority', {
                 priority_requested: true
             }, actionLog, { showNotify: true, notifyMessage: "Prioridade solicitada com sucesso!", fetchTickets: true });
         },
@@ -3921,8 +4092,9 @@ function app() {
             }
         },
 
-        async deleteTicket() {
-            if (!this.selectedTicket) return;
+        async deleteTicket(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
             if (!confirm('Tem certeza que deseja excluir este chamado? Ele irá para a Lixeira e não aparecerá nas listagens.')) return;
 
             const actionLog = {
@@ -3930,7 +4102,7 @@ function app() {
                 details: `Chamado movido para a lixeira por ${this.user.name}.`
             };
 
-            await this.mutateTicket(this.selectedTicket, 'DeleteTicket', {
+            await this.mutateTicket(ticket, 'deleteTicket', {
                 deleted_at: new Date().toISOString()
             }, actionLog, { showNotify: true, notifyMessage: 'Chamado movido para a Lixeira.', closeViewModal: true, fetchTickets: true });
         },
@@ -3966,7 +4138,7 @@ function app() {
                     details: `Chamado restaurado da lixeira por ${this.user.name}.`
                 };
 
-                await this.mutateTicket(ticketToRestore, 'RestoreTicket', {
+                await this.mutateTicket(ticketToRestore, 'restoreItem', {
                     deleted_at: null
                 }, actionLog, { showNotify: true, notifyMessage: "Item restaurado!", fetchTickets: true });
 
