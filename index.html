@@ -2743,7 +2743,7 @@
 
                                             <!-- Kanban Actions -->
                                             <div class="pt-2 mt-1 border-t border-gray-100 flex space-x-2" @click.stop>
-                                                <button x-show="!ticket.analysis_started_at" @click.stop="startTicketAnalysis(ticket)" :disabled="loading" class="flex-1 bg-yellow-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-yellow-700 transition-colors disabled:opacity-50">
+                                                <button x-show="!ticket.analysis_started_at && canExecuteAction(ticket, 'startAnalysis')" @click.stop="startTicketAnalysis(ticket)" :disabled="loading" class="flex-1 bg-yellow-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-yellow-700 transition-colors disabled:opacity-50">
                                                     <i class="fa-solid fa-play mr-1"></i> Iniciar
                                                 </button>
                                                 <button x-show="canExecuteAction(ticket, 'finishAnalysis')" @click.stop="finishAnalysisFromKanban(ticket)" :disabled="loading" class="flex-1 bg-indigo-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-indigo-700 transition-colors disabled:opacity-50">
