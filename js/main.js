@@ -1192,47 +1192,23 @@ function app() {
 
         // --- COMPANY CONFIG ---
         async saveCompanyConfig() {
-            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
-            this.loading = true;
-            try {
-                await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
-                    whatsapp_number: this.whatsappNumber
-                });
-                this.notify("Configurações salvas!");
-            } catch (e) {
-                this.notify("Erro ao salvar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAWorkspaceConfigService.saveCompanyConfig({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; }
+            });
         },
 
         // --- TRACKER CONFIG ACTIONS (NEW) ---
         async saveTrackerConfig() {
-            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
-            this.loading = true;
-            try {
-                const res = await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
-                    tracker_config: this.trackerConfig
-                });
-
-                // Check if update actually happened
-                if (Array.isArray(res) && res.length === 0) {
-                    throw new Error("Permissão negada ou workspace não encontrado.");
-                }
-
-                if (this.view === 'management_settings') {
-                    this.notify("Configurações de Gerenciamento salvas!");
-                } else {
-                    this.notify("Configurações de Acompanhamento salvas!");
-                }
-
-                // Refresh data to apply new flow rules (e.g. Tech Bench tickets)
-                await this.fetchTickets();
-            } catch (e) {
-                this.notify("Erro ao salvar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAWorkspaceConfigService.saveTrackerConfig({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchTickets: () => this.fetchTickets()
+            });
         },
 
         async handleLogoUpload(event) {
@@ -1565,14 +1541,10 @@ function app() {
         },
 
         async fetchFornecedores() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`fornecedores?select=*&workspace_id=eq.${this.user.workspace_id}&order=razao_social.asc`);
-                if (data) this.fornecedores = data;
-            } catch (error) {
-                console.error('Erro ao buscar fornecedores:', error);
-                alert('Erro ao carregar fornecedores: ' + error.message);
-            }
+            return await window.AIDACatalogService.fetchFornecedores({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         openFornecedorModal(fornecedor = null) {
@@ -1788,47 +1760,32 @@ function app() {
         },
 
         async fetchTemplates() {
-             if (!this.user?.workspace_id) return;
-             try {
-                 const data = await this.supabaseFetch('checklist_templates?select=*');
-                 if (data) {
-                     this.checklistTemplates = data;
-                     this.checklistTemplatesEntry = data.filter(t => !t.type || t.type === 'entry');
-                     this.checklistTemplatesFinal = data.filter(t => t.type === 'final');
-                 }
-             } catch (e) {
-                 console.error("Fetch Templates Error:", e);
-             }
+            return await window.AIDACatalogService.fetchTemplates({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         // --- DEVICE MODELS ---
         async fetchDeviceModels() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`device_models?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) this.deviceModels = data;
-            } catch(e) {
-                console.error("Fetch Models Error:", e);
-            }
+            return await window.AIDACatalogService.fetchDeviceModels({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
+
         async fetchDefectOptions() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`defect_options?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) this.defectOptions = data;
-            } catch(e) {
-                console.error("Fetch Defect Options Error:", e);
-            }
+            return await window.AIDACatalogService.fetchDefectOptions({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async fetchOutsourcedCompanies() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`outsourced_companies?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) this.outsourcedCompanies = data;
-            } catch(e) {
-                console.error("Fetch Outsourced Companies Error:", e);
-            }
+            return await window.AIDACatalogService.fetchOutsourcedCompanies({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async createOutsourcedCompany(name, phone) {
