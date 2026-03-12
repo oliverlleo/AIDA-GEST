@@ -1524,9 +1524,10 @@ function app() {
             this.finalizedPage++;
 
             try {
-                const offset = this.finalizedPage * this.finalizedLimit;
-                const endpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=not.is.null&order=delivered_at.desc&limit=${this.finalizedLimit}&offset=${offset}`;
-                const data = await this.supabaseFetch(endpoint);
+                const data = await window.AIDATicketQueryService.fetchFinalizedTicketsData({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
 
                 if (data) {
                     if (data.length < this.finalizedLimit) this.finalizedHasMore = false;
@@ -1612,87 +1613,23 @@ function app() {
             }
 
             try {
-                // Base Endpoint with Workspace Filter
-                let endpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null`;
+                const result = await window.AIDATicketQueryService.fetchTicketsData({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                    hasRole: (r) => this.hasRole(r)
+                }, loadMore);
 
-                // SEARCH
-                if (this.searchQuery) {
-                    const q = this.searchQuery;
-                    const qSafe = encodeURIComponent(`*${q}*`);
-                    endpoint += `&or=(client_name.ilike.${qSafe},os_number.ilike.${qSafe},device_model.ilike.${qSafe},serial_number.ilike.${qSafe},contact_info.ilike.${qSafe})`;
-                }
-
-                // VIEW SPECIFIC LOGIC
-                if (this.view === 'kanban' && !this.searchQuery) {
-                    // KANBAN SPLIT FETCHING
-                    // 1. Active Tickets (Always fetch up to 200)
-                    const activeEndpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=is.null&order=created_at.desc&limit=200`;
-                    const activePromise = this.supabaseFetch(activeEndpoint);
-
-                    // 2. Finalized Tickets (If enabled)
-                    let finalizedPromise = Promise.resolve([]);
-                    if (this.showFinalized) {
-                        // Fetch ALL currently loaded finalized tickets to maintain state on refresh
-                        const totalLimit = (this.finalizedPage + 1) * this.finalizedLimit;
-                        const finalEndpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=not.is.null&order=delivered_at.desc&limit=${totalLimit}`;
-                        finalizedPromise = this.supabaseFetch(finalEndpoint);
+                if (result.mode === 'kanban') {
+                    if (this.showFinalized && result.finalizedHasMore !== null) {
+                        this.finalizedHasMore = result.finalizedHasMore;
                     }
-
-                    const [activeData, finalizedData] = await Promise.all([activePromise, finalizedPromise]);
-
-                    if (this.showFinalized) {
-                        this.finalizedHasMore = (finalizedData && finalizedData.length === this.finalizedLimit);
-                    }
-
-                    // 3. Combine Logic
-                    // If loading more finalized, we append to existing finalized
-                    // But fetchTickets usually resets.
-                    // However, for simplicity here we assume fetchTickets is a full reload of active + current page of finalized?
-                    // Wait, if I load page 1 (50-100), I need page 0 (0-50) too if I just reset this.tickets.
-                    // But if I clicked "Load More", I called loadMoreFinalized(), not fetchTickets().
-                    // So fetchTickets() is for INIT/REFRESH.
-                    // So we just set tickets.
-                    this.tickets = [...(activeData || []), ...(finalizedData || [])];
-
-                    // Check if we reached the end (for pagination)
-                    // For Kanban we don't use standard pagination flags
-                    await this.fetchOperationalAlerts(); // Ensure alerts are fresh
+                    this.tickets = result.data;
+                    await this.fetchOperationalAlerts();
                     this.ticketPagination.isLoading = false;
-                    return; // EXIT HERE for Kanban
-
-                } else if (this.view === 'tech_orders') {
-                    // Tech View
-                    if (this.hasRole('admin')) {
-                        const techId = this.adminDashboardFilters.technician;
-                        if (techId && techId !== 'all') {
-                            endpoint += `&technician_id=eq.${techId}`;
-                        }
-                    } else if (this.user?.id) {
-                         endpoint += `&or=(technician_id.eq.${this.user.id},technician_id.is.null)`;
-                    }
-                    endpoint += `&status=in.(Analise Tecnica,Andamento Reparo)`;
-                    endpoint += `&order=created_at.asc`;
-                } else {
-                    // Dashboard/History/List: Apply Filters & Pagination
-                    const f = this.adminDashboardFilters;
-
-                    if (f.dateStart) endpoint += `&created_at=gte.${f.dateStart}T00:00:00`;
-                    if (f.dateEnd) endpoint += `&created_at=lte.${f.dateEnd}T23:59:59`;
-                    if (f.technician !== 'all') endpoint += `&technician_id=eq.${f.technician}`;
-                    if (f.status !== 'all') endpoint += `&status=eq.${f.status}`;
-                    if (f.defect !== 'all') endpoint += `&defect_reported=ilike.*${encodeURIComponent(f.defect)}*`;
-                    if (f.deviceModel !== 'all') endpoint += `&device_model=eq.${encodeURIComponent(f.deviceModel)}`;
-
-                    endpoint += `&order=created_at.desc`;
-
-                    // PAGINATION
-                    const limit = this.ticketPagination.limit;
-                    const offset = this.ticketPagination.page * limit;
-                    endpoint += `&limit=${limit}&offset=${offset}`;
+                    return;
                 }
 
-                const data = await this.supabaseFetch(endpoint);
-
+                const data = result.data;
                 if (data) {
                     if (loadMore) {
                         this.tickets = [...this.tickets, ...data];
@@ -1700,7 +1637,6 @@ function app() {
                         this.tickets = data;
                     }
 
-                    // Check if we reached the end (for pagination)
                     if (data.length < this.ticketPagination.limit) {
                         this.ticketPagination.hasMore = false;
                     }
@@ -1708,21 +1644,15 @@ function app() {
                     // POPULATE TECH TICKETS (Client Side Filter for safety/convenience)
                     if (this.view === 'tech_orders') {
                         this.techTickets = this.tickets.sort((a, b) => {
-                            // 1. Priority Requested (Always Top)
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
-
-                            // 2. Deadline (Sooner first)
                             const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
                             const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
                             if (dA !== dB) return dA - dB;
-
-                            // 3. Priority Level (Tie-breaker)
                             const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                             return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
                         });
                     } else {
-                        // For other views, we maintain client-side derivation for consistency
                         let relevantTickets = this.tickets;
                         const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
                         if (isTechOnly && this.user) {
@@ -1732,16 +1662,11 @@ function app() {
                         this.techTickets = relevantTickets.filter(t =>
                             ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                         ).sort((a, b) => {
-                            // 1. Priority Requested (Always Top)
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
-
-                            // 2. Deadline (Sooner first)
                             const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
                             const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
                             if (dA !== dB) return dA - dB;
-
-                            // 3. Priority Level (Tie-breaker)
                             const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                             return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
                         });
