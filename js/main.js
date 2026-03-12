@@ -640,8 +640,6 @@ function app() {
             }
 
             // 4. Cache / Skip Duplicate calls
-            // - If reason is realtime: ALWAYS fetch (unless throttled above)
-            // - If not realtime: Check params match AND strict cache TTL (e.g. 5s) to avoid unnecessary re-fetches
             const CACHE_TTL = 5000;
             const isCacheValid = (now - this.lastDashboardCallTime) < CACHE_TTL;
 
@@ -658,7 +656,11 @@ function app() {
                     // Update OPS (RPC)
                     await this.fetchOperationalAlerts();
 
-                    const data = await this.supabaseFetch('rpc/get_dashboard_kpis', 'POST', params);
+                    // Delegate to the dashboard service
+                    const data = await window.AIDADashboardService.requestDashboardMetrics(params, {
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    });
+
                     if (data) {
                         this.metrics = { ...this.metrics, ...data };
                         this.lastDashboardParams = paramString;
@@ -670,22 +672,13 @@ function app() {
                         }
                     }
                 } catch (e) {
-                    console.error("Dashboard RPC Error:", e);
+                    console.error("Dashboard Error:", e);
                     this.notify("Erro ao carregar métricas.", "error");
                 } finally {
                     this.dashboardMetricsPromise = null;
 
-                    // If a realtime update came in while we were busy, trigger a new fetch now
                     if (this.pendingRealtimeRefresh) {
                         this.pendingRealtimeRefresh = false;
-                        // Trigger immediate check (will be subject to throttle logic inside if applicable)
-                        // If reason is 'realtime', it respects throttling.
-                        // We assume lastDashboardCallTime was JUST updated above (if success).
-                        // So a direct call might be throttled.
-                        // However, if we just updated, maybe we don't *need* to fetch again?
-                        // Actually, if an event happened *during* the fetch, the data we just got *might* be stale.
-                        // But the throttle will block it anyway if < 1.5s.
-                        // So this effectively queues it for "in 1.5s".
                         this.requestDashboardMetrics({ reason: 'realtime' });
                     }
                 }
@@ -713,13 +706,15 @@ function app() {
 
             try {
                 const f = this.adminDashboardFilters;
-                // Note: backend handles null dates by defaulting to "today"
                 const params = {
                     p_date_start: f.dateStart || null,
                     p_date_end: f.dateEnd || null
                 };
 
-                const data = await this.supabaseFetch('rpc/get_daily_report', 'POST', params);
+                const data = await window.AIDADashboardService.requestDailyReport(params, {
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
+
                 if (data) {
                     this.dailyReport = data;
                 } else {
@@ -1296,83 +1291,53 @@ function app() {
 
         // --- LOGGING ---
         async logTicketAction(ticketId, action, details = null) {
-            try {
-                await this.supabaseFetch('ticket_logs', 'POST', {
-                    ticket_id: ticketId,
-                    action: action,
-                    details: details,
-                    user_name: this.user.name
-                });
-                if (this.view === 'dashboard') this.fetchGlobalLogs();
-            } catch (e) {
-                console.error("Log failed:", e);
-            }
+            return await window.AIDALogsNotificationsService.logTicketAction(ticketId, action, details, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                fetchGlobalLogs: () => this.fetchGlobalLogs()
+            });
         },
 
         async fetchTicketLogs(ticketId) {
-            if (!this.hasRole('admin')) return [];
-            try {
-                const logs = await this.supabaseFetch(`ticket_logs?ticket_id=eq.${ticketId}&order=created_at.desc`);
-                return logs || [];
-            } catch (e) {
-                console.error("Fetch logs failed:", e);
-                return [];
-            }
+            return await window.AIDALogsNotificationsService.fetchTicketLogs(ticketId, {
+                hasRole: (r) => this.hasRole(r),
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async fetchGlobalLogs() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const logs = await this.supabaseFetch(`ticket_logs?select=*,tickets(os_number,client_name,device_model)&order=created_at.desc&limit=10`);
-                this.dashboardLogs = logs || [];
-            } catch (e) {
-                console.error("Fetch global logs failed:", e);
-            }
+            return await window.AIDALogsNotificationsService.fetchGlobalLogs({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         // --- NOTIFICATIONS ---
         async fetchNotifications() {
-            if (!this.user) return;
-            try {
-                let query = `notifications?select=*,tickets(os_number,device_model)&order=created_at.desc&limit=50`;
-                const data = await this.supabaseFetch(query);
-
-                if (data) {
-                    const myRoles = this.user.roles || [];
-                    const userId = this.user.id;
-
-                    this.notificationsList = data.filter(n => {
-                        if (n.recipient_user_id) return n.recipient_user_id === userId;
-                        if (n.recipient_role) return myRoles.includes(n.recipient_role);
-                        return false;
-                    });
-                }
-            } catch(e) {
-                console.error("Fetch Notif Error:", e);
-            }
+            return await window.AIDALogsNotificationsService.fetchNotifications({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async createNotification(data) {
-            try {
-                await this.supabaseFetch('notifications', 'POST', data);
-            } catch(e) { console.error("Create Notif Error:", e); }
+            return await window.AIDALogsNotificationsService.createNotification(data, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async markNotificationRead(id) {
-            try {
-                const n = this.notificationsList.find(x => x.id === id);
-                if (n) n.is_read = true;
-
-                await this.supabaseFetch(`notifications?id=eq.${id}`, 'PATCH', { is_read: true, read_at: new Date().toISOString() });
-            } catch(e) { console.error(e); }
+            return await window.AIDALogsNotificationsService.markNotificationRead(id, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async markAllRead() {
-            const unreadIds = this.notificationsList.filter(n => !n.is_read).map(n => n.id);
-            if (unreadIds.length === 0) return;
-
-            this.notificationsList.forEach(n => n.is_read = true);
-            await this.supabaseFetch(`notifications?id=in.(${unreadIds.join(',')})`, 'PATCH', { is_read: true, read_at: new Date().toISOString() });
+            return await window.AIDALogsNotificationsService.markAllRead({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async checkTimeBasedAlerts() {
@@ -2155,39 +2120,17 @@ function app() {
         // --- INTERNAL NOTES SYSTEM ---
 
         async fetchInternalNotes(ticketId) {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(
-                    `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=eq.${ticketId}&order=created_at.asc`
-                );
-                this.internalNotes = data || [];
-            } catch (e) {
-                console.error("Fetch Internal Notes Error:", e);
-            }
+            return await window.AIDANotesService.fetchInternalNotes(ticketId, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async fetchGeneralNotes() {
-            if (!this.user?.workspace_id) return;
-            try {
-                let query = `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&is_archived=eq.false`;
-
-                if (!this.showResolvedNotes) {
-                    query += `&is_resolved=eq.false`;
-                }
-
-                if (this.noteDateFilter) {
-                    const start = new Date(this.noteDateFilter + 'T00:00:00').toISOString();
-                    const end = new Date(this.noteDateFilter + 'T23:59:59').toISOString();
-                    query += `&created_at=gte.${start}&created_at=lte.${end}`;
-                }
-
-                query += `&order=created_at.desc`;
-
-                const data = await this.supabaseFetch(query);
-                this.generalNotes = data || [];
-            } catch (e) {
-                console.error("Fetch General Notes Error:", e);
-            }
+            return await window.AIDANotesService.fetchGeneralNotes({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         // Mention Logic
@@ -2245,54 +2188,14 @@ function app() {
         },
 
         async sendNote(ticketId = null, isGeneral = false) {
-            const text = isGeneral ? this.newGeneralNoteText : this.newNoteText;
-            const isChecklist = isGeneral ? this.generalNoteIsChecklist : this.noteIsChecklist;
-            const checklistItems = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
-
-            if (!text.trim() && (!isChecklist || checklistItems.length === 0)) return;
-
-            this.loading = true;
-            try {
-                const mentionRegex = /@(\w+)/g;
-                const matches = text.match(mentionRegex) || [];
-                const mentions = matches.map(m => m.substring(1));
-
-                const cleanChecklist = checklistItems
-                    .filter(i => i.text.trim().length > 0)
-                    .map(i => ({ item: i.text, ok: i.ok }));
-
-                const payload = {
-                    workspace_id: this.user.workspace_id,
-                    ticket_id: ticketId,
-                    author_id: this.user.id,
-                    author_name: this.user.name,
-                    content: text,
-                    checklist_data: isChecklist ? cleanChecklist : [],
-                    mentions: mentions,
-                    is_resolved: false,
-                    created_at: new Date().toISOString()
-                };
-
-                await this.supabaseFetch('internal_notes', 'POST', payload);
-
-                if (isGeneral) {
-                    this.newGeneralNoteText = '';
-                    this.generalNoteIsChecklist = false;
-                    this.generalNoteChecklistItems = [];
-                    await this.fetchGeneralNotes();
-                } else {
-                    this.newNoteText = '';
-                    this.noteIsChecklist = false;
-                    this.noteChecklistItems = [];
-                    if (ticketId) await this.fetchInternalNotes(ticketId);
-                }
-                this.showMentionList = false;
-
-            } catch (e) {
-                this.notify("Erro ao enviar nota: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDANotesService.sendNote(ticketId, isGeneral, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchGeneralNotes: () => this.fetchGeneralNotes(),
+                fetchInternalNotes: (id) => this.fetchInternalNotes(id)
+            });
         },
 
         addNoteChecklistItem(isGeneral = false) {
@@ -2306,47 +2209,24 @@ function app() {
         },
 
         async toggleNoteCheckStatus(note, itemIndex) {
-            note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
-
-            try {
-                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
-                    checklist_data: note.checklist_data
-                });
-            } catch (e) {
-                console.error("Error toggling checklist:", e);
-                note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
-            }
+            return await window.AIDANotesService.toggleNoteCheckStatus(note, itemIndex, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async resolveNote(note) {
-            const newStatus = !note.is_resolved;
-            note.is_resolved = newStatus;
-
-            try {
-                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
-                    is_resolved: newStatus
-                });
-            } catch (e) {
-                note.is_resolved = !newStatus;
-                this.notify("Erro ao atualizar status", "error");
-            }
+            return await window.AIDANotesService.resolveNote(note, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
+            });
         },
 
         async archiveNote(note) {
-            if (!confirm("Arquivar esta nota?")) return;
-            try {
-                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
-                    is_archived: true,
-                    archived_at: new Date().toISOString()
-                });
-                if (note.ticket_id) {
-                    this.internalNotes = this.internalNotes.filter(n => n.id !== note.id);
-                } else {
-                    this.generalNotes = this.generalNotes.filter(n => n.id !== note.id);
-                }
-            } catch (e) {
-                this.notify("Erro ao arquivar", "error");
-            }
+            return await window.AIDANotesService.archiveNote(note, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
+            });
         },
 
         // ==========================================
@@ -2935,16 +2815,12 @@ function app() {
 
         // DASHBOARD OPERATIONAL METRICS (RPC)
         async fetchOperationalAlerts() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch('rpc/get_operational_alerts', 'POST', {
-                    p_workspace_id: this.user.workspace_id
-                });
-                if (data) {
-                    this.ops = data;
-                }
-            } catch (e) {
-                console.error("Fetch Alerts Error:", e);
+            const data = await window.AIDADashboardService.fetchOperationalAlerts({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
+            if (data) {
+                this.ops = data;
             }
         },
 
