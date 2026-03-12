@@ -2821,67 +2821,6 @@ function app() {
             this.purchaseFlow.items.splice(index, 1);
         },
 
-        async submitPurchase() {
-            if (!this.purchaseFlow.supplierId) {
-                alert('Selecione um fornecedor.');
-                return;
-            }
-            if (this.purchaseFlow.items.length === 0 || this.purchaseFlow.items.some(i => !i.name || i.quantity < 1)) {
-                alert('Preencha os itens corretamente.');
-                return;
-            }
-
-            const ticket = this.tickets.find(t => t.id === this.purchaseFlow.ticketId);
-            const supplier = this.fornecedores.find(f => f.id === this.purchaseFlow.supplierId);
-            const ctx = this.getLogContext(ticket);
-
-            const purchaseData = {
-                supplier_id: supplier.id,
-                supplier_name: supplier.razao_social,
-                items: this.purchaseFlow.items,
-                purchased_at: new Date().toISOString(),
-                purchased_by: this.employeeSession ? this.employeeSession.employee_id : null
-            };
-
-            const currentPurchases = Array.isArray(ticket.supplier_purchases) ? ticket.supplier_purchases : [];
-            const updatedPurchases = [...currentPurchases, purchaseData];
-
-            let itemsStr = this.purchaseFlow.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
-            const itemsHtml = `<span class="text-brand-500 font-bold">${this.escapeHtml(itemsStr)}</span>`;
-
-            const actionLog = {
-                action: 'Confirmou Compra',
-                details: `Compra de ${itemsHtml} do fornecedor <b>${this.escapeHtml(supplier.razao_social)}</b> para o ${ctx.device} de ${ctx.client} foi realizada.`
-            };
-
-            const updates = {
-                parts_status: 'Comprado',
-                parts_purchased_at: new Date().toISOString(),
-                supplier_purchases: updatedPurchases
-            };
-
-            const success = await this.mutateTicket(ticket, 'submitPurchase', updates, actionLog, { showNotify: false, fetchTickets: true });
-
-            if (success) {
-                this.modals.supplierPurchase = false;
-
-                // Open WhatsApp
-                if (supplier.whatsapp) {
-                    let phone = supplier.whatsapp.replace(/\D/g, '');
-                    if (phone.length === 10 || phone.length === 11) {
-                        phone = '55' + phone; // Add country code if not present
-                    }
-                    let msg = `Olá! Gostaria de solicitar a compra de: \n`;
-                    this.purchaseFlow.items.forEach(i => {
-                        msg += `- ${i.quantity}x ${i.name}\n`;
-                    });
-                    msg += `\nPara o aparelho: ${ticket.device_model}\nOS: ${ticket.os_number || ticket.id.slice(0, 8)}`;
-
-                    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
-                }
-            }
-        },
-
         async markPurchased(ticketOrId) {
             // Replaced by openPurchaseModal, kept for compatibility if needed elsewhere
             this.openPurchaseModal(ticketOrId);
