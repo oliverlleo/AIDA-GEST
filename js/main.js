@@ -2099,19 +2099,19 @@ function app() {
         },
 
         isFieldRequired(key) {
-            if (!this.trackerConfig.enable_required_ticket_fields) {
+            if (!this.isRequiredFieldsEnabled()) {
                 // Default legacy requirements (Updated to include Deadlines)
                 const defaults = ['client_name', 'os_number', 'device_model', 'defect_reported', 'responsible', 'analysis_deadline', 'deadline'];
                 return defaults.includes(key);
             }
-            return !!this.trackerConfig.required_ticket_fields[key];
+            return !!this.trackerConfig?.required_ticket_fields?.[key];
         },
 
         validateTicketRequirements(ticketData) {
             // If OS Generation is enabled, skip OS validation (server will fill it)
-            const isOsAuto = this.trackerConfig.os_generation && this.trackerConfig.os_generation.enabled;
+            const isOsAuto = this.isAutoOSGenerationEnabled();
 
-            if (!this.trackerConfig.enable_required_ticket_fields) {
+            if (!this.isRequiredFieldsEnabled()) {
                 // Legacy Validation (Hardcoded + Deadlines)
                 if (!ticketData.client_name || (!isOsAuto && !ticketData.os_number) || !ticketData.device_model || !ticketData.defect_reported) {
                     return { valid: false, missing: ['Campos Padrão (*)'] };
@@ -2182,7 +2182,7 @@ function app() {
                  let techId = this.ticketForm.technician_id;
                  if (techId === 'all') techId = null;
 
-                 const isOsAuto = this.trackerConfig.os_generation && this.trackerConfig.os_generation.enabled;
+                 const isOsAuto = this.isAutoOSGenerationEnabled();
 
                  const ticketData = {
                      id: this.ticketForm.id,
@@ -2510,7 +2510,7 @@ function app() {
         },
 
         sendTrackingWhatsApp() {
-            if (this.trackerConfig.disable_whatsapp_actions) return;
+            if (this.isWhatsAppDisabled()) return;
             const ticket = this.resolveTicket();
             if (!ticket || !ticket.contact_info) return this.notify("Sem contato cadastrado", "error");
 
@@ -2524,7 +2524,7 @@ function app() {
         },
 
         sendCarrierWhatsApp(ticket, carrier, trackingCode) {
-            if (this.trackerConfig.disable_whatsapp_actions) return;
+            if (this.isWhatsAppDisabled()) return;
             if (!ticket || !ticket.contact_info) return;
 
             const link = this.getTrackingLink(ticket);
@@ -2995,7 +2995,7 @@ function app() {
                 let number = ticket.contact_info.replace(/\D/g, '');
                 if (number.length <= 11) number = '55' + number;
 
-                if (!this.trackerConfig.disable_whatsapp_actions) {
+                if (!this.isWhatsAppDisabled()) {
                     window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
                     this.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
                 } else {
@@ -3459,7 +3459,7 @@ function app() {
              const ticket = this.resolveTicket(ticketOrId);
              if (!ticket) return;
 
-             if (this.trackerConfig.enable_logistics) {
+             if (this.isLogisticsEnabled()) {
                  this.openLogisticsModal(ticket);
                  return;
              }
