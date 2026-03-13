@@ -211,6 +211,12 @@ function app() {
         loadedToken: null,
         initInFlight: false,
 
+        // --- BOOTSTRAP STATE ---
+        bootstrapInFlight: false,
+        bootstrapDone: false,
+        baseDataLoaded: false,
+        realtimeReady: false,
+
         // Daily Report State
         dailyReport: null,
         dailyReportLoading: false,
@@ -405,6 +411,66 @@ function app() {
             });
         },
 
+        // --- CENTRAL BOOTSTRAP ---
+        async bootstrapAuthenticatedApp(options = {}) {
+            if (this.bootstrapInFlight) return;
+            this.bootstrapInFlight = true;
+            this.bootstrapDone = false;
+
+            try {
+                // Initialize context variables
+                this.initTechFilter();
+
+                // 1. Ensure Base Catalogs & Data
+                await this.ensureBaseDataLoaded();
+
+                // 2. Load Core Application Data
+                await this.fetchTickets();
+
+                // 3. Connect to Current View State
+                if (this.view === 'dashboard' || options.forceDashboard) {
+                    this.requestDashboardMetrics({ reason: options.reason || 'bootstrap' });
+                }
+
+                this.bootstrapDone = true;
+            } catch (err) {
+                console.error("[Bootstrap] Failed:", err);
+                this.notify("Erro ao carregar os dados iniciais do aplicativo.", "error");
+            } finally {
+                this.bootstrapInFlight = false;
+            }
+        },
+
+        async ensureBaseDataLoaded() {
+            if (this.baseDataLoaded) return;
+
+            try {
+                // Start parallel fetching for core static/catalog data
+                await Promise.all([
+                    this.fetchEmployees(),
+                    this.fetchTemplates(),
+                    this.fetchDeviceModels(),
+                    this.fetchDefectOptions(),
+                    this.fetchOutsourcedCompanies(),
+                    this.fetchFornecedores()
+                ]);
+
+                // Initial global logs load
+                this.fetchGlobalLogs();
+
+                // Setup realtime
+                if (!this.realtimeReady) {
+                    this.setupRealtime();
+                    this.realtimeReady = true;
+                }
+
+                this.baseDataLoaded = true;
+            } catch (err) {
+                console.error("[EnsureBaseData] Error:", err);
+                throw err;
+            }
+        },
+
         async init() {
             if (this.initInFlight) return;
             this.initInFlight = true;
@@ -500,16 +566,7 @@ function app() {
                     // Block access if must change password
                     if (this.mustChangePassword) return;
 
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    await this.fetchOutsourcedCompanies();
-                    await this.fetchFornecedores();
-                    this.fetchGlobalLogs();
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'init' });
+                    await this.bootstrapAuthenticatedApp({ reason: 'init_restore' });
                 }
             } catch (err) {
                 console.error("Init Error:", err);
@@ -957,16 +1014,7 @@ function app() {
                 notify: (msg, type) => this.notify(msg, type),
                 setLoading: (val) => { this.loading = val; },
                 hasRole: (r) => this.hasRole(r),
-                fetchEmployees: () => this.fetchEmployees(),
-                initTechFilter: () => this.initTechFilter(),
-                fetchTickets: () => this.fetchTickets(),
-                fetchTemplates: () => this.fetchTemplates(),
-                fetchDeviceModels: () => this.fetchDeviceModels(),
-                fetchDefectOptions: () => this.fetchDefectOptions(),
-                fetchOutsourcedCompanies: () => this.fetchOutsourcedCompanies(),
-                fetchGlobalLogs: () => this.fetchGlobalLogs(),
-                setupRealtime: () => this.setupRealtime(),
-                requestDashboardMetrics: (opts) => this.requestDashboardMetrics(opts),
+                bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
                 _applyContext: (ctx) => this._applyContext(ctx)
             };
         },

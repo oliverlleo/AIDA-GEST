@@ -56,7 +56,7 @@ window.AIDAAuthSessionService = {
     },
 
     async loginEmployee(deps) {
-        const { state, supabaseFetch, notify, setLoading, hasRole, fetchEmployees, initTechFilter, fetchTickets, fetchTemplates, fetchDeviceModels, fetchDefectOptions, fetchGlobalLogs, setupRealtime, requestDashboardMetrics } = deps;
+        const { state, supabaseFetch, notify, setLoading, hasRole, bootstrapAuthenticatedApp } = deps;
         setLoading(true);
         try {
             const data = await supabaseFetch('rpc/employee_login', 'POST', {
@@ -104,20 +104,12 @@ window.AIDAAuthSessionService = {
 
                 localStorage.setItem('techassist_employee', JSON.stringify(emp));
                 notify('Bem-vindo, ' + emp.name, 'success');
-                await fetchEmployees();
-                initTechFilter();
-                await fetchTickets();
-                await fetchTemplates();
-                await fetchDeviceModels();
-                await fetchDefectOptions();
-                fetchGlobalLogs();
 
                 if (hasRole('tecnico') && !hasRole('admin') && !hasRole('atendente')) {
                     state.view = 'tech_orders';
                 }
 
-                setupRealtime();
-                if (state.view === 'dashboard') requestDashboardMetrics({ reason: 'login_employee' });
+                await bootstrapAuthenticatedApp({ reason: 'login_employee' });
             } else {
                  notify('Credenciais inválidas.', 'error');
             }
@@ -169,7 +161,7 @@ window.AIDAAuthSessionService = {
     },
 
     async loadAdminData(deps) {
-        const { state, supabaseFetch, fetchEmployees, initTechFilter, fetchTickets, fetchTemplates, fetchDeviceModels, fetchDefectOptions, fetchOutsourcedCompanies, fetchGlobalLogs, setupRealtime, requestDashboardMetrics } = deps;
+        const { state, supabaseFetch, bootstrapAuthenticatedApp } = deps;
         if (!state.session) return;
         const user = state.session.user;
         const key = user.id;
@@ -220,16 +212,7 @@ window.AIDAAuthSessionService = {
                     };
                 }
 
-                await fetchEmployees();
-                initTechFilter();
-                await fetchTickets();
-                await fetchTemplates();
-                await fetchDeviceModels();
-                await fetchDefectOptions();
-                await fetchOutsourcedCompanies();
-                fetchGlobalLogs();
-                setupRealtime();
-                if (state.view === 'dashboard') requestDashboardMetrics({ reason: 'load_admin' });
+                await bootstrapAuthenticatedApp({ reason: 'load_admin' });
 
                 state.loadedToken = key;
             }
