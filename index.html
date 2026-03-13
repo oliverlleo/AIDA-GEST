@@ -2743,7 +2743,7 @@
 
                                             <!-- Kanban Actions -->
                                             <div class="pt-2 mt-1 border-t border-gray-100 flex space-x-2" @click.stop>
-                                                <button x-show="!ticket.analysis_started_at" @click.stop="startTicketAnalysis(ticket)" :disabled="loading" class="flex-1 bg-yellow-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-yellow-700 transition-colors disabled:opacity-50">
+                                                <button x-show="!ticket.analysis_started_at && canExecuteAction(ticket, 'startAnalysis')" @click.stop="startTicketAnalysis(ticket)" :disabled="loading" class="flex-1 bg-yellow-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-yellow-700 transition-colors disabled:opacity-50">
                                                     <i class="fa-solid fa-play mr-1"></i> Iniciar
                                                 </button>
                                                 <button x-show="canExecuteAction(ticket, 'finishAnalysis')" @click.stop="finishAnalysisFromKanban(ticket)" :disabled="loading" class="flex-1 bg-indigo-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-indigo-700 transition-colors disabled:opacity-50">
@@ -4993,6 +4993,24 @@
             </p>
         </div>
     </div>
+
+    <!-- JS MODULES (Infraestrutura inicial) -->
+    <script src="js/modules/config-helpers.js"></script>
+    <script src="js/modules/ticket-context.js"></script>
+    <script src="js/modules/workflow-rules.js"></script>
+    <script src="js/modules/ticket-mutations.js"></script>
+    <script src="js/modules/ticket-actions.js"></script>
+    <script src="js/modules/api-client.js"></script>
+    <script src="js/modules/storage-service.js"></script>
+    <script src="js/modules/workspace-config-service.js"></script>
+    <script src="js/modules/catalog-service.js"></script>
+    <script src="js/modules/ticket-query-service.js"></script>
+    <script src="js/modules/logs-notifications-service.js"></script>
+    <script src="js/modules/notes-service.js"></script>
+    <script src="js/modules/dashboard-service.js"></script>
+    <script src="js/modules/auth-session-service.js"></script>
+    <script src="js/modules/employee-service.js"></script>
+    <script src="js/modules/recycle-bin-service.js"></script>
 
     <!-- JS MAIN -->
     <script src="js/main.js?v=13"></script>
