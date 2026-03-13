@@ -2179,6 +2179,10 @@ function app() {
             return await window.AIDATicketActions.deleteTicket(ticketOrId, this._getActionDeps());
         },
 
+        async restoreItem(type, id) {
+            return await window.AIDATicketActions.restoreItem(type, id, this._getActionDeps());
+        },
+
         // == FIM SUBFASE 1 ==
 
         // == SUBFASE 2 — FLUXO TÉCNICO ==
@@ -2904,10 +2908,6 @@ function app() {
 
         async fetchDeletedItems() {
             return await window.AIDARecycleBinService.fetchDeletedItems(this._getRecycleBinDeps());
-        },
-
-        async restoreItem(type, id) {
-            return await window.AIDARecycleBinService.restoreItem(type, id, this._getRecycleBinDeps());
         },
 
         openRecycleBin() {

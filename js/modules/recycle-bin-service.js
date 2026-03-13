@@ -26,40 +26,4 @@ window.AIDARecycleBinService = {
         }
     },
 
-    async restoreItem(type, id, deps) {
-        const { state, supabaseFetch, mutateTicket, fetchDeletedItems, fetchEmployees, notify, setLoading } = deps;
-
-        if (!confirm("Deseja restaurar este item?")) return;
-
-        if (type === 'ticket') {
-            const ticketToRestore = state.deletedTickets.find(t => t.id === id) || { id };
-            const actionLog = {
-                action: 'Restaurou Chamado',
-                details: `Chamado restaurado da lixeira por ${state.user.name}.`
-            };
-
-            await mutateTicket(ticketToRestore, 'restoreItem', {
-                deleted_at: null
-            }, actionLog, { showNotify: true, notifyMessage: "Item restaurado!", fetchTickets: true });
-
-            await fetchDeletedItems();
-            return;
-        }
-
-        setLoading(true);
-        try {
-            await supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
-                deleted_at: null
-            });
-            notify("Item restaurado!");
-
-            await fetchDeletedItems();
-            await fetchEmployees();
-
-        } catch(e) {
-            notify("Erro ao restaurar: " + e.message, "error");
-        } finally {
-            setLoading(false);
-        }
-    }
 };
