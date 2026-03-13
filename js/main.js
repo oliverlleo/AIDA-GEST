@@ -211,6 +211,14 @@ function app() {
         loadedToken: null,
         initInFlight: false,
 
+        // --- ORCHESTRATION FLAGS ---
+        baseDataLoaded: false,
+        bootstrapInFlight: false,
+        bootstrapDone: false,
+        catalogsLoaded: false,
+        employeesLoaded: false,
+        realtimeReady: false,
+
         // Daily Report State
         dailyReport: null,
         dailyReportLoading: false,
@@ -417,6 +425,80 @@ function app() {
             return window.AIDAApiClient.getStorageHeaders(this._getApiDeps(), contentType);
         },
 
+        // ==========================================
+        // ORCHESTRATION / BOOTSTRAP
+        // ==========================================
+        async ensureBaseDataLoaded() {
+            if (this.baseDataLoaded) return;
+
+            console.log("[Bootstrap] Ensuring base data is loaded...");
+
+            try {
+                // Employees are sometimes needed early, load them first or in parallel
+                const promises = [];
+
+                if (!this.employeesLoaded) {
+                    promises.push(this.fetchEmployees().then(() => { this.employeesLoaded = true; }));
+                }
+
+                if (!this.catalogsLoaded) {
+                    const catalogPromise = Promise.all([
+                        this.fetchTemplates(),
+                        this.fetchDeviceModels(),
+                        this.fetchDefectOptions(),
+                        this.fetchOutsourcedCompanies(),
+                        this.fetchFornecedores()
+                    ]).then(() => { this.catalogsLoaded = true; });
+
+                    promises.push(catalogPromise);
+                }
+
+                await Promise.all(promises);
+                this.baseDataLoaded = true;
+                console.log("[Bootstrap] Base data load complete.");
+            } catch (e) {
+                console.error("[Bootstrap] Error loading base data:", e);
+            }
+        },
+
+        async bootstrapAuthenticatedApp(reason = 'unknown') {
+            if (this.bootstrapInFlight) return;
+            if (this.bootstrapDone) return;
+
+            this.bootstrapInFlight = true;
+            console.log(`[Bootstrap] Bootstrapping authenticated app (Reason: ${reason})...`);
+
+            try {
+                // 1. Initial State / Base Data
+                await this.ensureBaseDataLoaded();
+                this.initTechFilter(); // Initialized after employees are loaded
+
+                // 2. Load primary view data
+                await this.fetchTickets();
+                this.fetchGlobalLogs();
+
+                // 3. Realtime connection
+                if (!this.realtimeReady) {
+                    this.setupRealtime();
+                    this.realtimeReady = true;
+                }
+
+                // 4. View specific actions
+                if (this.view === 'dashboard') {
+                    this.requestDashboardMetrics({ reason: `bootstrap_${reason}` });
+                } else if (this.view === 'admin_dashboard') {
+                     this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
+                }
+
+                this.bootstrapDone = true;
+                console.log("[Bootstrap] Authenticated app bootstrap complete.");
+            } catch (e) {
+                console.error("[Bootstrap] Failed to bootstrap app:", e);
+            } finally {
+                this.bootstrapInFlight = false;
+            }
+        },
+
         async init() {
             if (this.initInFlight) return;
             this.initInFlight = true;
@@ -474,8 +556,6 @@ function app() {
                             this.user = this.employeeSession;
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
-                            await this.fetchEmployees();
-                            this.initTechFilter();
 
                             // Restore Tracker Config
                             if (this.employeeSession.tracker_config) {
@@ -515,16 +595,7 @@ function app() {
                     // Block access if must change password
                     if (this.mustChangePassword) return;
 
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    await this.fetchOutsourcedCompanies();
-                    await this.fetchFornecedores();
-                    this.fetchGlobalLogs();
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'init' });
+                    await this.bootstrapAuthenticatedApp('init');
                 }
             } catch (err) {
                 console.error("Init Error:", err);
@@ -1067,20 +1138,12 @@ function app() {
 
                     localStorage.setItem('techassist_employee', JSON.stringify(emp));
                     this.notify('Bem-vindo, ' + emp.name, 'success');
-                    await this.fetchEmployees();
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    this.fetchGlobalLogs();
 
                     if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
                         this.view = 'tech_orders';
                     }
 
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'login_employee' });
+                    await this.bootstrapAuthenticatedApp('login_employee');
                 } else {
                      this.notify('Credenciais inválidas.', 'error');
                 }
@@ -1166,16 +1229,7 @@ function app() {
                         };
                     }
 
-                    await this.fetchEmployees();
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    await this.fetchOutsourcedCompanies();
-                    this.fetchGlobalLogs();
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'load_admin' });
+                    await this.bootstrapAuthenticatedApp('load_admin');
 
                     this.loadedToken = key;
                 }
