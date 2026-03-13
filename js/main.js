@@ -427,11 +427,11 @@ function app() {
             this.bootstrapDone = false;
 
             try {
-                // Initialize context variables
-                this.initTechFilter();
-
                 // 1. Ensure Base Catalogs & Data
                 await this.ensureBaseDataLoaded();
+
+                // Initialize context variables now that employees are loaded
+                this.initTechFilter();
 
                 // 2. Load Core Application Data for Current View
                 await this.loadDataForCurrentView(true); // force load current view initially
@@ -477,10 +477,20 @@ function app() {
 
         // --- VIEW DEPENDENT LOADING ---
         async loadDataForCurrentView(force = false) {
-            // Check cache flag unless forcing reload
-            if (!force && this.viewsLoaded[this.view]) return;
-
             const currentView = this.view;
+
+            // Manage View-Specific State Resets (Runs every time view changes)
+            if (currentView === 'kanban') {
+                setTimeout(() => this.initKanbanScroll(), 100);
+            } else if (!['dashboard', 'admin_dashboard', 'kanban'].includes(currentView)) {
+                // Ensure other views start with clear filters
+                this.searchQuery = '';
+                this.activeQuickFilter = null;
+                this.columnFilters = {};
+            }
+
+            // Check cache flag unless forcing reload
+            if (!force && this.viewsLoaded[currentView]) return;
 
             try {
                 if (currentView === 'dashboard') {
@@ -492,10 +502,8 @@ function app() {
                     await this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
                 } else if (currentView === 'kanban') {
                     await this.fetchTickets();
-                    setTimeout(() => this.initKanbanScroll(), 100);
                 } else {
                     // Outras views (tech_orders, tester_bench, etc.)
-                    this.clearFilters();
                     await this.fetchTickets();
                 }
 
@@ -562,8 +570,6 @@ function app() {
                             this.user = this.employeeSession;
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
-                            await this.fetchEmployees();
-                            this.initTechFilter();
 
                             // Restore Tracker Config
                             if (this.employeeSession.tracker_config) {
