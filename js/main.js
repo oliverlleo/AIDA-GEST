@@ -502,6 +502,7 @@ function app() {
                     await this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
                 } else if (currentView === 'kanban') {
                     await this.fetchTickets();
+                    await this.fetchOperationalAlerts(); // Alerts are used in kanban header
                 } else {
                     // Outras views (tech_orders, tester_bench, etc.)
                     await this.fetchTickets();
@@ -1434,6 +1435,12 @@ function app() {
         async fetchTickets(loadMore = false) {
             if (!this.user?.workspace_id) return;
 
+            // Guard: Prevent concurrent fetches (unless forced by loadMore)
+            if (this.ticketPagination.isLoading) {
+                console.log("[FetchTickets] Blocked by isLoading guard");
+                return;
+            }
+
             this.ticketPagination.isLoading = true;
 
             if (loadMore) {
@@ -1441,7 +1448,7 @@ function app() {
             } else {
                 this.ticketPagination.page = 0;
                 this.ticketPagination.hasMore = true;
-                if (!loadMore) this.tickets = [];
+                // Preserve UI smoothly until response arrives if not paginating
             }
 
             try {
@@ -1456,7 +1463,6 @@ function app() {
                         this.finalizedHasMore = result.finalizedHasMore;
                     }
                     this.tickets = result.data;
-                    await this.fetchOperationalAlerts();
                     this.ticketPagination.isLoading = false;
                     return;
                 }
@@ -1502,10 +1508,6 @@ function app() {
                             const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                             return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
                         });
-                    }
-
-                    if (!loadMore) {
-                        await this.fetchOperationalAlerts();
                     }
                 }
             } catch (err) {
@@ -2051,7 +2053,7 @@ function app() {
                 },
                 logTicketAction: (id, act, det) => this.logTicketAction(id, act, det),
                 notify: (msg, type) => this.notify(msg, type),
-                fetchTickets: () => this.fetchTickets(),
+                fetchTickets: () => this.refreshPostMutation(),
                 closeViewModal: () => { this.modals.viewTicket = false; }
             };
         },
@@ -2067,6 +2069,27 @@ function app() {
             );
         },
 
+        // POST MUTATION REFRESH POLICY
+        async refreshPostMutation() {
+            // Se estamos no dashboard, a mutation provavelmente afeta métricas.
+            if (this.view === 'dashboard') {
+                await this.requestDashboardMetrics({ reason: 'post_mutation' });
+                // Tickets serão atualizados via realtime, sem necessidade do fetch pesado duplo
+                return;
+            } else if (this.view === 'admin_dashboard') {
+                await this.requestDashboardMetrics({ reason: 'post_mutation' });
+            }
+
+            // Para Kanban, os alertas operacionais que compõem o top-bar precisam ser validados:
+            if (this.view === 'kanban') {
+                await this.fetchOperationalAlerts();
+            }
+
+            // O Realtime e a mutação local (`updateSelectedTicket`) dão conta do resto.
+            // Para casos excepcionais (como reload massivo), fallback usando fetchTickets()
+            // pode ser passado em overrides explícitos, mas o fluxo padrão agora evita recargas.
+        },
+
         // --- 3. WRAPPERS & ACTIONS ---
 
         // Helper to provide comprehensive dependencies to ticket-actions module
@@ -2079,7 +2102,7 @@ function app() {
                 mutateTicket: (t, act, upd, log, opts) => this.mutateTicket(t, act, upd, log, opts),
                 updateStatus: (t, st, upd, log) => this.updateStatus(t, st, upd, log),
                 logTicketAction: (id, act, det) => this.logTicketAction(id, act, det),
-                fetchTickets: () => this.fetchTickets(),
+                fetchTickets: () => this.refreshPostMutation(),
                 fetchGlobalLogs: () => this.fetchGlobalLogs(),
                 fetchDeletedItems: () => this.fetchDeletedItems(),
                 fetchEmployees: () => this.fetchEmployees(),
