@@ -217,6 +217,11 @@ function app() {
         baseDataLoaded: false,
         realtimeReady: false,
 
+        // --- IN-FLIGHT GUARDS ---
+        globalLogsInFlight: false,
+        notificationsInFlight: false,
+        opsInFlight: false,
+
         // --- VIEW LOAD STATE ---
         viewsLoaded: {
             dashboard: false,
@@ -420,7 +425,11 @@ function app() {
             });
         },
 
-        // --- CENTRAL BOOTSTRAP ---
+        // ==========================================
+        // CARREGAMENTO & POLÍTICAS DE ATUALIZAÇÃO
+        // ==========================================
+
+        // --- 1. BOOTSTRAP CENTRAL ---
         async bootstrapAuthenticatedApp(options = {}) {
             if (this.bootstrapInFlight) return;
             this.bootstrapInFlight = true;
@@ -445,6 +454,7 @@ function app() {
             }
         },
 
+        // --- 2. BASE LOAD CENTRAL ---
         async ensureBaseDataLoaded() {
             if (this.baseDataLoaded) return;
 
@@ -475,7 +485,7 @@ function app() {
             }
         },
 
-        // --- VIEW DEPENDENT LOADING ---
+        // --- 3. CARREGAMENTO DEPENDENTE DA VIEW ---
         async loadDataForCurrentView(force = false) {
             const currentView = this.view;
 
@@ -489,13 +499,17 @@ function app() {
                 this.columnFilters = {};
             }
 
-            // Check cache flag unless forcing reload
-            if (!force && this.viewsLoaded[currentView]) return;
+            // NOTA SOBRE CACHE (viewsLoaded): Não podemos pular `fetchTickets()` pois
+            // a lista global de `tickets` muda conforme o contexto da tela (Dashboard vs Kanban vs Tech Orders).
+            // O cache serve apenas para dados secundários, mas a engine primária precisa rodar.
 
             try {
                 if (currentView === 'dashboard') {
                     await this.fetchTickets();
-                    this.fetchGlobalLogs();
+                    // Logs estáticos podem usar o cache
+                    if (!this.viewsLoaded[currentView]) {
+                        this.fetchGlobalLogs();
+                    }
                     await this.requestDashboardMetrics({ reason: 'view_change' });
                 } else if (currentView === 'admin_dashboard') {
                     await this.fetchTickets();
@@ -508,7 +522,7 @@ function app() {
                     await this.fetchTickets();
                 }
 
-                // Mark view as loaded
+                // Mark view as loaded for secondary unshared resources
                 if (this.viewsLoaded.hasOwnProperty(currentView)) {
                     this.viewsLoaded[currentView] = true;
                 }
@@ -1198,18 +1212,30 @@ function app() {
         },
 
         async fetchGlobalLogs() {
-            return await window.AIDALogsNotificationsService.fetchGlobalLogs({
-                state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-            });
+            if (this.globalLogsInFlight) return;
+            this.globalLogsInFlight = true;
+            try {
+                return await window.AIDALogsNotificationsService.fetchGlobalLogs({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
+            } finally {
+                this.globalLogsInFlight = false;
+            }
         },
 
         // --- NOTIFICATIONS ---
         async fetchNotifications() {
-            return await window.AIDALogsNotificationsService.fetchNotifications({
-                state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-            });
+            if (this.notificationsInFlight) return;
+            this.notificationsInFlight = true;
+            try {
+                return await window.AIDALogsNotificationsService.fetchNotifications({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
+            } finally {
+                this.notificationsInFlight = false;
+            }
         },
 
         async createNotification(data) {
@@ -1262,7 +1288,7 @@ function app() {
             }
         },
 
-        // --- TICKET LOGIC ---
+        // --- 5. POLÍTICA DE REFRESH VIA REALTIME ---
 
         isRelevantUpdate(payload) {
             if (!payload) return false;
@@ -1333,32 +1359,31 @@ function app() {
                 }
             }
 
-            // 3. Debounced List Refresh (Keep debounce for LIST only to avoid flicker)
-            if (this.realtimeDebounceTimer) clearTimeout(this.realtimeDebounceTimer);
-
-            this.realtimeDebounceTimer = setTimeout(async () => {
-                // List Refresh Strategy
-                if (payload.eventType === 'INSERT') {
-                    if (this.ticketPagination.page === 0) {
-                        await this.fetchTickets();
+            // 3. In-Memory List Refresh Strategy (Avoid expensive fetchTickets calls)
+            if (payload.eventType === 'INSERT' && payload.new) {
+                // Prevent duplicates
+                if (!this.tickets.some(t => t.id === payload.new.id)) {
+                    // Only add to the beginning if we are on the first page or Kanban (no pagination limit visually yet)
+                    if (this.ticketPagination.page === 0 || this.view === 'kanban') {
+                        this.tickets.unshift(payload.new);
                     } else {
                         this.notify("Novos chamados disponíveis.", "info");
                     }
-                } else if (payload.eventType === 'UPDATE') {
-                    if (this.ticketPagination.page === 0) {
-                        await this.fetchTickets();
-                    } else {
-                        const idx = this.tickets.findIndex(t => t.id === payload.new.id);
-                        if (idx > -1) {
-                            if (payload.new.deleted_at) {
-                                this.tickets.splice(idx, 1);
-                            } else {
-                                this.tickets[idx] = { ...this.tickets[idx], ...payload.new };
-                            }
-                        }
-                    }
                 }
-            }, 2000);
+            } else if (payload.eventType === 'UPDATE' && payload.new) {
+                const idx = this.tickets.findIndex(t => t.id === payload.new.id);
+                if (idx > -1) {
+                    if (payload.new.deleted_at) {
+                        this.tickets.splice(idx, 1); // Remove if logically deleted
+                    } else {
+                        this.tickets[idx] = { ...this.tickets[idx], ...payload.new }; // Update local state directly
+                    }
+                } else if (!payload.new.deleted_at && (this.ticketPagination.page === 0 || this.view === 'kanban')) {
+                    // If it was updated but we didn't have it locally (e.g. moved into our filter view scope)
+                    // we push it to ensure it appears. For perfect sorting, a fetch is ideal, but unshift is safe for RT.
+                    this.tickets.unshift(payload.new);
+                }
+            }
         },
 
         handleSearchInput() {
@@ -2069,7 +2094,7 @@ function app() {
             );
         },
 
-        // POST MUTATION REFRESH POLICY
+        // --- 4. POLÍTICA DE REFRESH PÓS-MUTAÇÃO ---
         async refreshPostMutation() {
             // Se estamos no dashboard, a mutation provavelmente afeta métricas.
             if (this.view === 'dashboard') {
@@ -2628,12 +2653,18 @@ function app() {
 
         // DASHBOARD OPERATIONAL METRICS (RPC)
         async fetchOperationalAlerts() {
-            const data = await window.AIDADashboardService.fetchOperationalAlerts({
-                state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-            });
-            if (data) {
-                this.ops = data;
+            if (this.opsInFlight) return;
+            this.opsInFlight = true;
+            try {
+                const data = await window.AIDADashboardService.fetchOperationalAlerts({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
+                if (data) {
+                    this.ops = data;
+                }
+            } finally {
+                this.opsInFlight = false;
             }
         },
 
