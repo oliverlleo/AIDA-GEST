@@ -154,6 +154,20 @@ window.AIDAAuthSessionService = {
         window.location.reload();
     },
 
+    async validateSessionToken(deps) {
+        const { state, supabaseFetch } = deps;
+        try {
+            const sessionData = await supabaseFetch('rpc/validate_employee_session', 'POST', { p_token: state.employeeSession.token });
+            if (!sessionData || sessionData.length === 0 || !sessionData[0].valid) {
+                return null;
+            }
+            return sessionData[0];
+        } catch (err) {
+            console.warn("Session validation failed:", err);
+            return null;
+        }
+    },
+
     async loadAdminData(deps) {
         const { state, supabaseFetch, fetchEmployees, initTechFilter, fetchTickets, fetchTemplates, fetchDeviceModels, fetchDefectOptions, fetchOutsourcedCompanies, fetchGlobalLogs, setupRealtime, requestDashboardMetrics } = deps;
         if (!state.session) return;

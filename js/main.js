@@ -431,27 +431,24 @@ function app() {
 
                             // Validate Session Token
                             if (this.employeeSession.token) {
-                                try {
-                                    const sessionData = await this.supabaseFetch('rpc/validate_employee_session', 'POST', { p_token: this.employeeSession.token });
-                                    if (!sessionData || sessionData.length === 0 || !sessionData[0].valid) {
-                                        throw new Error("Sessão expirada");
-                                    }
+                                const freshSession = await window.AIDAAuthSessionService.validateSessionToken({
+                                    state: this,
+                                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                                });
 
-                                    // FORCE UPDATE from Server Truth
-                                    const freshSession = sessionData[0];
-                                    this.employeeSession.workspace_id = freshSession.workspace_id;
-                                    this.employeeSession.employee_id = freshSession.employee_id;
-                                    this.employeeSession.roles = freshSession.roles || [];
-                                    if (!this.employeeSession.id) this.employeeSession.id = freshSession.employee_id;
-
-                                    // Update Storage with trusted data
-                                    localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
-
-                                } catch (sessionErr) {
-                                    console.warn("Session validation failed:", sessionErr);
+                                if (!freshSession) {
                                     this.logout();
                                     return;
                                 }
+
+                                // FORCE UPDATE from Server Truth
+                                this.employeeSession.workspace_id = freshSession.workspace_id;
+                                this.employeeSession.employee_id = freshSession.employee_id;
+                                this.employeeSession.roles = freshSession.roles || [];
+                                if (!this.employeeSession.id) this.employeeSession.id = freshSession.employee_id;
+
+                                // Update Storage with trusted data
+                                localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
                             } else {
                                 // Legacy session without token
                                 console.warn("Legacy session detected. Logging out.");
@@ -1342,45 +1339,21 @@ function app() {
         },
 
         async saveFornecedor() {
-            this.loading = true;
-            try {
-                if (this.fornecedorForm.id) {
-                    await this.supabaseFetch(`fornecedores?id=eq.${this.fornecedorForm.id}`, 'PATCH', {
-                        razao_social: this.fornecedorForm.razao_social,
-                        cnpj: this.fornecedorForm.cnpj,
-                        fornece: this.fornecedorForm.fornece,
-                        whatsapp: this.fornecedorForm.whatsapp,
-                        updated_at: new Date().toISOString()
-                    });
-                } else {
-                    if (!this.user?.workspace_id) throw new Error("Workspace ID não encontrado.");
-                    await this.supabaseFetch('fornecedores', 'POST', {
-                        workspace_id: this.user.workspace_id,
-                        razao_social: this.fornecedorForm.razao_social,
-                        cnpj: this.fornecedorForm.cnpj,
-                        fornece: this.fornecedorForm.fornece,
-                        whatsapp: this.fornecedorForm.whatsapp
-                    });
-                }
-                this.modals.fornecedor = false;
-                await this.fetchFornecedores();
-            } catch (error) {
-                console.error('Erro ao salvar fornecedor:', error);
-                alert('Erro ao salvar fornecedor: ' + error.message);
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDACatalogService.saveFornecedor({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchFornecedores: () => this.fetchFornecedores(),
+                setLoading: (val) => { this.loading = val; },
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         async deleteFornecedor(id) {
-            if (!confirm('Tem certeza que deseja excluir este fornecedor?')) return;
-            try {
-                await this.supabaseFetch(`fornecedores?id=eq.${id}`, 'DELETE');
-                await this.fetchFornecedores();
-            } catch (error) {
-                console.error('Erro ao excluir fornecedor:', error);
-                alert('Erro ao excluir fornecedor: ' + error.message);
-            }
+            return await window.AIDACatalogService.deleteFornecedor(id, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                fetchFornecedores: () => this.fetchFornecedores()
+            });
         },
 
         async fetchTickets(loadMore = false) {
@@ -1498,102 +1471,56 @@ function app() {
         },
 
         async createOutsourcedCompany(name, phone) {
-            if (!name || !name.trim()) return;
-            if (!this.user?.workspace_id) return;
-
-            try {
-                await this.supabaseFetch('outsourced_companies', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: name.trim(),
-                    phone: phone ? phone.trim() : null
-                });
-                await this.fetchOutsourcedCompanies();
-                this.notify("Empresa parceira cadastrada!", "success");
-            } catch(e) {
-                this.notify("Erro ao cadastrar: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.createOutsourcedCompany(name, phone, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchOutsourcedCompanies: () => this.fetchOutsourcedCompanies()
+            });
         },
 
         async deleteOutsourcedCompany(id) {
-            if (!confirm("Excluir esta empresa parceira?")) return;
-            try {
-                await this.supabaseFetch(`outsourced_companies?id=eq.${id}`, 'DELETE');
-                this.notify("Empresa excluída.");
-                await this.fetchOutsourcedCompanies();
-            } catch(e) {
-                this.notify("Erro ao excluir: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteOutsourcedCompany(id, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchOutsourcedCompanies: () => this.fetchOutsourcedCompanies()
+            });
         },
 
         async createDeviceModel(name) {
-            if (!name || !name.trim()) return;
-            if (!this.user?.workspace_id) return;
-
-            if (this.deviceModels.some(m => m.name.toLowerCase() === name.trim().toLowerCase())) {
-                return this.notify("Modelo já existe.", "error");
-            }
-
-            try {
-                await this.supabaseFetch('device_models', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: name.trim()
-                });
-                await this.fetchDeviceModels();
-                this.notify("Modelo cadastrado!", "success");
-                return true;
-            } catch(e) {
-                this.notify("Erro ao salvar modelo: " + e.message, "error");
-                return false;
-            }
+            return await window.AIDACatalogService.createDeviceModel(name, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchDeviceModels: () => this.fetchDeviceModels()
+            });
         },
+
         async createDefectOption(name) {
-            if (!name || !name.trim()) return false;
-            if (!this.user?.workspace_id) return false;
-
-            const trimmed = name.trim();
-            if (this.defectOptions.some(option => option.name.toLowerCase() === trimmed.toLowerCase())) {
-                this.notify("Defeito já cadastrado.", "error");
-                return false;
-            }
-
-            try {
-                await this.supabaseFetch('defect_options', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: trimmed
-                });
-                this.notify("Defeito cadastrado!", "success");
-                await this.fetchDefectOptions();
-                return true;
-            } catch(e) {
-                this.notify("Erro ao salvar defeito: " + e.message, "error");
-                return false;
-            }
+            return await window.AIDACatalogService.createDefectOption(name, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchDefectOptions: () => this.fetchDefectOptions()
+            });
         },
 
         async deleteDeviceModel(id) {
-            if (!confirm("Excluir este modelo da lista?")) return;
-            try {
-                await this.supabaseFetch(`device_models?id=eq.${id}`, 'DELETE');
-                this.notify("Modelo excluído.");
-                await this.fetchDeviceModels();
-                if (this.ticketForm.model && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
-                    this.ticketForm.model = '';
-                }
-            } catch(e) {
-                this.notify("Erro ao excluir: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteDeviceModel(id, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchDeviceModels: () => this.fetchDeviceModels()
+            });
         },
+
         async deleteDefectOption(id) {
-            if (!confirm("Excluir este defeito da lista?")) return;
-            try {
-                await this.supabaseFetch(`defect_options?id=eq.${id}`, 'DELETE');
-                this.notify("Defeito excluído.");
-                await this.fetchDefectOptions();
-                const available = new Set(this.defectOptions.map(option => option.name));
-                this.ticketForm.defects = (this.ticketForm.defects || []).filter(defect => available.has(defect));
-            } catch(e) {
-                this.notify("Erro ao excluir: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteDefectOption(id, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchDefectOptions: () => this.fetchDefectOptions()
+            });
         },
 
         openNewTicketModal() {
@@ -1619,38 +1546,21 @@ function app() {
             this.ticketForm.checklist.splice(index, 1);
         },
         async saveTemplate() {
-            if (!this.newTemplateName) return this.notify("Nomeie o modelo", "error");
-            if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
-
-            try {
-                await this.supabaseFetch('checklist_templates', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: this.newTemplateName,
-                    items: this.ticketForm.checklist.map(i => i.item),
-                    type: 'entry'
-                });
-
-                this.notify("Modelo salvo!");
-                this.newTemplateName = '';
-                this.fetchTemplates();
-            } catch (error) {
-                this.notify("Erro ao salvar: " + error.message, "error");
-            }
+            return await window.AIDACatalogService.saveTemplate({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
         },
 
         async deleteTemplate() {
-            if (!this.selectedTemplateId) return;
-            if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
-
-            try {
-                await this.supabaseFetch(`checklist_templates?id=eq.${this.selectedTemplateId}`, 'DELETE');
-
-                this.notify("Modelo excluído.");
-                this.selectedTemplateId = '';
-                this.fetchTemplates();
-            } catch (e) {
-                this.notify("Erro ao excluir: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteTemplate({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
         },
 
         loadTemplate() {
@@ -1669,35 +1579,21 @@ function app() {
             this.ticketForm.checklist_final.splice(index, 1);
         },
         async saveTemplateFinal() {
-            if (!this.newTemplateNameFinal) return this.notify("Nomeie o modelo final", "error");
-            if (this.ticketForm.checklist_final.length === 0) return this.notify("Adicione itens", "error");
-
-            try {
-                await this.supabaseFetch('checklist_templates', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: this.newTemplateNameFinal,
-                    items: this.ticketForm.checklist_final.map(i => i.item),
-                    type: 'final'
-                });
-
-                this.notify("Modelo final salvo!");
-                this.newTemplateNameFinal = '';
-                this.fetchTemplates();
-            } catch (error) {
-                this.notify("Erro ao salvar: " + error.message, "error");
-            }
+            return await window.AIDACatalogService.saveTemplateFinal({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
         },
+
         async deleteTemplateFinal() {
-            if (!this.selectedTemplateIdFinal) return;
-            if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
-            try {
-                await this.supabaseFetch(`checklist_templates?id=eq.${this.selectedTemplateIdFinal}`, 'DELETE');
-                this.notify("Modelo excluído.");
-                this.selectedTemplateIdFinal = '';
-                this.fetchTemplates();
-            } catch (e) {
-                this.notify("Erro: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteTemplateFinal({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
         },
         loadTemplateFinal() {
             const tmpl = this.checklistTemplates.find(t => t.id === this.selectedTemplateIdFinal);
