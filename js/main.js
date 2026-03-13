@@ -949,240 +949,59 @@ function app() {
             });
         },
 
-        // --- AUTH ---
-        async loginAdmin() {
-            this.loading = true;
-            try {
-                const { error } = await supabaseClient.auth.signInWithPassword({
-                    email: this.adminForm.email,
-                    password: this.adminForm.password,
-                });
-                if (error) this.notify(error.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+        // --- AUTH & SESSION ---
+
+        // Helper to provide dependencies for auth service
+        _getAuthDeps() {
+            return {
+                state: this,
+                supabaseClient: supabaseClient,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                hasRole: (r) => this.hasRole(r),
+                fetchEmployees: () => this.fetchEmployees(),
+                initTechFilter: () => this.initTechFilter(),
+                fetchTickets: () => this.fetchTickets(),
+                fetchTemplates: () => this.fetchTemplates(),
+                fetchDeviceModels: () => this.fetchDeviceModels(),
+                fetchDefectOptions: () => this.fetchDefectOptions(),
+                fetchOutsourcedCompanies: () => this.fetchOutsourcedCompanies(),
+                fetchGlobalLogs: () => this.fetchGlobalLogs(),
+                setupRealtime: () => this.setupRealtime(),
+                requestDashboardMetrics: (opts) => this.requestDashboardMetrics(opts),
+                _applyContext: (ctx) => this._applyContext(ctx)
+            };
         },
+
+        async loginAdmin() {
+            return await window.AIDAAuthSessionService.loginAdmin(this._getAuthDeps());
+        },
+
         async registerAdmin() {
-            this.loading = true;
-            try {
-                const { data: authData, error: authError } = await supabaseClient.auth.signUp({
-                    email: this.registerForm.email,
-                    password: this.registerForm.password,
-                });
-                if (authError) return this.notify(authError.message, 'error');
-                if (authData.user && !authData.session) return this.notify('Verifique seu e-mail.', 'success');
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAAuthSessionService.registerAdmin(this._getAuthDeps());
         },
 
         async completeCompanySetup() {
-             this.loading = true;
-             try {
-                 if (!this.registerForm.companyName) return this.notify('Digite o nome da empresa.', 'error');
-                 const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
-
-                 const wsId = await this.supabaseFetch('rpc/create_owner_workspace_and_profile', 'POST', {
-                        p_name: this.registerForm.companyName,
-                        p_company_code: generatedCode
-                 });
-
-                this.newCompanyCode = generatedCode;
-                this.registrationSuccess = true;
-                this.notify('Conta criada! Anote o código.', 'success');
-             } catch (err) {
-                 console.error(err);
-                 this.notify('Erro: ' + err.message, 'error');
-             } finally {
-                 this.loading = false;
-             }
+            return await window.AIDAAuthSessionService.completeCompanySetup(this._getAuthDeps());
         },
 
         async loginEmployee() {
-            this.loading = true;
-            try {
-                const data = await this.supabaseFetch('rpc/employee_login', 'POST', {
-                        p_company_code: this.loginForm.company_code,
-                        p_username: this.loginForm.username,
-                        p_password: this.loginForm.password
-                });
-
-                if (data && data.length > 0) {
-                    // New RPC returns: TABLE(token uuid, employee_json jsonb, workspace_json jsonb, must_change_password boolean)
-                    const result = data[0];
-                    const emp = result.employee_json;
-                    emp.token = result.token; // Attach Session Token
-                    emp.must_change_password = result.must_change_password; // Ensure flag is up to date
-
-                    if (emp.employee_id && !emp.id) {
-                        emp.id = emp.employee_id;
-                    }
-
-                    this.employeeSession = emp;
-                    this.user = emp;
-                    this.workspaceName = emp.workspace_name;
-                    this.companyCode = this.loginForm.company_code;
-
-                    // Apply Global Config
-                    if (emp.tracker_config) {
-                        this.trackerConfig = {
-                            ...this.trackerConfig,
-                            ...emp.tracker_config,
-                            colors: {
-                                ...this.trackerConfig.colors,
-                                ...(emp.tracker_config.colors || {})
-                            },
-                            required_ticket_fields: {
-                                ...this.trackerConfig.required_ticket_fields,
-                                ...(emp.tracker_config.required_ticket_fields || {})
-                            }
-                        };
-                    }
-
-                    // Check Must Change Password
-                    if (emp.must_change_password) {
-                        this.mustChangePassword = true;
-                        this.modals.forceChangePassword = true;
-                        // Don't load data yet, just save session so they can change password
-                        localStorage.setItem('techassist_employee', JSON.stringify(emp));
-                        return;
-                    }
-
-                    localStorage.setItem('techassist_employee', JSON.stringify(emp));
-                    this.notify('Bem-vindo, ' + emp.name, 'success');
-                    await this.fetchEmployees();
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    this.fetchGlobalLogs();
-
-                    if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
-                        this.view = 'tech_orders';
-                    }
-
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'login_employee' });
-                } else {
-                     this.notify('Credenciais inválidas.', 'error');
-                }
-            } catch(err) {
-                 console.error(err);
-                 this.notify('Falha no login: ' + err.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAAuthSessionService.loginEmployee(this._getAuthDeps());
         },
 
         async logout() {
-            this.loading = true;
-
-            // Logout from Employee Session (Server-side)
-            if (this.employeeSession && this.employeeSession.token) {
-                try {
-                    await this.supabaseFetch('rpc/employee_logout', 'POST', { p_token: this.employeeSession.token });
-                } catch (e) { console.warn("Logout RPC warning:", e); }
-            }
-
-            try { if (this.session) await supabaseClient.auth.signOut(); } catch (e) {}
-            this.employeeSession = null;
-            this.user = null;
-            this.session = null;
-            this.notificationsList = [];
-            localStorage.removeItem('techassist_employee');
-
-            // Clear context globally
-            this._applyContext(window.AIDATicketContext.clearContext());
-
-            this.view = 'dashboard';
-            this.loading = false;
-            window.location.reload();
+            return await window.AIDAAuthSessionService.logout(this._getAuthDeps());
         },
+
         async loadAdminData() {
-            if (!this.session) return;
-            const user = this.session.user;
-            const key = user.id;
-
-            if (this.loadedToken === key) {
-                console.log('[Auth] Skipping loadAdminData - already loaded for', key);
-                return;
-            }
-
-            console.log('[Auth] loadAdminData start...', key);
-
-            try {
-                // Modified select to include tracker_config
-                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number,tracker_config)&id=eq.${user.id}`);
-                let profile = profileData && profileData.length > 0 ? profileData[0] : null;
-
-                if (!profile) {
-                    const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code,whatsapp_number&owner_id=eq.${user.id}`);
-                    const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
-
-                    if (workspace) {
-                        await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
-                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number,tracker_config)&id=eq.${user.id}`);
-                        profile = newProfileData[0];
-                    } else {
-                        this.view = 'setup_required';
-                        return;
-                    }
-                }
-
-                if (profile) {
-                    this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
-                    this.workspaceName = profile.workspaces?.name;
-                    this.companyCode = profile.workspaces?.company_code;
-                    this.whatsappNumber = profile.workspaces?.whatsapp_number || '';
-
-                    // Populate Tracker Config
-                    if (profile.workspaces?.tracker_config) {
-                        // Merge with defaults to ensure all fields exist
-                        this.trackerConfig = {
-                            ...this.trackerConfig,
-                            ...profile.workspaces.tracker_config,
-                            colors: {
-                                ...this.trackerConfig.colors,
-                                ...(profile.workspaces.tracker_config.colors || {})
-                            },
-                            required_ticket_fields: {
-                                ...this.trackerConfig.required_ticket_fields,
-                                ...(profile.workspaces.tracker_config.required_ticket_fields || {})
-                            }
-                        };
-                    }
-
-                    await this.fetchEmployees();
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    await this.fetchOutsourcedCompanies();
-                    this.fetchGlobalLogs();
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'load_admin' });
-
-                    this.loadedToken = key;
-                }
-            } catch (err) {
-                console.error("Load Admin Error:", err);
-            }
+            return await window.AIDAAuthSessionService.loadAdminData(this._getAuthDeps());
         },
         async fetchEmployees() {
-            if (!this.user?.workspace_id) return;
-            try {
-                let data;
-                if (this.session) {
-                     data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
-                } else {
-                     data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
-                }
-                if (data) this.employees = data;
-            } catch (e) {
-                 console.error("Fetch Employees Error:", e);
-            }
+            return await window.AIDAEmployeeService.fetchEmployees({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         // --- COMPANY CONFIG ---
@@ -2360,10 +2179,6 @@ function app() {
             return await window.AIDATicketActions.deleteTicket(ticketOrId, this._getActionDeps());
         },
 
-        async restoreItem(type, id) {
-            return await window.AIDATicketActions.restoreItem(type, id, this._getActionDeps());
-        },
-
         // == FIM SUBFASE 1 ==
 
         // == SUBFASE 2 — FLUXO TÉCNICO ==
@@ -3003,27 +2818,14 @@ function app() {
         },
 
         async createEmployee() {
-            if (!this.user?.workspace_id) return this.notify('Erro workspace', 'error');
-            if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
-            this.loading = true;
-            try {
-                await this.supabaseFetch('rpc/create_employee', 'POST', {
-                    p_workspace_id: this.user.workspace_id,
-                    p_name: this.employeeForm.name,
-                    p_username: this.employeeForm.username,
-                    p_password: this.employeeForm.password,
-                    p_roles: this.employeeForm.roles
-                });
-
-                this.notify('Criado!');
-                this.modals.newEmployee = false;
-                await this.fetchEmployees();
-            } catch(e) {
-                console.error(e);
-                this.notify('Erro: ' + e.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAEmployeeService.createEmployee({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchEmployees: () => this.fetchEmployees(),
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         openEditEmployee(emp) {
@@ -3043,122 +2845,69 @@ function app() {
         },
 
         async resetEmployeePassword() {
-            const { employeeId, newPassword, confirmPassword } = this.resetPasswordForm;
-            if (!newPassword || !confirmPassword) return this.notify("Preencha as senhas.", "error");
-            if (newPassword !== confirmPassword) return this.notify("Senhas não conferem.", "error");
-
-            this.loading = true;
-            try {
-                await this.supabaseFetch('rpc/reset_employee_password', 'POST', {
-                    p_employee_id: employeeId,
-                    p_new_password: newPassword
-                });
-                this.notify("Senha resetada! O funcionário deverá trocar no próximo login.");
-                this.modals.resetPassword = false;
-                this.modals.editEmployee = false;
-            } catch (e) {
-                this.notify("Erro ao resetar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAEmployeeService.resetEmployeePassword({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         async changeOwnPassword() {
-            const { oldPassword, newPassword, confirmPassword } = this.changePasswordForm;
-            if (!oldPassword || !newPassword || !confirmPassword) return this.notify("Preencha todos os campos.", "error");
-            if (newPassword !== confirmPassword) return this.notify("Nova senha não confere.", "error");
-
-            this.loading = true;
-            try {
-                const token = this.employeeSession ? this.employeeSession.token : null;
-                if (!token) throw new Error("Sessão inválida.");
-
-                await this.supabaseFetch('rpc/employee_change_password', 'POST', {
-                    p_token: token,
-                    p_old_password: oldPassword,
-                    p_new_password: newPassword
-                });
-
-                this.notify("Senha alterada com sucesso!");
-                this.modals.forceChangePassword = false;
-                this.mustChangePassword = false;
-
-                // Update local session state
-                this.employeeSession.must_change_password = false;
-                localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
-
-                // Continue login flow
-                await this.fetchEmployees();
-                this.initTechFilter();
-                await this.fetchTickets();
-                this.fetchGlobalLogs();
-                this.setupRealtime();
-                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'password_changed' });
-
-            } catch (e) {
-                this.notify("Erro ao alterar senha: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAEmployeeService.changeOwnPassword({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchEmployees: () => this.fetchEmployees(),
+                initTechFilter: () => this.initTechFilter(),
+                fetchTickets: () => this.fetchTickets(),
+                fetchGlobalLogs: () => this.fetchGlobalLogs(),
+                setupRealtime: () => this.setupRealtime(),
+                requestDashboardMetrics: (opts) => this.requestDashboardMetrics(opts),
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         async updateEmployee() {
-            if (!this.employeeForm.id) return;
-            if (!this.employeeForm.name || !this.employeeForm.username) return this.notify('Preencha campos obrigatórios', 'error');
-
-            this.loading = true;
-            try {
-                await this.supabaseFetch('rpc/update_employee', 'POST', {
-                    p_id: this.employeeForm.id,
-                    p_name: this.employeeForm.name,
-                    p_username: this.employeeForm.username,
-                    p_password: this.employeeForm.password,
-                    p_roles: this.employeeForm.roles
-                });
-
-                this.notify('Atualizado!');
-                this.modals.editEmployee = false;
-                await this.fetchEmployees();
-            } catch(e) {
-                console.error(e);
-                this.notify('Erro: ' + e.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAEmployeeService.updateEmployee({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchEmployees: () => this.fetchEmployees(),
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         async deleteEmployee(id) {
-            if (!confirm('Tem certeza que deseja mover este funcionário para a Lixeira?')) return;
-            try {
-                await this.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
-                    deleted_at: new Date().toISOString()
-                });
-                this.notify('Funcionário movido para a Lixeira.');
-                await this.fetchEmployees();
-            } catch(e) {
-                this.notify('Erro ao excluir: ' + e.message, 'error');
-            }
+            return await window.AIDAEmployeeService.deleteEmployee(id, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchEmployees: () => this.fetchEmployees()
+            });
+        },
+
+        _getRecycleBinDeps() {
+            return {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                hasRole: (r) => this.hasRole(r),
+                setLoading: (val) => { this.loading = val; },
+                notify: (msg, type) => this.notify(msg, type),
+                mutateTicket: (t, act, upd, log, opts) => this.mutateTicket(t, act, upd, log, opts),
+                fetchDeletedItems: () => this.fetchDeletedItems(),
+                fetchEmployees: () => this.fetchEmployees()
+            };
         },
 
         async fetchDeletedItems() {
-            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
-            this.loading = true;
-            try {
-                const tickets = await this.supabaseFetch(
-                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
-                );
-                this.deletedTickets = tickets || [];
+            return await window.AIDARecycleBinService.fetchDeletedItems(this._getRecycleBinDeps());
+        },
 
-                const emps = await this.supabaseFetch(
-                    `employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
-                );
-                this.deletedEmployees = emps || [];
-
-            } catch(e) {
-                this.notify("Erro ao buscar lixeira: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+        async restoreItem(type, id) {
+            return await window.AIDARecycleBinService.restoreItem(type, id, this._getRecycleBinDeps());
         },
 
         openRecycleBin() {

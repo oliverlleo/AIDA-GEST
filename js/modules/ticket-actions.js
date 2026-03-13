@@ -215,41 +215,6 @@ window.AIDATicketActions = {
         }, actionLog, { showNotify: true, notifyMessage: 'Chamado movido para a Lixeira.', closeViewModal: true, fetchTickets: true });
     },
 
-    async restoreItem(type, id, deps) {
-        if (!confirm("Deseja restaurar este item?")) return;
-
-        if (type === 'ticket') {
-            const ticketToRestore = deps.state.deletedTickets.find(t => t.id === id) || { id };
-            const actionLog = {
-                action: 'Restaurou Chamado',
-                details: `Chamado restaurado da lixeira por ${deps.state.user.name}.`
-            };
-
-            await deps.mutateTicket(ticketToRestore, 'restoreItem', {
-                deleted_at: null
-            }, actionLog, { showNotify: true, notifyMessage: "Item restaurado!", fetchTickets: true });
-
-            await deps.fetchDeletedItems();
-            return;
-        }
-
-        deps.setLoading(true);
-        try {
-            await deps.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
-                deleted_at: null
-            });
-            deps.notify("Item restaurado!");
-
-            await deps.fetchDeletedItems();
-            await deps.fetchEmployees();
-
-        } catch(e) {
-            deps.notify("Erro ao restaurar: " + e.message, "error");
-        } finally {
-            deps.setLoading(false);
-        }
-    },
-
     // ==========================================
     // SUBFASE 2 — FLUXO TÉCNICO
     // ==========================================
