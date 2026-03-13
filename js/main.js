@@ -396,73 +396,25 @@ function app() {
             return null;
         },
 
+        // --- DEPENDENCY INJECTION HELPER ---
+        _getApiDeps() {
+            return {
+                SUPABASE_URL,
+                SUPABASE_KEY,
+                session: this.session,
+                employeeSession: this.employeeSession,
+                user: this.user
+            };
+        },
+
         // --- HELPER: NATIVE FETCH (Stateless) ---
         async supabaseFetch(endpoint, method = 'GET', body = null) {
-            const isRpc = endpoint.startsWith('rpc/');
-            const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
-
-            let token = SUPABASE_KEY;
-            if (this.session && this.session.access_token) {
-                token = this.session.access_token;
-            }
-
-            const headers = {
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'Prefer': method === 'GET' ? undefined : 'return=representation'
-            };
-
-            // Employee Token Header
-            if (this.employeeSession && this.employeeSession.token) {
-                headers['x-employee-token'] = this.employeeSession.token;
-            }
-
-            if (this.user && this.user.workspace_id) {
-                // If Employee, do NOT send x-workspace-id (Backend derives from Token)
-                // If Admin, send it (Admin context uses headers for RLS sometimes, or explicit params)
-                // But for safety/compat with new RLS policy, we can send it for Admin.
-                // For Employee, strictly omit it to prevent confusion/spoofing, although backend now ignores it.
-                if (!this.employeeSession) {
-                    headers['x-workspace-id'] = this.user.workspace_id;
-                }
-            }
-
-            const options = {
-                method,
-                headers,
-                body: body ? JSON.stringify(body) : undefined
-            };
-
-            const response = await fetch(url, options);
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: response.statusText }));
-                throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-            }
-
-            if (response.status === 204) return null;
-
-            return await response.json();
+            return await window.AIDAApiClient.supabaseFetch(this._getApiDeps(), endpoint, method, body);
         },
 
         // --- STORAGE HELPER ---
         getStorageHeaders(contentType) {
-            const token = this.session?.access_token || SUPABASE_KEY;
-
-            const headers = {
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': contentType
-            };
-
-            // If Employee, send token for RLS derivation
-            if (this.employeeSession?.token) {
-                headers['x-employee-token'] = this.employeeSession.token;
-            }
-
-            // Do NOT send x-workspace-id (Removed as per security hardening)
-            return headers;
+            return window.AIDAApiClient.getStorageHeaders(this._getApiDeps(), contentType);
         },
 
         async init() {
@@ -1297,16 +1249,7 @@ function app() {
 
             this.loading = true;
             try {
-                const bucket = 'workspace_logos';
-                const path = `${this.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
-                const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
-
-                const headers = this.getStorageHeaders(file.type);
-                const response = await fetch(url, { method: 'POST', headers, body: file });
-                if (!response.ok) throw new Error("Falha no upload");
-
-                // Construct Public URL (bucket is public now)
-                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
+                const publicUrl = await window.AIDAStorageService.handleLogoUpload(this._getApiDeps(), file);
                 this.trackerConfig.logo_url = publicUrl;
                 this.notify("Logo carregado!");
             } catch(e) {
@@ -2339,27 +2282,7 @@ function app() {
         async uploadTicketPhoto(file, ticketId) {
             try {
                 this.loading = true;
-
-                // 1) Path ESTRITO: workspaceId/ticketId/...
-                const workspaceId = this.employeeSession?.workspace_id || this.user?.workspace_id;
-                if (!workspaceId) throw new Error("Workspace ID not found for upload");
-
-                const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-                const path = `${workspaceId}/${ticketId}/${Date.now()}_${safeName}`;
-
-                // 2) Upload direto no Storage (sem Edge Function)
-                const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
-                const headers = this.getStorageHeaders(file.type); // já injeta x-employee-token quando existir
-
-                const res = await fetch(url, { method: 'POST', headers, body: file });
-                if (!res.ok) {
-                    const txt = await res.text().catch(() => '');
-                    throw new Error(`Falha no upload (${res.status}): ${txt}`);
-                }
-
-                // 3) Retornar APENAS o path (nunca URL pública)
-                return path;
-
+                return await window.AIDAStorageService.uploadTicketPhoto(this._getApiDeps(), file, ticketId);
             } catch (e) {
                 console.error("Upload Error:", e);
                 this.notify("Erro upload: " + e.message, "error");
@@ -2371,68 +2294,7 @@ function app() {
 
         // Helper to resolve view URLs
         async getPhotoUrl(input) {
-            if (!input) return '';
-
-            let path = input;
-            console.log('[getPhotoUrl] input:', input);
-
-            // 1) Se já é signed (tem token na query), pode retornar direto
-            if (typeof path === 'string' && path.startsWith('http') && path.includes('token=')) {
-                return path;
-            }
-
-            // 2) Se veio URL pública antiga, extrai path
-            const pubMarker = '/storage/v1/object/public/ticket_photos/';
-            if (path.includes(pubMarker)) {
-                path = path.split(pubMarker)[1];
-            }
-
-            // 3) Se veio URL privada do storage (object/...), extrai path também
-            const objMarker = '/storage/v1/object/ticket_photos/';
-            if (path.includes(objMarker)) {
-                path = path.split(objMarker)[1];
-            }
-
-            // Se ainda for http e não for storage, retorna (ex: imagem externa)
-            if (path.startsWith('http')) return path;
-
-            try {
-                // Encode path components
-                const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-                const signEndpoint = `${SUPABASE_URL}/storage/v1/object/sign/ticket_photos/${encodedPath}`;
-
-                const headers = this.getStorageHeaders('application/json');
-                const res = await fetch(signEndpoint, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ expiresIn: 600 })
-                });
-
-                if (!res.ok) {
-                    const txt = await res.text().catch(() => '');
-                    console.warn('[SIGN FAIL]', res.status, txt, { input, path });
-                    return '';
-                }
-
-                const data = await res.json();
-                const signed = data?.signedURL || data?.signedUrl;
-                if (!signed) return '';
-
-                let full;
-                if (signed.startsWith('http')) {
-                    full = signed.includes('/storage/v1/') ? signed : signed.replace(`${SUPABASE_URL}/`, `${SUPABASE_URL}/storage/v1/`);
-                } else if (signed.startsWith('/')) {
-                    full = `${SUPABASE_URL}/storage/v1${signed}`;
-                } else {
-                    full = `${SUPABASE_URL}/storage/v1/${signed}`;
-                }
-
-                console.log('[getPhotoUrl] signed src:', full);
-                return full;
-            } catch (e) {
-                console.warn('Error signing URL:', e, { input, path });
-                return '';
-            }
+            return await window.AIDAStorageService.getPhotoUrl(this._getApiDeps(), input);
         },
 
         async handlePhotoUpload(event, targetList = 'new') {
