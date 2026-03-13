@@ -217,6 +217,15 @@ function app() {
         baseDataLoaded: false,
         realtimeReady: false,
 
+        // --- VIEW LOAD STATE ---
+        viewsLoaded: {
+            dashboard: false,
+            admin_dashboard: false,
+            kanban: false,
+            tech_orders: false,
+            tester_bench: false
+        },
+
         // Daily Report State
         dailyReport: null,
         dailyReportLoading: false,
@@ -424,13 +433,8 @@ function app() {
                 // 1. Ensure Base Catalogs & Data
                 await this.ensureBaseDataLoaded();
 
-                // 2. Load Core Application Data
-                await this.fetchTickets();
-
-                // 3. Connect to Current View State
-                if (this.view === 'dashboard' || options.forceDashboard) {
-                    this.requestDashboardMetrics({ reason: options.reason || 'bootstrap' });
-                }
+                // 2. Load Core Application Data for Current View
+                await this.loadDataForCurrentView(true); // force load current view initially
 
                 this.bootstrapDone = true;
             } catch (err) {
@@ -468,6 +472,39 @@ function app() {
             } catch (err) {
                 console.error("[EnsureBaseData] Error:", err);
                 throw err;
+            }
+        },
+
+        // --- VIEW DEPENDENT LOADING ---
+        async loadDataForCurrentView(force = false) {
+            // Check cache flag unless forcing reload
+            if (!force && this.viewsLoaded[this.view]) return;
+
+            const currentView = this.view;
+
+            try {
+                if (currentView === 'dashboard') {
+                    await this.fetchTickets();
+                    this.fetchGlobalLogs();
+                    await this.requestDashboardMetrics({ reason: 'view_change' });
+                } else if (currentView === 'admin_dashboard') {
+                    await this.fetchTickets();
+                    await this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
+                } else if (currentView === 'kanban') {
+                    await this.fetchTickets();
+                    setTimeout(() => this.initKanbanScroll(), 100);
+                } else {
+                    // Outras views (tech_orders, tester_bench, etc.)
+                    this.clearFilters();
+                    await this.fetchTickets();
+                }
+
+                // Mark view as loaded
+                if (this.viewsLoaded.hasOwnProperty(currentView)) {
+                    this.viewsLoaded[currentView] = true;
+                }
+            } catch (e) {
+                console.error(`Erro ao carregar dados da view: ${currentView}`, e);
             }
         },
 
@@ -593,23 +630,7 @@ function app() {
             }, 60000);
 
             this.$watch('view', (value) => {
-                if (value === 'kanban') {
-                    // Reset to Kanban mode (Active only)
-                    this.fetchTickets();
-                    setTimeout(() => this.initKanbanScroll(), 100);
-                } else if (value === 'dashboard') {
-                    // Dashboard/History mode
-                    this.fetchTickets();
-                    this.fetchGlobalLogs();
-                    this.calculateMetrics();
-                } else if (value === 'admin_dashboard') {
-                    this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
-                    this.fetchTickets();
-                } else {
-                    // Other views (e.g. tech_orders)
-                    this.clearFilters();
-                    this.fetchTickets();
-                }
+                this.loadDataForCurrentView();
             });
 
             this.$watch('searchQuery', () => {
