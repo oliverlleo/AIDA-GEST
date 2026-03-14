@@ -1081,6 +1081,7 @@ function app() {
                 notify: (msg, type) => this.notify(msg, type),
                 setLoading: (val) => { this.loading = val; },
                 hasRole: (r) => this.hasRole(r),
+                validateSessionToken: (opts) => window.AIDAAuthSessionService.validateSessionToken(opts),
                 bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
                 _applyContext: (ctx) => this._applyContext(ctx)
             };
@@ -2913,6 +2914,7 @@ function app() {
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                 notify: (msg, type) => this.notify(msg, type),
                 setLoading: (val) => { this.loading = val; },
+                validateSessionToken: (opts) => window.AIDAAuthSessionService.validateSessionToken(opts),
                 bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
                 closeModal: (name) => { this.modals[name] = false; }
             });

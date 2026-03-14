@@ -56,7 +56,7 @@ window.AIDAAuthSessionService = {
     },
 
     async loginEmployee(deps) {
-        const { state, supabaseFetch, notify, setLoading, hasRole, bootstrapAuthenticatedApp } = deps;
+        const { state, supabaseFetch, notify, setLoading, validateSessionToken, bootstrapAuthenticatedApp } = deps;
         setLoading(true);
         try {
             const data = await supabaseFetch('rpc/employee_login', 'POST', {
@@ -76,8 +76,18 @@ window.AIDAAuthSessionService = {
                 }
 
                 state.employeeSession = emp;
-                state.user = emp;
-                state.workspaceName = emp.workspace_name;
+
+                // Validate and normalize the session to get the full server truth (including workspace_id)
+                const freshSession = await validateSessionToken({ state, supabaseFetch });
+                if (freshSession) {
+                    state.employeeSession.workspace_id = freshSession.workspace_id;
+                    state.employeeSession.employee_id = freshSession.employee_id;
+                    state.employeeSession.roles = freshSession.roles || [];
+                    if (!state.employeeSession.id) state.employeeSession.id = freshSession.employee_id;
+                }
+
+                state.user = state.employeeSession;
+                state.workspaceName = emp.workspace_name || (freshSession && freshSession.workspace_name) || '';
                 state.companyCode = state.loginForm.company_code;
                 if (emp.whatsapp_number) state.whatsappNumber = emp.whatsapp_number;
 

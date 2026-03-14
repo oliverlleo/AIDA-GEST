@@ -108,7 +108,7 @@ window.AIDAEmployeeService = {
     },
 
     async changeOwnPassword(deps) {
-        const { state, supabaseFetch, notify, setLoading, bootstrapAuthenticatedApp, closeModal } = deps;
+        const { state, supabaseFetch, notify, setLoading, validateSessionToken, bootstrapAuthenticatedApp, closeModal } = deps;
         const { oldPassword, newPassword, confirmPassword } = state.changePasswordForm;
         if (!oldPassword || !newPassword || !confirmPassword) return notify("Preencha todos os campos.", "error");
         if (newPassword !== confirmPassword) return notify("Nova senha não confere.", "error");
@@ -126,9 +126,20 @@ window.AIDAEmployeeService = {
 
             notify("Senha alterada com sucesso!");
 
-            // Atualiza sessão e garante que o usuário esteja coerente antes do bootstrap
+            // Revalida a sessão com o servidor para garantir workspace_id e roles exatas
+            const freshSession = await validateSessionToken({ state, supabaseFetch });
+            if (freshSession) {
+                state.employeeSession.workspace_id = freshSession.workspace_id;
+                state.employeeSession.employee_id = freshSession.employee_id;
+                state.employeeSession.roles = freshSession.roles || [];
+                if (!state.employeeSession.id) state.employeeSession.id = freshSession.employee_id;
+            }
+
+            // Atualiza sessão local e garante que o usuário esteja coerente antes do bootstrap
             state.employeeSession.must_change_password = false;
-            state.user = state.employeeSession; // Fix UI rendering race-condition issue
+            state.user = state.employeeSession;
+            if (freshSession && freshSession.workspace_name) state.workspaceName = freshSession.workspace_name;
+
             localStorage.setItem('techassist_employee', JSON.stringify(state.employeeSession));
 
             // Corrige o fluxo de view no primeiro acesso lendo a sessão real recém configurada
