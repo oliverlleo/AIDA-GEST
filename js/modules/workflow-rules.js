@@ -25,6 +25,9 @@ window.AIDAWorkflowRules = {
             case 'startAnalysis':
                 if (isOutsourced || status !== 'Aberto') return false;
                 return isAdmin || isAttendant || isTech;
+            case 'startTicketAnalysis':
+                if (status !== 'Analise Tecnica' || ticket.analysis_started_at) return false;
+                return isAdmin || isTech;
             case 'sendToOutsourced':
                 if (!isOutsourced || status !== 'Aberto') return false;
                 return isAdmin || isAttendant || isTech;
