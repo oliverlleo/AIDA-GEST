@@ -2506,6 +2506,78 @@ function app() {
                    date1.getMonth() === date2.getMonth() &&
                    date1.getFullYear() === date2.getFullYear();
         },
+        // --- COMBOBOX HELPERS ---
+        deviceModelCombobox() {
+            return {
+                open: false,
+                search: '',
+                init() {
+                    this.search = this.ticketForm.model || '';
+                    this.$watch('ticketForm.model', (val) => {
+                        if (!this.open) this.search = val || '';
+                    });
+                    this.$watch('open', (isOpen) => {
+                        if (!isOpen) {
+                            this.search = this.ticketForm.model || '';
+                        }
+                    });
+                },
+                toggleArrow() {
+                    this.open = !this.open;
+                    if (this.open) {
+                        this.search = '';
+                        this.$nextTick(() => this.$refs.searchInput.focus());
+                    }
+                },
+                onInput() {
+                    this.open = true;
+                    this.ticketForm.model = this.search;
+                },
+                onFocus() {
+                    this.open = true;
+                    this.search = this.ticketForm.model || '';
+                },
+                selectOption(modelName) {
+                    this.ticketForm.model = modelName;
+                    this.search = modelName;
+                    this.open = false;
+                }
+            };
+        },
+
+        defectCombobox() {
+            return {
+                open: false,
+                search: '',
+                init() {
+                    this.$watch('open', (isOpen) => {
+                        if (!isOpen) {
+                            this.search = '';
+                        }
+                    });
+                },
+                toggleArrow() {
+                    this.open = !this.open;
+                    if (this.open) {
+                        this.search = '';
+                        this.$nextTick(() => this.$refs.defectSearch.focus());
+                    }
+                },
+                onInput() {
+                    this.open = true;
+                },
+                onFocus() {
+                    this.open = true;
+                },
+                selectOption(defectName) {
+                    this.addDefectToTicket(defectName);
+                    this.search = '';
+                    this.open = false;
+                    this.$nextTick(() => this.$refs.defectSearch.focus());
+                }
+            };
+        },
+
         addDefectToTicket(defectName) {
             const trimmed = defectName.trim();
             if (!trimmed) return;
