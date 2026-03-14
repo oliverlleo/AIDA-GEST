@@ -491,8 +491,16 @@ function app() {
 
             // Blindagem mínima contra view de dashboard indevida no primeiro acesso de técnicos/testers
             if (currentView === 'dashboard' && this.user) {
-                const isTechOnly = this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente');
-                const isTesterOnly = this.hasRole('tester') && !this.hasRole('admin') && !this.hasRole('atendente');
+                // IMPORTANT: Read purely from the user roles array, bypassing the global hasRole() function
+                // to avoid false positives caused by lingering 'this.session' evaluations.
+                const roles = this.user.roles || [];
+                const isTech = roles.includes('tecnico');
+                const isTester = roles.includes('tester');
+                const isAdminOrAttendant = roles.includes('admin') || roles.includes('atendente');
+
+                const isTesterOnly = isTester && !isAdminOrAttendant;
+                const isTechOnly = isTech && !isAdminOrAttendant;
+
                 if (isTesterOnly) {
                     currentView = 'tester_bench';
                     this.view = 'tester_bench';

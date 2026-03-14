@@ -131,16 +131,15 @@ window.AIDAEmployeeService = {
             state.user = state.employeeSession; // Fix UI rendering race-condition issue
             localStorage.setItem('techassist_employee', JSON.stringify(state.employeeSession));
 
-            // Corrige o fluxo de view no primeiro acesso, baseando-se no perfil
+            // Corrige o fluxo de view no primeiro acesso lendo a sessão real recém configurada
             const roles = state.user.roles || [];
             const isTech = roles.includes('tecnico');
-            const isAdmin = roles.includes('admin');
-            const isAttendant = roles.includes('atendente');
             const isTester = roles.includes('tester');
+            const isAdminOrAttendant = roles.includes('admin') || roles.includes('atendente');
 
-            if (isTester && !isAdmin && !isAttendant) {
+            if (isTester && !isAdminOrAttendant) {
                 state.view = 'tester_bench';
-            } else if (isTech && !isAdmin && !isAttendant) {
+            } else if (isTech && !isAdminOrAttendant) {
                 state.view = 'tech_orders';
             } else {
                 state.view = 'dashboard';

@@ -96,11 +96,18 @@ window.AIDAAuthSessionService = {
                     };
                 }
 
-                // Ajusta a view corretamente antes de qualquer return/early exit
-                if (hasRole('tester') && !hasRole('admin') && !hasRole('atendente')) {
+                // Ajusta a view corretamente antes de qualquer return/early exit sem depender de hasRole()
+                const roles = emp.roles || [];
+                const isTech = roles.includes('tecnico');
+                const isTester = roles.includes('tester');
+                const isAdminOrAttendant = roles.includes('admin') || roles.includes('atendente');
+
+                if (isTester && !isAdminOrAttendant) {
                     state.view = 'tester_bench';
-                } else if (hasRole('tecnico') && !hasRole('admin') && !hasRole('atendente')) {
+                } else if (isTech && !isAdminOrAttendant) {
                     state.view = 'tech_orders';
+                } else {
+                    state.view = 'dashboard';
                 }
 
                 if (emp.must_change_password) {
