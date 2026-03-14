@@ -79,6 +79,7 @@ window.AIDAAuthSessionService = {
                 state.user = emp;
                 state.workspaceName = emp.workspace_name;
                 state.companyCode = state.loginForm.company_code;
+                if (emp.whatsapp_number) state.whatsappNumber = emp.whatsapp_number;
 
                 if (emp.tracker_config) {
                     state.trackerConfig = {

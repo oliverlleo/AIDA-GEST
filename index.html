@@ -1375,6 +1375,23 @@
                                 </select>
                             </div>
                             <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Data Inicial</label>
+                                <input type="date" x-model="adminDashboardFilters.dateStart" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Data Final</label>
+                                <input type="date" x-model="adminDashboardFilters.dateEnd" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
+                            </div>
+                            <div class="flex items-end">
+                                <button @click="adminDashboardFilters.dateStart = ''; adminDashboardFilters.dateEnd = ''" class="w-full text-xs text-gray-500 font-bold hover:text-brand-500 transition-colors uppercase border border-gray-200 rounded-lg py-2 hover:bg-gray-50">
+                                    Limpar Datas
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Secondary Filters -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-6 pt-6 border-t border-gray-100">
+                            <div>
                                 <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Visão rápida</label>
                                 <select x-model="adminDashboardFilters.quickView" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500">
                                     <option value="summary">Resumo executivo</option>
@@ -3473,16 +3490,19 @@
                                 <template x-for="p in PRIORITIES" :key="p"><option :value="p" x-text="p"></option></template>
                             </select>
                         </div>
-                        <div x-data="{ open: false, search: '' }">
+                        <div class="col-span-1" x-data="{ open: false, search: '' }" x-init="$watch('open', val => { if(val) { search = ticketForm.model || ''; $nextTick(() => $refs.searchInput.focus()); } else { ticketForm.model = search || ticketForm.model; } })">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Modelo <span x-show="isFieldRequired('device_model')" class="text-red-500">*</span></label>
                             <div class="relative">
-                                <!-- Trigger Button (Looks like Select) -->
-                                <button @click="open = !open; search = ''; $nextTick(() => $refs.searchInput.focus())"
-                                        type="button"
-                                        class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-left flex justify-between items-center focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
-                                    <span x-text="ticketForm.model || 'Selecione o Modelo...'" :class="!ticketForm.model ? 'text-gray-400' : 'text-gray-900'"></span>
-                                    <i class="fa-solid fa-chevron-down text-xs text-gray-500"></i>
-                                </button>
+                                <!-- Search Input acting as combobox -->
+                                <div class="flex items-center w-full bg-gray-50 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500 transition-all overflow-hidden">
+                                    <input type="text" x-model="search" x-ref="searchInput"
+                                           @focus="open = true" @click="open = true" @input="open = true; ticketForm.model = search"
+                                           class="w-full bg-transparent p-2.5 text-sm text-gray-900 outline-none placeholder-gray-400"
+                                           placeholder="Selecione ou digite o Modelo...">
+                                    <button type="button" @click="open = !open; if(open) $nextTick(() => $refs.searchInput.focus())" class="px-3 py-2 text-gray-500 hover:text-gray-700 bg-gray-50 h-full">
+                                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                                    </button>
+                                </div>
 
                                 <!-- Dropdown -->
                                 <div x-show="open" @click.outside="open = false"
@@ -3495,27 +3515,19 @@
                                      x-transition:leave-end="transform opacity-0 scale-95"
                                      x-cloak>
 
-                                    <!-- Search Input -->
-                                    <div class="sticky top-0 z-10 bg-white p-2 border-b">
-                                        <div class="flex gap-1">
-                                            <input x-ref="searchInput" x-model="search" type="text"
-                                                   class="w-full p-2 border rounded text-sm focus:ring-brand-500 focus:border-brand-500"
-                                                   placeholder="Buscar ou criar...">
-
-                                            <!-- Add Button (Visible if search has text) -->
-                                            <button x-show="search.length > 0 && !deviceModels.some(m => m.name.toLowerCase() === search.toLowerCase())"
-                                                    @click="createDeviceModel(search).then(ok => { if(ok) { ticketForm.model = search; open = false; search = ''; } })"
-                                                    class="bg-brand-500 text-white px-3 rounded hover:bg-brand-600 transition-colors" title="Cadastrar">
-                                                <i class="fa-solid fa-plus"></i>
-                                            </button>
-                                        </div>
+                                    <!-- Add Button (Visible if search has text and not already saved) -->
+                                    <div class="sticky top-0 bg-white p-2 border-b border-gray-100 z-10" x-show="search.length > 0 && !deviceModels.some(m => m.name.toLowerCase() === search.toLowerCase())">
+                                        <button @click="createDeviceModel(search).then(ok => { if(ok) { ticketForm.model = search; open = false; } })"
+                                                class="w-full bg-brand-500 text-white px-3 py-2 rounded hover:bg-brand-600 transition-colors flex items-center justify-center gap-2" title="Cadastrar">
+                                            <i class="fa-solid fa-plus"></i> <span class="font-bold text-xs">Cadastrar Novo</span>
+                                        </button>
                                     </div>
 
                                     <!-- List -->
                                     <ul class="py-1">
                                         <template x-for="model in deviceModels.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))" :key="model.id">
                                             <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center"
-                                                @click="ticketForm.model = model.name; open = false">
+                                                @click="ticketForm.model = model.name; search = model.name; open = false">
                                                 <span class="block truncate" :class="ticketForm.model === model.name ? 'font-bold text-brand-600' : 'text-gray-900'" x-text="model.name"></span>
 
                                                 <!-- Delete Icon -->
@@ -3596,7 +3608,7 @@
                                 <template x-for="defect in ticketForm.defects" :key="defect">
                                     <span class="bg-gray-200 text-gray-800 text-xs font-bold px-2 py-1 rounded flex items-center border border-gray-300">
                                         <span x-text="defect"></span>
-                                        <button @click="removeDefectFromTicket(defect)" class="ml-2 text-gray-500 hover:text-red-500 transition-colors">
+                                        <button type="button" @click="removeDefectFromTicket(defect)" class="ml-2 text-gray-500 hover:text-red-500 transition-colors">
                                             <i class="fa-solid fa-times"></i>
                                         </button>
                                     </span>
@@ -3605,13 +3617,16 @@
 
                             <!-- Dropdown Trigger -->
                             <div class="relative">
-                                <button type="button"
-                                        @click="open = !open; search = ''; $nextTick(() => $refs.defectSearch.focus())"
-                                        class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-left flex justify-between items-center focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm transition-all"
-                                        :class="ticketForm.defects && ticketForm.defects.length > 0 ? 'text-gray-900' : 'text-gray-400'">
-                                    <span x-text="ticketForm.defects && ticketForm.defects.length > 0 ? 'Adicionar outro defeito...' : 'Selecione ou digite os defeitos...'"></span>
-                                    <i class="fa-solid fa-chevron-down text-xs text-gray-500"></i>
-                                </button>
+                                <div class="flex items-center w-full bg-gray-50 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500 transition-all overflow-hidden">
+                                    <input type="text" x-model="search" x-ref="defectSearch"
+                                           @focus="open = true" @click="open = true" @input="open = true"
+                                           @keydown.enter.prevent="if(search.trim()) { createDefectOption(search).then(ok => { if(ok) { addDefectToTicket(search); search = ''; open = false; } }) }"
+                                           class="w-full bg-transparent p-2.5 text-sm text-gray-900 outline-none placeholder-gray-400"
+                                           :placeholder="ticketForm.defects && ticketForm.defects.length > 0 ? 'Adicionar outro defeito...' : 'Selecione ou digite os defeitos...'">
+                                    <button type="button" @click="open = !open; if(open) $nextTick(() => $refs.defectSearch.focus())" class="px-3 py-2 text-gray-500 hover:text-gray-700 bg-gray-50 h-full">
+                                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                                    </button>
+                                </div>
 
                                 <!-- Dropdown Menu -->
                                 <div x-show="open" @click.outside="open = false"
@@ -3624,28 +3639,19 @@
                                      x-transition:leave-end="transform opacity-0 scale-95"
                                      x-cloak>
 
-                                     <!-- Search Input -->
-                                     <div class="sticky top-0 z-10 bg-white p-2 border-b">
-                                         <div class="flex gap-1">
-                                             <input x-ref="defectSearch" x-model="search" type="text"
-                                                    class="w-full p-2 border rounded text-sm focus:ring-brand-500 focus:border-brand-500"
-                                                    placeholder="Buscar ou criar novo..."
-                                                    @keydown.enter.prevent="if(search.length > 0 && !defectOptions.some(d => d.name.toLowerCase() === search.toLowerCase())) { createDefectOption(search).then(ok => { if(ok) { addDefectToTicket(search); open = false; search = ''; } }); }">
-
-                                             <!-- Add Button -->
-                                             <button x-show="search.length > 0 && !defectOptions.some(d => d.name.toLowerCase() === search.toLowerCase())"
-                                                     @click.prevent="createDefectOption(search).then(ok => { if(ok) { addDefectToTicket(search); open = false; search = ''; } })"
-                                                     class="bg-brand-500 text-white px-3 rounded hover:bg-brand-600 transition-colors shadow" title="Cadastrar Defeito">
-                                                 <i class="fa-solid fa-plus"></i>
-                                             </button>
-                                         </div>
+                                     <!-- Quick Add Button -->
+                                     <div class="sticky top-0 bg-white p-2 border-b border-gray-100 z-10" x-show="search.trim().length > 0 && !defectOptions.some(d => d.name.toLowerCase() === search.trim().toLowerCase())">
+                                         <button @click="createDefectOption(search).then(ok => { if(ok) { addDefectToTicket(search); search = ''; open = false; } })"
+                                                 class="w-full bg-brand-500 text-white px-3 py-2 rounded hover:bg-brand-600 transition-colors flex items-center justify-center gap-2" title="Cadastrar e Adicionar">
+                                             <i class="fa-solid fa-plus"></i> <span class="font-bold text-xs">Cadastrar Novo</span>
+                                         </button>
                                      </div>
 
                                      <!-- List -->
                                      <ul class="py-1">
                                          <template x-for="option in defectOptions.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))" :key="option.id">
                                              <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center transition-colors"
-                                                 @click="addDefectToTicket(option.name); open = false">
+                                                 @click="addDefectToTicket(option.name); search = ''; open = false; $nextTick(() => $refs.defectSearch.focus())">
                                                  <span class="block truncate" :class="ticketForm.defects.includes(option.name) ? 'font-bold text-brand-600' : 'text-gray-900'" x-text="option.name"></span>
 
                                                  <!-- Delete Option -->

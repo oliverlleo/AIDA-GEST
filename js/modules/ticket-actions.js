@@ -72,7 +72,7 @@ window.AIDATicketActions = {
 
             deps.notify("Chamado criado!");
             deps.closeModal('ticket');
-            await deps.fetchTickets();
+            await deps.fetchTickets(true); // forceListRefetch flag to true
         } catch (err) {
             deps.notify("Erro ao criar: " + err.message, "error");
         } finally {

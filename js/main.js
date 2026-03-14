@@ -586,6 +586,10 @@ function app() {
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
 
+                            // Correção Bug 5: O Telefone da empresa salva, mas não reaparecia para funcionários ou em reload.
+                            // Hidratar whatsappNumber no front a partir da sessão armazenada, se disponível.
+                            if (this.employeeSession.whatsapp_number) this.whatsappNumber = this.employeeSession.whatsapp_number;
+
                             // Restore Tracker Config
                             if (this.employeeSession.tracker_config) {
                                 this.trackerConfig = {
@@ -2095,7 +2099,18 @@ function app() {
         },
 
         // --- 4. POLÍTICA DE REFRESH PÓS-MUTAÇÃO ---
-        async refreshPostMutation() {
+        async refreshPostMutation(forceListRefetch = false) {
+            // Se foi especificado um refetch forçado na listagem (ex: createTicket)
+            if (forceListRefetch) {
+                 await this.fetchTickets();
+                 if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
+                     await this.requestDashboardMetrics({ reason: 'post_mutation_forced' });
+                 } else if (this.view === 'kanban') {
+                     await this.fetchOperationalAlerts();
+                 }
+                 return;
+            }
+
             // Se estamos no dashboard, a mutation provavelmente afeta métricas.
             if (this.view === 'dashboard') {
                 await this.requestDashboardMetrics({ reason: 'post_mutation' });
@@ -2127,7 +2142,7 @@ function app() {
                 mutateTicket: (t, act, upd, log, opts) => this.mutateTicket(t, act, upd, log, opts),
                 updateStatus: (t, st, upd, log) => this.updateStatus(t, st, upd, log),
                 logTicketAction: (id, act, det) => this.logTicketAction(id, act, det),
-                fetchTickets: () => this.refreshPostMutation(),
+                fetchTickets: (force = false) => this.refreshPostMutation(force),
                 fetchGlobalLogs: () => this.fetchGlobalLogs(),
                 fetchDeletedItems: () => this.fetchDeletedItems(),
                 fetchEmployees: () => this.fetchEmployees(),
