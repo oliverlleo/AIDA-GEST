@@ -211,6 +211,26 @@ function app() {
         loadedToken: null,
         initInFlight: false,
 
+        // --- BOOTSTRAP STATE ---
+        bootstrapInFlight: false,
+        bootstrapDone: false,
+        baseDataLoaded: false,
+        realtimeReady: false,
+
+        // --- IN-FLIGHT GUARDS ---
+        globalLogsInFlight: false,
+        notificationsInFlight: false,
+        opsInFlight: false,
+
+        // --- VIEW LOAD STATE ---
+        viewsLoaded: {
+            dashboard: false,
+            admin_dashboard: false,
+            kanban: false,
+            tech_orders: false,
+            tester_bench: false
+        },
+
         // Daily Report State
         dailyReport: null,
         dailyReportLoading: false,
@@ -352,117 +372,184 @@ function app() {
         // CONFIG HELPERS (TRACKER / FEATURES)
         // ==========================================
         isLogisticsEnabled() {
-            return !!this.trackerConfig?.enable_logistics;
+            return window.AIDAConfigHelpers.isLogisticsEnabled(this.trackerConfig);
         },
         isOutsourcedEnabled() {
-            return !!this.trackerConfig?.enable_outsourced;
+            return window.AIDAConfigHelpers.isOutsourcedEnabled(this.trackerConfig);
         },
         getTestFlowMode() {
-            return this.trackerConfig?.test_flow || 'kanban';
+            return window.AIDAConfigHelpers.getTestFlowMode(this.trackerConfig);
         },
         isAutoOSGenerationEnabled() {
-            return !!this.trackerConfig?.os_generation?.enabled;
+            return window.AIDAConfigHelpers.isAutoOSGenerationEnabled(this.trackerConfig);
         },
         isWhatsAppDisabled() {
-            return !!this.trackerConfig?.disable_whatsapp_actions;
+            return window.AIDAConfigHelpers.isWhatsAppDisabled(this.trackerConfig);
         },
         isRequiredFieldsEnabled() {
-            return !!this.trackerConfig?.enable_required_ticket_fields;
+            return window.AIDAConfigHelpers.isRequiredFieldsEnabled(this.trackerConfig);
         },
 
         // ==========================================
         // MODAL CONTEXT / ACTIVE TICKET HELPER
         // ==========================================
+
+        // Wrapper for context actions
+        _applyContext(contextState) {
+            this.activeTicketId = contextState.activeTicketId;
+            this.activeModalContext = contextState.activeModalContext;
+        },
+
         resolveTicket(ticketOrId) {
-            if (!ticketOrId) {
-                // Fallback to activeTicketId if no explicit argument was passed
-                if (!this.activeTicketId) return null;
-                const found = this.tickets.find(t => t.id === this.activeTicketId);
-                return found || this.selectedTicket; // Ultimate fallback
-            }
-
-            // If it's an object with an ID
-            if (typeof ticketOrId === 'object' && ticketOrId.id) {
-                // Refresh from main array to prevent stale data
-                const found = this.tickets.find(t => t.id === ticketOrId.id);
-                return found || ticketOrId;
-            }
-
-            // If it's just an ID string
-            if (typeof ticketOrId === 'string') {
-                return this.tickets.find(t => t.id === ticketOrId);
-            }
-
-            return null;
+            return window.AIDATicketContext.resolveTicket(
+                ticketOrId,
+                this.tickets,
+                this.selectedTicket
+            );
         },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
         async supabaseFetch(endpoint, method = 'GET', body = null) {
-            const isRpc = endpoint.startsWith('rpc/');
-            const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
-
-            let token = SUPABASE_KEY;
-            if (this.session && this.session.access_token) {
-                token = this.session.access_token;
-            }
-
-            const headers = {
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'Prefer': method === 'GET' ? undefined : 'return=representation'
-            };
-
-            // Employee Token Header
-            if (this.employeeSession && this.employeeSession.token) {
-                headers['x-employee-token'] = this.employeeSession.token;
-            }
-
-            if (this.user && this.user.workspace_id) {
-                // If Employee, do NOT send x-workspace-id (Backend derives from Token)
-                // If Admin, send it (Admin context uses headers for RLS sometimes, or explicit params)
-                // But for safety/compat with new RLS policy, we can send it for Admin.
-                // For Employee, strictly omit it to prevent confusion/spoofing, although backend now ignores it.
-                if (!this.employeeSession) {
-                    headers['x-workspace-id'] = this.user.workspace_id;
-                }
-            }
-
-            const options = {
-                method,
-                headers,
-                body: body ? JSON.stringify(body) : undefined
-            };
-
-            const response = await fetch(url, options);
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: response.statusText }));
-                throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-            }
-
-            if (response.status === 204) return null;
-
-            return await response.json();
+            return await window.AIDAApiClient.supabaseFetch(endpoint, method, body, {
+                SUPABASE_URL,
+                SUPABASE_KEY,
+                state: this
+            });
         },
 
         // --- STORAGE HELPER ---
         getStorageHeaders(contentType) {
-            const token = this.session?.access_token || SUPABASE_KEY;
+            return window.AIDAStorageService.getStorageHeaders(contentType, {
+                SUPABASE_KEY,
+                state: this
+            });
+        },
 
-            const headers = {
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': contentType
-            };
+        // ==========================================
+        // CARREGAMENTO & POLÍTICAS DE ATUALIZAÇÃO
+        // ==========================================
 
-            // If Employee, send token for RLS derivation
-            if (this.employeeSession?.token) {
-                headers['x-employee-token'] = this.employeeSession.token;
+        // --- 1. BOOTSTRAP CENTRAL ---
+        async bootstrapAuthenticatedApp(options = {}) {
+            if (this.bootstrapInFlight) return;
+            this.bootstrapInFlight = true;
+            this.bootstrapDone = false;
+
+            try {
+                // 1. Ensure Base Catalogs & Data
+                await this.ensureBaseDataLoaded();
+
+                // Initialize context variables now that employees are loaded
+                this.initTechFilter();
+
+                // 2. Load Core Application Data for Current View
+                await this.loadDataForCurrentView(true); // force load current view initially
+
+                this.bootstrapDone = true;
+            } catch (err) {
+                console.error("[Bootstrap] Failed:", err);
+                this.notify("Erro ao carregar os dados iniciais do aplicativo.", "error");
+            } finally {
+                this.bootstrapInFlight = false;
+            }
+        },
+
+        // --- 2. BASE LOAD CENTRAL ---
+        async ensureBaseDataLoaded() {
+            if (this.baseDataLoaded) return;
+
+            try {
+                // Start parallel fetching for core static/catalog data
+                await Promise.all([
+                    this.fetchEmployees(),
+                    this.fetchTemplates(),
+                    this.fetchDeviceModels(),
+                    this.fetchDefectOptions(),
+                    this.fetchOutsourcedCompanies(),
+                    this.fetchFornecedores()
+                ]);
+
+                // Initial global logs load
+                this.fetchGlobalLogs();
+
+                // Setup realtime
+                if (!this.realtimeReady) {
+                    this.setupRealtime();
+                    this.realtimeReady = true;
+                }
+
+                this.baseDataLoaded = true;
+            } catch (err) {
+                console.error("[EnsureBaseData] Error:", err);
+                throw err;
+            }
+        },
+
+        // --- 3. CARREGAMENTO DEPENDENTE DA VIEW ---
+        async loadDataForCurrentView(force = false) {
+            let currentView = this.view;
+
+            // Blindagem mínima contra view de dashboard indevida no primeiro acesso de técnicos/testers
+            if (currentView === 'dashboard' && this.user) {
+                // IMPORTANT: Read purely from the user roles array, bypassing the global hasRole() function
+                // to avoid false positives caused by lingering 'this.session' evaluations.
+                const roles = this.user.roles || [];
+                const isTech = roles.includes('tecnico');
+                const isTester = roles.includes('tester');
+                const isAdminOrAttendant = roles.includes('admin') || roles.includes('atendente');
+
+                const isTesterOnly = isTester && !isAdminOrAttendant;
+                const isTechOnly = isTech && !isAdminOrAttendant;
+
+                if (isTesterOnly) {
+                    currentView = 'tester_bench';
+                    this.view = 'tester_bench';
+                } else if (isTechOnly) {
+                    currentView = 'tech_orders';
+                    this.view = 'tech_orders';
+                }
             }
 
-            // Do NOT send x-workspace-id (Removed as per security hardening)
-            return headers;
+            // Manage View-Specific State Resets (Runs every time view changes)
+            if (currentView === 'kanban') {
+                setTimeout(() => this.initKanbanScroll(), 100);
+            } else if (!['dashboard', 'admin_dashboard', 'kanban'].includes(currentView)) {
+                // Ensure other views start with clear filters
+                this.searchQuery = '';
+                this.activeQuickFilter = null;
+                this.columnFilters = {};
+            }
+
+            // NOTA SOBRE CACHE (viewsLoaded): Não podemos pular `fetchTickets()` pois
+            // a lista global de `tickets` muda conforme o contexto da tela (Dashboard vs Kanban vs Tech Orders).
+            // O cache serve apenas para dados secundários, mas a engine primária precisa rodar.
+
+            try {
+                if (currentView === 'dashboard') {
+                    await this.fetchTickets();
+                    // Logs estáticos podem usar o cache
+                    if (!this.viewsLoaded[currentView]) {
+                        this.fetchGlobalLogs();
+                    }
+                    await this.requestDashboardMetrics({ reason: 'view_change' });
+                } else if (currentView === 'admin_dashboard') {
+                    await this.fetchTickets();
+                    await this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
+                } else if (currentView === 'kanban') {
+                    await this.fetchTickets();
+                    await this.fetchOperationalAlerts(); // Alerts are used in kanban header
+                } else {
+                    // Outras views (tech_orders, tester_bench, etc.)
+                    await this.fetchTickets();
+                }
+
+                // Mark view as loaded for secondary unshared resources
+                if (this.viewsLoaded.hasOwnProperty(currentView)) {
+                    this.viewsLoaded[currentView] = true;
+                }
+            } catch (e) {
+                console.error(`Erro ao carregar dados da view: ${currentView}`, e);
+            }
         },
 
         async init() {
@@ -491,27 +578,24 @@ function app() {
 
                             // Validate Session Token
                             if (this.employeeSession.token) {
-                                try {
-                                    const sessionData = await this.supabaseFetch('rpc/validate_employee_session', 'POST', { p_token: this.employeeSession.token });
-                                    if (!sessionData || sessionData.length === 0 || !sessionData[0].valid) {
-                                        throw new Error("Sessão expirada");
-                                    }
+                                const freshSession = await window.AIDAAuthSessionService.validateSessionToken({
+                                    state: this,
+                                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                                });
 
-                                    // FORCE UPDATE from Server Truth
-                                    const freshSession = sessionData[0];
-                                    this.employeeSession.workspace_id = freshSession.workspace_id;
-                                    this.employeeSession.employee_id = freshSession.employee_id;
-                                    this.employeeSession.roles = freshSession.roles || [];
-                                    if (!this.employeeSession.id) this.employeeSession.id = freshSession.employee_id;
-
-                                    // Update Storage with trusted data
-                                    localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
-
-                                } catch (sessionErr) {
-                                    console.warn("Session validation failed:", sessionErr);
+                                if (!freshSession) {
                                     this.logout();
                                     return;
                                 }
+
+                                // FORCE UPDATE from Server Truth
+                                this.employeeSession.workspace_id = freshSession.workspace_id;
+                                this.employeeSession.employee_id = freshSession.employee_id;
+                                this.employeeSession.roles = freshSession.roles || [];
+                                if (!this.employeeSession.id) this.employeeSession.id = freshSession.employee_id;
+
+                                // Update Storage with trusted data
+                                localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
                             } else {
                                 // Legacy session without token
                                 console.warn("Legacy session detected. Logging out.");
@@ -522,8 +606,10 @@ function app() {
                             this.user = this.employeeSession;
                             if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
                             if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
-                            await this.fetchEmployees();
-                            this.initTechFilter();
+
+                            // Correção Bug 5: O Telefone da empresa salva, mas não reaparecia para funcionários ou em reload.
+                            // Hidratar whatsappNumber no front a partir da sessão armazenada, se disponível.
+                            if (this.employeeSession.whatsapp_number) this.whatsappNumber = this.employeeSession.whatsapp_number;
 
                             // Restore Tracker Config
                             if (this.employeeSession.tracker_config) {
@@ -563,16 +649,7 @@ function app() {
                     // Block access if must change password
                     if (this.mustChangePassword) return;
 
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    await this.fetchOutsourcedCompanies();
-                    await this.fetchFornecedores();
-                    this.fetchGlobalLogs();
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'init' });
+                    await this.bootstrapAuthenticatedApp({ reason: 'init_restore' });
                 }
             } catch (err) {
                 console.error("Init Error:", err);
@@ -599,23 +676,7 @@ function app() {
             }, 60000);
 
             this.$watch('view', (value) => {
-                if (value === 'kanban') {
-                    // Reset to Kanban mode (Active only)
-                    this.fetchTickets();
-                    setTimeout(() => this.initKanbanScroll(), 100);
-                } else if (value === 'dashboard') {
-                    // Dashboard/History mode
-                    this.fetchTickets();
-                    this.fetchGlobalLogs();
-                    this.calculateMetrics();
-                } else if (value === 'admin_dashboard') {
-                    this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
-                    this.fetchTickets();
-                } else {
-                    // Other views (e.g. tech_orders)
-                    this.clearFilters();
-                    this.fetchTickets();
-                }
+                this.loadDataForCurrentView();
             });
 
             this.$watch('searchQuery', () => {
@@ -700,8 +761,6 @@ function app() {
             }
 
             // 4. Cache / Skip Duplicate calls
-            // - If reason is realtime: ALWAYS fetch (unless throttled above)
-            // - If not realtime: Check params match AND strict cache TTL (e.g. 5s) to avoid unnecessary re-fetches
             const CACHE_TTL = 5000;
             const isCacheValid = (now - this.lastDashboardCallTime) < CACHE_TTL;
 
@@ -718,7 +777,11 @@ function app() {
                     // Update OPS (RPC)
                     await this.fetchOperationalAlerts();
 
-                    const data = await this.supabaseFetch('rpc/get_dashboard_kpis', 'POST', params);
+                    // Delegate to the dashboard service
+                    const data = await window.AIDADashboardService.requestDashboardMetrics(params, {
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    });
+
                     if (data) {
                         this.metrics = { ...this.metrics, ...data };
                         this.lastDashboardParams = paramString;
@@ -730,22 +793,13 @@ function app() {
                         }
                     }
                 } catch (e) {
-                    console.error("Dashboard RPC Error:", e);
+                    console.error("Dashboard Error:", e);
                     this.notify("Erro ao carregar métricas.", "error");
                 } finally {
                     this.dashboardMetricsPromise = null;
 
-                    // If a realtime update came in while we were busy, trigger a new fetch now
                     if (this.pendingRealtimeRefresh) {
                         this.pendingRealtimeRefresh = false;
-                        // Trigger immediate check (will be subject to throttle logic inside if applicable)
-                        // If reason is 'realtime', it respects throttling.
-                        // We assume lastDashboardCallTime was JUST updated above (if success).
-                        // So a direct call might be throttled.
-                        // However, if we just updated, maybe we don't *need* to fetch again?
-                        // Actually, if an event happened *during* the fetch, the data we just got *might* be stale.
-                        // But the throttle will block it anyway if < 1.5s.
-                        // So this effectively queues it for "in 1.5s".
                         this.requestDashboardMetrics({ reason: 'realtime' });
                     }
                 }
@@ -773,13 +827,15 @@ function app() {
 
             try {
                 const f = this.adminDashboardFilters;
-                // Note: backend handles null dates by defaulting to "today"
                 const params = {
                     p_date_start: f.dateStart || null,
                     p_date_end: f.dateEnd || null
                 };
 
-                const data = await this.supabaseFetch('rpc/get_daily_report', 'POST', params);
+                const data = await window.AIDADashboardService.requestDailyReport(params, {
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
+
                 if (data) {
                     this.dailyReport = data;
                 } else {
@@ -1014,281 +1070,72 @@ function app() {
             });
         },
 
-        // --- AUTH ---
-        async loginAdmin() {
-            this.loading = true;
-            try {
-                const { error } = await supabaseClient.auth.signInWithPassword({
-                    email: this.adminForm.email,
-                    password: this.adminForm.password,
-                });
-                if (error) this.notify(error.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+        // --- AUTH & SESSION ---
+
+        // Helper to provide dependencies for auth service
+        _getAuthDeps() {
+            return {
+                state: this,
+                supabaseClient: supabaseClient,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                hasRole: (r) => this.hasRole(r),
+                validateSessionToken: (opts) => window.AIDAAuthSessionService.validateSessionToken(opts),
+                bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
+                _applyContext: (ctx) => this._applyContext(ctx)
+            };
         },
+
+        async loginAdmin() {
+            return await window.AIDAAuthSessionService.loginAdmin(this._getAuthDeps());
+        },
+
         async registerAdmin() {
-            this.loading = true;
-            try {
-                const { data: authData, error: authError } = await supabaseClient.auth.signUp({
-                    email: this.registerForm.email,
-                    password: this.registerForm.password,
-                });
-                if (authError) return this.notify(authError.message, 'error');
-                if (authData.user && !authData.session) return this.notify('Verifique seu e-mail.', 'success');
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAAuthSessionService.registerAdmin(this._getAuthDeps());
         },
 
         async completeCompanySetup() {
-             this.loading = true;
-             try {
-                 if (!this.registerForm.companyName) return this.notify('Digite o nome da empresa.', 'error');
-                 const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
-
-                 const wsId = await this.supabaseFetch('rpc/create_owner_workspace_and_profile', 'POST', {
-                        p_name: this.registerForm.companyName,
-                        p_company_code: generatedCode
-                 });
-
-                this.newCompanyCode = generatedCode;
-                this.registrationSuccess = true;
-                this.notify('Conta criada! Anote o código.', 'success');
-             } catch (err) {
-                 console.error(err);
-                 this.notify('Erro: ' + err.message, 'error');
-             } finally {
-                 this.loading = false;
-             }
+            return await window.AIDAAuthSessionService.completeCompanySetup(this._getAuthDeps());
         },
 
         async loginEmployee() {
-            this.loading = true;
-            try {
-                const data = await this.supabaseFetch('rpc/employee_login', 'POST', {
-                        p_company_code: this.loginForm.company_code,
-                        p_username: this.loginForm.username,
-                        p_password: this.loginForm.password
-                });
-
-                if (data && data.length > 0) {
-                    // New RPC returns: TABLE(token uuid, employee_json jsonb, workspace_json jsonb, must_change_password boolean)
-                    const result = data[0];
-                    const emp = result.employee_json;
-                    emp.token = result.token; // Attach Session Token
-                    emp.must_change_password = result.must_change_password; // Ensure flag is up to date
-
-                    if (emp.employee_id && !emp.id) {
-                        emp.id = emp.employee_id;
-                    }
-
-                    this.employeeSession = emp;
-                    this.user = emp;
-                    this.workspaceName = emp.workspace_name;
-                    this.companyCode = this.loginForm.company_code;
-
-                    // Apply Global Config
-                    if (emp.tracker_config) {
-                        this.trackerConfig = {
-                            ...this.trackerConfig,
-                            ...emp.tracker_config,
-                            colors: {
-                                ...this.trackerConfig.colors,
-                                ...(emp.tracker_config.colors || {})
-                            },
-                            required_ticket_fields: {
-                                ...this.trackerConfig.required_ticket_fields,
-                                ...(emp.tracker_config.required_ticket_fields || {})
-                            }
-                        };
-                    }
-
-                    // Check Must Change Password
-                    if (emp.must_change_password) {
-                        this.mustChangePassword = true;
-                        this.modals.forceChangePassword = true;
-                        // Don't load data yet, just save session so they can change password
-                        localStorage.setItem('techassist_employee', JSON.stringify(emp));
-                        return;
-                    }
-
-                    localStorage.setItem('techassist_employee', JSON.stringify(emp));
-                    this.notify('Bem-vindo, ' + emp.name, 'success');
-                    await this.fetchEmployees();
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    this.fetchGlobalLogs();
-
-                    if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
-                        this.view = 'tech_orders';
-                    }
-
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'login_employee' });
-                } else {
-                     this.notify('Credenciais inválidas.', 'error');
-                }
-            } catch(err) {
-                 console.error(err);
-                 this.notify('Falha no login: ' + err.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAAuthSessionService.loginEmployee(this._getAuthDeps());
         },
 
         async logout() {
-            this.loading = true;
-
-            // Logout from Employee Session (Server-side)
-            if (this.employeeSession && this.employeeSession.token) {
-                try {
-                    await this.supabaseFetch('rpc/employee_logout', 'POST', { p_token: this.employeeSession.token });
-                } catch (e) { console.warn("Logout RPC warning:", e); }
-            }
-
-            try { if (this.session) await supabaseClient.auth.signOut(); } catch (e) {}
-            this.employeeSession = null;
-            this.user = null;
-            this.session = null;
-            this.notificationsList = [];
-            localStorage.removeItem('techassist_employee');
-            this.view = 'dashboard';
-            this.loading = false;
-            window.location.reload();
+            return await window.AIDAAuthSessionService.logout(this._getAuthDeps());
         },
+
         async loadAdminData() {
-            if (!this.session) return;
-            const user = this.session.user;
-            const key = user.id;
-
-            if (this.loadedToken === key) {
-                console.log('[Auth] Skipping loadAdminData - already loaded for', key);
-                return;
-            }
-
-            console.log('[Auth] loadAdminData start...', key);
-
-            try {
-                // Modified select to include tracker_config
-                const profileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number,tracker_config)&id=eq.${user.id}`);
-                let profile = profileData && profileData.length > 0 ? profileData[0] : null;
-
-                if (!profile) {
-                    const wsData = await this.supabaseFetch(`workspaces?select=id,name,company_code,whatsapp_number&owner_id=eq.${user.id}`);
-                    const workspace = wsData && wsData.length > 0 ? wsData[0] : null;
-
-                    if (workspace) {
-                        await this.supabaseFetch('profiles', 'POST', { id: user.id, workspace_id: workspace.id, role: 'admin' });
-                        const newProfileData = await this.supabaseFetch(`profiles?select=*,workspaces(name,company_code,whatsapp_number,tracker_config)&id=eq.${user.id}`);
-                        profile = newProfileData[0];
-                    } else {
-                        this.view = 'setup_required';
-                        return;
-                    }
-                }
-
-                if (profile) {
-                    this.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
-                    this.workspaceName = profile.workspaces?.name;
-                    this.companyCode = profile.workspaces?.company_code;
-                    this.whatsappNumber = profile.workspaces?.whatsapp_number || '';
-
-                    // Populate Tracker Config
-                    if (profile.workspaces?.tracker_config) {
-                        // Merge with defaults to ensure all fields exist
-                        this.trackerConfig = {
-                            ...this.trackerConfig,
-                            ...profile.workspaces.tracker_config,
-                            colors: {
-                                ...this.trackerConfig.colors,
-                                ...(profile.workspaces.tracker_config.colors || {})
-                            },
-                            required_ticket_fields: {
-                                ...this.trackerConfig.required_ticket_fields,
-                                ...(profile.workspaces.tracker_config.required_ticket_fields || {})
-                            }
-                        };
-                    }
-
-                    await this.fetchEmployees();
-                    this.initTechFilter();
-                    await this.fetchTickets();
-                    await this.fetchTemplates();
-                    await this.fetchDeviceModels();
-                    await this.fetchDefectOptions();
-                    await this.fetchOutsourcedCompanies();
-                    this.fetchGlobalLogs();
-                    this.setupRealtime();
-                    if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'load_admin' });
-
-                    this.loadedToken = key;
-                }
-            } catch (err) {
-                console.error("Load Admin Error:", err);
-            }
+            return await window.AIDAAuthSessionService.loadAdminData(this._getAuthDeps());
         },
         async fetchEmployees() {
-            if (!this.user?.workspace_id) return;
-            try {
-                let data;
-                if (this.session) {
-                     data = await this.supabaseFetch(`employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
-                } else {
-                     data = await this.supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: this.user.workspace_id });
-                }
-                if (data) this.employees = data;
-            } catch (e) {
-                 console.error("Fetch Employees Error:", e);
-            }
+            return await window.AIDAEmployeeService.fetchEmployees({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         // --- COMPANY CONFIG ---
         async saveCompanyConfig() {
-            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
-            this.loading = true;
-            try {
-                await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
-                    whatsapp_number: this.whatsappNumber
-                });
-                this.notify("Configurações salvas!");
-            } catch (e) {
-                this.notify("Erro ao salvar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAWorkspaceConfigService.saveCompanyConfig({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; }
+            });
         },
 
         // --- TRACKER CONFIG ACTIONS (NEW) ---
         async saveTrackerConfig() {
-            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
-            this.loading = true;
-            try {
-                const res = await this.supabaseFetch(`workspaces?id=eq.${this.user.workspace_id}`, 'PATCH', {
-                    tracker_config: this.trackerConfig
-                });
-
-                // Check if update actually happened
-                if (Array.isArray(res) && res.length === 0) {
-                    throw new Error("Permissão negada ou workspace não encontrado.");
-                }
-
-                if (this.view === 'management_settings') {
-                    this.notify("Configurações de Gerenciamento salvas!");
-                } else {
-                    this.notify("Configurações de Acompanhamento salvas!");
-                }
-
-                // Refresh data to apply new flow rules (e.g. Tech Bench tickets)
-                await this.fetchTickets();
-            } catch (e) {
-                this.notify("Erro ao salvar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAWorkspaceConfigService.saveTrackerConfig({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchTickets: () => this.fetchTickets()
+            });
         },
 
         async handleLogoUpload(event) {
@@ -1297,16 +1144,12 @@ function app() {
 
             this.loading = true;
             try {
-                const bucket = 'workspace_logos';
-                const path = `${this.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
-                const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
+                const publicUrl = await window.AIDAStorageService.handleLogoUpload(file, {
+                    SUPABASE_URL,
+                    SUPABASE_KEY,
+                    state: this
+                });
 
-                const headers = this.getStorageHeaders(file.type);
-                const response = await fetch(url, { method: 'POST', headers, body: file });
-                if (!response.ok) throw new Error("Falha no upload");
-
-                // Construct Public URL (bucket is public now)
-                const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
                 this.trackerConfig.logo_url = publicUrl;
                 this.notify("Logo carregado!");
             } catch(e) {
@@ -1380,83 +1223,65 @@ function app() {
 
         // --- LOGGING ---
         async logTicketAction(ticketId, action, details = null) {
-            try {
-                await this.supabaseFetch('ticket_logs', 'POST', {
-                    ticket_id: ticketId,
-                    action: action,
-                    details: details,
-                    user_name: this.user.name
-                });
-                if (this.view === 'dashboard') this.fetchGlobalLogs();
-            } catch (e) {
-                console.error("Log failed:", e);
-            }
+            return await window.AIDALogsNotificationsService.logTicketAction(ticketId, action, details, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                fetchGlobalLogs: () => this.fetchGlobalLogs()
+            });
         },
 
         async fetchTicketLogs(ticketId) {
-            if (!this.hasRole('admin')) return [];
-            try {
-                const logs = await this.supabaseFetch(`ticket_logs?ticket_id=eq.${ticketId}&order=created_at.desc`);
-                return logs || [];
-            } catch (e) {
-                console.error("Fetch logs failed:", e);
-                return [];
-            }
+            return await window.AIDALogsNotificationsService.fetchTicketLogs(ticketId, {
+                hasRole: (r) => this.hasRole(r),
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async fetchGlobalLogs() {
-            if (!this.user?.workspace_id) return;
+            if (this.globalLogsInFlight) return;
+            this.globalLogsInFlight = true;
             try {
-                const logs = await this.supabaseFetch(`ticket_logs?select=*,tickets(os_number,client_name,device_model)&order=created_at.desc&limit=10`);
-                this.dashboardLogs = logs || [];
-            } catch (e) {
-                console.error("Fetch global logs failed:", e);
+                return await window.AIDALogsNotificationsService.fetchGlobalLogs({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
+            } finally {
+                this.globalLogsInFlight = false;
             }
         },
 
         // --- NOTIFICATIONS ---
         async fetchNotifications() {
-            if (!this.user) return;
+            if (this.notificationsInFlight) return;
+            this.notificationsInFlight = true;
             try {
-                let query = `notifications?select=*,tickets(os_number,device_model)&order=created_at.desc&limit=50`;
-                const data = await this.supabaseFetch(query);
-
-                if (data) {
-                    const myRoles = this.user.roles || [];
-                    const userId = this.user.id;
-
-                    this.notificationsList = data.filter(n => {
-                        if (n.recipient_user_id) return n.recipient_user_id === userId;
-                        if (n.recipient_role) return myRoles.includes(n.recipient_role);
-                        return false;
-                    });
-                }
-            } catch(e) {
-                console.error("Fetch Notif Error:", e);
+                return await window.AIDALogsNotificationsService.fetchNotifications({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
+            } finally {
+                this.notificationsInFlight = false;
             }
         },
 
         async createNotification(data) {
-            try {
-                await this.supabaseFetch('notifications', 'POST', data);
-            } catch(e) { console.error("Create Notif Error:", e); }
+            return await window.AIDALogsNotificationsService.createNotification(data, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async markNotificationRead(id) {
-            try {
-                const n = this.notificationsList.find(x => x.id === id);
-                if (n) n.is_read = true;
-
-                await this.supabaseFetch(`notifications?id=eq.${id}`, 'PATCH', { is_read: true, read_at: new Date().toISOString() });
-            } catch(e) { console.error(e); }
+            return await window.AIDALogsNotificationsService.markNotificationRead(id, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async markAllRead() {
-            const unreadIds = this.notificationsList.filter(n => !n.is_read).map(n => n.id);
-            if (unreadIds.length === 0) return;
-
-            this.notificationsList.forEach(n => n.is_read = true);
-            await this.supabaseFetch(`notifications?id=in.(${unreadIds.join(',')})`, 'PATCH', { is_read: true, read_at: new Date().toISOString() });
+            return await window.AIDALogsNotificationsService.markAllRead({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async checkTimeBasedAlerts() {
@@ -1489,7 +1314,7 @@ function app() {
             }
         },
 
-        // --- TICKET LOGIC ---
+        // --- 5. POLÍTICA DE REFRESH VIA REALTIME ---
 
         isRelevantUpdate(payload) {
             if (!payload) return false;
@@ -1560,32 +1385,31 @@ function app() {
                 }
             }
 
-            // 3. Debounced List Refresh (Keep debounce for LIST only to avoid flicker)
-            if (this.realtimeDebounceTimer) clearTimeout(this.realtimeDebounceTimer);
-
-            this.realtimeDebounceTimer = setTimeout(async () => {
-                // List Refresh Strategy
-                if (payload.eventType === 'INSERT') {
-                    if (this.ticketPagination.page === 0) {
-                        await this.fetchTickets();
+            // 3. In-Memory List Refresh Strategy (Avoid expensive fetchTickets calls)
+            if (payload.eventType === 'INSERT' && payload.new) {
+                // Prevent duplicates
+                if (!this.tickets.some(t => t.id === payload.new.id)) {
+                    // Only add to the beginning if we are on the first page or Kanban (no pagination limit visually yet)
+                    if (this.ticketPagination.page === 0 || this.view === 'kanban') {
+                        this.tickets.unshift(payload.new);
                     } else {
                         this.notify("Novos chamados disponíveis.", "info");
                     }
-                } else if (payload.eventType === 'UPDATE') {
-                    if (this.ticketPagination.page === 0) {
-                        await this.fetchTickets();
-                    } else {
-                        const idx = this.tickets.findIndex(t => t.id === payload.new.id);
-                        if (idx > -1) {
-                            if (payload.new.deleted_at) {
-                                this.tickets.splice(idx, 1);
-                            } else {
-                                this.tickets[idx] = { ...this.tickets[idx], ...payload.new };
-                            }
-                        }
-                    }
                 }
-            }, 2000);
+            } else if (payload.eventType === 'UPDATE' && payload.new) {
+                const idx = this.tickets.findIndex(t => t.id === payload.new.id);
+                if (idx > -1) {
+                    if (payload.new.deleted_at) {
+                        this.tickets.splice(idx, 1); // Remove if logically deleted
+                    } else {
+                        this.tickets[idx] = { ...this.tickets[idx], ...payload.new }; // Update local state directly
+                    }
+                } else if (!payload.new.deleted_at && (this.ticketPagination.page === 0 || this.view === 'kanban')) {
+                    // If it was updated but we didn't have it locally (e.g. moved into our filter view scope)
+                    // we push it to ensure it appears. For perfect sorting, a fetch is ideal, but unshift is safe for RT.
+                    this.tickets.unshift(payload.new);
+                }
+            }
         },
 
         handleSearchInput() {
@@ -1608,9 +1432,10 @@ function app() {
             this.finalizedPage++;
 
             try {
-                const offset = this.finalizedPage * this.finalizedLimit;
-                const endpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=not.is.null&order=delivered_at.desc&limit=${this.finalizedLimit}&offset=${offset}`;
-                const data = await this.supabaseFetch(endpoint);
+                const data = await window.AIDATicketQueryService.fetchFinalizedTicketsData({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                });
 
                 if (data) {
                     if (data.length < this.finalizedLimit) this.finalizedHasMore = false;
@@ -1625,14 +1450,10 @@ function app() {
         },
 
         async fetchFornecedores() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`fornecedores?select=*&workspace_id=eq.${this.user.workspace_id}&order=razao_social.asc`);
-                if (data) this.fornecedores = data;
-            } catch (error) {
-                console.error('Erro ao buscar fornecedores:', error);
-                alert('Erro ao carregar fornecedores: ' + error.message);
-            }
+            return await window.AIDACatalogService.fetchFornecedores({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         openFornecedorModal(fornecedor = null) {
@@ -1645,49 +1466,31 @@ function app() {
         },
 
         async saveFornecedor() {
-            this.loading = true;
-            try {
-                if (this.fornecedorForm.id) {
-                    await this.supabaseFetch(`fornecedores?id=eq.${this.fornecedorForm.id}`, 'PATCH', {
-                        razao_social: this.fornecedorForm.razao_social,
-                        cnpj: this.fornecedorForm.cnpj,
-                        fornece: this.fornecedorForm.fornece,
-                        whatsapp: this.fornecedorForm.whatsapp,
-                        updated_at: new Date().toISOString()
-                    });
-                } else {
-                    if (!this.user?.workspace_id) throw new Error("Workspace ID não encontrado.");
-                    await this.supabaseFetch('fornecedores', 'POST', {
-                        workspace_id: this.user.workspace_id,
-                        razao_social: this.fornecedorForm.razao_social,
-                        cnpj: this.fornecedorForm.cnpj,
-                        fornece: this.fornecedorForm.fornece,
-                        whatsapp: this.fornecedorForm.whatsapp
-                    });
-                }
-                this.modals.fornecedor = false;
-                await this.fetchFornecedores();
-            } catch (error) {
-                console.error('Erro ao salvar fornecedor:', error);
-                alert('Erro ao salvar fornecedor: ' + error.message);
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDACatalogService.saveFornecedor({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchFornecedores: () => this.fetchFornecedores(),
+                setLoading: (val) => { this.loading = val; },
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         async deleteFornecedor(id) {
-            if (!confirm('Tem certeza que deseja excluir este fornecedor?')) return;
-            try {
-                await this.supabaseFetch(`fornecedores?id=eq.${id}`, 'DELETE');
-                await this.fetchFornecedores();
-            } catch (error) {
-                console.error('Erro ao excluir fornecedor:', error);
-                alert('Erro ao excluir fornecedor: ' + error.message);
-            }
+            return await window.AIDACatalogService.deleteFornecedor(id, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                fetchFornecedores: () => this.fetchFornecedores()
+            });
         },
 
         async fetchTickets(loadMore = false) {
             if (!this.user?.workspace_id) return;
+
+            // Guard: Prevent concurrent fetches (unless forced by loadMore)
+            if (this.ticketPagination.isLoading) {
+                console.log("[FetchTickets] Blocked by isLoading guard");
+                return;
+            }
 
             this.ticketPagination.isLoading = true;
 
@@ -1696,91 +1499,26 @@ function app() {
             } else {
                 this.ticketPagination.page = 0;
                 this.ticketPagination.hasMore = true;
-                if (!loadMore) this.tickets = [];
+                // Preserve UI smoothly until response arrives if not paginating
             }
 
             try {
-                // Base Endpoint with Workspace Filter
-                let endpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null`;
+                const result = await window.AIDATicketQueryService.fetchTicketsData({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                    hasRole: (r) => this.hasRole(r)
+                }, loadMore);
 
-                // SEARCH
-                if (this.searchQuery) {
-                    const q = this.searchQuery;
-                    const qSafe = encodeURIComponent(`*${q}*`);
-                    endpoint += `&or=(client_name.ilike.${qSafe},os_number.ilike.${qSafe},device_model.ilike.${qSafe},serial_number.ilike.${qSafe},contact_info.ilike.${qSafe})`;
-                }
-
-                // VIEW SPECIFIC LOGIC
-                if (this.view === 'kanban' && !this.searchQuery) {
-                    // KANBAN SPLIT FETCHING
-                    // 1. Active Tickets (Always fetch up to 200)
-                    const activeEndpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=is.null&order=created_at.desc&limit=200`;
-                    const activePromise = this.supabaseFetch(activeEndpoint);
-
-                    // 2. Finalized Tickets (If enabled)
-                    let finalizedPromise = Promise.resolve([]);
-                    if (this.showFinalized) {
-                        // Fetch ALL currently loaded finalized tickets to maintain state on refresh
-                        const totalLimit = (this.finalizedPage + 1) * this.finalizedLimit;
-                        const finalEndpoint = `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null&delivered_at=not.is.null&order=delivered_at.desc&limit=${totalLimit}`;
-                        finalizedPromise = this.supabaseFetch(finalEndpoint);
+                if (result.mode === 'kanban') {
+                    if (this.showFinalized && result.finalizedHasMore !== null) {
+                        this.finalizedHasMore = result.finalizedHasMore;
                     }
-
-                    const [activeData, finalizedData] = await Promise.all([activePromise, finalizedPromise]);
-
-                    if (this.showFinalized) {
-                        this.finalizedHasMore = (finalizedData && finalizedData.length === this.finalizedLimit);
-                    }
-
-                    // 3. Combine Logic
-                    // If loading more finalized, we append to existing finalized
-                    // But fetchTickets usually resets.
-                    // However, for simplicity here we assume fetchTickets is a full reload of active + current page of finalized?
-                    // Wait, if I load page 1 (50-100), I need page 0 (0-50) too if I just reset this.tickets.
-                    // But if I clicked "Load More", I called loadMoreFinalized(), not fetchTickets().
-                    // So fetchTickets() is for INIT/REFRESH.
-                    // So we just set tickets.
-                    this.tickets = [...(activeData || []), ...(finalizedData || [])];
-
-                    // Check if we reached the end (for pagination)
-                    // For Kanban we don't use standard pagination flags
-                    await this.fetchOperationalAlerts(); // Ensure alerts are fresh
+                    this.tickets = result.data;
                     this.ticketPagination.isLoading = false;
-                    return; // EXIT HERE for Kanban
-
-                } else if (this.view === 'tech_orders') {
-                    // Tech View
-                    if (this.hasRole('admin')) {
-                        const techId = this.adminDashboardFilters.technician;
-                        if (techId && techId !== 'all') {
-                            endpoint += `&technician_id=eq.${techId}`;
-                        }
-                    } else if (this.user?.id) {
-                         endpoint += `&or=(technician_id.eq.${this.user.id},technician_id.is.null)`;
-                    }
-                    endpoint += `&status=in.(Analise Tecnica,Andamento Reparo)`;
-                    endpoint += `&order=created_at.asc`;
-                } else {
-                    // Dashboard/History/List: Apply Filters & Pagination
-                    const f = this.adminDashboardFilters;
-
-                    if (f.dateStart) endpoint += `&created_at=gte.${f.dateStart}T00:00:00`;
-                    if (f.dateEnd) endpoint += `&created_at=lte.${f.dateEnd}T23:59:59`;
-                    if (f.technician !== 'all') endpoint += `&technician_id=eq.${f.technician}`;
-                    if (f.status !== 'all') endpoint += `&status=eq.${f.status}`;
-                    if (f.defect !== 'all') endpoint += `&defect_reported=ilike.*${encodeURIComponent(f.defect)}*`;
-                    if (f.deviceModel !== 'all') endpoint += `&device_model=eq.${encodeURIComponent(f.deviceModel)}`;
-
-                    endpoint += `&order=created_at.desc`;
-
-                    // PAGINATION
-                    const limit = this.ticketPagination.limit;
-                    const offset = this.ticketPagination.page * limit;
-                    endpoint += `&limit=${limit}&offset=${offset}`;
+                    return;
                 }
 
-                const data = await this.supabaseFetch(endpoint);
-
+                const data = result.data;
                 if (data) {
                     if (loadMore) {
                         this.tickets = [...this.tickets, ...data];
@@ -1788,7 +1526,6 @@ function app() {
                         this.tickets = data;
                     }
 
-                    // Check if we reached the end (for pagination)
                     if (data.length < this.ticketPagination.limit) {
                         this.ticketPagination.hasMore = false;
                     }
@@ -1796,21 +1533,15 @@ function app() {
                     // POPULATE TECH TICKETS (Client Side Filter for safety/convenience)
                     if (this.view === 'tech_orders') {
                         this.techTickets = this.tickets.sort((a, b) => {
-                            // 1. Priority Requested (Always Top)
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
-
-                            // 2. Deadline (Sooner first)
                             const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
                             const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
                             if (dA !== dB) return dA - dB;
-
-                            // 3. Priority Level (Tie-breaker)
                             const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                             return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
                         });
                     } else {
-                        // For other views, we maintain client-side derivation for consistency
                         let relevantTickets = this.tickets;
                         const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
                         if (isTechOnly && this.user) {
@@ -1820,23 +1551,14 @@ function app() {
                         this.techTickets = relevantTickets.filter(t =>
                             ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
                         ).sort((a, b) => {
-                            // 1. Priority Requested (Always Top)
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
-
-                            // 2. Deadline (Sooner first)
                             const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
                             const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
                             if (dA !== dB) return dA - dB;
-
-                            // 3. Priority Level (Tie-breaker)
                             const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                             return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
                         });
-                    }
-
-                    if (!loadMore) {
-                        await this.fetchOperationalAlerts();
                     }
                 }
             } catch (err) {
@@ -1848,146 +1570,85 @@ function app() {
         },
 
         async fetchTemplates() {
-             if (!this.user?.workspace_id) return;
-             try {
-                 const data = await this.supabaseFetch('checklist_templates?select=*');
-                 if (data) {
-                     this.checklistTemplates = data;
-                     this.checklistTemplatesEntry = data.filter(t => !t.type || t.type === 'entry');
-                     this.checklistTemplatesFinal = data.filter(t => t.type === 'final');
-                 }
-             } catch (e) {
-                 console.error("Fetch Templates Error:", e);
-             }
+            return await window.AIDACatalogService.fetchTemplates({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         // --- DEVICE MODELS ---
         async fetchDeviceModels() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`device_models?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) this.deviceModels = data;
-            } catch(e) {
-                console.error("Fetch Models Error:", e);
-            }
+            return await window.AIDACatalogService.fetchDeviceModels({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
+
         async fetchDefectOptions() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`defect_options?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) this.defectOptions = data;
-            } catch(e) {
-                console.error("Fetch Defect Options Error:", e);
-            }
+            return await window.AIDACatalogService.fetchDefectOptions({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async fetchOutsourcedCompanies() {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(`outsourced_companies?select=*&workspace_id=eq.${this.user.workspace_id}&order=name.asc`);
-                if (data) this.outsourcedCompanies = data;
-            } catch(e) {
-                console.error("Fetch Outsourced Companies Error:", e);
-            }
+            return await window.AIDACatalogService.fetchOutsourcedCompanies({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async createOutsourcedCompany(name, phone) {
-            if (!name || !name.trim()) return;
-            if (!this.user?.workspace_id) return;
-
-            try {
-                await this.supabaseFetch('outsourced_companies', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: name.trim(),
-                    phone: phone ? phone.trim() : null
-                });
-                await this.fetchOutsourcedCompanies();
-                this.notify("Empresa parceira cadastrada!", "success");
-            } catch(e) {
-                this.notify("Erro ao cadastrar: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.createOutsourcedCompany(name, phone, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchOutsourcedCompanies: () => this.fetchOutsourcedCompanies()
+            });
         },
 
         async deleteOutsourcedCompany(id) {
-            if (!confirm("Excluir esta empresa parceira?")) return;
-            try {
-                await this.supabaseFetch(`outsourced_companies?id=eq.${id}`, 'DELETE');
-                this.notify("Empresa excluída.");
-                await this.fetchOutsourcedCompanies();
-            } catch(e) {
-                this.notify("Erro ao excluir: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteOutsourcedCompany(id, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchOutsourcedCompanies: () => this.fetchOutsourcedCompanies()
+            });
         },
 
         async createDeviceModel(name) {
-            if (!name || !name.trim()) return;
-            if (!this.user?.workspace_id) return;
-
-            if (this.deviceModels.some(m => m.name.toLowerCase() === name.trim().toLowerCase())) {
-                return this.notify("Modelo já existe.", "error");
-            }
-
-            try {
-                await this.supabaseFetch('device_models', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: name.trim()
-                });
-                await this.fetchDeviceModels();
-                this.notify("Modelo cadastrado!", "success");
-                return true;
-            } catch(e) {
-                this.notify("Erro ao salvar modelo: " + e.message, "error");
-                return false;
-            }
+            return await window.AIDACatalogService.createDeviceModel(name, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchDeviceModels: () => this.fetchDeviceModels()
+            });
         },
+
         async createDefectOption(name) {
-            if (!name || !name.trim()) return false;
-            if (!this.user?.workspace_id) return false;
-
-            const trimmed = name.trim();
-            if (this.defectOptions.some(option => option.name.toLowerCase() === trimmed.toLowerCase())) {
-                this.notify("Defeito já cadastrado.", "error");
-                return false;
-            }
-
-            try {
-                await this.supabaseFetch('defect_options', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: trimmed
-                });
-                this.notify("Defeito cadastrado!", "success");
-                await this.fetchDefectOptions();
-                return true;
-            } catch(e) {
-                this.notify("Erro ao salvar defeito: " + e.message, "error");
-                return false;
-            }
+            return await window.AIDACatalogService.createDefectOption(name, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchDefectOptions: () => this.fetchDefectOptions()
+            });
         },
 
         async deleteDeviceModel(id) {
-            if (!confirm("Excluir este modelo da lista?")) return;
-            try {
-                await this.supabaseFetch(`device_models?id=eq.${id}`, 'DELETE');
-                this.notify("Modelo excluído.");
-                await this.fetchDeviceModels();
-                if (this.ticketForm.model && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
-                    this.ticketForm.model = '';
-                }
-            } catch(e) {
-                this.notify("Erro ao excluir: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteDeviceModel(id, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchDeviceModels: () => this.fetchDeviceModels()
+            });
         },
+
         async deleteDefectOption(id) {
-            if (!confirm("Excluir este defeito da lista?")) return;
-            try {
-                await this.supabaseFetch(`defect_options?id=eq.${id}`, 'DELETE');
-                this.notify("Defeito excluído.");
-                await this.fetchDefectOptions();
-                const available = new Set(this.defectOptions.map(option => option.name));
-                this.ticketForm.defects = (this.ticketForm.defects || []).filter(defect => available.has(defect));
-            } catch(e) {
-                this.notify("Erro ao excluir: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteDefectOption(id, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchDefectOptions: () => this.fetchDefectOptions()
+            });
         },
 
         openNewTicketModal() {
@@ -2013,38 +1674,21 @@ function app() {
             this.ticketForm.checklist.splice(index, 1);
         },
         async saveTemplate() {
-            if (!this.newTemplateName) return this.notify("Nomeie o modelo", "error");
-            if (this.ticketForm.checklist.length === 0) return this.notify("Adicione itens", "error");
-
-            try {
-                await this.supabaseFetch('checklist_templates', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: this.newTemplateName,
-                    items: this.ticketForm.checklist.map(i => i.item),
-                    type: 'entry'
-                });
-
-                this.notify("Modelo salvo!");
-                this.newTemplateName = '';
-                this.fetchTemplates();
-            } catch (error) {
-                this.notify("Erro ao salvar: " + error.message, "error");
-            }
+            return await window.AIDACatalogService.saveTemplate({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
         },
 
         async deleteTemplate() {
-            if (!this.selectedTemplateId) return;
-            if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
-
-            try {
-                await this.supabaseFetch(`checklist_templates?id=eq.${this.selectedTemplateId}`, 'DELETE');
-
-                this.notify("Modelo excluído.");
-                this.selectedTemplateId = '';
-                this.fetchTemplates();
-            } catch (e) {
-                this.notify("Erro ao excluir: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteTemplate({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
         },
 
         loadTemplate() {
@@ -2063,35 +1707,21 @@ function app() {
             this.ticketForm.checklist_final.splice(index, 1);
         },
         async saveTemplateFinal() {
-            if (!this.newTemplateNameFinal) return this.notify("Nomeie o modelo final", "error");
-            if (this.ticketForm.checklist_final.length === 0) return this.notify("Adicione itens", "error");
-
-            try {
-                await this.supabaseFetch('checklist_templates', 'POST', {
-                    workspace_id: this.user.workspace_id,
-                    name: this.newTemplateNameFinal,
-                    items: this.ticketForm.checklist_final.map(i => i.item),
-                    type: 'final'
-                });
-
-                this.notify("Modelo final salvo!");
-                this.newTemplateNameFinal = '';
-                this.fetchTemplates();
-            } catch (error) {
-                this.notify("Erro ao salvar: " + error.message, "error");
-            }
+            return await window.AIDACatalogService.saveTemplateFinal({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
         },
+
         async deleteTemplateFinal() {
-            if (!this.selectedTemplateIdFinal) return;
-            if (!confirm("Tem certeza que deseja excluir este modelo?")) return;
-            try {
-                await this.supabaseFetch(`checklist_templates?id=eq.${this.selectedTemplateIdFinal}`, 'DELETE');
-                this.notify("Modelo excluído.");
-                this.selectedTemplateIdFinal = '';
-                this.fetchTemplates();
-            } catch (e) {
-                this.notify("Erro: " + e.message, "error");
-            }
+            return await window.AIDACatalogService.deleteTemplateFinal({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
         },
         loadTemplateFinal() {
             const tmpl = this.checklistTemplates.find(t => t.id === this.selectedTemplateIdFinal);
@@ -2099,12 +1729,7 @@ function app() {
         },
 
         isFieldRequired(key) {
-            if (!this.isRequiredFieldsEnabled()) {
-                // Default legacy requirements (Updated to include Deadlines)
-                const defaults = ['client_name', 'os_number', 'device_model', 'defect_reported', 'responsible', 'analysis_deadline', 'deadline'];
-                return defaults.includes(key);
-            }
-            return !!this.trackerConfig?.required_ticket_fields?.[key];
+            return window.AIDAConfigHelpers.isFieldRequired(this.trackerConfig, key);
         },
 
         validateTicketRequirements(ticketData) {
@@ -2162,84 +1787,10 @@ function app() {
             };
         },
 
-        async createTicket() {
-             // Basic Integrity Checks
-             if (this.deviceModels && this.deviceModels.length > 0 && !this.deviceModels.find(m => m.name === this.ticketForm.model)) {
-                 return this.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
-             }
-
-             if (this.ticketForm.deadline && this.ticketForm.analysis_deadline) {
-                 const deadline = new Date(this.ticketForm.deadline);
-                 const analysis = new Date(this.ticketForm.analysis_deadline);
-                 if (analysis > deadline) {
-                     return this.notify("O Prazo de Análise não pode ser maior que o Prazo de Entrega.", "error");
-                 }
-             }
-
-             this.loading = true;
-
-             try {
-                 let techId = this.ticketForm.technician_id;
-                 if (techId === 'all') techId = null;
-
-                 const isOsAuto = this.isAutoOSGenerationEnabled();
-
-                 const ticketData = {
-                     id: this.ticketForm.id,
-                     workspace_id: this.user.workspace_id,
-                    client_name: this.ticketForm.client_name,
-                    os_number: isOsAuto ? null : this.ticketForm.os_number, // Send null if auto
-                    device_model: this.ticketForm.model,
-                    serial_number: this.ticketForm.serial,
-                    defect_reported: this.ticketForm.defects.length ? this.ticketForm.defects.join(', ') : null,
-                    priority: this.ticketForm.priority,
-                    contact_info: this.ticketForm.contact,
-                     deadline: this.toUTC(this.ticketForm.deadline) || null,
-                     analysis_deadline: this.toUTC(this.ticketForm.analysis_deadline) || null,
-                     device_condition: this.ticketForm.device_condition,
-                     technician_id: this.ticketForm.is_outsourced ? null : techId,
-                     is_outsourced: this.ticketForm.is_outsourced,
-                     outsourced_company_id: (this.ticketForm.is_outsourced && this.ticketForm.outsourced_company_id && this.ticketForm.outsourced_company_id !== '') ? this.ticketForm.outsourced_company_id : null,
-                     checklist_data: this.ticketForm.checklist,
-                     checklist_final_data: this.ticketForm.checklist_final,
-                     photos_urls: this.ticketForm.photos,
-                     status: 'Aberto',
-                     created_by_name: this.user.name
-                 };
-
-                 // Configurable Validation
-                 const validation = this.validateTicketRequirements(ticketData);
-                 if (!validation.valid) {
-                     this.loading = false;
-                     return this.notify("Preencha os campos obrigatórios: " + validation.missing.join(', '), "error");
-                 }
-
-                 const createdData = await this.supabaseFetch('tickets', 'POST', ticketData);
-                 let createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
-
-                 // Ensure we have the public_token (if backend generated it and frontend didn't get it back fully populated)
-                 if (!createdTicket.public_token) {
-                     const fresh = await this.supabaseFetch(`tickets?id=eq.${createdTicket.id}&select=*`);
-                     if (fresh && fresh.length > 0) createdTicket = fresh[0];
-                 }
-
-                 const ctx = this.getLogContext(createdTicket);
-                 await this.logTicketAction(createdTicket.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
-
-                 this.notify("Chamado criado!");
-                 this.modals.ticket = false;
-                 await this.fetchTickets();
-             } catch (err) {
-                 this.notify("Erro ao criar: " + err.message, "error");
-             } finally {
-                 this.loading = false;
-             }
-        },
-
         viewTicketDetails(ticket) {
-            // Establish Secure Context
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'viewTicket', ticketId: ticket.id };
+            // Establish Secure Context via Module
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'viewTicket');
+            this._applyContext(newContext);
             this.selectedTicket = ticket;
 
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
@@ -2277,91 +1828,15 @@ function app() {
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
         },
 
-        async saveDeadlines() {
-            const ticket = this.resolveTicket();
-            if (!ticket) return;
-
-            if (this.editDeadlineForm.deadline && this.editDeadlineForm.analysis_deadline) {
-                const deadline = new Date(this.editDeadlineForm.deadline);
-                const analysis = new Date(this.editDeadlineForm.analysis_deadline);
-                if (analysis > deadline) {
-                    return this.notify("O Prazo de Análise não pode ser maior que o Prazo de Entrega.", "error");
-                }
-            }
-
-            const oldDeadline = ticket.deadline ? new Date(ticket.deadline).toLocaleString() : 'Não definido';
-            const newDeadline = this.editDeadlineForm.deadline ? new Date(this.editDeadlineForm.deadline).toLocaleString() : 'Não definido';
-
-            const oldAnalysis = ticket.analysis_deadline ? new Date(ticket.analysis_deadline).toLocaleString() : 'Não definido';
-            const newAnalysis = this.editDeadlineForm.analysis_deadline ? new Date(this.editDeadlineForm.analysis_deadline).toLocaleString() : 'Não definido';
-
-            const ctx = this.getLogContext(ticket);
-            let actionDetails = [];
-            if (oldDeadline !== newDeadline) {
-                actionDetails.push(`de ${oldDeadline} para ${newDeadline} (Prazo)`);
-            }
-            if (oldAnalysis !== newAnalysis) {
-                actionDetails.push(`de ${oldAnalysis} para ${newAnalysis} (Análise)`);
-            }
-
-            const actionLog = actionDetails.length > 0 ? {
-                action: 'Alterou Prazo',
-                details: `${this.user.name} alterou prazos do ${ctx.device} de ${ctx.client}: ${actionDetails.join(', ')}`
-            } : null;
-
-            const updates = {
-                deadline: this.toUTC(this.editDeadlineForm.deadline) || null,
-                analysis_deadline: this.toUTC(this.editDeadlineForm.analysis_deadline) || null
-            };
-
-            const success = await this.mutateTicket(ticket, 'saveDeadlines', updates, actionLog, { showNotify: true, notifyMessage: 'Prazos atualizados!', fetchTickets: true });
-
-            if (success) {
-                this.editingDeadlines = false;
-            }
-        },
-
-        async saveTicketChanges() {
-             const ticket = this.resolveTicket();
-             if (!ticket) return;
-             await this.mutateTicket(ticket, 'saveTicketChanges', {
-                 // For editable fields that are bound to selectedTicket in UI,
-                 // we must use selectedTicket to grab the user's unsaved input.
-                 // The *target* of the mutation is the strictly resolved ticket.
-                 tech_notes: this.selectedTicket.tech_notes,
-                 parts_needed: this.selectedTicket.parts_needed,
-                 checklist_data: this.selectedTicket.checklist_data,
-                 checklist_final_data: this.selectedTicket.checklist_final_data,
-                 photos_urls: this.selectedTicket.photos_urls
-             }, null, { showNotify: true, notifyMessage: "Alterações salvas!", fetchTickets: true });
-        },
-
         async uploadTicketPhoto(file, ticketId) {
             try {
                 this.loading = true;
-
-                // 1) Path ESTRITO: workspaceId/ticketId/...
-                const workspaceId = this.employeeSession?.workspace_id || this.user?.workspace_id;
-                if (!workspaceId) throw new Error("Workspace ID not found for upload");
-
-                const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-                const path = `${workspaceId}/${ticketId}/${Date.now()}_${safeName}`;
-
-                // 2) Upload direto no Storage (sem Edge Function)
-                const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
-                const headers = this.getStorageHeaders(file.type); // já injeta x-employee-token quando existir
-
-                const res = await fetch(url, { method: 'POST', headers, body: file });
-                if (!res.ok) {
-                    const txt = await res.text().catch(() => '');
-                    throw new Error(`Falha no upload (${res.status}): ${txt}`);
-                }
-
-                // 3) Retornar APENAS o path (nunca URL pública)
-                return path;
-
+                return await window.AIDAStorageService.uploadTicketPhoto(file, ticketId, {
+                    SUPABASE_URL,
+                    SUPABASE_KEY,
+                    state: this
+                });
             } catch (e) {
-                console.error("Upload Error:", e);
                 this.notify("Erro upload: " + e.message, "error");
                 return null;
             } finally {
@@ -2371,68 +1846,11 @@ function app() {
 
         // Helper to resolve view URLs
         async getPhotoUrl(input) {
-            if (!input) return '';
-
-            let path = input;
-            console.log('[getPhotoUrl] input:', input);
-
-            // 1) Se já é signed (tem token na query), pode retornar direto
-            if (typeof path === 'string' && path.startsWith('http') && path.includes('token=')) {
-                return path;
-            }
-
-            // 2) Se veio URL pública antiga, extrai path
-            const pubMarker = '/storage/v1/object/public/ticket_photos/';
-            if (path.includes(pubMarker)) {
-                path = path.split(pubMarker)[1];
-            }
-
-            // 3) Se veio URL privada do storage (object/...), extrai path também
-            const objMarker = '/storage/v1/object/ticket_photos/';
-            if (path.includes(objMarker)) {
-                path = path.split(objMarker)[1];
-            }
-
-            // Se ainda for http e não for storage, retorna (ex: imagem externa)
-            if (path.startsWith('http')) return path;
-
-            try {
-                // Encode path components
-                const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-                const signEndpoint = `${SUPABASE_URL}/storage/v1/object/sign/ticket_photos/${encodedPath}`;
-
-                const headers = this.getStorageHeaders('application/json');
-                const res = await fetch(signEndpoint, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ expiresIn: 600 })
-                });
-
-                if (!res.ok) {
-                    const txt = await res.text().catch(() => '');
-                    console.warn('[SIGN FAIL]', res.status, txt, { input, path });
-                    return '';
-                }
-
-                const data = await res.json();
-                const signed = data?.signedURL || data?.signedUrl;
-                if (!signed) return '';
-
-                let full;
-                if (signed.startsWith('http')) {
-                    full = signed.includes('/storage/v1/') ? signed : signed.replace(`${SUPABASE_URL}/`, `${SUPABASE_URL}/storage/v1/`);
-                } else if (signed.startsWith('/')) {
-                    full = `${SUPABASE_URL}/storage/v1${signed}`;
-                } else {
-                    full = `${SUPABASE_URL}/storage/v1/${signed}`;
-                }
-
-                console.log('[getPhotoUrl] signed src:', full);
-                return full;
-            } catch (e) {
-                console.warn('Error signing URL:', e, { input, path });
-                return '';
-            }
+            return await window.AIDAStorageService.getPhotoUrl(input, {
+                SUPABASE_URL,
+                SUPABASE_KEY,
+                state: this
+            });
         },
 
         async handlePhotoUpload(event, targetList = 'new') {
@@ -2545,39 +1963,17 @@ function app() {
         // --- INTERNAL NOTES SYSTEM ---
 
         async fetchInternalNotes(ticketId) {
-            if (!this.user?.workspace_id) return;
-            try {
-                const data = await this.supabaseFetch(
-                    `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=eq.${ticketId}&order=created_at.asc`
-                );
-                this.internalNotes = data || [];
-            } catch (e) {
-                console.error("Fetch Internal Notes Error:", e);
-            }
+            return await window.AIDANotesService.fetchInternalNotes(ticketId, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async fetchGeneralNotes() {
-            if (!this.user?.workspace_id) return;
-            try {
-                let query = `internal_notes?select=*&workspace_id=eq.${this.user.workspace_id}&ticket_id=is.null&is_archived=eq.false`;
-
-                if (!this.showResolvedNotes) {
-                    query += `&is_resolved=eq.false`;
-                }
-
-                if (this.noteDateFilter) {
-                    const start = new Date(this.noteDateFilter + 'T00:00:00').toISOString();
-                    const end = new Date(this.noteDateFilter + 'T23:59:59').toISOString();
-                    query += `&created_at=gte.${start}&created_at=lte.${end}`;
-                }
-
-                query += `&order=created_at.desc`;
-
-                const data = await this.supabaseFetch(query);
-                this.generalNotes = data || [];
-            } catch (e) {
-                console.error("Fetch General Notes Error:", e);
-            }
+            return await window.AIDANotesService.fetchGeneralNotes({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         // Mention Logic
@@ -2635,54 +2031,14 @@ function app() {
         },
 
         async sendNote(ticketId = null, isGeneral = false) {
-            const text = isGeneral ? this.newGeneralNoteText : this.newNoteText;
-            const isChecklist = isGeneral ? this.generalNoteIsChecklist : this.noteIsChecklist;
-            const checklistItems = isGeneral ? this.generalNoteChecklistItems : this.noteChecklistItems;
-
-            if (!text.trim() && (!isChecklist || checklistItems.length === 0)) return;
-
-            this.loading = true;
-            try {
-                const mentionRegex = /@(\w+)/g;
-                const matches = text.match(mentionRegex) || [];
-                const mentions = matches.map(m => m.substring(1));
-
-                const cleanChecklist = checklistItems
-                    .filter(i => i.text.trim().length > 0)
-                    .map(i => ({ item: i.text, ok: i.ok }));
-
-                const payload = {
-                    workspace_id: this.user.workspace_id,
-                    ticket_id: ticketId,
-                    author_id: this.user.id,
-                    author_name: this.user.name,
-                    content: text,
-                    checklist_data: isChecklist ? cleanChecklist : [],
-                    mentions: mentions,
-                    is_resolved: false,
-                    created_at: new Date().toISOString()
-                };
-
-                await this.supabaseFetch('internal_notes', 'POST', payload);
-
-                if (isGeneral) {
-                    this.newGeneralNoteText = '';
-                    this.generalNoteIsChecklist = false;
-                    this.generalNoteChecklistItems = [];
-                    await this.fetchGeneralNotes();
-                } else {
-                    this.newNoteText = '';
-                    this.noteIsChecklist = false;
-                    this.noteChecklistItems = [];
-                    if (ticketId) await this.fetchInternalNotes(ticketId);
-                }
-                this.showMentionList = false;
-
-            } catch (e) {
-                this.notify("Erro ao enviar nota: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDANotesService.sendNote(ticketId, isGeneral, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchGeneralNotes: () => this.fetchGeneralNotes(),
+                fetchInternalNotes: (id) => this.fetchInternalNotes(id)
+            });
         },
 
         addNoteChecklistItem(isGeneral = false) {
@@ -2696,47 +2052,24 @@ function app() {
         },
 
         async toggleNoteCheckStatus(note, itemIndex) {
-            note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
-
-            try {
-                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
-                    checklist_data: note.checklist_data
-                });
-            } catch (e) {
-                console.error("Error toggling checklist:", e);
-                note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
-            }
+            return await window.AIDANotesService.toggleNoteCheckStatus(note, itemIndex, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
         },
 
         async resolveNote(note) {
-            const newStatus = !note.is_resolved;
-            note.is_resolved = newStatus;
-
-            try {
-                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
-                    is_resolved: newStatus
-                });
-            } catch (e) {
-                note.is_resolved = !newStatus;
-                this.notify("Erro ao atualizar status", "error");
-            }
+            return await window.AIDANotesService.resolveNote(note, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
+            });
         },
 
         async archiveNote(note) {
-            if (!confirm("Arquivar esta nota?")) return;
-            try {
-                await this.supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
-                    is_archived: true,
-                    archived_at: new Date().toISOString()
-                });
-                if (note.ticket_id) {
-                    this.internalNotes = this.internalNotes.filter(n => n.id !== note.id);
-                } else {
-                    this.generalNotes = this.generalNotes.filter(n => n.id !== note.id);
-                }
-            } catch (e) {
-                this.notify("Erro ao arquivar", "error");
-            }
+            return await window.AIDANotesService.archiveNote(note, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
+            });
         },
 
         // ==========================================
@@ -2748,183 +2081,189 @@ function app() {
 
         // --- 1. WORKFLOW RULES ENGINE ---
         canExecuteAction(ticket, action) {
-            if (!ticket) return false;
-
-            const isOutsourced = ticket.is_outsourced;
-            const status = ticket.status;
-
-            // Check roles
-            const isAdmin = this.hasRole('admin');
-            const isTech = this.hasRole('tecnico');
-            const isAttendant = this.hasRole('atendente');
-            const isTester = this.hasRole('tester');
-
-            switch (action) {
-                case 'createTicket':
-                    return isAdmin || isAttendant || isTech;
-                case 'startAnalysis':
-                    if (isOutsourced || status !== 'Aberto') return false;
-                    return isAdmin || isTech;
-                case 'sendToOutsourced':
-                    if (!isOutsourced || status !== 'Aberto') return false;
-                    return isAdmin || isAttendant || isTech;
-                case 'finishAnalysis':
-                    if (status !== 'Analise Tecnica' || !ticket.analysis_started_at) return false;
-                    return isAdmin || isTech;
-                case 'sendBudget':
-                    if (status !== 'Aprovacao' || ticket.budget_status === 'Enviado') return false;
-                    return isAdmin || isAttendant;
-                case 'approveRepair':
-                case 'denyRepair':
-                    if (status !== 'Aprovacao' || ticket.budget_status !== 'Enviado') return false;
-                    return isAdmin || isAttendant;
-                case 'markPurchased':
-                    if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
-                    return isAdmin || isAttendant;
-                case 'confirmReceived':
-                    if (status !== 'Compra Peca' || ticket.parts_status !== 'Comprado') return false;
-                    return isAdmin || isAttendant;
-                case 'startRepair':
-                    if (status !== 'Andamento Reparo' || ticket.repair_start_at) return false;
-                    return isAdmin || isTech;
-                case 'finishRepair':
-                    if (status !== 'Andamento Reparo' || !ticket.repair_start_at) return false;
-                    return isAdmin || isTech;
-                case 'startTest':
-                    if (status !== 'Teste Final' || ticket.test_start_at) return false;
-                    if (this.getTestFlowMode() === 'tester') return isAdmin || isTester;
-                    return isAdmin || isTech;
-                case 'concludeTest':
-                    if (status !== 'Teste Final' || !ticket.test_start_at) return false;
-                    if (this.getTestFlowMode() === 'tester') return isAdmin || isTester;
-                    return isAdmin || isTech;
-                case 'markAvailable':
-                case 'confirmLogisticsOption': // Equivalent to make available but logistics flow
-                    if (status !== 'Retirada Cliente' || ticket.pickup_available) return false;
-                    return isAdmin || isAttendant || isTech;
-                case 'markDelivered':
-                case 'confirmCarrier': // Equivalent to final mile in logistics
-                    if (status !== 'Retirada Cliente' || !ticket.pickup_available) return false;
-                    return isAdmin || isAttendant;
-                case 'receiveFromOutsourced':
-                case 'cobrarOutsourced':
-                    if (status !== 'Terceirizado') return false;
-                    return isAdmin || isAttendant || isTech;
-                case 'requestPriority':
-                    return !ticket.priority_requested;
-                case 'deleteTicket':
-                case 'restoreItem':
-                    return isAdmin;
-                case 'saveTicketChanges':
-                case 'saveDeadlines':
-                    return isAdmin || isTech || isAttendant;
-                case 'submitPurchase':
-                    if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
-                    return isAdmin || isAttendant;
-                case 'updateStatus':
-                    // Generic status update wrapper validation
-                    return isAdmin || isTech || isAttendant || isTester;
-                default:
-                    return true;
-            }
+            return window.AIDAWorkflowRules.canExecuteAction(
+                ticket,
+                action,
+                (role) => this.hasRole(role),
+                this.trackerConfig
+            );
         },
 
         // --- 2. CENTRALIZED MUTATION LAYER ---
+
+        // Helper to bundle dependencies for the mutation module
+        _getMutationDeps() {
+            return {
+                canExecuteAction: (t, a) => this.canExecuteAction(t, a),
+                setLoading: (val) => { this.loading = val; },
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                updateSelectedTicket: (id, updates) => {
+                    if (this.selectedTicket && this.selectedTicket.id === id) {
+                        this.selectedTicket = { ...this.selectedTicket, ...updates };
+                    }
+                },
+                logTicketAction: (id, act, det) => this.logTicketAction(id, act, det),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTickets: () => this.refreshPostMutation(),
+                closeViewModal: () => { this.modals.viewTicket = false; }
+            };
+        },
+
         async mutateTicket(ticket, actionName, updates = {}, actionLog = null, options = { showNotify: true, closeViewModal: false, fetchTickets: true }) {
-            // JS-Level enforcement
-            if (!this.canExecuteAction(ticket, actionName)) {
-                console.warn(`[Workflow Engine] Mutation prevented. Action '${actionName}' is not allowed on ticket ${ticket.id} (${ticket.status})`);
-                this.notify("Ação não permitida para o estado atual.", "error");
-                return false;
+            return await window.AIDATicketMutations.mutateTicket(
+                ticket,
+                actionName,
+                updates,
+                actionLog,
+                options,
+                this._getMutationDeps()
+            );
+        },
+
+        // --- 4. POLÍTICA DE REFRESH PÓS-MUTAÇÃO ---
+        async refreshPostMutation(forceListRefetch = false) {
+            // Se foi especificado um refetch forçado (ex: createTicket) OU
+            // se estivermos em uma view operacional que depende de consistência forte na UI após ações
+            // (kanban, tech_orders, tester_bench, admin_dashboard), disparamos o fetch.
+            const operationalViews = ['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'];
+            const needsFetch = forceListRefetch || operationalViews.includes(this.view);
+
+            if (needsFetch) {
+                 await this.fetchTickets();
             }
 
-            this.loading = true;
-            try {
-                // Determine payload
-                const finalUpdates = {
-                    ...updates,
-                    updated_at: new Date().toISOString()
-                };
-
-                // Send to backend
-                await this.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', finalUpdates);
-
-                // Update selectedTicket directly to avoid flashing/stale data
-                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                    this.selectedTicket = { ...this.selectedTicket, ...finalUpdates };
-                }
-
-                // Log Action
-                if (actionLog) {
-                     await this.logTicketAction(ticket.id, actionLog.action, actionLog.details);
-                }
-
-                // UI Feedback
-                if (options.showNotify) {
-                    this.notify(options.notifyMessage || "Atualizado com sucesso!");
-                }
-
-                // Refresh Lists if needed
-                if (options.fetchTickets) {
-                     await this.fetchTickets();
-                }
-
-                // Modal management
-                if (options.closeViewModal) {
-                    this.modals.viewTicket = false;
-                }
-
-                return true;
-            } catch (error) {
-                console.error("Mutation Error:", error);
-                this.notify("Erro ao atualizar: " + (error.message || error), "error");
-                return false;
-            } finally {
-                this.loading = false;
+            // Atualiza métricas ou alertas complementares dependendo da view
+            if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
+                await this.requestDashboardMetrics({ reason: 'post_mutation' });
+            } else if (this.view === 'kanban') {
+                await this.fetchOperationalAlerts();
             }
         },
 
         // --- 3. WRAPPERS & ACTIONS ---
-        async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
-            const updates = { status: newStatus, ...additionalUpdates };
-            await this.mutateTicket(ticket, 'updateStatus', updates, actionLog, { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true });
+
+        // Helper to provide comprehensive dependencies to ticket-actions module
+        _getActionDeps() {
+            return {
+                state: this, // Pass the whole Alpine component as state (read-only where possible, mutable for specific deep bindings)
+                notify: (msg, type) => this.notify(msg, type),
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                resolveTicket: (t) => this.resolveTicket(t),
+                mutateTicket: (t, act, upd, log, opts) => this.mutateTicket(t, act, upd, log, opts),
+                updateStatus: (t, st, upd, log) => this.updateStatus(t, st, upd, log),
+                logTicketAction: (id, act, det) => this.logTicketAction(id, act, det),
+                fetchTickets: (force = false) => this.refreshPostMutation(force),
+                fetchGlobalLogs: () => this.fetchGlobalLogs(),
+                fetchDeletedItems: () => this.fetchDeletedItems(),
+                fetchEmployees: () => this.fetchEmployees(),
+                getLogContext: (t) => this.getLogContext(t),
+                escapeHtml: (str) => this.escapeHtml(str),
+                toUTC: (date) => this.toUTC(date),
+                isAutoOSGenerationEnabled: () => this.isAutoOSGenerationEnabled(),
+                isWhatsAppDisabled: () => this.isWhatsAppDisabled(),
+                isLogisticsEnabled: () => this.isLogisticsEnabled(),
+                getOutsourcedCompany: (id) => this.getOutsourcedCompany(id),
+                getOutsourcedPhone: (id) => this.getOutsourcedPhone(id),
+                getTrackingLink: (t) => this.getTrackingLink(t),
+                sendTrackingWhatsApp: () => this.sendTrackingWhatsApp(),
+                sendCarrierWhatsApp: (t, c, tr) => this.sendCarrierWhatsApp(t, c, tr),
+                validateTicketRequirements: (data) => this.validateTicketRequirements(data),
+                setLoading: (val) => { this.loading = val; },
+                closeModal: (name) => { this.modals[name] = false; },
+                openLogisticsModal: (t) => this.openLogisticsModal(t),
+                setEditingDeadlines: (val) => { this.editingDeadlines = val; }
+            };
         },
 
+        async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null) {
+            return await window.AIDATicketMutations.updateStatus(
+                ticket,
+                newStatus,
+                additionalUpdates,
+                actionLog,
+                this._getMutationDeps()
+            );
+        },
+
+        // == SUBFASE 1 — FLUXO ADMINISTRATIVO BASE ==
+
+        async createTicket() {
+            return await window.AIDATicketActions.createTicket(this._getActionDeps());
+        },
+
+        async finishAnalysis(ticketOrId) {
+            return await window.AIDATicketActions.finishAnalysis(ticketOrId, this._getActionDeps());
+        },
+
+        async approveRepair(ticketOrId) {
+            return await window.AIDATicketActions.approveRepair(ticketOrId, this._getActionDeps());
+        },
+
+        async denyRepair(ticketOrId) {
+            return await window.AIDATicketActions.denyRepair(ticketOrId, this._getActionDeps());
+        },
+
+        async confirmReceived(ticketOrId) {
+            return await window.AIDATicketActions.confirmReceived(ticketOrId, this._getActionDeps());
+        },
+
+        async markDelivered(ticketOrId) {
+            return await window.AIDATicketActions.markDelivered(ticketOrId, this._getActionDeps());
+        },
+
+        async saveDeadlines() {
+            return await window.AIDATicketActions.saveDeadlines(this._getActionDeps());
+        },
+
+        async saveTicketChanges() {
+            return await window.AIDATicketActions.saveTicketChanges(this._getActionDeps());
+        },
+
+        async deleteTicket(ticketOrId) {
+            return await window.AIDATicketActions.deleteTicket(ticketOrId, this._getActionDeps());
+        },
+
+        async restoreItem(type, id) {
+            return await window.AIDATicketActions.restoreItem(type, id, this._getActionDeps());
+        },
+
+        // == FIM SUBFASE 1 ==
+
+        // == SUBFASE 2 — FLUXO TÉCNICO ==
+
         async startAnalysis(ticket) {
-            const ctx = this.getLogContext(ticket);
-            await this.updateStatus(ticket, 'Analise Tecnica', {}, {
-                action: 'Iniciou Atendimento',
-                details: `${ctx.device} de ${ctx.client} enviado para análise do técnico.`
-            });
+            return await window.AIDATicketActions.startAnalysis(ticket, this._getActionDeps());
         },
 
         async startTicketAnalysis(ticket) {
-            this.loading = true;
-            try {
-                // Call RPC
-                await this.supabaseFetch('rpc/start_ticket_analysis', 'POST', {
-                    p_ticket_id: ticket.id
-                });
-
-                // Update Local State
-                if (this.selectedTicket && this.selectedTicket.id === ticket.id) {
-                    this.selectedTicket.analysis_started_at = new Date().toISOString();
-                }
-
-                this.notify("Análise iniciada com sucesso!");
-                await this.fetchTickets();
-                if (this.view === 'dashboard') this.fetchGlobalLogs();
-
-            } catch (e) {
-                console.error("Start Analysis Error:", e);
-                this.notify("Erro ao iniciar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDATicketActions.startTicketAnalysis(ticket, this._getActionDeps());
         },
 
+        async startRepair(ticketOrId) {
+            return await window.AIDATicketActions.startRepair(ticketOrId, this._getActionDeps());
+        },
+
+        async finishRepair(success) {
+            return await window.AIDATicketActions.finishRepair(success, this._getActionDeps());
+        },
+
+        async startTest(ticketOrId) {
+            return await window.AIDATicketActions.startTest(ticketOrId, this._getActionDeps());
+        },
+
+        async concludeTest(success) {
+            return await window.AIDATicketActions.concludeTest(success, this._getActionDeps());
+        },
+
+        async requestPriority(ticketOrId) {
+            return await window.AIDATicketActions.requestPriority(ticketOrId, this._getActionDeps());
+        },
+
+        // == FIM SUBFASE 2 ==
+
         finishAnalysisFromKanban(ticket) {
-            this.activeTicketId = ticket.id;
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'finishAnalysis');
+            this._applyContext(newContext);
             this.selectedTicket = ticket;
             this.analysisForm = { needsParts: false, partsList: '' };
             this.modals.finishAnalysis = true;
@@ -2936,22 +2275,6 @@ function app() {
             }
             this.modals.finishAnalysis = false;
             await this.finishAnalysis(this.resolveTicket());
-        },
-
-        async finishAnalysis(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-
-            if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
-                return this.notify("Liste as peças necessárias.", "error");
-            }
-            const ctx = this.getLogContext(ticket);
-            await this.updateStatus(ticket, 'Aprovacao', {
-                parts_needed: this.analysisForm.partsList,
-                // Make sure to take tech_notes from selectedTicket if editing in same view,
-                // but ideally here we just use whatever ticket has
-                tech_notes: this.selectedTicket && this.selectedTicket.id === ticket.id ? this.selectedTicket.tech_notes : ticket.tech_notes
-            }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
         },
 
         openWhatsApp(phone) {
@@ -2972,55 +2295,11 @@ function app() {
             this.viewTicketDetails(ticket);
         },
 
-        async sendBudget(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const actionLog = {
-                action: 'Enviou Orçamento',
-                details: `Orçamento para o ${ctx.device} de ${ctx.client} foi enviado para o cliente.`
-            };
-
-            const updates = {
-                budget_status: 'Enviado',
-                budget_sent_at: new Date().toISOString()
-            };
-
-            const success = await this.mutateTicket(ticket, 'sendBudget', updates, actionLog, { showNotify: false, fetchTickets: true });
-
-            if (success) {
-                const link = this.getTrackingLink(ticket);
-                const msg = `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`;
-
-                let number = ticket.contact_info.replace(/\D/g, '');
-                if (number.length <= 11) number = '55' + number;
-
-                if (!this.isWhatsAppDisabled()) {
-                    window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
-                    this.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
-                } else {
-                    this.notify("Orçamento marcado como Enviado.");
-                }
-            }
-        },
-        async approveRepair(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
-            const ctx = this.getLogContext(ticket);
-            await this.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: `${ctx.client} aprovou o orçamento do ${ctx.device}.` });
-        },
-        async denyRepair(ticketOrId) {
-             const ticket = this.resolveTicket(ticketOrId);
-             if (!ticket) return;
-             const ctx = this.getLogContext(ticket);
-             await this.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: `${ctx.client} reprovou o orçamento do ${ctx.device}.` });
-        },
-
         openPurchaseModal(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'supplierPurchase');
+            this._applyContext(newContext);
             this.purchaseFlow = {
                 ticketId: ticket.id,
                 supplierId: '',
@@ -3037,213 +2316,56 @@ function app() {
             this.purchaseFlow.items.splice(index, 1);
         },
 
-        async submitPurchase() {
-            if (!this.purchaseFlow.supplierId) {
-                alert('Selecione um fornecedor.');
-                return;
-            }
-            if (this.purchaseFlow.items.length === 0 || this.purchaseFlow.items.some(i => !i.name || i.quantity < 1)) {
-                alert('Preencha os itens corretamente.');
-                return;
-            }
-
-            const ticket = this.tickets.find(t => t.id === this.purchaseFlow.ticketId);
-            const supplier = this.fornecedores.find(f => f.id === this.purchaseFlow.supplierId);
-            const ctx = this.getLogContext(ticket);
-
-            const purchaseData = {
-                supplier_id: supplier.id,
-                supplier_name: supplier.razao_social,
-                items: this.purchaseFlow.items,
-                purchased_at: new Date().toISOString(),
-                purchased_by: this.employeeSession ? this.employeeSession.employee_id : null
-            };
-
-            const currentPurchases = Array.isArray(ticket.supplier_purchases) ? ticket.supplier_purchases : [];
-            const updatedPurchases = [...currentPurchases, purchaseData];
-
-            let itemsStr = this.purchaseFlow.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
-            const itemsHtml = `<span class="text-brand-500 font-bold">${this.escapeHtml(itemsStr)}</span>`;
-
-            const actionLog = {
-                action: 'Confirmou Compra',
-                details: `Compra de ${itemsHtml} do fornecedor <b>${this.escapeHtml(supplier.razao_social)}</b> para o ${ctx.device} de ${ctx.client} foi realizada.`
-            };
-
-            const updates = {
-                parts_status: 'Comprado',
-                parts_purchased_at: new Date().toISOString(),
-                supplier_purchases: updatedPurchases
-            };
-
-            const success = await this.mutateTicket(ticket, 'submitPurchase', updates, actionLog, { showNotify: false, fetchTickets: true });
-
-            if (success) {
-                this.modals.supplierPurchase = false;
-
-                // Open WhatsApp
-                if (supplier.whatsapp) {
-                    let phone = supplier.whatsapp.replace(/\D/g, '');
-                    if (phone.length === 10 || phone.length === 11) {
-                        phone = '55' + phone; // Add country code if not present
-                    }
-                    let msg = `Olá! Gostaria de solicitar a compra de: \n`;
-                    this.purchaseFlow.items.forEach(i => {
-                        msg += `- ${i.quantity}x ${i.name}\n`;
-                    });
-                    msg += `\nPara o aparelho: ${ticket.device_model}\nOS: ${ticket.os_number || ticket.id.slice(0, 8)}`;
-
-                    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
-                }
-            }
-        },
-
         async markPurchased(ticketOrId) {
             // Replaced by openPurchaseModal, kept for compatibility if needed elsewhere
             this.openPurchaseModal(ticketOrId);
         },
-        async confirmReceived(ticketOrId) {
-             const ticket = this.resolveTicket(ticketOrId);
-             if (!ticket) return;
-             const ctx = this.getLogContext(ticket);
-             const rawPart = ticket.parts_needed || 'peça';
-             const part = `<span class="text-brand-500 font-bold">${this.escapeHtml(rawPart)}</span>`;
-             await this.updateStatus(ticket, 'Andamento Reparo', {
-                 parts_status: 'Recebido',
-                 parts_received_at: new Date().toISOString()
-             }, { action: 'Recebeu Peças', details: `Peça ${part} recebida para o ${ctx.device} de ${ctx.client}. Reparo liberado.` });
-        },
-
-        async startRepair(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const actionLog = {
-                action: 'Iniciou Execução',
-                details: `Reparo iniciado do ${ctx.device} de ${ctx.client}.`
-            };
-            const now = new Date().toISOString();
-            await this.mutateTicket(ticket, 'startRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
-        },
-
         openOutcomeModal(mode, ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'outcome', ticketId: ticket.id };
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'outcome');
+            this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
             this.outcomeMode = mode;
             this.showTestFailureForm = false;
             this.modals.outcome = true;
         },
 
-        async finishRepair(success) {
-            const ticket = this.resolveTicket();
-            if (!ticket) return;
-            const nextStatus = success ? 'Teste Final' : 'Retirada Cliente';
-            const updates = {
-                repair_successful: success,
-                repair_end_at: new Date().toISOString()
-            };
+        // == SUBFASE 3 — TERCEIRIZAÇÃO / COMPRA / LOGÍSTICA ==
 
-            // Calculate Duration
-            const duration = this.getDuration(ticket.repair_start_at);
-            const ctx = this.getLogContext(ticket);
-
-            const detailMsg = success
-                ? `O reparo do ${ctx.device} de ${ctx.client} foi finalizado com sucesso.`
-                : `O ${ctx.device} de ${ctx.client} não teve reparo.`;
-
-            this.modals.outcome = false;
-            await this.updateStatus(ticket, nextStatus, updates, {
-                action: 'Finalizou Reparo',
-                details: detailMsg
-            });
+        async sendToOutsourced() {
+            return await window.AIDATicketActions.sendToOutsourced(this._getActionDeps());
         },
 
-        async startTest(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const actionLog = {
-                action: 'Iniciou Testes',
-                details: `Os testes no ${ctx.device} de ${ctx.client} foram iniciados.`
-            };
-            const now = new Date().toISOString();
-            await this.mutateTicket(ticket, 'startTest', { test_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
+        async receiveFromOutsourced(ticketOrId) {
+            return await window.AIDATicketActions.receiveFromOutsourced(ticketOrId, this._getActionDeps());
         },
 
-        async concludeTest(success) {
-            const ticket = this.resolveTicket();
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-
-            if (success) {
-                this.modals.outcome = false;
-                // Redirect logic based on Logistics Mode
-                // If standard mode, it goes to "Retirada Cliente" which matches current DB/UI logic.
-                await this.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
-            } else {
-                // FAILURE LOGIC
-                if (!this.testFailureData.reason) return this.notify("Descreva o defeito apresentado", "error");
-
-                // Outsourced Flow Logic
-                if (ticket.is_outsourced) {
-                     if (!this.testFailureData.action) return this.notify("Selecione a ação (Devolver ou Reparo)", "error");
-
-                     if (this.testFailureData.action === 'return') {
-                         if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
-
-                         const count = (ticket.outsourced_return_count || 0) + 1;
-                         const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
-
-                         // Add note to history
-                         const newNote = {
-                             date: new Date().toISOString(),
-                             text: this.testFailureData.reason,
-                             user: this.user.name,
-                             context: `Retorno ${count}x`
-                         };
-                         const updatedNotes = [...(ticket.outsourced_notes || []), newNote];
-
-                         this.modals.outcome = false;
-                         await this.updateStatus(ticket, 'Terceirizado', {
-                             outsourced_deadline: this.toUTC(this.testFailureData.newDeadline),
-                             outsourced_return_count: count,
-                             test_start_at: null,
-                             outsourced_notes: updatedNotes
-                         }, {
-                             action: 'Devolveu para Terceiro',
-                             details: `${ctx.device} retornado para ${companyName} (${count}ª vez). Motivo: ${this.testFailureData.reason}`
-                         });
-                         return;
-                     }
-                }
-
-                if (!this.testFailureData.newDeadline) return this.notify("Defina um novo prazo", "error");
-
-                const newNote = {
-                    date: new Date().toISOString(),
-                    text: this.testFailureData.reason,
-                    user: this.user.name,
-                    context: ticket.is_outsourced && this.testFailureData.action === 'repair' ? 'Falha de Terceiro' : 'Reprova em Teste'
-                };
-
-                const existingNotes = Array.isArray(ticket.test_notes) ? ticket.test_notes : [];
-                const updatedNotes = [...existingNotes, newNote];
-
-                this.modals.outcome = false;
-                await this.updateStatus(ticket, 'Andamento Reparo', {
-                    deadline: this.toUTC(this.testFailureData.newDeadline),
-                    priority: this.testFailureData.newPriority,
-                    repair_start_at: null,
-                    test_start_at: null,
-                    status: 'Andamento Reparo',
-                    test_notes: updatedNotes
-                }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Defeito: ' + this.testFailureData.reason });
-                this.notify("Retornado para reparo com urgência!");
-            }
+        cobrarOutsourced(ticket) {
+            return window.AIDATicketActions.cobrarOutsourced(ticket, this._getActionDeps());
         },
+
+        async submitPurchase() {
+            return await window.AIDATicketActions.submitPurchase(this._getActionDeps());
+        },
+
+        async confirmLogisticsOption(type) {
+            return await window.AIDATicketActions.confirmLogisticsOption(type, this._getActionDeps());
+        },
+
+        async confirmCarrier() {
+            return await window.AIDATicketActions.confirmCarrier(this._getActionDeps());
+        },
+
+        async markAvailable(ticketOrId) {
+            return await window.AIDATicketActions.markAvailable(ticketOrId, this._getActionDeps());
+        },
+
+        async sendBudget(ticketOrId) {
+            return await window.AIDATicketActions.sendBudget(ticketOrId, this._getActionDeps());
+        },
+
+        // == FIM SUBFASE 3 ==
 
         // --- OUTSOURCED FUNCTIONS ---
         getOutsourcedCompany(id) {
@@ -3258,242 +2380,35 @@ function app() {
         openOutsourcedModal(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'outsourced', ticketId: ticket.id };
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'outsourced');
+            this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
             this.outsourcedForm = { company_id: ticket.outsourced_company_id, deadline: '', price: '' };
             this.modals.outsourced = true;
-        },
-
-        async sendToOutsourced() {
-             if (!this.outsourcedForm.deadline) return this.notify("Informe o prazo.", "error");
-             if (!this.outsourcedForm.company_id) return this.notify("Selecione a empresa parceira.", "error");
-
-             const ticket = this.resolveTicket();
-             if (!ticket) return;
-
-             this.loading = true;
-             try {
-                 const companyId = this.outsourcedForm.company_id;
-
-                 // Update ticket context with the selected company before generating log
-                 const tempTicketContext = { ...ticket, outsourced_company_id: companyId };
-                 const ctx = this.getLogContext(tempTicketContext);
-                 const companyName = this.getOutsourcedCompany(companyId);
-
-                 await this.updateStatus(ticket, 'Terceirizado', {
-                     outsourced_deadline: this.toUTC(this.outsourcedForm.deadline),
-                     outsourced_company_id: companyId,
-                     is_outsourced: true,
-                     // If moving from Aberto, ensure analysis logic is skipped or marked as handled externally
-                     status: 'Terceirizado'
-                 }, {
-                     action: 'Enviou Terceirizado',
-                     details: `${ctx.device} de ${ctx.client} enviado para ${companyName}. Prazo: ${new Date(this.outsourcedForm.deadline).toLocaleDateString('pt-BR')}.`
-                 });
-
-                 this.modals.outsourced = false;
-                 this.modals.viewTicket = false; // Close detail view if open
-             } catch(e) {
-                 this.notify("Erro: " + e.message, "error");
-                 this.loading = false;
-             }
-        },
-
-        async receiveFromOutsourced(ticketOrId) {
-             const ticket = this.resolveTicket(ticketOrId);
-             if (!ticket) return;
-             // For this specific action, we don't want the (Terceirizado: X) suffix in the context
-             // because the log message already says "recebido da X".
-             const safeClientName = this.escapeHtml(ticket.client_name);
-             const safeOsNumber = this.escapeHtml(ticket.os_number);
-             const safeDevice = this.escapeHtml(ticket.device_model);
-
-             // Custom context without duplication
-             const cleanContext = {
-                 client: `<b>${safeClientName} da OS ${safeOsNumber}</b>`,
-                 device: `<b>${safeDevice}</b>`
-             };
-
-             const companyName = this.getOutsourcedCompany(ticket.outsourced_company_id);
-
-             await this.updateStatus(ticket, 'Teste Final', {
-                 test_start_at: null // Reset test status to ensure "Start Test" appears
-             }, {
-                 action: 'Recebeu de Terceiro',
-                 details: `${cleanContext.device} de ${cleanContext.client} recebido da ${companyName}. Enviado para testes.`
-             });
-        },
-
-        cobrarOutsourced(ticket) {
-            const phone = this.getOutsourcedPhone(ticket.outsourced_company_id);
-            if (!phone) return this.notify("Telefone não cadastrado.", "error");
-
-            // Context requested by user
-            const msg = `Olá, gostaria de saber sobre o andamento do aparelho ${ticket.device_model} (OS ${ticket.os_number}) enviado para vocês.`;
-
-            let number = phone.replace(/\D/g, '');
-            // Ensure 55 prefix if not present (assuming BR number logic generally)
-            if (!number.startsWith('55') && number.length >= 10) {
-                number = '55' + number;
-            }
-
-            window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
         },
 
         // --- LOGISTICS FUNCTIONS ---
         openLogisticsModal(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'logistics', ticketId: ticket.id };
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'logistics');
+            this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
             this.logisticsMode = 'initial';
             this.logisticsForm = { carrier: '', tracking: '' };
             this.modals.logistics = true;
         },
 
-        async confirmLogisticsOption(type) {
-            if (type === 'pickup') {
-                // Execute standard "Disponibilizar" logic for Client Pickup
-                const ticket = this.resolveTicket();
-                if (!ticket) return;
-                const ctx = this.getLogContext(ticket);
-                const actionLog = {
-                    action: 'Disponibilizou Retirada',
-                    details: `O ${ctx.device} de ${ctx.client} foi disponibilizado.`
-                };
-
-                const updates = {
-                    pickup_available: true,
-                    pickup_available_at: new Date().toISOString(),
-                    delivery_method: 'pickup'
-                };
-
-                const success = await this.mutateTicket(ticket, 'confirmLogisticsOption', updates, actionLog, { showNotify: true, notifyMessage: "Disponibilizado para retirada.", closeViewModal: true, fetchTickets: true });
-                if (success) {
-                    this.modals.logistics = false;
-                    this.sendTrackingWhatsApp();
-                }
-            }
-        },
-
-        async confirmCarrier() {
-            const form = this.logisticsForm;
-            // Validation: If tracking exists, carrier is mandatory.
-            if (form.tracking && !form.carrier) {
-                return this.notify("Transportadora é obrigatória se houver código de rastreio.", "error");
-            }
-            if (this.logisticsMode === 'carrier_form' && !form.carrier) {
-                 return this.notify("Informe a transportadora.", "error");
-            }
-
-            const ticket = this.resolveTicket();
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const updates = {};
-            let actionLog = null;
-
-            if (this.logisticsMode === 'add_tracking') {
-                updates.tracking_code = form.tracking;
-                actionLog = {
-                    action: 'Adicionou Rastreio',
-                    details: `Código de rastreio do cliente foi adicionado e o numero do rastrio ${form.tracking}`
-                };
-            } else {
-                updates.delivery_method = 'carrier';
-                updates.carrier_name = form.carrier;
-                updates.tracking_code = form.tracking || null;
-                updates.pickup_available = true;
-                updates.pickup_available_at = new Date().toISOString();
-
-                let logMsg = `Aparelho ${ctx.device} de ${ctx.client} foi enviado por transportadora.`;
-                if (form.tracking) logMsg += ` Código de Rastreio ${form.tracking}.`;
-                actionLog = {
-                    action: 'Enviou Transportadora',
-                    details: logMsg
-                };
-            }
-
-            const success = await this.mutateTicket(ticket, 'confirmCarrier', updates, actionLog, { showNotify: true, notifyMessage: "Informações de envio atualizadas!", closeViewModal: true, fetchTickets: true });
-
-            if (success) {
-                this.modals.logistics = false;
-                if (this.logisticsMode !== 'add_tracking') {
-                    this.sendCarrierWhatsApp(ticket, form.carrier, form.tracking);
-                }
-            }
-        },
-
         addTrackingCode(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket) return;
-            this.activeTicketId = ticket.id;
-            this.activeModalContext = { name: 'logistics', ticketId: ticket.id };
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'logistics');
+            this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
             this.logisticsMode = 'add_tracking';
             this.logisticsForm = { carrier: ticket.carrier_name || '', tracking: '' };
             this.modals.logistics = true;
         },
-
-        async markDelivered(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            // Equivalent to "Chegou" or "Retirado (Finalizar)"
-            const ctx = this.getLogContext(ticket);
-            let action = 'Finalizou Entrega';
-            let details = `${ctx.device} de ${ctx.client} foi retirado.`;
-
-            if (ticket.delivery_method === 'carrier') {
-                action = 'Entrega Confirmada';
-                // Specific text requested: "[Model] do [Client] da OS [Number] chegou ao seu destino."
-                details = `${ctx.device} do ${ctx.client} chegou ao seu destino.`;
-            }
-
-            await this.updateStatus(ticket, 'Finalizado', {
-                delivered_at: new Date().toISOString()
-            }, { action, details });
-        },
-
-        async markAvailable(ticketOrId) {
-             const ticket = this.resolveTicket(ticketOrId);
-             if (!ticket) return;
-
-             if (this.isLogisticsEnabled()) {
-                 this.openLogisticsModal(ticket);
-                 return;
-             }
-
-             // Legacy Flow
-             const ctx = this.getLogContext(ticket);
-             const actionLog = {
-                 action: 'Disponibilizou Retirada',
-                 details: `O ${ctx.device} de ${ctx.client} foi disponibilizado.`
-             };
-
-             const success = await this.mutateTicket(ticket, 'markAvailable', {
-                 pickup_available: true,
-                 pickup_available_at: new Date().toISOString()
-             }, actionLog, { showNotify: false, fetchTickets: true });
-
-             if (success) {
-                 this.sendTrackingWhatsApp();
-             }
-        },
-        async requestPriority(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            const ctx = this.getLogContext(ticket);
-            const actionLog = {
-                action: 'Solicitou Prioridade',
-                details: `Foi solicitado prioridade no ${ctx.device} de ${ctx.client}.`
-            };
-
-            await this.mutateTicket(ticket, 'requestPriority', {
-                priority_requested: true
-            }, actionLog, { showNotify: true, notifyMessage: "Prioridade solicitada com sucesso!", fetchTickets: true });
-        },
-
         // ==========================================
         // END WORKFLOW MODULE
         // ==========================================
@@ -3763,16 +2678,18 @@ function app() {
 
         // DASHBOARD OPERATIONAL METRICS (RPC)
         async fetchOperationalAlerts() {
-            if (!this.user?.workspace_id) return;
+            if (this.opsInFlight) return;
+            this.opsInFlight = true;
             try {
-                const data = await this.supabaseFetch('rpc/get_operational_alerts', 'POST', {
-                    p_workspace_id: this.user.workspace_id
+                const data = await window.AIDADashboardService.fetchOperationalAlerts({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 });
                 if (data) {
                     this.ops = data;
                 }
-            } catch (e) {
-                console.error("Fetch Alerts Error:", e);
+            } finally {
+                this.opsInFlight = false;
             }
         },
 
@@ -3955,27 +2872,14 @@ function app() {
         },
 
         async createEmployee() {
-            if (!this.user?.workspace_id) return this.notify('Erro workspace', 'error');
-            if (!this.employeeForm.name || !this.employeeForm.username || !this.employeeForm.password) return this.notify('Preencha campos', 'error');
-            this.loading = true;
-            try {
-                await this.supabaseFetch('rpc/create_employee', 'POST', {
-                    p_workspace_id: this.user.workspace_id,
-                    p_name: this.employeeForm.name,
-                    p_username: this.employeeForm.username,
-                    p_password: this.employeeForm.password,
-                    p_roles: this.employeeForm.roles
-                });
-
-                this.notify('Criado!');
-                this.modals.newEmployee = false;
-                await this.fetchEmployees();
-            } catch(e) {
-                console.error(e);
-                this.notify('Erro: ' + e.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAEmployeeService.createEmployee({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchEmployees: () => this.fetchEmployees(),
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         openEditEmployee(emp) {
@@ -3995,172 +2899,61 @@ function app() {
         },
 
         async resetEmployeePassword() {
-            const { employeeId, newPassword, confirmPassword } = this.resetPasswordForm;
-            if (!newPassword || !confirmPassword) return this.notify("Preencha as senhas.", "error");
-            if (newPassword !== confirmPassword) return this.notify("Senhas não conferem.", "error");
-
-            this.loading = true;
-            try {
-                await this.supabaseFetch('rpc/reset_employee_password', 'POST', {
-                    p_employee_id: employeeId,
-                    p_new_password: newPassword
-                });
-                this.notify("Senha resetada! O funcionário deverá trocar no próximo login.");
-                this.modals.resetPassword = false;
-                this.modals.editEmployee = false;
-            } catch (e) {
-                this.notify("Erro ao resetar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAEmployeeService.resetEmployeePassword({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         async changeOwnPassword() {
-            const { oldPassword, newPassword, confirmPassword } = this.changePasswordForm;
-            if (!oldPassword || !newPassword || !confirmPassword) return this.notify("Preencha todos os campos.", "error");
-            if (newPassword !== confirmPassword) return this.notify("Nova senha não confere.", "error");
-
-            this.loading = true;
-            try {
-                const token = this.employeeSession ? this.employeeSession.token : null;
-                if (!token) throw new Error("Sessão inválida.");
-
-                await this.supabaseFetch('rpc/employee_change_password', 'POST', {
-                    p_token: token,
-                    p_old_password: oldPassword,
-                    p_new_password: newPassword
-                });
-
-                this.notify("Senha alterada com sucesso!");
-                this.modals.forceChangePassword = false;
-                this.mustChangePassword = false;
-
-                // Update local session state
-                this.employeeSession.must_change_password = false;
-                localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
-
-                // Continue login flow
-                await this.fetchEmployees();
-                this.initTechFilter();
-                await this.fetchTickets();
-                this.fetchGlobalLogs();
-                this.setupRealtime();
-                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'password_changed' });
-
-            } catch (e) {
-                this.notify("Erro ao alterar senha: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAEmployeeService.changeOwnPassword({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                validateSessionToken: (opts) => window.AIDAAuthSessionService.validateSessionToken(opts),
+                bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         async updateEmployee() {
-            if (!this.employeeForm.id) return;
-            if (!this.employeeForm.name || !this.employeeForm.username) return this.notify('Preencha campos obrigatórios', 'error');
-
-            this.loading = true;
-            try {
-                await this.supabaseFetch('rpc/update_employee', 'POST', {
-                    p_id: this.employeeForm.id,
-                    p_name: this.employeeForm.name,
-                    p_username: this.employeeForm.username,
-                    p_password: this.employeeForm.password,
-                    p_roles: this.employeeForm.roles
-                });
-
-                this.notify('Atualizado!');
-                this.modals.editEmployee = false;
-                await this.fetchEmployees();
-            } catch(e) {
-                console.error(e);
-                this.notify('Erro: ' + e.message, 'error');
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDAEmployeeService.updateEmployee({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchEmployees: () => this.fetchEmployees(),
+                closeModal: (name) => { this.modals[name] = false; }
+            });
         },
 
         async deleteEmployee(id) {
-            if (!confirm('Tem certeza que deseja mover este funcionário para a Lixeira?')) return;
-            try {
-                await this.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
-                    deleted_at: new Date().toISOString()
-                });
-                this.notify('Funcionário movido para a Lixeira.');
-                await this.fetchEmployees();
-            } catch(e) {
-                this.notify('Erro ao excluir: ' + e.message, 'error');
-            }
+            return await window.AIDAEmployeeService.deleteEmployee(id, {
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchEmployees: () => this.fetchEmployees()
+            });
         },
 
-        async deleteTicket(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
-            if (!ticket) return;
-            if (!confirm('Tem certeza que deseja excluir este chamado? Ele irá para a Lixeira e não aparecerá nas listagens.')) return;
-
-            const actionLog = {
-                action: 'Excluiu Chamado',
-                details: `Chamado movido para a lixeira por ${this.user.name}.`
+        _getRecycleBinDeps() {
+            return {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                hasRole: (r) => this.hasRole(r),
+                setLoading: (val) => { this.loading = val; },
+                notify: (msg, type) => this.notify(msg, type),
+                mutateTicket: (t, act, upd, log, opts) => this.mutateTicket(t, act, upd, log, opts),
+                fetchDeletedItems: () => this.fetchDeletedItems(),
+                fetchEmployees: () => this.fetchEmployees()
             };
-
-            await this.mutateTicket(ticket, 'deleteTicket', {
-                deleted_at: new Date().toISOString()
-            }, actionLog, { showNotify: true, notifyMessage: 'Chamado movido para a Lixeira.', closeViewModal: true, fetchTickets: true });
         },
 
         async fetchDeletedItems() {
-            if (!this.user?.workspace_id || !this.hasRole('admin')) return;
-            this.loading = true;
-            try {
-                const tickets = await this.supabaseFetch(
-                    `tickets?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
-                );
-                this.deletedTickets = tickets || [];
-
-                const emps = await this.supabaseFetch(
-                    `employees?select=*&workspace_id=eq.${this.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
-                );
-                this.deletedEmployees = emps || [];
-
-            } catch(e) {
-                this.notify("Erro ao buscar lixeira: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
-        },
-
-        async restoreItem(type, id) {
-            if (!confirm("Deseja restaurar este item?")) return;
-
-            if (type === 'ticket') {
-                const ticketToRestore = this.deletedTickets.find(t => t.id === id) || { id };
-                const actionLog = {
-                    action: 'Restaurou Chamado',
-                    details: `Chamado restaurado da lixeira por ${this.user.name}.`
-                };
-
-                await this.mutateTicket(ticketToRestore, 'restoreItem', {
-                    deleted_at: null
-                }, actionLog, { showNotify: true, notifyMessage: "Item restaurado!", fetchTickets: true });
-
-                await this.fetchDeletedItems();
-                return;
-            }
-
-            this.loading = true;
-            try {
-                await this.supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
-                    deleted_at: null
-                });
-                this.notify("Item restaurado!");
-
-                await this.fetchDeletedItems();
-                await this.fetchEmployees();
-
-            } catch(e) {
-                this.notify("Erro ao restaurar: " + e.message, "error");
-            } finally {
-                this.loading = false;
-            }
+            return await window.AIDARecycleBinService.fetchDeletedItems(this._getRecycleBinDeps());
         },
 
         openRecycleBin() {
