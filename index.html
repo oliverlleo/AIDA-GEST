@@ -3506,7 +3506,7 @@
                                 </div>
 
                                 <!-- Dropdown -->
-                                <div x-show="open" @click.outside="open = false"
+                                <div x-show="open" @click.outside="closeDropdown()"
                                      class="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
                                      x-transition:enter="transition ease-out duration-100"
                                      x-transition:enter-start="transform opacity-0 scale-95"
@@ -3631,7 +3631,7 @@
                                 </div>
 
                                 <!-- Dropdown Menu -->
-                                <div x-show="open" @click.outside="open = false"
+                                <div x-show="open" @click.outside="closeDropdown()"
                                      class="absolute z-10 mt-1 w-full bg-white shadow-xl max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
                                      x-transition:enter="transition ease-out duration-100"
                                      x-transition:enter-start="transform opacity-0 scale-95"

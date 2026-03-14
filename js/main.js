@@ -2516,16 +2516,13 @@ function app() {
                     this.$watch('ticketForm.model', (val) => {
                         if (!this.open) this.search = val || '';
                     });
-                    this.$watch('open', (isOpen) => {
-                        if (!isOpen) {
-                            this.search = this.ticketForm.model || '';
-                        }
-                    });
                 },
                 toggleArrow() {
-                    this.open = !this.open;
                     if (this.open) {
-                        this.search = '';
+                        this.closeDropdown();
+                    } else {
+                        this.open = true;
+                        this.search = ''; // Open with clear search to see all options
                         this.$nextTick(() => this.$refs.searchInput.focus());
                     }
                 },
@@ -2534,13 +2531,20 @@ function app() {
                     this.ticketForm.model = this.search;
                 },
                 onFocus() {
-                    this.open = true;
-                    this.search = this.ticketForm.model || '';
+                    // Only overwrite search if we are NOT opening it explicitly via arrow
+                    if (!this.open) {
+                        this.open = true;
+                        this.search = this.ticketForm.model || '';
+                    }
                 },
                 selectOption(modelName) {
                     this.ticketForm.model = modelName;
                     this.search = modelName;
                     this.open = false;
+                },
+                closeDropdown() {
+                    this.open = false;
+                    this.search = this.ticketForm.model || ''; // Restore input value to bound state
                 }
             };
         },
@@ -2549,17 +2553,13 @@ function app() {
             return {
                 open: false,
                 search: '',
-                init() {
-                    this.$watch('open', (isOpen) => {
-                        if (!isOpen) {
-                            this.search = '';
-                        }
-                    });
-                },
+                init() {},
                 toggleArrow() {
-                    this.open = !this.open;
                     if (this.open) {
-                        this.search = '';
+                        this.closeDropdown();
+                    } else {
+                        this.open = true;
+                        this.search = ''; // Open with clear search to see all options
                         this.$nextTick(() => this.$refs.defectSearch.focus());
                     }
                 },
@@ -2574,6 +2574,10 @@ function app() {
                     this.search = '';
                     this.open = false;
                     this.$nextTick(() => this.$refs.defectSearch.focus());
+                },
+                closeDropdown() {
+                    this.open = false;
+                    this.search = ''; // Reset search string completely
                 }
             };
         },
