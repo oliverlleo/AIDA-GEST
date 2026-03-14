@@ -108,7 +108,7 @@ window.AIDAEmployeeService = {
     },
 
     async changeOwnPassword(deps) {
-        const { state, supabaseFetch, notify, setLoading, validateSessionToken, bootstrapAuthenticatedApp, closeModal } = deps;
+        const { state, supabaseFetch, notify, setLoading, processEmployeeLoginResponse, closeModal } = deps;
         const { oldPassword, newPassword, confirmPassword } = state.changePasswordForm;
         if (!oldPassword || !newPassword || !confirmPassword) return notify("Preencha todos os campos.", "error");
         if (newPassword !== confirmPassword) return notify("Nova senha não confere.", "error");
@@ -118,50 +118,34 @@ window.AIDAEmployeeService = {
             const token = state.employeeSession ? state.employeeSession.token : null;
             if (!token) throw new Error("Sessão inválida.");
 
+            // 1. Altera a senha
             await supabaseFetch('rpc/employee_change_password', 'POST', {
                 p_token: token,
                 p_old_password: oldPassword,
                 p_new_password: newPassword
             });
 
-            notify("Senha alterada com sucesso!");
+            // 2. Re-autentica forçadamente com a nova senha para obter um NOVO TOKEN do servidor,
+            // garantindo que não caia no erro de "Workspace não identificado ou token inválido".
+            const username = state.user.username || state.employeeSession.username || state.loginForm.username;
+            const company_code = state.companyCode || state.loginForm.company_code;
 
-            // Revalida a sessão com o servidor para garantir workspace_id e roles exatas
-            const freshSession = await validateSessionToken({ state, supabaseFetch });
-            if (freshSession) {
-                state.employeeSession.workspace_id = freshSession.workspace_id;
-                state.employeeSession.employee_id = freshSession.employee_id;
-                state.employeeSession.roles = freshSession.roles || [];
-                if (!state.employeeSession.id) state.employeeSession.id = freshSession.employee_id;
-            }
+            const reauthData = await supabaseFetch('rpc/employee_login', 'POST', {
+                p_company_code: company_code,
+                p_username: username,
+                p_password: newPassword
+            });
 
-            // Atualiza sessão local e garante que o usuário esteja coerente antes do bootstrap
-            state.employeeSession.must_change_password = false;
-            state.user = state.employeeSession;
-            if (freshSession && freshSession.workspace_name) state.workspaceName = freshSession.workspace_name;
+            if (reauthData && reauthData.length > 0) {
+                // Remove modals before jumping into the response processor
+                closeModal('forceChangePassword');
 
-            localStorage.setItem('techassist_employee', JSON.stringify(state.employeeSession));
-
-            // Corrige o fluxo de view no primeiro acesso lendo a sessão real recém configurada
-            const roles = state.user.roles || [];
-            const isTech = roles.includes('tecnico');
-            const isTester = roles.includes('tester');
-            const isAdminOrAttendant = roles.includes('admin') || roles.includes('atendente');
-
-            if (isTester && !isAdminOrAttendant) {
-                state.view = 'tester_bench';
-            } else if (isTech && !isAdminOrAttendant) {
-                state.view = 'tech_orders';
+                // 3. O Helper processará o novo login e invocará o Bootstrap centralmente.
+                deps.isReauth = true;
+                await processEmployeeLoginResponse(reauthData[0], company_code, deps);
             } else {
-                state.view = 'dashboard';
+                throw new Error("Falha na reautenticação após a troca de senha.");
             }
-
-            // Limpa modais e libera interface principal
-            state.mustChangePassword = false;
-            closeModal('forceChangePassword');
-
-            // Usa a via central unificada de carregamento (sem reconstruir na mão)
-            await bootstrapAuthenticatedApp({ reason: 'password_changed' });
 
         } catch (e) {
             notify("Erro ao alterar senha: " + e.message, "error");
