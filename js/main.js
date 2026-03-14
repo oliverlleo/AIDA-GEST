@@ -2889,12 +2889,7 @@ function app() {
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                 notify: (msg, type) => this.notify(msg, type),
                 setLoading: (val) => { this.loading = val; },
-                fetchEmployees: () => this.fetchEmployees(),
-                initTechFilter: () => this.initTechFilter(),
-                fetchTickets: () => this.fetchTickets(),
-                fetchGlobalLogs: () => this.fetchGlobalLogs(),
-                setupRealtime: () => this.setupRealtime(),
-                requestDashboardMetrics: (opts) => this.requestDashboardMetrics(opts),
+                bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
                 closeModal: (name) => { this.modals[name] = false; }
             });
         },

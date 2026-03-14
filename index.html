@@ -92,7 +92,7 @@
                 <div class="flex items-center space-x-3">
                     <div class="text-right hidden sm:block">
                         <p class="text-sm font-medium text-white" x-text="user?.name"></p>
-                        <p class="text-xs text-gray-400 capitalize" x-text="employeeSession ? user.roles.join(', ') : 'Administrador'"></p>
+                        <p class="text-xs text-gray-400 capitalize" x-text="(employeeSession && user && user.roles) ? user.roles.join(', ') : 'Administrador'"></p>
                     </div>
                     <div class="bg-gray-800 rounded-full w-10 h-10 flex items-center justify-center text-brand-500 font-bold border border-gray-700">
                         <span x-text="(user?.name || 'U').charAt(0).toUpperCase()"></span>

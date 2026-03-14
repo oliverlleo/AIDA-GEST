@@ -108,7 +108,7 @@ window.AIDAEmployeeService = {
     },
 
     async changeOwnPassword(deps) {
-        const { state, supabaseFetch, notify, setLoading, fetchEmployees, initTechFilter, fetchTickets, fetchGlobalLogs, setupRealtime, requestDashboardMetrics, closeModal } = deps;
+        const { state, supabaseFetch, notify, setLoading, bootstrapAuthenticatedApp, closeModal } = deps;
         const { oldPassword, newPassword, confirmPassword } = state.changePasswordForm;
         if (!oldPassword || !newPassword || !confirmPassword) return notify("Preencha todos os campos.", "error");
         if (newPassword !== confirmPassword) return notify("Nova senha não confere.", "error");
@@ -125,20 +125,18 @@ window.AIDAEmployeeService = {
             });
 
             notify("Senha alterada com sucesso!");
-            closeModal('forceChangePassword');
-            state.mustChangePassword = false;
 
-            // Update local session state
+            // Atualiza sessão e garante que o usuário esteja coerente antes do bootstrap
             state.employeeSession.must_change_password = false;
+            state.user = state.employeeSession; // Fix UI rendering race-condition issue
             localStorage.setItem('techassist_employee', JSON.stringify(state.employeeSession));
 
-            // Continue login flow
-            await fetchEmployees();
-            initTechFilter();
-            await fetchTickets();
-            fetchGlobalLogs();
-            setupRealtime();
-            if (state.view === 'dashboard') requestDashboardMetrics({ reason: 'password_changed' });
+            // Limpa modais e libera interface principal
+            state.mustChangePassword = false;
+            closeModal('forceChangePassword');
+
+            // Usa a via central unificada de carregamento (sem reconstruir na mão)
+            await bootstrapAuthenticatedApp({ reason: 'password_changed' });
 
         } catch (e) {
             notify("Erro ao alterar senha: " + e.message, "error");
