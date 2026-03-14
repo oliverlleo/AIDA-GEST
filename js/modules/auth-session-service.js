@@ -55,8 +55,85 @@ window.AIDAAuthSessionService = {
         }
     },
 
+    // Helper para processar e normalizar o retorno do login de funcionário (RPC)
+    async processEmployeeLoginResponse(result, company_code, deps) {
+        const { state, supabaseFetch, validateSessionToken, notify, bootstrapAuthenticatedApp, isReauth } = deps;
+
+        const emp = result.employee_json;
+        emp.token = result.token;
+        emp.must_change_password = result.must_change_password;
+
+        if (emp.employee_id && !emp.id) {
+            emp.id = emp.employee_id;
+        }
+
+        state.employeeSession = emp;
+
+        // Revalida a sessão com o servidor para garantir workspace_id e roles exatas
+        const freshSession = await validateSessionToken({ state, supabaseFetch });
+        if (freshSession) {
+            state.employeeSession.workspace_id = freshSession.workspace_id;
+            state.employeeSession.employee_id = freshSession.employee_id;
+            state.employeeSession.roles = freshSession.roles || [];
+            if (!state.employeeSession.id) state.employeeSession.id = freshSession.employee_id;
+        }
+
+        state.user = state.employeeSession;
+        state.workspaceName = emp.workspace_name || (freshSession && freshSession.workspace_name) || '';
+        state.companyCode = company_code;
+        if (emp.whatsapp_number) state.whatsappNumber = emp.whatsapp_number;
+
+        if (emp.tracker_config) {
+            state.trackerConfig = {
+                ...state.trackerConfig,
+                ...emp.tracker_config,
+                colors: {
+                    ...state.trackerConfig.colors,
+                    ...(emp.tracker_config.colors || {})
+                },
+                required_ticket_fields: {
+                    ...state.trackerConfig.required_ticket_fields,
+                    ...(emp.tracker_config.required_ticket_fields || {})
+                }
+            };
+        }
+
+        // Ajusta a view corretamente antes de qualquer return/early exit
+        const roles = state.user.roles || [];
+        const isTech = roles.includes('tecnico');
+        const isTester = roles.includes('tester');
+        const isAdminOrAttendant = roles.includes('admin') || roles.includes('atendente');
+
+        if (isTester && !isAdminOrAttendant) {
+            state.view = 'tester_bench';
+        } else if (isTech && !isAdminOrAttendant) {
+            state.view = 'tech_orders';
+        } else {
+            state.view = 'dashboard';
+        }
+
+        // Intercepta se a senha precisa ser mudada
+        if (emp.must_change_password) {
+            state.mustChangePassword = true;
+            state.modals.forceChangePassword = true;
+            localStorage.setItem('techassist_employee', JSON.stringify(state.employeeSession));
+            return;
+        }
+
+        state.mustChangePassword = false;
+        localStorage.setItem('techassist_employee', JSON.stringify(state.employeeSession));
+
+        if (!isReauth) {
+            notify('Bem-vindo, ' + emp.name, 'success');
+        } else {
+            notify('Senha alterada e sessão renovada com sucesso!', 'success');
+        }
+
+        await bootstrapAuthenticatedApp({ reason: isReauth ? 'password_changed' : 'login_employee' });
+    },
+
     async loginEmployee(deps) {
-        const { state, supabaseFetch, notify, setLoading, validateSessionToken, bootstrapAuthenticatedApp } = deps;
+        const { state, supabaseFetch, notify, setLoading } = deps;
         setLoading(true);
         try {
             const data = await supabaseFetch('rpc/employee_login', 'POST', {
@@ -66,71 +143,7 @@ window.AIDAAuthSessionService = {
             });
 
             if (data && data.length > 0) {
-                const result = data[0];
-                const emp = result.employee_json;
-                emp.token = result.token;
-                emp.must_change_password = result.must_change_password;
-
-                if (emp.employee_id && !emp.id) {
-                    emp.id = emp.employee_id;
-                }
-
-                state.employeeSession = emp;
-
-                // Validate and normalize the session to get the full server truth (including workspace_id)
-                const freshSession = await validateSessionToken({ state, supabaseFetch });
-                if (freshSession) {
-                    state.employeeSession.workspace_id = freshSession.workspace_id;
-                    state.employeeSession.employee_id = freshSession.employee_id;
-                    state.employeeSession.roles = freshSession.roles || [];
-                    if (!state.employeeSession.id) state.employeeSession.id = freshSession.employee_id;
-                }
-
-                state.user = state.employeeSession;
-                state.workspaceName = emp.workspace_name || (freshSession && freshSession.workspace_name) || '';
-                state.companyCode = state.loginForm.company_code;
-                if (emp.whatsapp_number) state.whatsappNumber = emp.whatsapp_number;
-
-                if (emp.tracker_config) {
-                    state.trackerConfig = {
-                        ...state.trackerConfig,
-                        ...emp.tracker_config,
-                        colors: {
-                            ...state.trackerConfig.colors,
-                            ...(emp.tracker_config.colors || {})
-                        },
-                        required_ticket_fields: {
-                            ...state.trackerConfig.required_ticket_fields,
-                            ...(emp.tracker_config.required_ticket_fields || {})
-                        }
-                    };
-                }
-
-                // Ajusta a view corretamente antes de qualquer return/early exit sem depender de hasRole()
-                const roles = emp.roles || [];
-                const isTech = roles.includes('tecnico');
-                const isTester = roles.includes('tester');
-                const isAdminOrAttendant = roles.includes('admin') || roles.includes('atendente');
-
-                if (isTester && !isAdminOrAttendant) {
-                    state.view = 'tester_bench';
-                } else if (isTech && !isAdminOrAttendant) {
-                    state.view = 'tech_orders';
-                } else {
-                    state.view = 'dashboard';
-                }
-
-                if (emp.must_change_password) {
-                    state.mustChangePassword = true;
-                    state.modals.forceChangePassword = true;
-                    localStorage.setItem('techassist_employee', JSON.stringify(emp));
-                    return;
-                }
-
-                localStorage.setItem('techassist_employee', JSON.stringify(emp));
-                notify('Bem-vindo, ' + emp.name, 'success');
-
-                await bootstrapAuthenticatedApp({ reason: 'login_employee' });
+                await this.processEmployeeLoginResponse(data[0], state.loginForm.company_code, deps);
             } else {
                  notify('Credenciais inválidas.', 'error');
             }

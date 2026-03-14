@@ -2916,6 +2916,7 @@ function app() {
                 setLoading: (val) => { this.loading = val; },
                 validateSessionToken: (opts) => window.AIDAAuthSessionService.validateSessionToken(opts),
                 bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
+                processEmployeeLoginResponse: (result, companyCode, deps) => window.AIDAAuthSessionService.processEmployeeLoginResponse(result, companyCode, deps),
                 closeModal: (name) => { this.modals[name] = false; }
             });
         },
