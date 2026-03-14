@@ -2121,34 +2121,22 @@ function app() {
 
         // --- 4. POLÍTICA DE REFRESH PÓS-MUTAÇÃO ---
         async refreshPostMutation(forceListRefetch = false) {
-            // Se foi especificado um refetch forçado na listagem (ex: createTicket)
-            if (forceListRefetch) {
+            // Se foi especificado um refetch forçado (ex: createTicket) OU
+            // se estivermos em uma view operacional que depende de consistência forte na UI após ações
+            // (kanban, tech_orders, tester_bench, admin_dashboard), disparamos o fetch.
+            const operationalViews = ['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'];
+            const needsFetch = forceListRefetch || operationalViews.includes(this.view);
+
+            if (needsFetch) {
                  await this.fetchTickets();
-                 if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
-                     await this.requestDashboardMetrics({ reason: 'post_mutation_forced' });
-                 } else if (this.view === 'kanban') {
-                     await this.fetchOperationalAlerts();
-                 }
-                 return;
             }
 
-            // Se estamos no dashboard, a mutation provavelmente afeta métricas.
-            if (this.view === 'dashboard') {
+            // Atualiza métricas ou alertas complementares dependendo da view
+            if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
                 await this.requestDashboardMetrics({ reason: 'post_mutation' });
-                // Tickets serão atualizados via realtime, sem necessidade do fetch pesado duplo
-                return;
-            } else if (this.view === 'admin_dashboard') {
-                await this.requestDashboardMetrics({ reason: 'post_mutation' });
-            }
-
-            // Para Kanban, os alertas operacionais que compõem o top-bar precisam ser validados:
-            if (this.view === 'kanban') {
+            } else if (this.view === 'kanban') {
                 await this.fetchOperationalAlerts();
             }
-
-            // O Realtime e a mutação local (`updateSelectedTicket`) dão conta do resto.
-            // Para casos excepcionais (como reload massivo), fallback usando fetchTickets()
-            // pode ser passado em overrides explícitos, mas o fluxo padrão agora evita recargas.
         },
 
         // --- 3. WRAPPERS & ACTIONS ---

@@ -3490,7 +3490,8 @@
                                 <template x-for="p in PRIORITIES" :key="p"><option :value="p" x-text="p"></option></template>
                             </select>
                         </div>
-                        <div class="col-span-1" x-data="{ open: false, search: '' }" x-init="$watch('open', val => { if(val) { search = ticketForm.model || ''; $nextTick(() => $refs.searchInput.focus()); } else { ticketForm.model = search || ticketForm.model; } })">
+                        <!-- Device Model Custom Select -->
+                        <div class="col-span-1" x-data="{ open: false, search: '' }" x-init="$watch('open', val => { if(val) { search = ticketForm.model || ''; $nextTick(() => $refs.searchInput.focus()); } else { if(!ticketForm.model) ticketForm.model = search; } })">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Modelo <span x-show="isFieldRequired('device_model')" class="text-red-500">*</span></label>
                             <div class="relative">
                                 <!-- Search Input acting as combobox -->
@@ -3517,7 +3518,7 @@
 
                                     <!-- Add Button (Visible if search has text and not already saved) -->
                                     <div class="sticky top-0 bg-white p-2 border-b border-gray-100 z-10" x-show="search.length > 0 && !deviceModels.some(m => m.name.toLowerCase() === search.toLowerCase())">
-                                        <button @click="createDeviceModel(search).then(ok => { if(ok) { ticketForm.model = search; open = false; } })"
+                                        <button type="button" @click="createDeviceModel(search).then(ok => { if(ok) { ticketForm.model = search; open = false; } })"
                                                 class="w-full bg-brand-500 text-white px-3 py-2 rounded hover:bg-brand-600 transition-colors flex items-center justify-center gap-2" title="Cadastrar">
                                             <i class="fa-solid fa-plus"></i> <span class="font-bold text-xs">Cadastrar Novo</span>
                                         </button>
@@ -3527,11 +3528,11 @@
                                     <ul class="py-1">
                                         <template x-for="model in deviceModels.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))" :key="model.id">
                                             <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center"
-                                                @click="ticketForm.model = model.name; search = model.name; open = false">
+                                                @mousedown.prevent="ticketForm.model = model.name; search = model.name; open = false">
                                                 <span class="block truncate" :class="ticketForm.model === model.name ? 'font-bold text-brand-600' : 'text-gray-900'" x-text="model.name"></span>
 
                                                 <!-- Delete Icon -->
-                                                <button @click.stop="deleteDeviceModel(model.id)" class="mr-2 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button type="button" @mousedown.stop.prevent="deleteDeviceModel(model.id)" class="mr-2 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <i class="fa-solid fa-trash text-xs"></i>
                                                 </button>
                                             </li>
@@ -3600,6 +3601,7 @@
                             </div>
                         </div>
 
+                        <!-- Defect Options Tag Input -->
                         <div class="col-span-2" x-data="{ open: false, search: '' }">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado <span x-show="isFieldRequired('defect_reported')" class="text-red-500">*</span></label>
 
@@ -3608,7 +3610,7 @@
                                 <template x-for="defect in ticketForm.defects" :key="defect">
                                     <span class="bg-gray-200 text-gray-800 text-xs font-bold px-2 py-1 rounded flex items-center border border-gray-300">
                                         <span x-text="defect"></span>
-                                        <button type="button" @click="removeDefectFromTicket(defect)" class="ml-2 text-gray-500 hover:text-red-500 transition-colors">
+                                        <button type="button" @click.stop="removeDefectFromTicket(defect)" class="ml-2 text-gray-500 hover:text-red-500 transition-colors">
                                             <i class="fa-solid fa-times"></i>
                                         </button>
                                     </span>
@@ -3641,7 +3643,7 @@
 
                                      <!-- Quick Add Button -->
                                      <div class="sticky top-0 bg-white p-2 border-b border-gray-100 z-10" x-show="search.trim().length > 0 && !defectOptions.some(d => d.name.toLowerCase() === search.trim().toLowerCase())">
-                                         <button @click="createDefectOption(search).then(ok => { if(ok) { addDefectToTicket(search); search = ''; open = false; } })"
+                                         <button type="button" @click="createDefectOption(search).then(ok => { if(ok) { addDefectToTicket(search); search = ''; open = false; } })"
                                                  class="w-full bg-brand-500 text-white px-3 py-2 rounded hover:bg-brand-600 transition-colors flex items-center justify-center gap-2" title="Cadastrar e Adicionar">
                                              <i class="fa-solid fa-plus"></i> <span class="font-bold text-xs">Cadastrar Novo</span>
                                          </button>
@@ -3651,11 +3653,11 @@
                                      <ul class="py-1">
                                          <template x-for="option in defectOptions.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))" :key="option.id">
                                              <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center transition-colors"
-                                                 @click="addDefectToTicket(option.name); search = ''; open = false; $nextTick(() => $refs.defectSearch.focus())">
+                                                 @mousedown.prevent="addDefectToTicket(option.name); search = ''; open = false; $nextTick(() => $refs.defectSearch.focus())">
                                                  <span class="block truncate" :class="ticketForm.defects.includes(option.name) ? 'font-bold text-brand-600' : 'text-gray-900'" x-text="option.name"></span>
 
                                                  <!-- Delete Option -->
-                                                 <button @click.stop="deleteDefectOption(option.id)" class="mr-2 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Excluir Opção">
+                                                 <button type="button" @mousedown.stop.prevent="deleteDefectOption(option.id)" class="mr-2 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Excluir Opção">
                                                     <i class="fa-solid fa-trash text-xs"></i>
                                                  </button>
                                              </li>
