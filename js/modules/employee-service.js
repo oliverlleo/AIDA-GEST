@@ -131,6 +131,21 @@ window.AIDAEmployeeService = {
             state.user = state.employeeSession; // Fix UI rendering race-condition issue
             localStorage.setItem('techassist_employee', JSON.stringify(state.employeeSession));
 
+            // Corrige o fluxo de view no primeiro acesso, baseando-se no perfil
+            const roles = state.user.roles || [];
+            const isTech = roles.includes('tecnico');
+            const isAdmin = roles.includes('admin');
+            const isAttendant = roles.includes('atendente');
+            const isTester = roles.includes('tester');
+
+            if (isTester && !isAdmin && !isAttendant) {
+                state.view = 'tester_bench';
+            } else if (isTech && !isAdmin && !isAttendant) {
+                state.view = 'tech_orders';
+            } else {
+                state.view = 'dashboard';
+            }
+
             // Limpa modais e libera interface principal
             state.mustChangePassword = false;
             closeModal('forceChangePassword');

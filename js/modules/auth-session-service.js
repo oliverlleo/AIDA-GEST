@@ -96,6 +96,13 @@ window.AIDAAuthSessionService = {
                     };
                 }
 
+                // Ajusta a view corretamente antes de qualquer return/early exit
+                if (hasRole('tester') && !hasRole('admin') && !hasRole('atendente')) {
+                    state.view = 'tester_bench';
+                } else if (hasRole('tecnico') && !hasRole('admin') && !hasRole('atendente')) {
+                    state.view = 'tech_orders';
+                }
+
                 if (emp.must_change_password) {
                     state.mustChangePassword = true;
                     state.modals.forceChangePassword = true;
@@ -105,10 +112,6 @@ window.AIDAAuthSessionService = {
 
                 localStorage.setItem('techassist_employee', JSON.stringify(emp));
                 notify('Bem-vindo, ' + emp.name, 'success');
-
-                if (hasRole('tecnico') && !hasRole('admin') && !hasRole('atendente')) {
-                    state.view = 'tech_orders';
-                }
 
                 await bootstrapAuthenticatedApp({ reason: 'login_employee' });
             } else {

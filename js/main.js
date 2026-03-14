@@ -487,7 +487,20 @@ function app() {
 
         // --- 3. CARREGAMENTO DEPENDENTE DA VIEW ---
         async loadDataForCurrentView(force = false) {
-            const currentView = this.view;
+            let currentView = this.view;
+
+            // Blindagem mínima contra view de dashboard indevida no primeiro acesso de técnicos/testers
+            if (currentView === 'dashboard' && this.user) {
+                const isTechOnly = this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente');
+                const isTesterOnly = this.hasRole('tester') && !this.hasRole('admin') && !this.hasRole('atendente');
+                if (isTesterOnly) {
+                    currentView = 'tester_bench';
+                    this.view = 'tester_bench';
+                } else if (isTechOnly) {
+                    currentView = 'tech_orders';
+                    this.view = 'tech_orders';
+                }
+            }
 
             // Manage View-Specific State Resets (Runs every time view changes)
             if (currentView === 'kanban') {
