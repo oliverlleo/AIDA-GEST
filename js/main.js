@@ -538,6 +538,10 @@ function app() {
                 } else if (currentView === 'kanban') {
                     await this.fetchTickets();
                     await this.fetchOperationalAlerts(); // Alerts are used in kanban header
+                } else if (currentView === 'employees') {
+                    await this.fetchTickets();
+                    // Load fresh workspace configurations to ensure UI has latest data
+                    await this.loadWorkspaceConfig();
                 } else {
                     // Outras views (tech_orders, tester_bench, etc.)
                     await this.fetchTickets();
@@ -594,6 +598,20 @@ function app() {
                                 this.employeeSession.roles = freshSession.roles || [];
                                 if (!this.employeeSession.id) this.employeeSession.id = freshSession.employee_id;
 
+                                // Secure fallback to fetch companyCode if not reliably in session
+                                if (freshSession.company_code) {
+                                    this.employeeSession.company_code = freshSession.company_code;
+                                } else {
+                                    try {
+                                        const wsData = await this.supabaseFetch(`workspaces?select=company_code&id=eq.${freshSession.workspace_id}`);
+                                        if (wsData && wsData.length > 0) {
+                                            this.employeeSession.company_code = wsData[0].company_code;
+                                        }
+                                    } catch (e) {
+                                        console.warn("Could not rehydrate company_code securely", e);
+                                    }
+                                }
+
                                 // Update Storage with trusted data
                                 localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
                             } else {
@@ -609,7 +627,11 @@ function app() {
 
                             // Correção Bug 5: O Telefone da empresa salva, mas não reaparecia para funcionários ou em reload.
                             // Hidratar whatsappNumber no front a partir da sessão armazenada, se disponível.
-                            if (this.employeeSession.whatsapp_number) this.whatsappNumber = this.employeeSession.whatsapp_number;
+                            if (this.employeeSession.whatsapp_number) {
+                                this.whatsappNumber = this.employeeSession.whatsapp_number;
+                            } else {
+                                this.whatsappNumber = '';
+                            }
 
                             // Restore Tracker Config
                             if (this.employeeSession.tracker_config) {
@@ -1118,6 +1140,13 @@ function app() {
         },
 
         // --- COMPANY CONFIG ---
+        async loadWorkspaceConfig() {
+            return await window.AIDAWorkspaceConfigService.loadWorkspaceConfig({
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
+        },
+
         async saveCompanyConfig() {
             return await window.AIDAWorkspaceConfigService.saveCompanyConfig({
                 state: this,
@@ -1377,9 +1406,9 @@ function app() {
             }
 
             // 2. Optimized Dashboard Refresh (Throttle + Relevance Check)
-            if (this.view === 'dashboard') {
+            if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
                 if (this.isRelevantUpdate(payload)) {
-                    console.log('[Dashboard][Realtime] relevant event -> scheduling refresh');
+                    console.log(`[${this.view}][Realtime] relevant event -> scheduling refresh`);
                     this.invalidateDashboardCache('realtime_event');
                     this.requestDashboardMetrics({ reason: 'realtime' });
                 }
@@ -1417,7 +1446,7 @@ function app() {
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
                 this.fetchTickets();
-                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'search' });
+                if (this.view === 'dashboard' || this.view === 'admin_dashboard') this.requestDashboardMetrics({ reason: 'search' });
             }, 500); // 500ms debounce
         },
 

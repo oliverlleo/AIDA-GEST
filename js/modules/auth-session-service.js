@@ -81,6 +81,7 @@ window.AIDAAuthSessionService = {
         state.user = state.employeeSession;
         state.workspaceName = emp.workspace_name || (freshSession && freshSession.workspace_name) || '';
         state.companyCode = company_code;
+        state.employeeSession.company_code = company_code; // Save to session for restore
         if (emp.whatsapp_number) state.whatsappNumber = emp.whatsapp_number;
 
         if (emp.tracker_config) {
