@@ -43,6 +43,13 @@ window.AIDAWorkspaceConfigService = {
         deps.setLoading(true);
         try {
             await deps.supabaseFetch('rpc/update_workspace_company_config', 'POST', { p_whatsapp_number: deps.state.whatsappNumber });
+
+            // Rehydrate employee session cache so the new whatsappNumber survives a reload
+            if (deps.state.employeeSession) {
+                deps.state.employeeSession.whatsapp_number = deps.state.whatsappNumber;
+                localStorage.setItem('techassist_employee', JSON.stringify(deps.state.employeeSession));
+            }
+
             deps.notify("Configurações salvas!");
         } catch (e) {
             deps.notify("Erro ao salvar: " + e.message, "error");
