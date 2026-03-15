@@ -25,33 +25,27 @@ window.AIDAStorageService = {
         const { SUPABASE_URL, SUPABASE_KEY, state } = deps;
 
         try {
-            const wsId = state.employeeSession?.workspace_id || state.user?.workspace_id;
-            if (!wsId) throw new Error('Workspace ID não encontrado na sessão.');
-
-            // Use the edge function instead of direct storage access
             const url = `${SUPABASE_URL}/functions/v1/upload-workspace-logo`;
-            const token = state.session?.access_token || SUPABASE_KEY;
 
-            // Build headers explicitly. No 'Content-Type' so the browser can set the multipart boundary automatically for FormData
+            const form = new FormData();
+            form.append('file', file);
+
             const headers = {
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${token}`
+                apikey: SUPABASE_KEY
             };
 
-            // If Employee, send token
+            if (state.session?.access_token) {
+                headers['Authorization'] = `Bearer ${state.session.access_token}`;
+            }
+
             if (state.employeeSession?.token) {
                 headers['x-employee-token'] = state.employeeSession.token;
             }
 
-            const formData = new FormData();
-            formData.append('file', file);
-            // Optionally pass workspace_id if the backend might need it
-            formData.append('workspace_id', wsId);
-
             const response = await fetch(url, {
                 method: 'POST',
                 headers,
-                body: formData
+                body: form
             });
 
             if (!response.ok) {
@@ -59,22 +53,9 @@ window.AIDAStorageService = {
                 throw new Error(`Falha no upload (${response.status}): ${txt}`);
             }
 
-            // Expected that the edge function returns the public URL or the path in JSON
             const data = await response.json();
+            return data.publicUrl || data.url || data.path;
 
-            // Assume the function returns { url: "..." } or { publicUrl: "..." } or { path: "..." }
-            const finalUrl = data.url || data.publicUrl || data.path;
-
-            if (!finalUrl) {
-                throw new Error("A Edge Function não retornou a URL da imagem.");
-            }
-
-            // If the Edge Function returns just a relative path, we reconstruct the public URL
-            if (finalUrl && !finalUrl.startsWith('http')) {
-               return `${SUPABASE_URL}/storage/v1/object/public/workspace_logos/${finalUrl}`;
-            }
-
-            return finalUrl;
         } catch(e) {
             throw e;
         }
