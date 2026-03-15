@@ -22,25 +22,59 @@ window.AIDAStorageService = {
     },
 
     async handleLogoUpload(file, deps) {
-        const { SUPABASE_URL, state } = deps;
+        const { SUPABASE_URL, SUPABASE_KEY, state } = deps;
 
         try {
-            const bucket = 'workspace_logos';
             const wsId = state.employeeSession?.workspace_id || state.user?.workspace_id;
             if (!wsId) throw new Error('Workspace ID não encontrado na sessão.');
-            const path = `${wsId}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
-            const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
 
-            const headers = this.getStorageHeaders(file.type, deps);
-            const response = await fetch(url, { method: 'POST', headers, body: file });
+            // Use the edge function instead of direct storage access
+            const url = `${SUPABASE_URL}/functions/v1/upload-workspace-logo`;
+            const token = state.session?.access_token || SUPABASE_KEY;
+
+            // Build headers explicitly. No 'Content-Type' so the browser can set the multipart boundary automatically for FormData
+            const headers = {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${token}`
+            };
+
+            // If Employee, send token
+            if (state.employeeSession?.token) {
+                headers['x-employee-token'] = state.employeeSession.token;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            // Optionally pass workspace_id if the backend might need it
+            formData.append('workspace_id', wsId);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers,
+                body: formData
+            });
+
             if (!response.ok) {
                 const txt = await response.text().catch(() => '');
                 throw new Error(`Falha no upload (${response.status}): ${txt}`);
             }
 
-            // Construct Public URL (bucket is public now)
-            const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
-            return publicUrl;
+            // Expected that the edge function returns the public URL or the path in JSON
+            const data = await response.json();
+
+            // Assume the function returns { url: "..." } or { publicUrl: "..." } or { path: "..." }
+            const finalUrl = data.url || data.publicUrl || data.path;
+
+            if (!finalUrl) {
+                throw new Error("A Edge Function não retornou a URL da imagem.");
+            }
+
+            // If the Edge Function returns just a relative path, we reconstruct the public URL
+            if (finalUrl && !finalUrl.startsWith('http')) {
+               return `${SUPABASE_URL}/storage/v1/object/public/workspace_logos/${finalUrl}`;
+            }
+
+            return finalUrl;
         } catch(e) {
             throw e;
         }
