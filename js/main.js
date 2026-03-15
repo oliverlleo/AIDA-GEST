@@ -599,7 +599,9 @@ function app() {
                                 if (!this.employeeSession.id) this.employeeSession.id = freshSession.employee_id;
 
                                 // Secure fallback to fetch companyCode if not reliably in session
-                                if (!freshSession.company_code && !this.employeeSession.company_code) {
+                                if (freshSession.company_code) {
+                                    this.employeeSession.company_code = freshSession.company_code;
+                                } else {
                                     try {
                                         const wsData = await this.supabaseFetch(`workspaces?select=company_code&id=eq.${freshSession.workspace_id}`);
                                         if (wsData && wsData.length > 0) {
@@ -608,8 +610,6 @@ function app() {
                                     } catch (e) {
                                         console.warn("Could not rehydrate company_code securely", e);
                                     }
-                                } else if (freshSession.company_code) {
-                                    this.employeeSession.company_code = freshSession.company_code;
                                 }
 
                                 // Update Storage with trusted data
