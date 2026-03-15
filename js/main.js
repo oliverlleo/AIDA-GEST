@@ -48,6 +48,44 @@ function app() {
             viewType: 'data'
         },
 
+        // Operational Filters (New Backend feature)
+        // Home/Dashboard specific state
+        homeOperationalFilters: {
+            window: 'all',
+            basis: 'auto',
+            status: 'all',
+            technician: 'all',
+            search: ''
+        },
+        homeOperationalCounts: {
+            today: 0,
+            today_tomorrow: 0,
+            next_7_days: 0,
+            overdue: 0,
+            no_deadline: 0,
+            all: 0
+        },
+        homeOperationalItems: [],
+        homeOperationalLoading: false,
+
+        // Kanban/Chamados specific state
+        kanbanOperationalFilters: {
+            window: 'all',
+            basis: 'auto',
+            status: 'all',
+            technician: 'all',
+            search: ''
+        },
+        kanbanOperationalCounts: {
+            today: 0,
+            today_tomorrow: 0,
+            next_7_days: 0,
+            overdue: 0,
+            no_deadline: 0,
+            all: 0
+        },
+        kanbanOperationalLastResponse: null,
+
         // Tracker Configuration (NEW)
         trackerConfig: {
             logo_url: '',
@@ -161,6 +199,21 @@ function app() {
             pendingDelivery: [],
             // Outsourced
             outsourcedToSend: [], // New
+            pendingOutsourced: []
+        },
+        homeOps: {
+            pendingBudgets: [],
+            waitingBudgetResponse: [],
+            pendingPickups: [],
+            urgentAnalysis: [],
+            delayedDeliveries: [],
+            priorityTickets: [],
+            pendingPurchase: [],
+            pendingReceipt: [],
+            pendingTech: [],
+            pendingTracking: [],
+            pendingDelivery: [],
+            outsourcedToSend: [],
             pendingOutsourced: []
         },
         metrics: {
@@ -532,12 +585,14 @@ function app() {
                         this.fetchGlobalLogs();
                     }
                     await this.requestDashboardMetrics({ reason: 'view_change' });
+                    await this.fetchHomeOperationalQueue();
                 } else if (currentView === 'admin_dashboard') {
                     await this.fetchTickets();
                     await this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
                 } else if (currentView === 'kanban') {
                     await this.fetchTickets();
                     await this.fetchOperationalAlerts(); // Alerts are used in kanban header
+                    await this.fetchKanbanOperationalCounts();
                 } else {
                     // Outras views (tech_orders, tester_bench, etc.)
                     await this.fetchTickets();
@@ -1416,8 +1471,20 @@ function app() {
             if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
-                this.fetchTickets();
-                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'search' });
+                // Synchronize search for operational filters based on view
+                if (this.view === 'kanban') {
+                    this.kanbanOperationalFilters.search = (this.searchQuery || '').trim();
+                } else if (this.view === 'dashboard') {
+                    this.homeOperationalFilters.search = (this.searchQuery || '').trim();
+                }
+                if (this.view === 'dashboard') {
+                    this.fetchHomeOperationalQueue();
+                } else {
+                    this.fetchTickets();
+                }
+                if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
+                    this.requestDashboardMetrics({ reason: 'search' });
+                }
             }, 500); // 500ms debounce
         },
 
@@ -1508,6 +1575,24 @@ function app() {
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                     hasRole: (r) => this.hasRole(r)
                 }, loadMore);
+
+                // OPERATIONAL RPC MODE HANDLING
+                if (result.mode === 'operational_rpc') {
+                    this.kanbanOperationalCounts = result.counts;
+                    this.kanbanOperationalLastResponse = result.data;
+
+                    if (loadMore) {
+                        this.tickets = [...this.tickets, ...result.data];
+                    } else {
+                        this.tickets = result.data;
+                    }
+
+                    if (result.data.length < this.ticketPagination.limit) {
+                        this.ticketPagination.hasMore = false;
+                    }
+                    this.ticketPagination.isLoading = false;
+                    return;
+                }
 
                 if (result.mode === 'kanban') {
                     if (this.showFinalized && result.finalizedHasMore !== null) {
@@ -2896,7 +2981,148 @@ function app() {
             this.searchQuery = '';
             this.activeQuickFilter = null;
             this.columnFilters = {};
+            if (this.view === 'dashboard') {
+                this.resetHomeOperationalFilters();
+            } else if (this.view === 'kanban') {
+                this.resetKanbanOperationalFilters();
+            }
             this.fetchTickets();
+        },
+
+        isHomeOperationalFilterActive() {
+            const f = this.homeOperationalFilters || {};
+            const hasSearch = !!String(f.search || '').trim();
+            return (
+                f.window !== 'all' ||
+                f.basis !== 'auto' ||
+                f.status !== 'all' ||
+                f.technician !== 'all' ||
+                hasSearch
+            );
+        },
+
+        isKanbanOperationalFilterActive() {
+            const f = this.kanbanOperationalFilters || {};
+            const hasSearch = !!String(f.search || '').trim();
+            return (
+                f.window !== 'all' ||
+                f.basis !== 'auto' ||
+                f.status !== 'all' ||
+                f.technician !== 'all' ||
+                hasSearch
+            );
+        },
+
+        resetHomeOperationalFilters() {
+            this.homeOperationalFilters = {
+                window: 'all',
+                basis: 'auto',
+                status: 'all',
+                technician: 'all',
+                search: ''
+            };
+        },
+
+        resetKanbanOperationalFilters() {
+            this.kanbanOperationalFilters = {
+                window: 'all',
+                basis: 'auto',
+                status: 'all',
+                technician: 'all',
+                search: ''
+            };
+        },
+
+        applyHomeOperationalWindow(windowType) {
+            this.homeOperationalFilters.window = windowType;
+            if (this.homeOperationalFilters.basis === 'all') this.homeOperationalFilters.basis = 'auto';
+            this.fetchHomeOperationalQueue();
+        },
+
+        applyHomeOperationalBasis(basisType) {
+            this.homeOperationalFilters.basis = basisType;
+            this.fetchHomeOperationalQueue();
+        },
+
+        applyKanbanOperationalWindow(windowType) {
+            this.kanbanOperationalFilters.window = windowType;
+            if (this.kanbanOperationalFilters.basis === 'all') this.kanbanOperationalFilters.basis = 'auto';
+            this.fetchTickets();
+        },
+
+        applyKanbanOperationalBasis(basisType) {
+            this.kanbanOperationalFilters.basis = basisType;
+            this.fetchTickets();
+        },
+
+        async fetchHomeOperationalQueue() {
+            if (!this.user?.workspace_id) return;
+            try {
+                this.homeOperationalLoading = true;
+                const f = this.homeOperationalFilters;
+                const search = String(f.search || '').trim();
+
+                const payload = {
+                    p_window: f.window,
+                    p_basis: f.basis,
+                    p_status: f.status !== 'all' ? f.status : null,
+                    p_technician_id: f.technician !== 'all' ? f.technician : null,
+                    p_search: search ? search : null,
+                    p_limit: 200, // Just a small sample limit for home display if needed
+                    p_offset: 0
+                };
+                const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', payload);
+                if (response) {
+                    if (response.counts) this.homeOperationalCounts = response.counts;
+                    if (response.items) {
+                        this.homeOperationalItems = response.items;
+                        // Build homeOps locally
+                        this.homeOps = {
+                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao'),
+                            waitingBudgetResponse: [], // Approximate since we dont have budget_status often
+                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente'),
+                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Logistica' || t.status === 'Envio'),
+                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Entrega' || t.status === 'Pronto para Entrega'),
+                            pendingTech: this.homeOperationalItems.filter(t => ['Aberto', 'Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(t.status)),
+                            outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
+                            pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado'),
+                            pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca'),
+                            pendingReceipt: [],
+                            priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
+                            delayedDeliveries: this.homeOperationalItems.filter(t => t.is_overdue === true && t.effective_due_type === 'delivery'),
+                            urgentAnalysis: this.homeOperationalItems.filter(t => t.is_overdue === true && t.effective_due_type === 'analysis'),
+                        };
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load home operational queue", e);
+            } finally {
+                this.homeOperationalLoading = false;
+            }
+        },
+
+        async fetchKanbanOperationalCounts() {
+            if (!this.user?.workspace_id) return;
+            try {
+                const f = this.kanbanOperationalFilters;
+                const search = String(f.search || '').trim();
+
+                const payload = {
+                    p_window: f.window,
+                    p_basis: f.basis,
+                    p_status: f.status !== 'all' ? f.status : null,
+                    p_technician_id: f.technician !== 'all' ? f.technician : null,
+                    p_search: search ? search : null,
+                    p_limit: 0, // Only fetch counts, no items
+                    p_offset: 0
+                };
+                const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', payload);
+                if (response && response.counts) {
+                    this.kanbanOperationalCounts = response.counts;
+                }
+            } catch (e) {
+                console.error("Failed to load kanban operational counts", e);
+            }
         },
 
         // Helper to initialize filters for a column if not exists

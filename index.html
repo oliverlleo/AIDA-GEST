@@ -751,12 +751,63 @@
 
                 <!-- VIEW: DASHBOARD (Welcome) ... existing views -->
                 <div x-show="view === 'dashboard' && (session || employeeSession)" class="p-8 overflow-y-auto h-full" x-transition.opacity>
-                    <header class="flex justify-between items-center mb-8">
+                    <header class="flex justify-between items-center mb-8 flex-wrap gap-y-4">
                         <div>
-                            <h1 class="text-3xl font-bold text-gray-800">Visão Geral</h1>
-                            <p class="text-gray-500">Resumo das atividades.</p>
+                            <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+                                Visão Geral
+                            </h1>
+                            <p class="text-gray-500 flex items-center">
+                                <i class="fa-solid fa-calendar-check text-brand-500 mr-2 text-sm"></i> Agenda Operacional
+                            </p>
                         </div>
-                        <button @click="openNewTicketModal()" class="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-brand-500 transition-colors shadow-lg flex items-center">
+                        <div class="flex-grow flex justify-center lg:px-4">
+                            <!-- Agenda Operacional Filtros -->
+                            <div class="flex flex-wrap gap-4">
+                            <!-- Hoje -->
+                            <button @click="applyHomeOperationalWindow('today')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="homeOperationalFilters.window === 'today' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Hoje</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="homeOperationalCounts.today">0</span>
+                            </button>
+                            <!-- Hoje + amanhã -->
+                            <button @click="applyHomeOperationalWindow('today_tomorrow')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="homeOperationalFilters.window === 'today_tomorrow' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Hoje + Amanhã</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="homeOperationalCounts.today_tomorrow">0</span>
+                            </button>
+                            <!-- 7 dias -->
+                            <button @click="applyHomeOperationalWindow('next_7_days')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="homeOperationalFilters.window === 'next_7_days' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">7 dias</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="homeOperationalCounts.next_7_days">0</span>
+                            </button>
+                            <!-- Atrasados -->
+                            <button @click="applyHomeOperationalWindow('overdue')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="homeOperationalFilters.window === 'overdue' ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Atrasados</span>
+                                <span class="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold" x-text="homeOperationalCounts.overdue">0</span>
+                            </button>
+                            <!-- Sem prazo -->
+                            <button @click="applyHomeOperationalWindow('no_deadline')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="homeOperationalFilters.window === 'no_deadline' ? 'bg-gray-100 border-gray-400 text-gray-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Sem prazo</span>
+                                <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="homeOperationalCounts.no_deadline">0</span>
+                            </button>
+                            <!-- Todos -->
+                            <button @click="applyHomeOperationalWindow('all')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="homeOperationalFilters.window === 'all' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Todos</span>
+                                <span class="bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full" :class="homeOperationalFilters.window === 'all' ? 'bg-gray-700' : ''" x-text="homeOperationalCounts.all">0</span>
+                            </button>
+                        </div>
+                        </div>
+                        <button @click="openNewTicketModal()" class="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-brand-500 transition-colors shadow-lg flex items-center shrink-0">
                             <i class="fa-solid fa-plus mr-2"></i> Abrir Chamado
                         </button>
                     </header>
@@ -781,24 +832,17 @@
                         </div>
                     </div>
 
-                    <!-- OPERATIONAL DASHBOARD (Atendente Focus) -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                        <!-- Col 1: Client Communication (2/3) -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div class="lg:col-span-2">
-                            <h3 class="text-lg font-bold text-gray-800 flex items-center mb-6">
-                                <i class="fa-solid fa-comments text-brand-500 mr-2"></i> Pendências com Cliente
-                            </h3>
-
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Budgets to Send -->
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-yellow-50 px-4 py-3 border-b border-yellow-100 flex justify-between items-center">
                                     <h4 class="font-bold text-yellow-800 text-sm">Aguardando Envio de Orçamento</h4>
-                                    <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingBudgets.length">0</span>
+                                    <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingBudgets.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                    <template x-for="t in ops.pendingBudgets" :key="t.id">
+                                    <template x-for="t in homeOps.pendingBudgets" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
@@ -842,7 +886,7 @@
                                             </div>
                                         </div>
                                     </template>
-                                    <div x-show="!ops.pendingBudgets.length" class="p-4 text-center text-gray-400 text-sm italic">Tudo em dia!</div>
+                                    <div x-show="!homeOps.pendingBudgets.length" class="p-4 text-center text-gray-400 text-sm italic">Tudo em dia!</div>
                                 </div>
                             </div>
 
@@ -850,10 +894,10 @@
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
                                     <h4 class="font-bold text-indigo-800 text-sm">Aguardando Aprovação</h4>
-                                    <span class="bg-indigo-200 text-indigo-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.waitingBudgetResponse.length">0</span>
+                                    <span class="bg-indigo-200 text-indigo-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.waitingBudgetResponse.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                    <template x-for="t in ops.waitingBudgetResponse" :key="t.id">
+                                    <template x-for="t in homeOps.waitingBudgetResponse" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
@@ -882,7 +926,7 @@
                                             </div>
                                         </div>
                                     </template>
-                                    <div x-show="!ops.waitingBudgetResponse.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum orçamento pendente de resposta.</div>
+                                    <div x-show="!homeOps.waitingBudgetResponse.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum orçamento pendente de resposta.</div>
                                 </div>
                             </div>
 
@@ -890,10 +934,10 @@
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-blue-50 px-4 py-3 border-b border-blue-100 flex justify-between items-center">
                                     <h4 class="font-bold text-blue-800 text-sm" x-text="isLogisticsEnabled() ? 'Logística e expedição (pendente)' : 'Solicitar Retirada (Aparelhos Pronto)'"></h4>
-                                    <span class="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingPickups.length">0</span>
+                                    <span class="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingPickups.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                    <template x-for="t in ops.pendingPickups" :key="t.id">
+                                    <template x-for="t in homeOps.pendingPickups" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
@@ -917,7 +961,7 @@
                                             </div>
                                         </div>
                                     </template>
-                                    <div x-show="!ops.pendingPickups.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
+                                    <div x-show="!homeOps.pendingPickups.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
 
@@ -925,10 +969,10 @@
                             <div x-show="isLogisticsEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-orange-50 px-4 py-3 border-b border-orange-100 flex justify-between items-center">
                                     <h4 class="font-bold text-orange-800 text-sm">Gerar Rastreio</h4>
-                                    <span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingTracking.length">0</span>
+                                    <span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingTracking.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                    <template x-for="t in ops.pendingTracking" :key="t.id">
+                                    <template x-for="t in homeOps.pendingTracking" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
@@ -942,7 +986,7 @@
                                             </div>
                                         </div>
                                     </template>
-                                    <div x-show="!ops.pendingTracking.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
+                                    <div x-show="!homeOps.pendingTracking.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
 
@@ -950,10 +994,10 @@
                             <div x-show="isLogisticsEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-green-50 px-4 py-3 border-b border-green-100 flex justify-between items-center">
                                     <h4 class="font-bold text-green-800 text-sm">Liberado</h4>
-                                    <span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingDelivery.length">0</span>
+                                    <span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingDelivery.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                    <template x-for="t in ops.pendingDelivery" :key="t.id">
+                                    <template x-for="t in homeOps.pendingDelivery" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
@@ -973,7 +1017,7 @@
                                             </div>
                                         </div>
                                     </template>
-                                    <div x-show="!ops.pendingDelivery.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
+                                    <div x-show="!homeOps.pendingDelivery.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
                             </div> <!-- End Grid for Client Pendencies -->
@@ -986,10 +1030,10 @@
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                                     <h4 class="font-bold text-gray-700 text-sm">Aguardando Início (Enviar p/ Análise)</h4>
-                                    <span class="bg-gray-300 text-gray-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingTech.length">0</span>
+                                    <span class="bg-gray-300 text-gray-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingTech.length">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                    <template x-for="t in ops.pendingTech" :key="t.id">
+                                    <template x-for="t in homeOps.pendingTech" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
                                                 <div class="flex items-center gap-2">
@@ -1023,7 +1067,7 @@
                                             </button>
                                         </div>
                                     </template>
-                                    <div x-show="!ops.pendingTech.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum chamado aguardando início.</div>
+                                    <div x-show="!homeOps.pendingTech.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum chamado aguardando início.</div>
                                 </div>
                             </div>
 
@@ -1037,10 +1081,10 @@
                                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                         <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex justify-between items-center">
                                             <h4 class="font-bold text-purple-800 text-sm">Pendente Envio</h4>
-                                            <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.outsourcedToSend ? ops.outsourcedToSend.length : 0">0</span>
+                                            <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.outsourcedToSend ? homeOps.outsourcedToSend.length : 0">0</span>
                                         </div>
                                         <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                            <template x-for="t in ops.outsourcedToSend" :key="t.id">
+                                            <template x-for="t in homeOps.outsourcedToSend" :key="t.id">
                                                 <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                                     <div>
                                                         <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
@@ -1056,7 +1100,7 @@
                                                     </button>
                                                 </div>
                                             </template>
-                                            <div x-show="!ops.outsourcedToSend || !ops.outsourcedToSend.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente de envio.</div>
+                                            <div x-show="!homeOps.outsourcedToSend || !homeOps.outsourcedToSend.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente de envio.</div>
                                         </div>
                                     </div>
 
@@ -1064,10 +1108,10 @@
                                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                         <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex justify-between items-center">
                                             <h4 class="font-bold text-purple-800 text-sm">Aguardando Retorno</h4>
-                                            <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingOutsourced.length">0</span>
+                                            <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingOutsourced.length">0</span>
                                         </div>
                                         <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                            <template x-for="t in ops.pendingOutsourced" :key="t.id">
+                                            <template x-for="t in homeOps.pendingOutsourced" :key="t.id">
                                                 <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                                     <div>
                                                         <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
@@ -1092,7 +1136,7 @@
                                                     </div>
                                                 </div>
                                             </template>
-                                            <div x-show="!ops.pendingOutsourced.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum aparelho terceirizado pendente.</div>
+                                            <div x-show="!homeOps.pendingOutsourced.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum aparelho terceirizado pendente.</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1107,10 +1151,10 @@
                                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                     <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex justify-between items-center">
                                         <h4 class="font-bold text-purple-800 text-sm">Aguardando Compra</h4>
-                                        <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingPurchase.length">0</span>
+                                        <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingPurchase.length">0</span>
                                     </div>
                                     <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                        <template x-for="t in ops.pendingPurchase" :key="t.id">
+                                        <template x-for="t in homeOps.pendingPurchase" :key="t.id">
                                             <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                                 <div>
                                                     <div class="font-bold text-gray-800 text-sm" x-text="t.device_model"></div>
@@ -1129,7 +1173,7 @@
                                                 </button>
                                             </div>
                                         </template>
-                                        <div x-show="!ops.pendingPurchase.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhuma compra pendente.</div>
+                                        <div x-show="!homeOps.pendingPurchase.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhuma compra pendente.</div>
                                     </div>
                                 </div>
 
@@ -1137,10 +1181,10 @@
                                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                     <div class="bg-teal-50 px-4 py-3 border-b border-teal-100 flex justify-between items-center">
                                         <h4 class="font-bold text-teal-800 text-sm">Aguardando Recebimento</h4>
-                                        <span class="bg-teal-200 text-teal-800 text-xs px-2 py-1 rounded-full font-bold" x-text="ops.pendingReceipt.length">0</span>
+                                        <span class="bg-teal-200 text-teal-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingReceipt.length">0</span>
                                     </div>
                                     <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                                        <template x-for="t in ops.pendingReceipt" :key="t.id">
+                                        <template x-for="t in homeOps.pendingReceipt" :key="t.id">
                                             <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                                 <div>
                                                     <div class="font-bold text-gray-800 text-sm" x-text="t.device_model"></div>
@@ -1159,12 +1203,11 @@
                                                 </button>
                                             </div>
                                         </template>
-                                        <div x-show="!ops.pendingReceipt.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum recebimento pendente.</div>
+                                        <div x-show="!homeOps.pendingReceipt.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum recebimento pendente.</div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
+</div>
                         <!-- Col 2: Alerts & Activity (1/3) -->
                         <div class="space-y-6">
                             <!-- Critical Alerts -->
@@ -1176,14 +1219,14 @@
                                 </div>
                                 <div class="p-3 space-y-3 max-h-96 overflow-y-auto">
                                     <!-- Priority List -->
-                                    <template x-if="ops.priorityTickets.length">
+                                    <template x-if="homeOps.priorityTickets.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200" @click="applyQuickFilter('priority')">
-                                                <span>PRIORIDADE (<span x-text="ops.priorityTickets.length"></span>)</span>
+                                                <span>PRIORIDADE (<span x-text="homeOps.priorityTickets.length"></span>)</span>
                                                 <i class="fa-solid fa-chevron-right text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
-                                                <template x-for="t in ops.priorityTickets.slice(0, 5)" :key="t.id">
+                                                <template x-for="t in homeOps.priorityTickets.slice(0, 5)" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-red-50 border-l-2 border-red-500 p-2 cursor-pointer hover:bg-red-100 transition-colors rounded-r group relative">
                                                         <div class="flex justify-between items-center text-xs mb-0.5">
                                                              <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
@@ -1204,7 +1247,7 @@
                                                         </div>
                                                     </div>
                                                 </template>
-                                                <div x-show="ops.priorityTickets.length > 5" class="text-center text-[10px] text-red-400 cursor-pointer hover:underline" @click="applyQuickFilter('priority')">
+                                                <div x-show="homeOps.priorityTickets.length > 5" class="text-center text-[10px] text-red-400 cursor-pointer hover:underline" @click="applyQuickFilter('priority')">
                                                     Ver mais...
                                                 </div>
                                             </div>
@@ -1212,14 +1255,14 @@
                                     </template>
 
                                     <!-- Delayed List -->
-                                    <template x-if="ops.delayedDeliveries.length">
+                                    <template x-if="homeOps.delayedDeliveries.length">
                                         <div class="mb-2">
                                             <div class="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-orange-200" @click="applyQuickFilter('delayed')">
-                                                <span>ATRASADOS (<span x-text="ops.delayedDeliveries.length"></span>)</span>
+                                                <span>ATRASADOS (<span x-text="homeOps.delayedDeliveries.length"></span>)</span>
                                                 <i class="fa-solid fa-chevron-right text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
-                                                <template x-for="t in ops.delayedDeliveries.slice(0, 5)" :key="t.id">
+                                                <template x-for="t in homeOps.delayedDeliveries.slice(0, 5)" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-orange-50 border-l-2 border-orange-500 p-2 cursor-pointer hover:bg-orange-100 transition-colors rounded-r">
                                                         <div class="flex justify-between items-center text-xs mb-0.5">
                                                              <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
@@ -1232,7 +1275,7 @@
                                                         </div>
                                                     </div>
                                                 </template>
-                                                <div x-show="ops.delayedDeliveries.length > 5" class="text-center text-[10px] text-orange-400 cursor-pointer hover:underline" @click="applyQuickFilter('delayed')">
+                                                <div x-show="homeOps.delayedDeliveries.length > 5" class="text-center text-[10px] text-orange-400 cursor-pointer hover:underline" @click="applyQuickFilter('delayed')">
                                                     Ver mais...
                                                 </div>
                                             </div>
@@ -1240,14 +1283,14 @@
                                     </template>
 
                                     <!-- Analysis Expiring -->
-                                    <template x-if="ops.urgentAnalysis.length">
+                                    <template x-if="homeOps.urgentAnalysis.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200">
-                                                <span>ANÁLISE EXPIRANDO (<span x-text="ops.urgentAnalysis.length"></span>)</span>
+                                                <span>ANÁLISE EXPIRANDO (<span x-text="homeOps.urgentAnalysis.length"></span>)</span>
                                                 <i class="fa-solid fa-stopwatch text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
-                                                <template x-for="t in ops.urgentAnalysis" :key="t.id">
+                                                <template x-for="t in homeOps.urgentAnalysis" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-red-50 border-l-2 border-red-500 p-2 cursor-pointer hover:bg-red-100 transition-colors rounded-r group relative">
                                                         <div class="flex justify-between items-center text-xs mb-0.5">
                                                              <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
@@ -1273,7 +1316,7 @@
                                     </template>
 
                                     <!-- Empty State -->
-                                    <div x-show="!ops.priorityTickets.length && !ops.delayedDeliveries.length && !ops.urgentAnalysis.length" class="text-center py-4 text-gray-400 text-xs italic">
+                                    <div x-show="!homeOps.priorityTickets.length && !homeOps.delayedDeliveries.length && !homeOps.urgentAnalysis.length" class="text-center py-4 text-gray-400 text-xs italic">
                                         Nenhum alerta crítico.
                                     </div>
                                 </div>
@@ -1319,11 +1362,10 @@
                                     <i class="fa-solid fa-chevron-right text-[10px]"></i>
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- VIEW: ADMIN DASHBOARD -->
+</div>
+</div>
+</div>
+<!-- VIEW: ADMIN DASHBOARD -->
                 <div x-show="view === 'admin_dashboard' && hasRole('admin')" class="p-8 overflow-y-auto h-full" x-transition.opacity x-cloak>
                     <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
                         <div>
@@ -2267,36 +2309,89 @@
                 <!-- VIEW: KANBAN BOARD -->
                 <div x-show="view === 'kanban'" class="flex-grow flex flex-col h-full overflow-hidden" x-cloak>
                     <!-- Kanban Header -->
-                    <div class="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm z-10">
-                        <h2 class="text-xl font-bold flex items-center">
-                            <i class="fa-solid fa-layer-group text-brand-500 mr-2"></i> Quadro de Chamados
-                        </h2>
-                        <div class="flex space-x-3 items-center">
-                             <!-- Search Bar -->
-                             <div class="relative">
-                                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                                 <input type="text" x-model="searchQuery" placeholder="Buscar OS, Cliente, Serial..."
-                                        class="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all w-64 bg-gray-50 focus:bg-white">
-                             </div>
+                    <div class="bg-white border-b px-6 py-4 flex flex-col space-y-4 shadow-sm z-10">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-xl font-bold flex items-center">
+                                <i class="fa-solid fa-layer-group text-brand-500 mr-2"></i> Quadro de Chamados
+                            </h2>
+                            <div class="flex space-x-3 items-center">
+                                 <!-- Search Bar -->
+                                 <div class="relative">
+                                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                     <input type="text" x-model="searchQuery" placeholder="Buscar OS, Cliente, Serial..."
+                                            class="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all w-64 bg-gray-50 focus:bg-white">
+                                 </div>
 
-                             <div class="flex items-center space-x-2">
-                                <!-- Clear Filter Button (Visible only when filter is active) -->
-                                <button x-show="activeQuickFilter || searchQuery" @click="clearFilters()"
-                                        class="text-xs px-3 py-2 rounded font-bold border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors flex items-center">
-                                    <i class="fa-solid fa-filter-circle-xmark mr-1"></i>
-                                    <span class="hidden sm:inline">Limpar Filtro</span>
+                                 <div class="flex items-center space-x-2">
+                                    <!-- Clear Filter Button (Visible only when filter is active) -->
+                                    <button x-show="activeQuickFilter || searchQuery || isKanbanOperationalFilterActive()" @click="clearFilters()"
+                                            class="text-xs px-3 py-2 rounded font-bold border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors flex items-center">
+                                        <i class="fa-solid fa-filter-circle-xmark mr-1"></i>
+                                        <span class="hidden sm:inline">Limpar Filtros</span>
+                                    </button>
+
+                                    <button @click="showFinalized = !showFinalized"
+                                            class="text-xs px-3 py-2 rounded font-bold border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                                            :class="showFinalized ? 'bg-gray-100 text-brand-600 border-brand-200' : ''">
+                                        <i class="fa-solid" :class="showFinalized ? 'fa-eye' : 'fa-eye-slash'"></i>
+                                        <span x-text="showFinalized ? 'Ocultar Finalizados' : 'Mostrar Finalizados'" class="ml-1 hidden sm:inline"></span>
+                                    </button>
+                                    <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
+                                        <i class="fa-solid fa-plus mr-1"></i> Novo
+                                    </button>
+                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Barra de Filtro Operacional Inteligente -->
+                        <div class="flex flex-col md:flex-row md:items-center justify-between bg-gray-50 border rounded-lg p-3 gap-3">
+                            <!-- Linha 1: Janela Operacional -->
+                            <div class="flex flex-wrap gap-2 items-center">
+                                <span class="text-xs font-bold text-gray-500 uppercase mr-1">Fila:</span>
+
+                                <button @click="applyKanbanOperationalWindow('today')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'today' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    Hoje <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'today' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.today"></span>
                                 </button>
 
-                                <button @click="showFinalized = !showFinalized"
-                                        class="text-xs px-3 py-2 rounded font-bold border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
-                                        :class="showFinalized ? 'bg-gray-100 text-brand-600 border-brand-200' : ''">
-                                    <i class="fa-solid" :class="showFinalized ? 'fa-eye' : 'fa-eye-slash'"></i>
-                                    <span x-text="showFinalized ? 'Ocultar Finalizados' : 'Mostrar Finalizados'" class="ml-1 hidden sm:inline"></span>
+                                <button @click="applyKanbanOperationalWindow('today_tomorrow')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'today_tomorrow' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    Hoje+Amanhã <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'today_tomorrow' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.today_tomorrow"></span>
                                 </button>
-                                <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
-                                    <i class="fa-solid fa-plus mr-1"></i> Novo
+
+                                <button @click="applyKanbanOperationalWindow('next_7_days')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'next_7_days' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    7 dias <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'next_7_days' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.next_7_days"></span>
                                 </button>
-                             </div>
+
+                                <button @click="applyKanbanOperationalWindow('overdue')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'overdue' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-200 hover:border-red-300'">
+                                    Atrasados <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'overdue' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.overdue"></span>
+                                </button>
+
+                                <button @click="applyKanbanOperationalWindow('no_deadline')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'no_deadline' ? 'bg-gray-600 text-white border-gray-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'">
+                                    Sem prazo <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'no_deadline' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.no_deadline"></span>
+                                </button>
+
+                                <button @click="applyKanbanOperationalWindow('all')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'all' ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'">
+                                    Todos <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'all' ? 'text-gray-300' : 'text-gray-400'" x-text="kanbanOperationalCounts.all"></span>
+                                </button>
+                            </div>
+
+                            <!-- Linha 2: Base do Cálculo -->
+                            <div class="flex items-center space-x-2 border-l border-gray-200 pl-4">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase">Base:</span>
+                                <select x-model="kanbanOperationalFilters.basis" @change="fetchTickets()"
+                                        class="text-xs border-transparent bg-transparent font-medium text-gray-700 focus:ring-0 cursor-pointer hover:text-brand-600">
+                                    <option value="auto">Automático (Inteligente)</option>
+                                    <option value="analysis">Análise</option>
+                                    <option value="delivery">Entrega</option>
+                                    <option value="entry">Entrada</option>
+                                    <option value="outsourced">Terceirizado</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -2422,6 +2517,13 @@
                                                                   :class="ticket.repair_successful ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'">
                                                                 <i class="fa-solid" :class="ticket.repair_successful ? 'fa-check' : 'fa-xmark'"></i>
                                                                 <span x-text="ticket.repair_successful ? 'Sucesso' : 'Sem Sucesso'"></span>
+                                                            </span>
+                                                        </template>
+                                                        <!-- Operational Queue Badge -->
+                                                        <template x-if="ticket.effective_due_type && ticket.effective_due_type !== 'none'">
+                                                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase bg-gray-50 text-gray-600 border-gray-200" title="Prazo Efetivo">
+                                                                <i class="fa-solid fa-clock text-gray-400 mr-1"></i>
+                                                                <span x-text="ticket.effective_due_type === 'analysis' ? 'Análise' : (ticket.effective_due_type === 'delivery' ? 'Entrega' : (ticket.effective_due_type === 'entry' ? 'Entrada' : 'Terceirizado'))"></span>
                                                             </span>
                                                         </template>
                                                     </div>
