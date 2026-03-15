@@ -592,6 +592,7 @@ function app() {
                 } else if (currentView === 'kanban') {
                     await this.fetchTickets();
                     await this.fetchOperationalAlerts(); // Alerts are used in kanban header
+                    await this.fetchKanbanOperationalCounts();
                 } else {
                     // Outras views (tech_orders, tester_bench, etc.)
                     await this.fetchTickets();
@@ -3092,28 +3093,35 @@ function app() {
                             urgentAnalysis: this.homeOperationalItems.filter(t => t.is_overdue === true && t.effective_due_type === 'analysis'),
                         };
                     }
-                    if (this.homeOperationalItems) {
-                        this.homeOps = {
-                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && !t.budget_status),
-                            waitingBudgetResponse: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && t.budget_status),
-                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente'),
-                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Logistica'),
-                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Entrega' || t.status === 'Pronto para Entrega'),
-                            pendingTech: this.homeOperationalItems.filter(t => ['Aberto', 'Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(t.status)),
-                            outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
-                            pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && t.outsourced_at),
-                            pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca' && t.parts_bought !== true),
-                            pendingReceipt: this.homeOperationalItems.filter(t => t.status === 'Compra Peca' && t.parts_bought === true),
-                            priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
-                            delayedDeliveries: this.homeOperationalItems.filter(t => t.is_overdue && t.effective_due_type === 'delivery'),
-                            urgentAnalysis: this.homeOperationalItems.filter(t => t.is_overdue && t.effective_due_type === 'analysis'),
-                        };
-                    }
                 }
             } catch (e) {
                 console.error("Failed to load home operational queue", e);
             } finally {
                 this.homeOperationalLoading = false;
+            }
+        },
+
+        async fetchKanbanOperationalCounts() {
+            if (!this.user?.workspace_id) return;
+            try {
+                const f = this.kanbanOperationalFilters;
+                const search = String(f.search || '').trim();
+
+                const payload = {
+                    p_window: f.window,
+                    p_basis: f.basis,
+                    p_status: f.status !== 'all' ? f.status : null,
+                    p_technician_id: f.technician !== 'all' ? f.technician : null,
+                    p_search: search ? search : null,
+                    p_limit: 0, // Only fetch counts, no items
+                    p_offset: 0
+                };
+                const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', payload);
+                if (response && response.counts) {
+                    this.kanbanOperationalCounts = response.counts;
+                }
+            } catch (e) {
+                console.error("Failed to load kanban operational counts", e);
             }
         },
 
