@@ -627,7 +627,11 @@ function app() {
 
                             // Correção Bug 5: O Telefone da empresa salva, mas não reaparecia para funcionários ou em reload.
                             // Hidratar whatsappNumber no front a partir da sessão armazenada, se disponível.
-                            if (this.employeeSession.whatsapp_number) this.whatsappNumber = this.employeeSession.whatsapp_number;
+                            if (this.employeeSession.whatsapp_number) {
+                                this.whatsappNumber = this.employeeSession.whatsapp_number;
+                            } else {
+                                this.whatsappNumber = '';
+                            }
 
                             // Restore Tracker Config
                             if (this.employeeSession.tracker_config) {
