@@ -3528,7 +3528,7 @@
                                     <ul class="py-1">
                                         <template x-for="model in deviceModels.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))" :key="model.id">
                                             <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center"
-                                                @mousedown.prevent="selectOption(model.name)">
+                                                @mousedown.stop.prevent="selectOption(model.name)">
                                                 <span class="block truncate" :class="ticketForm.model === model.name ? 'font-bold text-brand-600' : 'text-gray-900'" x-text="model.name"></span>
 
                                                 <!-- Delete Icon -->
@@ -3653,7 +3653,7 @@
                                      <ul class="py-1">
                                          <template x-for="option in defectOptions.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))" :key="option.id">
                                              <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center transition-colors"
-                                                 @mousedown.prevent="selectOption(option.name)">
+                                                 @mousedown.stop.prevent="selectOption(option.name)">
                                                  <span class="block truncate" :class="ticketForm.defects.includes(option.name) ? 'font-bold text-brand-600' : 'text-gray-900'" x-text="option.name"></span>
 
                                                  <!-- Delete Option -->

@@ -2543,8 +2543,10 @@ function app() {
                     this.open = false;
                 },
                 closeDropdown() {
-                    this.open = false;
-                    this.search = this.ticketForm.model || ''; // Restore input value to bound state
+                    if (this.open) {
+                        this.open = false;
+                        this.search = this.ticketForm.model || ''; // Restore input value to bound state
+                    }
                 }
             };
         },
@@ -2576,8 +2578,10 @@ function app() {
                     this.$nextTick(() => this.$refs.defectSearch.focus());
                 },
                 closeDropdown() {
-                    this.open = false;
-                    this.search = ''; // Reset search string completely
+                    if (this.open) {
+                        this.open = false;
+                        this.search = ''; // Reset search string completely
+                    }
                 }
             };
         },
