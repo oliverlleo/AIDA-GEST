@@ -13,12 +13,14 @@ window.AIDATicketQueryService = {
             const limit = state.ticketPagination.limit;
             const offset = state.ticketPagination.page * limit;
 
+            const search = String(f.search || '').trim();
+
             const payload = {
                 p_window: f.window,
                 p_basis: f.basis,
                 p_status: f.status !== 'all' ? f.status : null,
                 p_technician_id: f.technician !== 'all' ? f.technician : null,
-                p_search: f.search || state.searchQuery || null,
+                p_search: search ? search : null,
                 p_limit: limit,
                 p_offset: offset
             };

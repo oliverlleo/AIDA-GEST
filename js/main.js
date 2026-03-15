@@ -1436,6 +1436,10 @@ function app() {
             if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
+                // Synchronize search for operational filters if in kanban
+                if (this.view === 'kanban') {
+                    this.operationalFilters.search = (this.searchQuery || '').trim();
+                }
                 this.fetchTickets();
                 if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'search' });
             }, 500); // 500ms debounce
@@ -2939,9 +2943,16 @@ function app() {
         },
 
         isOperationalFilterActive() {
-            const f = this.operationalFilters;
-            // Only consider it active if a core filter is genuinely applied
-            return f.window !== 'all' || f.basis !== 'auto' || f.status !== 'all' || f.technician !== 'all';
+            const f = this.operationalFilters || {};
+            const hasSearch = !!String(f.search || '').trim();
+            // Retorna true quando houver QUALQUER filtro operacional real, incluindo busca
+            return (
+                f.window !== 'all' ||
+                f.basis !== 'auto' ||
+                f.status !== 'all' ||
+                f.technician !== 'all' ||
+                hasSearch
+            );
         },
 
         resetOperationalFilters() {
