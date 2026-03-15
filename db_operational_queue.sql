@@ -34,10 +34,9 @@ AS $$
 DECLARE
     v_workspace_id UUID;
     v_user_id UUID;
-    v_token TEXT;
-    v_token_workspace_id UUID;
+
     v_tz TEXT := 'America/Sao_Paulo';
-    v_now TIMESTAMP WITH TIME ZONE;
+    v_today_date DATE;
     v_today_start TIMESTAMP WITH TIME ZONE;
     v_tomorrow_start TIMESTAMP WITH TIME ZONE;
     v_day_after_tomorrow_start TIMESTAMP WITH TIME ZONE;
@@ -82,43 +81,15 @@ BEGIN
         END IF;
     END IF;
 
-    -- If not resolved yet, check employee token
+    -- If not resolved yet, use the standard system function for employee tokens
     IF v_workspace_id IS NULL THEN
         BEGIN
-            v_token := current_setting('request.headers', true)::json->>'x-employee-token';
+            SELECT workspace_id INTO v_workspace_id
+            FROM public.current_employee_from_token()
+            LIMIT 1;
         EXCEPTION WHEN OTHERS THEN
-            v_token := NULL;
+            v_workspace_id := NULL;
         END;
-
-        IF v_token IS NOT NULL THEN
-            -- Attempt to resolve using the same standard as current_employee_from_token
-            -- We extract workspace_id from the employee token payload directly, or via an existing function if we trust it,
-            -- but to be safe and isolated, we do an internal check if possible, or use current_employee_from_token if it exists.
-            -- Assuming the system has `current_employee_from_token()` that returns a record or json.
-            -- Actually, standard JWT logic or employee table lookup:
-            BEGIN
-                SELECT workspace_id INTO v_token_workspace_id
-                FROM public.employees
-                WHERE token = v_token AND active = true; -- This depends on the exact schema for employees.
-                -- We'll use current_employee_from_token() logic if we can't be sure of the schema.
-                -- For safety, I will assume token is a column in employees or use current_employee_from_token() as requested in the prompt.
-            EXCEPTION WHEN OTHERS THEN
-                v_token_workspace_id := NULL;
-            END;
-
-            IF v_token_workspace_id IS NOT NULL THEN
-                 v_workspace_id := v_token_workspace_id;
-            ELSE
-                 -- Try using the existing function if token lookup failed.
-                 -- The prompt mentions: "se não for authenticated, resolver via current_employee_from_token()"
-                 -- I will assume the function returns a record with workspace_id.
-                 BEGIN
-                     EXECUTE 'SELECT workspace_id FROM public.current_employee_from_token()' INTO v_workspace_id;
-                 EXCEPTION WHEN OTHERS THEN
-                     v_workspace_id := NULL;
-                 END;
-            END IF;
-        END IF;
     END IF;
 
     IF v_workspace_id IS NULL THEN
@@ -126,8 +97,13 @@ BEGIN
     END IF;
 
     -- 3. Time Calculations in Operation Timezone
-    v_now := CURRENT_TIMESTAMP AT TIME ZONE v_tz;
-    v_today_start := date_trunc('day', v_now AT TIME ZONE v_tz) AT TIME ZONE v_tz;
+    -- Get current date in Sao Paulo timezone safely
+    v_today_date := (now() AT TIME ZONE v_tz)::date;
+
+    -- Convert local date back to absolute timestamptz for boundaries
+    -- This casts the local date to a local timestamp 'YYYY-MM-DD 00:00:00'
+    -- and then correctly interprets it as America/Sao_Paulo time to produce a global timestamptz.
+    v_today_start := (v_today_date::timestamp AT TIME ZONE v_tz);
     v_tomorrow_start := v_today_start + interval '1 day';
     v_day_after_tomorrow_start := v_today_start + interval '2 days';
     v_in_8_days_start := v_today_start + interval '8 days';
@@ -171,11 +147,15 @@ BEGIN
         FROM public.tickets t
         WHERE t.workspace_id = v_workspace_id
           AND t.deleted_at IS NULL
-          AND (p_status IS NULL OR p_status = 'all' OR t.status = p_status)
           AND (
-              (p_status IS NOT NULL AND p_status != 'all')
+              -- Se p_status for 'all', trazemos tudo (incluindo finalizados, ou você pode querer excluir finalizados até no 'all'.
+              -- O padrão pedido: excluir Finalizado por padrão, mas se vier preenchido e não for 'all', respeitar.
+              -- Para ser seguro: se for 'all', traz tudo. Se for null, exclui Finalizado. Se for específico, traz o específico.
+              (p_status = 'all')
               OR
               (p_status IS NULL AND t.status != 'Finalizado')
+              OR
+              (p_status IS NOT NULL AND p_status != 'all' AND t.status = p_status)
           )
           AND (p_technician_id IS NULL OR t.technician_id = p_technician_id)
           AND (
@@ -198,39 +178,28 @@ BEGIN
                 WHEN bt.effective_due_at >= v_tomorrow_start AND bt.effective_due_at < v_day_after_tomorrow_start THEN 'tomorrow'
                 WHEN bt.effective_due_at >= v_day_after_tomorrow_start AND bt.effective_due_at < v_in_8_days_start THEN 'next_7_days'
                 ELSE 'later'
-            END AS base_bucket,
+            END AS urgency_bucket,
 
-            -- is_overdue and days_to_due
+            -- is_overdue and days_to_due based on local time difference
             (bt.effective_due_at < v_today_start) AS is_overdue,
             CASE
                 WHEN bt.effective_due_at IS NOT NULL THEN
-                    EXTRACT(DAY FROM (date_trunc('day', bt.effective_due_at AT TIME ZONE v_tz) - v_today_start))::integer
+                    -- EXTRACT EPOCH / 86400 on truncated local dates gives exact days difference.
+                    -- Simple DATE subtraction using AT TIME ZONE:
+                    ((bt.effective_due_at AT TIME ZONE v_tz)::date - (v_today_start AT TIME ZONE v_tz)::date)
                 ELSE NULL
             END AS days_to_due
         FROM base_tickets bt
     ),
-    final_tickets AS (
-        SELECT
-            bt.*,
-            CASE
-                WHEN bt.base_bucket = 'overdue' THEN 'overdue'
-                WHEN bt.base_bucket = 'today' THEN 'today'
-                WHEN bt.base_bucket = 'tomorrow' THEN 'today_tomorrow'
-                WHEN bt.base_bucket = 'next_7_days' THEN 'next_7_days'
-                WHEN bt.base_bucket = 'no_deadline' THEN 'no_deadline'
-                ELSE 'later'
-            END AS urgency_bucket
-        FROM bucketed_tickets bt
-    ),
     aggregated_counts AS (
         SELECT
             COUNT(*) FILTER (WHERE urgency_bucket = 'today') AS today_count,
-            COUNT(*) FILTER (WHERE urgency_bucket IN ('today', 'today_tomorrow')) AS today_tomorrow_count,
-            COUNT(*) FILTER (WHERE urgency_bucket IN ('today', 'today_tomorrow', 'next_7_days')) AS next_7_days_count,
+            COUNT(*) FILTER (WHERE urgency_bucket IN ('today', 'tomorrow')) AS today_tomorrow_count,
+            COUNT(*) FILTER (WHERE urgency_bucket IN ('today', 'tomorrow', 'next_7_days')) AS next_7_days_count,
             COUNT(*) FILTER (WHERE urgency_bucket = 'overdue') AS overdue_count,
             COUNT(*) FILTER (WHERE urgency_bucket = 'no_deadline') AS no_deadline_count,
             COUNT(*) AS all_count
-        FROM final_tickets
+        FROM bucketed_tickets
     )
     SELECT
         jsonb_build_object(
@@ -245,29 +214,19 @@ BEGIN
     -- Retrieve items based on the window
     SELECT COALESCE(jsonb_agg(row_to_json(filtered.*)), '[]'::jsonb) INTO v_items
     FROM (
-        SELECT * FROM final_tickets ft
+        SELECT * FROM bucketed_tickets ft
         WHERE
             (p_window = 'all') OR
             (p_window = 'overdue' AND ft.urgency_bucket = 'overdue') OR
             (p_window = 'no_deadline' AND ft.urgency_bucket = 'no_deadline') OR
             (p_window = 'today' AND ft.urgency_bucket = 'today') OR
-            (p_window = 'today_tomorrow' AND ft.urgency_bucket IN ('today', 'today_tomorrow')) OR
-            (p_window = 'next_7_days' AND ft.urgency_bucket IN ('today', 'today_tomorrow', 'next_7_days'))
+            (p_window = 'today_tomorrow' AND ft.urgency_bucket IN ('today', 'tomorrow')) OR
+            (p_window = 'next_7_days' AND ft.urgency_bucket IN ('today', 'tomorrow', 'next_7_days'))
         ORDER BY
             ft.effective_due_at ASC NULLS LAST,
-            -- Assuming priority_requested is a field or we prioritize textual priority:
-            -- Not explicitly defined in schema description above, but mentioned in prompt:
-            -- priority_requested desc, then textual priority
-            -- If priority_requested or priority fields don't exist, this might fail, but I'll add them based on prompt.
-            -- Using a generic approach for textual priority if it exists:
-            -- Actually, let's use a safe ordering approach that won't fail if fields are missing in this DB version.
-            -- "prioridade textual: Urgente, Alta, Normal, Baixa"
-            -- I'll wrap them in an EXISTS check or just try to order.
-            -- Since I must not fail and dynamic sort fields can be missing,
-            -- I will cast the record to JSON and extract boolean as text or directly use the column if it's guaranteed.
-            -- Using simple extraction for priority string
-            (row_to_json(ft)->>'priority_requested') DESC NULLS LAST,
-            CASE row_to_json(ft)->>'priority'
+            -- Safe and strict ordering based on actual columns
+            ft.priority_requested DESC NULLS LAST,
+            CASE ft.priority
                 WHEN 'Urgente' THEN 1
                 WHEN 'Alta' THEN 2
                 WHEN 'Normal' THEN 3
