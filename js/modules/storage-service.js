@@ -26,7 +26,9 @@ window.AIDAStorageService = {
 
         try {
             const bucket = 'workspace_logos';
-            const path = `${state.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
+            const wsId = state.employeeSession?.workspace_id || state.user?.workspace_id;
+            if (!wsId) throw new Error('Workspace ID não encontrado na sessão.');
+            const path = `${wsId}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
             const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
 
             const headers = this.getStorageHeaders(file.type, deps);
