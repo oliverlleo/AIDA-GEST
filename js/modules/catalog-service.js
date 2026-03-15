@@ -102,7 +102,7 @@ window.AIDACatalogService = {
         }
     },
 
-    async createOutsourcedCompany(name, phone, deps) {
+    async createOutsourcedCompany(name, phone, services, deps) {
         const { state, supabaseFetch, notify, fetchOutsourcedCompanies } = deps;
         if (!name || !name.trim()) return;
         if (!state.user?.workspace_id) return;
@@ -111,7 +111,8 @@ window.AIDACatalogService = {
             await supabaseFetch('outsourced_companies', 'POST', {
                 workspace_id: state.user.workspace_id,
                 name: name.trim(),
-                phone: phone ? phone.trim() : null
+                phone: phone ? phone.trim() : null,
+                services: services ? services.trim() : null
             });
             await fetchOutsourcedCompanies();
             notify("Empresa parceira cadastrada!", "success");

@@ -1683,8 +1683,8 @@ function app() {
             });
         },
 
-        async createOutsourcedCompany(name, phone) {
-            return await window.AIDACatalogService.createOutsourcedCompany(name, phone, {
+        async createOutsourcedCompany(name, phone, services) {
+            return await window.AIDACatalogService.createOutsourcedCompany(name, phone, services, {
                 state: this,
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                 notify: (msg, type) => this.notify(msg, type),
@@ -2460,6 +2460,10 @@ function app() {
         getOutsourcedPhone(id) {
              const c = this.outsourcedCompanies.find(x => x.id === id);
              return c ? c.phone : '';
+        },
+        getOutsourcedServices(id) {
+             const c = this.outsourcedCompanies.find(x => x.id === id);
+             return c && c.services ? c.services : '';
         },
 
         openOutsourcedModal(ticketOrId) {
