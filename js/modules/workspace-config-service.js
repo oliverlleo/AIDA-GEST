@@ -3,6 +3,41 @@
 // Parte da infraestrutura de módulos
 
 window.AIDAWorkspaceConfigService = {
+    async loadWorkspaceConfig(deps) {
+        const workspaceId = deps.state.user?.workspace_id || deps.state.employeeSession?.workspace_id;
+        if (!workspaceId) return;
+
+        try {
+            // Re-fetch essential workspace details (e.g., whatsapp_number, company_code)
+            // Note: Since RLS policies generally allow users in the same workspace to select,
+            // a direct fetch on `workspaces` table via the `workspace_id` is safe and effective.
+            const data = await deps.supabaseFetch(`workspaces?select=company_code,whatsapp_number,tracker_config&id=eq.${workspaceId}`);
+
+            if (data && data.length > 0) {
+                const ws = data[0];
+                deps.state.companyCode = ws.company_code;
+                deps.state.whatsappNumber = ws.whatsapp_number || '';
+
+                if (ws.tracker_config) {
+                    deps.state.trackerConfig = {
+                        ...deps.state.trackerConfig,
+                        ...ws.tracker_config,
+                        colors: {
+                            ...deps.state.trackerConfig.colors,
+                            ...(ws.tracker_config.colors || {})
+                        },
+                        required_ticket_fields: {
+                            ...deps.state.trackerConfig.required_ticket_fields,
+                            ...(ws.tracker_config.required_ticket_fields || {})
+                        }
+                    };
+                }
+            }
+        } catch (e) {
+            console.error("Erro ao recarregar configurações do workspace:", e);
+        }
+    },
+
     async saveCompanyConfig(deps) {
         if (!deps.state.user?.workspace_id || !deps.state.hasRole('admin')) return;
         deps.setLoading(true);

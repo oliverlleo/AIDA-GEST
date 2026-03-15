@@ -2991,7 +2991,7 @@
                     <!-- Section 1: Company Data -->
                     <div class="bg-white rounded-lg shadow p-6 mb-8">
                          <h2 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Dados da Empresa</h2>
-                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                              <div>
                                  <label class="block text-sm font-bold text-gray-600 mb-1">WhatsApp da Empresa</label>
                                  <p class="text-xs text-gray-400 mb-2">Este número aparecerá no botão "Precisa de Ajuda?" da página do cliente.</p>
@@ -2999,6 +2999,11 @@
                                      <input type="text" x-model="whatsappNumber" placeholder="Ex: 5511999999999" class="flex-grow border rounded-l-lg p-2 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
                                      <button @click="saveCompanyConfig()" class="bg-brand-500 text-white px-4 py-2 rounded-r-lg font-bold hover:bg-brand-600">Salvar</button>
                                  </div>
+                             </div>
+                             <div>
+                                 <label class="block text-sm font-bold text-gray-600 mb-1">Código da Empresa</label>
+                                 <p class="text-xs text-gray-400 mb-2">Necessário para login da equipe técnica.</p>
+                                 <input type="text" x-model="companyCode" readonly disabled class="w-full border rounded-lg p-2 bg-gray-100 text-gray-600 font-mono font-bold cursor-not-allowed">
                              </div>
                          </div>
                     </div>
