@@ -31,7 +31,10 @@ window.AIDAStorageService = {
 
             const headers = this.getStorageHeaders(file.type, deps);
             const response = await fetch(url, { method: 'POST', headers, body: file });
-            if (!response.ok) throw new Error("Falha no upload");
+            if (!response.ok) {
+                const txt = await response.text().catch(() => '');
+                throw new Error(`Falha no upload (${response.status}): ${txt}`);
+            }
 
             // Construct Public URL (bucket is public now)
             const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
