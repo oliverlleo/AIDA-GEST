@@ -832,7 +832,9 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Budgets to Send -->
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-yellow-50 px-4 py-3 border-b border-yellow-100 flex justify-between items-center">
@@ -1205,8 +1207,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
+</div>
                         <!-- Col 2: Alerts & Activity (1/3) -->
                         <div class="space-y-6">
                             <!-- Critical Alerts -->
@@ -1361,11 +1362,10 @@
                                     <i class="fa-solid fa-chevron-right text-[10px]"></i>
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- VIEW: ADMIN DASHBOARD -->
+</div>
+</div>
+</div>
+<!-- VIEW: ADMIN DASHBOARD -->
                 <div x-show="view === 'admin_dashboard' && hasRole('admin')" class="p-8 overflow-y-auto h-full" x-transition.opacity x-cloak>
                     <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
                         <div>
