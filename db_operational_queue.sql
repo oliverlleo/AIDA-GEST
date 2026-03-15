@@ -148,14 +148,11 @@ BEGIN
         WHERE t.workspace_id = v_workspace_id
           AND t.deleted_at IS NULL
           AND (
-              -- Se p_status for 'all', trazemos tudo (incluindo finalizados, ou você pode querer excluir finalizados até no 'all'.
-              -- O padrão pedido: excluir Finalizado por padrão, mas se vier preenchido e não for 'all', respeitar.
-              -- Para ser seguro: se for 'all', traz tudo. Se for null, exclui Finalizado. Se for específico, traz o específico.
-              (p_status = 'all')
+              (p_status IS NULL AND t.status <> 'Finalizado')
               OR
-              (p_status IS NULL AND t.status != 'Finalizado')
+              (p_status = 'all' AND t.status <> 'Finalizado')
               OR
-              (p_status IS NOT NULL AND p_status != 'all' AND t.status = p_status)
+              (p_status IS NOT NULL AND p_status <> 'all' AND t.status = p_status)
           )
           AND (p_technician_id IS NULL OR t.technician_id = p_technician_id)
           AND (
