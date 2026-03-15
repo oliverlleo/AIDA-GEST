@@ -4,31 +4,42 @@
 
 window.AIDAWorkspaceConfigService = {
     async loadWorkspaceConfig(deps) {
-        const workspaceId = deps.state.user?.workspace_id || deps.state.employeeSession?.workspace_id;
-        if (!workspaceId) return;
-
         try {
-            // Re-fetch essential workspace details (e.g., whatsapp_number, company_code)
-            // Note: Since RLS policies generally allow users in the same workspace to select,
-            // a direct fetch on `workspaces` table via the `workspace_id` is safe and effective.
-            const data = await deps.supabaseFetch(`workspaces?select=company_code,whatsapp_number,tracker_config&id=eq.${workspaceId}`);
+            let wsData = null;
 
-            if (data && data.length > 0) {
-                const ws = data[0];
-                deps.state.companyCode = ws.company_code;
-                deps.state.whatsappNumber = ws.whatsapp_number || '';
+            // 1. Caminho para Admin Funcionário (usando RPC segura)
+            if (deps.state.employeeSession && deps.state.employeeSession.token && deps.state.hasRole('admin')) {
+                const rpcData = await deps.supabaseFetch('rpc/get_workspace_company_config_for_employee', 'POST', {
+                    p_token: deps.state.employeeSession.token
+                });
+                if (rpcData && rpcData.length > 0) {
+                    wsData = rpcData[0];
+                }
+            }
+            // 2. Caminho preservado para Admin por E-mail (dono)
+            else if (deps.state.user?.workspace_id) {
+                const data = await deps.supabaseFetch(`workspaces?select=company_code,whatsapp_number,tracker_config&id=eq.${deps.state.user.workspace_id}`);
+                if (data && data.length > 0) {
+                    wsData = data[0];
+                }
+            }
 
-                if (ws.tracker_config) {
+            // Aplicar o retorno no estado (comum para os dois caminhos)
+            if (wsData) {
+                deps.state.companyCode = wsData.company_code;
+                deps.state.whatsappNumber = wsData.whatsapp_number || '';
+
+                if (wsData.tracker_config) {
                     deps.state.trackerConfig = {
                         ...deps.state.trackerConfig,
-                        ...ws.tracker_config,
+                        ...wsData.tracker_config,
                         colors: {
                             ...deps.state.trackerConfig.colors,
-                            ...(ws.tracker_config.colors || {})
+                            ...(wsData.tracker_config.colors || {})
                         },
                         required_ticket_fields: {
                             ...deps.state.trackerConfig.required_ticket_fields,
-                            ...(ws.tracker_config.required_ticket_fields || {})
+                            ...(wsData.tracker_config.required_ticket_fields || {})
                         }
                     };
                 }
