@@ -25,27 +25,51 @@ window.AIDAStorageService = {
         const { SUPABASE_URL, SUPABASE_KEY, state } = deps;
 
         try {
-            const url = `${SUPABASE_URL}/functions/v1/upload-workspace-logo`;
+            const workspaceId = state.employeeSession?.workspace_id || state.user?.workspace_id;
+            if (!workspaceId) throw new Error('Workspace ID not found for logo upload');
 
-            const form = new FormData();
-            form.append('file', file);
+            // CASO 1: ADMIN FUNCIONÁRIO -> EDGE FUNCTION
+            if (state.employeeSession?.token) {
+                const url = `${SUPABASE_URL}/functions/v1/upload-workspace-logo`;
+
+                const form = new FormData();
+                form.append('file', file);
+
+                const headers = {
+                    apikey: SUPABASE_KEY,
+                    'x-employee-token': state.employeeSession.token
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: form
+                });
+
+                if (!response.ok) {
+                    const txt = await response.text().catch(() => '');
+                    throw new Error(`Falha no upload (${response.status}): ${txt}`);
+                }
+
+                const data = await response.json();
+                return data.publicUrl || data.url || data.path;
+            }
+
+            // CASO 2: ADMIN POR E-MAIL -> STORAGE DIRETO
+            const bucket = 'workspace_logos';
+            const path = `${workspaceId}/logo/logo_${Date.now()}.png`;
+            const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
 
             const headers = {
-                apikey: SUPABASE_KEY
+                apikey: SUPABASE_KEY,
+                Authorization: `Bearer ${state.session.access_token}`,
+                'Content-Type': file.type || 'application/octet-stream'
             };
-
-            if (state.session?.access_token) {
-                headers['Authorization'] = `Bearer ${state.session.access_token}`;
-            }
-
-            if (state.employeeSession?.token) {
-                headers['x-employee-token'] = state.employeeSession.token;
-            }
 
             const response = await fetch(url, {
                 method: 'POST',
                 headers,
-                body: form
+                body: file
             });
 
             if (!response.ok) {
@@ -53,9 +77,7 @@ window.AIDAStorageService = {
                 throw new Error(`Falha no upload (${response.status}): ${txt}`);
             }
 
-            const data = await response.json();
-            return data.publicUrl || data.url || data.path;
-
+            return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
         } catch(e) {
             throw e;
         }
