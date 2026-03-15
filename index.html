@@ -781,6 +781,57 @@
                         </div>
                     </div>
 
+                    <!-- NOVO: Agenda Operacional -->
+                    <div class="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <h3 class="text-lg font-bold text-gray-800 flex items-center mb-4">
+                            <i class="fa-solid fa-calendar-check text-brand-500 mr-2"></i> Agenda Operacional
+                        </h3>
+                        <div class="flex flex-wrap gap-4">
+                            <!-- Hoje -->
+                            <button @click="applyOperationalWindow('today')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="operationalFilters.window === 'today' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Hoje</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="operationalCounts.today">0</span>
+                            </button>
+                            <!-- Hoje + amanhã -->
+                            <button @click="applyOperationalWindow('today_tomorrow')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="operationalFilters.window === 'today_tomorrow' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Hoje + Amanhã</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="operationalCounts.today_tomorrow">0</span>
+                            </button>
+                            <!-- 7 dias -->
+                            <button @click="applyOperationalWindow('next_7_days')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="operationalFilters.window === 'next_7_days' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">7 dias</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="operationalCounts.next_7_days">0</span>
+                            </button>
+                            <!-- Atrasados -->
+                            <button @click="applyOperationalWindow('overdue')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="operationalFilters.window === 'overdue' ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Atrasados</span>
+                                <span class="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold" x-text="operationalCounts.overdue">0</span>
+                            </button>
+                            <!-- Sem prazo -->
+                            <button @click="applyOperationalWindow('no_deadline')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="operationalFilters.window === 'no_deadline' ? 'bg-gray-100 border-gray-400 text-gray-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Sem prazo</span>
+                                <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="operationalCounts.no_deadline">0</span>
+                            </button>
+                            <!-- Todos -->
+                            <button @click="applyOperationalWindow('all')"
+                                    class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
+                                    :class="operationalFilters.window === 'all' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                <span class="font-bold">Todos</span>
+                                <span class="bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full" :class="operationalFilters.window === 'all' ? 'bg-gray-700' : ''" x-text="operationalCounts.all">0</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- OPERATIONAL DASHBOARD (Atendente Focus) -->
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
@@ -2267,36 +2318,89 @@
                 <!-- VIEW: KANBAN BOARD -->
                 <div x-show="view === 'kanban'" class="flex-grow flex flex-col h-full overflow-hidden" x-cloak>
                     <!-- Kanban Header -->
-                    <div class="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm z-10">
-                        <h2 class="text-xl font-bold flex items-center">
-                            <i class="fa-solid fa-layer-group text-brand-500 mr-2"></i> Quadro de Chamados
-                        </h2>
-                        <div class="flex space-x-3 items-center">
-                             <!-- Search Bar -->
-                             <div class="relative">
-                                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                                 <input type="text" x-model="searchQuery" placeholder="Buscar OS, Cliente, Serial..."
-                                        class="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all w-64 bg-gray-50 focus:bg-white">
-                             </div>
+                    <div class="bg-white border-b px-6 py-4 flex flex-col space-y-4 shadow-sm z-10">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-xl font-bold flex items-center">
+                                <i class="fa-solid fa-layer-group text-brand-500 mr-2"></i> Quadro de Chamados
+                            </h2>
+                            <div class="flex space-x-3 items-center">
+                                 <!-- Search Bar -->
+                                 <div class="relative">
+                                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                     <input type="text" x-model="searchQuery" placeholder="Buscar OS, Cliente, Serial..."
+                                            class="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all w-64 bg-gray-50 focus:bg-white">
+                                 </div>
 
-                             <div class="flex items-center space-x-2">
-                                <!-- Clear Filter Button (Visible only when filter is active) -->
-                                <button x-show="activeQuickFilter || searchQuery" @click="clearFilters()"
-                                        class="text-xs px-3 py-2 rounded font-bold border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors flex items-center">
-                                    <i class="fa-solid fa-filter-circle-xmark mr-1"></i>
-                                    <span class="hidden sm:inline">Limpar Filtro</span>
+                                 <div class="flex items-center space-x-2">
+                                    <!-- Clear Filter Button (Visible only when filter is active) -->
+                                    <button x-show="activeQuickFilter || searchQuery || isOperationalFilterActive()" @click="clearFilters()"
+                                            class="text-xs px-3 py-2 rounded font-bold border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors flex items-center">
+                                        <i class="fa-solid fa-filter-circle-xmark mr-1"></i>
+                                        <span class="hidden sm:inline">Limpar Filtros</span>
+                                    </button>
+
+                                    <button @click="showFinalized = !showFinalized"
+                                            class="text-xs px-3 py-2 rounded font-bold border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                                            :class="showFinalized ? 'bg-gray-100 text-brand-600 border-brand-200' : ''">
+                                        <i class="fa-solid" :class="showFinalized ? 'fa-eye' : 'fa-eye-slash'"></i>
+                                        <span x-text="showFinalized ? 'Ocultar Finalizados' : 'Mostrar Finalizados'" class="ml-1 hidden sm:inline"></span>
+                                    </button>
+                                    <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
+                                        <i class="fa-solid fa-plus mr-1"></i> Novo
+                                    </button>
+                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Barra de Filtro Operacional Inteligente -->
+                        <div class="flex flex-col md:flex-row md:items-center justify-between bg-gray-50 border rounded-lg p-3 gap-3">
+                            <!-- Linha 1: Janela Operacional -->
+                            <div class="flex flex-wrap gap-2 items-center">
+                                <span class="text-xs font-bold text-gray-500 uppercase mr-1">Fila:</span>
+
+                                <button @click="applyOperationalWindow('today')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="operationalFilters.window === 'today' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    Hoje <span class="ml-1 font-bold" :class="operationalFilters.window === 'today' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.today"></span>
                                 </button>
 
-                                <button @click="showFinalized = !showFinalized"
-                                        class="text-xs px-3 py-2 rounded font-bold border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
-                                        :class="showFinalized ? 'bg-gray-100 text-brand-600 border-brand-200' : ''">
-                                    <i class="fa-solid" :class="showFinalized ? 'fa-eye' : 'fa-eye-slash'"></i>
-                                    <span x-text="showFinalized ? 'Ocultar Finalizados' : 'Mostrar Finalizados'" class="ml-1 hidden sm:inline"></span>
+                                <button @click="applyOperationalWindow('today_tomorrow')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="operationalFilters.window === 'today_tomorrow' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    Hoje+Amanhã <span class="ml-1 font-bold" :class="operationalFilters.window === 'today_tomorrow' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.today_tomorrow"></span>
                                 </button>
-                                <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
-                                    <i class="fa-solid fa-plus mr-1"></i> Novo
+
+                                <button @click="applyOperationalWindow('next_7_days')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="operationalFilters.window === 'next_7_days' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    7 dias <span class="ml-1 font-bold" :class="operationalFilters.window === 'next_7_days' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.next_7_days"></span>
                                 </button>
-                             </div>
+
+                                <button @click="applyOperationalWindow('overdue')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="operationalFilters.window === 'overdue' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-200 hover:border-red-300'">
+                                    Atrasados <span class="ml-1 font-bold" :class="operationalFilters.window === 'overdue' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.overdue"></span>
+                                </button>
+
+                                <button @click="applyOperationalWindow('no_deadline')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="operationalFilters.window === 'no_deadline' ? 'bg-gray-600 text-white border-gray-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'">
+                                    Sem prazo <span class="ml-1 font-bold" :class="operationalFilters.window === 'no_deadline' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.no_deadline"></span>
+                                </button>
+
+                                <button @click="applyOperationalWindow('all')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="operationalFilters.window === 'all' ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'">
+                                    Todos <span class="ml-1 font-bold" :class="operationalFilters.window === 'all' ? 'text-gray-300' : 'text-gray-400'" x-text="operationalCounts.all"></span>
+                                </button>
+                            </div>
+
+                            <!-- Linha 2: Base do Cálculo -->
+                            <div class="flex items-center space-x-2 border-l border-gray-200 pl-4">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase">Base:</span>
+                                <select x-model="operationalFilters.basis" @change="fetchTickets()"
+                                        class="text-xs border-transparent bg-transparent font-medium text-gray-700 focus:ring-0 cursor-pointer hover:text-brand-600">
+                                    <option value="auto">Automático (Inteligente)</option>
+                                    <option value="analysis">Análise</option>
+                                    <option value="delivery">Entrega</option>
+                                    <option value="entry">Entrada</option>
+                                    <option value="outsourced">Terceirizado</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -2422,6 +2526,13 @@
                                                                   :class="ticket.repair_successful ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'">
                                                                 <i class="fa-solid" :class="ticket.repair_successful ? 'fa-check' : 'fa-xmark'"></i>
                                                                 <span x-text="ticket.repair_successful ? 'Sucesso' : 'Sem Sucesso'"></span>
+                                                            </span>
+                                                        </template>
+                                                        <!-- Operational Queue Badge -->
+                                                        <template x-if="ticket.effective_due_type && ticket.effective_due_type !== 'none'">
+                                                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase bg-gray-50 text-gray-600 border-gray-200" title="Prazo Efetivo">
+                                                                <i class="fa-solid fa-clock text-gray-400 mr-1"></i>
+                                                                <span x-text="ticket.effective_due_type === 'analysis' ? 'Análise' : (ticket.effective_due_type === 'delivery' ? 'Entrega' : (ticket.effective_due_type === 'entry' ? 'Entrada' : 'Terceirizado'))"></span>
                                                             </span>
                                                         </template>
                                                     </div>

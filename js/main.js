@@ -48,6 +48,25 @@ function app() {
             viewType: 'data'
         },
 
+        // Operational Filters (New Backend feature)
+        operationalFilters: {
+            window: 'today',
+            basis: 'auto',
+            status: 'all',
+            technician: 'all',
+            search: ''
+        },
+        operationalCounts: {
+            today: 0,
+            today_tomorrow: 0,
+            next_7_days: 0,
+            overdue: 0,
+            no_deadline: 0,
+            all: 0
+        },
+        operationalLoading: false,
+        operationalLastResponse: null,
+
         // Tracker Configuration (NEW)
         trackerConfig: {
             logo_url: '',
@@ -1509,6 +1528,24 @@ function app() {
                     hasRole: (r) => this.hasRole(r)
                 }, loadMore);
 
+                // OPERATIONAL RPC MODE HANDLING
+                if (result.mode === 'operational_rpc') {
+                    this.operationalCounts = result.counts;
+                    this.operationalLastResponse = result.data;
+
+                    if (loadMore) {
+                        this.tickets = [...this.tickets, ...result.data];
+                    } else {
+                        this.tickets = result.data;
+                    }
+
+                    if (result.data.length < this.ticketPagination.limit) {
+                        this.ticketPagination.hasMore = false;
+                    }
+                    this.ticketPagination.isLoading = false;
+                    return;
+                }
+
                 if (result.mode === 'kanban') {
                     if (this.showFinalized && result.finalizedHasMore !== null) {
                         this.finalizedHasMore = result.finalizedHasMore;
@@ -2896,6 +2933,35 @@ function app() {
             this.searchQuery = '';
             this.activeQuickFilter = null;
             this.columnFilters = {};
+            this.resetOperationalFilters();
+            this.fetchTickets();
+        },
+
+        isOperationalFilterActive() {
+            const f = this.operationalFilters;
+            return f.window !== 'all' || f.basis !== 'auto' || f.status !== 'all' || f.technician !== 'all' || f.search !== '';
+        },
+
+        resetOperationalFilters() {
+            this.operationalFilters = {
+                window: 'all',
+                basis: 'auto',
+                status: 'all',
+                technician: 'all',
+                search: ''
+            };
+        },
+
+        applyOperationalWindow(windowType) {
+            this.operationalFilters.window = windowType;
+            if (this.view !== 'kanban') {
+                this.view = 'kanban';
+            }
+            this.fetchTickets();
+        },
+
+        applyOperationalBasis(basisType) {
+            this.operationalFilters.basis = basisType;
             this.fetchTickets();
         },
 
