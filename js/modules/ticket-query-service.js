@@ -7,8 +7,8 @@ window.AIDATicketQueryService = {
         const { state, supabaseFetch, hasRole } = deps;
 
         // OPERATIONAL QUEUE RPC
-        // Activate only when operational filter is active and we are in an operational view
-        if (state.isOperationalFilterActive() && ['kanban', 'dashboard', 'admin_dashboard'].includes(state.view)) {
+        // Activate only when operational filter is active and we are exactly in the kanban view
+        if (state.isOperationalFilterActive() && state.view === 'kanban') {
             const f = state.operationalFilters;
             const limit = state.ticketPagination.limit;
             const offset = state.ticketPagination.page * limit;

@@ -50,7 +50,7 @@ function app() {
 
         // Operational Filters (New Backend feature)
         operationalFilters: {
-            window: 'today',
+            window: 'all',
             basis: 'auto',
             status: 'all',
             technician: 'all',
@@ -551,6 +551,7 @@ function app() {
                         this.fetchGlobalLogs();
                     }
                     await this.requestDashboardMetrics({ reason: 'view_change' });
+                    await this.fetchOperationalCounts();
                 } else if (currentView === 'admin_dashboard') {
                     await this.fetchTickets();
                     await this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
@@ -2939,7 +2940,8 @@ function app() {
 
         isOperationalFilterActive() {
             const f = this.operationalFilters;
-            return f.window !== 'all' || f.basis !== 'auto' || f.status !== 'all' || f.technician !== 'all' || f.search !== '';
+            // Only consider it active if a core filter is genuinely applied
+            return f.window !== 'all' || f.basis !== 'auto' || f.status !== 'all' || f.technician !== 'all';
         },
 
         resetOperationalFilters() {
@@ -2954,15 +2956,42 @@ function app() {
 
         applyOperationalWindow(windowType) {
             this.operationalFilters.window = windowType;
+            // Default basis if it's the first time interacting with the shortcut
+            if (this.operationalFilters.basis === 'all') this.operationalFilters.basis = 'auto';
+
             if (this.view !== 'kanban') {
+                // Change to kanban view, which automatically calls fetchTickets
                 this.view = 'kanban';
+            } else {
+                // If already in kanban, manually refresh tickets
+                this.fetchTickets();
             }
-            this.fetchTickets();
         },
 
         applyOperationalBasis(basisType) {
             this.operationalFilters.basis = basisType;
             this.fetchTickets();
+        },
+
+        async fetchOperationalCounts() {
+            if (!this.user?.workspace_id) return;
+            try {
+                this.operationalLoading = true;
+                const payload = {
+                    p_window: 'all',
+                    p_basis: this.operationalFilters.basis || 'auto',
+                    p_limit: 0,
+                    p_offset: 0
+                };
+                const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', payload);
+                if (response && response.counts) {
+                    this.operationalCounts = response.counts;
+                }
+            } catch (e) {
+                console.error("Failed to load operational counts", e);
+            } finally {
+                this.operationalLoading = false;
+            }
         },
 
         // Helper to initialize filters for a column if not exists
