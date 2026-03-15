@@ -201,6 +201,21 @@ function app() {
             outsourcedToSend: [], // New
             pendingOutsourced: []
         },
+        homeOps: {
+            pendingBudgets: [],
+            waitingBudgetResponse: [],
+            pendingPickups: [],
+            urgentAnalysis: [],
+            delayedDeliveries: [],
+            priorityTickets: [],
+            pendingPurchase: [],
+            pendingReceipt: [],
+            pendingTech: [],
+            pendingTracking: [],
+            pendingDelivery: [],
+            outsourcedToSend: [],
+            pendingOutsourced: []
+        },
         metrics: {
              filteredTickets: [],
              techDeepDive: [],
@@ -1461,8 +1476,14 @@ function app() {
                 } else if (this.view === 'dashboard') {
                     this.homeOperationalFilters.search = (this.searchQuery || '').trim();
                 }
-                this.fetchTickets();
-                if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'search' });
+                if (this.view === 'dashboard') {
+                    this.fetchHomeOperationalQueue();
+                } else {
+                    this.fetchTickets();
+                }
+                if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
+                    this.requestDashboardMetrics({ reason: 'search' });
+                }
             }, 500); // 500ms debounce
         },
 
@@ -3046,13 +3067,48 @@ function app() {
                     p_status: f.status !== 'all' ? f.status : null,
                     p_technician_id: f.technician !== 'all' ? f.technician : null,
                     p_search: search ? search : null,
-                    p_limit: 10, // Just a small sample limit for home display if needed
+                    p_limit: 200, // Just a small sample limit for home display if needed
                     p_offset: 0
                 };
                 const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', payload);
                 if (response) {
                     if (response.counts) this.homeOperationalCounts = response.counts;
-                    if (response.items) this.homeOperationalItems = response.items;
+                    if (response.items) {
+                        this.homeOperationalItems = response.items;
+                        // Build homeOps locally
+                        this.homeOps = {
+                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao'),
+                            waitingBudgetResponse: [], // Approximate since we dont have budget_status often
+                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente'),
+                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Logistica' || t.status === 'Envio'),
+                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Entrega' || t.status === 'Pronto para Entrega'),
+                            pendingTech: this.homeOperationalItems.filter(t => ['Aberto', 'Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(t.status)),
+                            outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
+                            pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado'),
+                            pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca'),
+                            pendingReceipt: [],
+                            priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
+                            delayedDeliveries: this.homeOperationalItems.filter(t => t.is_overdue === true && t.effective_due_type === 'delivery'),
+                            urgentAnalysis: this.homeOperationalItems.filter(t => t.is_overdue === true && t.effective_due_type === 'analysis'),
+                        };
+                    }
+                    if (this.homeOperationalItems) {
+                        this.homeOps = {
+                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && !t.budget_status),
+                            waitingBudgetResponse: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && t.budget_status),
+                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente'),
+                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Logistica'),
+                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Entrega' || t.status === 'Pronto para Entrega'),
+                            pendingTech: this.homeOperationalItems.filter(t => ['Aberto', 'Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(t.status)),
+                            outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
+                            pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && t.outsourced_at),
+                            pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca' && t.parts_bought !== true),
+                            pendingReceipt: this.homeOperationalItems.filter(t => t.status === 'Compra Peca' && t.parts_bought === true),
+                            priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
+                            delayedDeliveries: this.homeOperationalItems.filter(t => t.is_overdue && t.effective_due_type === 'delivery'),
+                            urgentAnalysis: this.homeOperationalItems.filter(t => t.is_overdue && t.effective_due_type === 'analysis'),
+                        };
+                    }
                 }
             } catch (e) {
                 console.error("Failed to load home operational queue", e);
