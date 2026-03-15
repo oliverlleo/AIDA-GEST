@@ -22,20 +22,40 @@ window.AIDAStorageService = {
     },
 
     async handleLogoUpload(file, deps) {
-        const { SUPABASE_URL, state } = deps;
+        const { SUPABASE_URL, SUPABASE_KEY, state } = deps;
 
         try {
-            const bucket = 'workspace_logos';
-            const path = `${state.user.workspace_id}/logo/logo_${Date.now()}.png`; // Unique name to force refresh
-            const url = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
+            const url = `${SUPABASE_URL}/functions/v1/upload-workspace-logo`;
 
-            const headers = this.getStorageHeaders(file.type, deps);
-            const response = await fetch(url, { method: 'POST', headers, body: file });
-            if (!response.ok) throw new Error("Falha no upload");
+            const form = new FormData();
+            form.append('file', file);
 
-            // Construct Public URL (bucket is public now)
-            const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
-            return publicUrl;
+            const headers = {
+                apikey: SUPABASE_KEY
+            };
+
+            if (state.session?.access_token) {
+                headers['Authorization'] = `Bearer ${state.session.access_token}`;
+            }
+
+            if (state.employeeSession?.token) {
+                headers['x-employee-token'] = state.employeeSession.token;
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers,
+                body: form
+            });
+
+            if (!response.ok) {
+                const txt = await response.text().catch(() => '');
+                throw new Error(`Falha no upload (${response.status}): ${txt}`);
+            }
+
+            const data = await response.json();
+            return data.publicUrl || data.url || data.path;
+
         } catch(e) {
             throw e;
         }
