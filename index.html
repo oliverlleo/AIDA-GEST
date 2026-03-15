@@ -3497,10 +3497,10 @@
                                 <!-- Search Input acting as combobox -->
                                 <div class="flex items-center w-full bg-gray-50 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500 transition-all overflow-hidden">
                                     <input type="text" x-model="search" x-ref="searchInput"
-                                           @focus="onFocus" @click="onFocus" @input="onInput"
+                                           @focus="onFocus" @click="onFocus" @input="onInput" @keydown="onKeydown"
                                            class="w-full bg-transparent p-2.5 text-sm text-gray-900 outline-none placeholder-gray-400"
                                            placeholder="Selecione ou digite o Modelo...">
-                                    <button type="button" @click="toggleArrow" class="px-3 py-2 text-gray-500 hover:text-gray-700 bg-gray-50 h-full">
+                                    <button type="button" @click="toggleArrow" class="px-3 py-2 text-gray-500 hover:text-gray-700 bg-gray-50 h-full" tabindex="-1">
                                         <i class="fa-solid fa-chevron-down text-xs"></i>
                                     </button>
                                 </div>
@@ -3525,14 +3525,16 @@
                                     </div>
 
                                     <!-- List -->
-                                    <ul class="py-1">
-                                        <template x-for="model in deviceModels.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))" :key="model.id">
-                                            <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center"
+                                    <ul class="py-1" x-ref="listbox">
+                                        <template x-for="(model, index) in deviceModels.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))" :key="model.id">
+                                            <li class="combobox-option cursor-pointer select-none relative py-2 pl-3 pr-9 group flex justify-between items-center"
+                                                :class="highlightedIndex === index ? 'bg-gray-200' : 'hover:bg-gray-100'"
+                                                @mouseenter="highlightedIndex = index"
                                                 @mousedown.stop.prevent="selectOption(model.name)">
                                                 <span class="block truncate" :class="ticketForm.model === model.name ? 'font-bold text-brand-600' : 'text-gray-900'" x-text="model.name"></span>
 
                                                 <!-- Delete Icon -->
-                                                <button type="button" @mousedown.stop.prevent="deleteDeviceModel(model.id)" class="mr-2 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button type="button" @mousedown.stop.prevent="deleteDeviceModel(model.id)" class="mr-2 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity" tabindex="-1">
                                                     <i class="fa-solid fa-trash text-xs"></i>
                                                 </button>
                                             </li>
@@ -3621,11 +3623,10 @@
                             <div class="relative">
                                 <div class="flex items-center w-full bg-gray-50 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500 transition-all overflow-hidden">
                                     <input type="text" x-model="search" x-ref="defectSearch"
-                                           @focus="onFocus" @click="onFocus" @input="onInput"
-                                           @keydown.enter.prevent="if(search.trim()) { createDefectOption(search).then(ok => { if(ok) { selectOption(search); } }) }"
+                                           @focus="onFocus" @click="onFocus" @input="onInput" @keydown="onKeydown"
                                            class="w-full bg-transparent p-2.5 text-sm text-gray-900 outline-none placeholder-gray-400"
                                            :placeholder="ticketForm.defects && ticketForm.defects.length > 0 ? 'Adicionar outro defeito...' : 'Selecione ou digite os defeitos...'">
-                                    <button type="button" @click="toggleArrow" class="px-3 py-2 text-gray-500 hover:text-gray-700 bg-gray-50 h-full">
+                                    <button type="button" @click="toggleArrow" class="px-3 py-2 text-gray-500 hover:text-gray-700 bg-gray-50 h-full" tabindex="-1">
                                         <i class="fa-solid fa-chevron-down text-xs"></i>
                                     </button>
                                 </div>
@@ -3650,14 +3651,16 @@
                                      </div>
 
                                      <!-- List -->
-                                     <ul class="py-1">
-                                         <template x-for="option in defectOptions.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))" :key="option.id">
-                                             <li class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 group flex justify-between items-center transition-colors"
+                                     <ul class="py-1" x-ref="listbox">
+                                         <template x-for="(option, index) in defectOptions.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))" :key="option.id">
+                                             <li class="combobox-option cursor-pointer select-none relative py-2 pl-3 pr-9 group flex justify-between items-center transition-colors"
+                                                 :class="highlightedIndex === index ? 'bg-gray-200' : 'hover:bg-gray-100'"
+                                                 @mouseenter="highlightedIndex = index"
                                                  @mousedown.stop.prevent="selectOption(option.name)">
                                                  <span class="block truncate" :class="ticketForm.defects.includes(option.name) ? 'font-bold text-brand-600' : 'text-gray-900'" x-text="option.name"></span>
 
                                                  <!-- Delete Option -->
-                                                 <button type="button" @mousedown.stop.prevent="deleteDefectOption(option.id)" class="mr-2 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Excluir Opção">
+                                                 <button type="button" @mousedown.stop.prevent="deleteDefectOption(option.id)" class="mr-2 text-gray-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Excluir Opção" tabindex="-1">
                                                     <i class="fa-solid fa-trash text-xs"></i>
                                                  </button>
                                              </li>

@@ -2511,10 +2511,14 @@ function app() {
             return {
                 open: false,
                 search: '',
+                highlightedIndex: -1,
                 init() {
                     this.search = this.ticketForm.model || '';
                     this.$watch('ticketForm.model', (val) => {
                         if (!this.open) this.search = val || '';
+                    });
+                    this.$watch('search', () => {
+                        this.highlightedIndex = -1;
                     });
                 },
                 toggleArrow() {
@@ -2523,6 +2527,7 @@ function app() {
                     } else {
                         this.open = true;
                         this.search = ''; // Open with clear search to see all options
+                        this.highlightedIndex = -1;
                         this.$nextTick(() => this.$refs.searchInput.focus());
                     }
                 },
@@ -2535,18 +2540,67 @@ function app() {
                     if (!this.open) {
                         this.open = true;
                         this.search = this.ticketForm.model || '';
+                        this.highlightedIndex = -1;
                     }
                 },
                 selectOption(modelName) {
                     this.ticketForm.model = modelName;
                     this.search = modelName;
                     this.open = false;
+                    this.highlightedIndex = -1;
                 },
                 closeDropdown() {
                     if (this.open) {
                         this.open = false;
                         this.search = this.ticketForm.model || ''; // Restore input value to bound state
+                        this.highlightedIndex = -1;
                     }
+                },
+                onKeydown(e) {
+                    if (!this.open) {
+                        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                            e.preventDefault();
+                            this.open = true;
+                        }
+                        return;
+                    }
+                    const options = this.deviceModels.filter(m => m.name.toLowerCase().includes(this.search.toLowerCase()));
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (options.length > 0) {
+                            this.highlightedIndex = (this.highlightedIndex + 1) % options.length;
+                            this.scrollToHighlighted();
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (options.length > 0) {
+                            this.highlightedIndex = this.highlightedIndex <= 0 ? options.length - 1 : this.highlightedIndex - 1;
+                            this.scrollToHighlighted();
+                        }
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (this.highlightedIndex >= 0 && this.highlightedIndex < options.length) {
+                            this.selectOption(options[this.highlightedIndex].name);
+                        } else if (this.search.trim().length > 0 && !options.some(m => m.name.toLowerCase() === this.search.trim().toLowerCase())) {
+                            // Criar novo se não houver destacada e não existir exato
+                            this.createDeviceModel(this.search).then(ok => {
+                                if(ok) { this.selectOption(this.search); }
+                            });
+                        }
+                    } else if (e.key === 'Escape') {
+                        this.closeDropdown();
+                    }
+                },
+                scrollToHighlighted() {
+                    this.$nextTick(() => {
+                        const list = this.$refs.listbox;
+                        if (!list) return;
+                        const items = list.querySelectorAll('li.combobox-option');
+                        const item = items[this.highlightedIndex];
+                        if (item) {
+                            item.scrollIntoView({ block: 'nearest' });
+                        }
+                    });
                 }
             };
         },
@@ -2555,13 +2609,19 @@ function app() {
             return {
                 open: false,
                 search: '',
-                init() {},
+                highlightedIndex: -1,
+                init() {
+                    this.$watch('search', () => {
+                        this.highlightedIndex = -1;
+                    });
+                },
                 toggleArrow() {
                     if (this.open) {
                         this.closeDropdown();
                     } else {
                         this.open = true;
                         this.search = ''; // Open with clear search to see all options
+                        this.highlightedIndex = -1;
                         this.$nextTick(() => this.$refs.defectSearch.focus());
                     }
                 },
@@ -2570,18 +2630,67 @@ function app() {
                 },
                 onFocus() {
                     this.open = true;
+                    this.highlightedIndex = -1;
                 },
                 selectOption(defectName) {
                     this.addDefectToTicket(defectName);
                     this.search = '';
                     this.open = false;
+                    this.highlightedIndex = -1;
                     this.$nextTick(() => this.$refs.defectSearch.focus());
                 },
                 closeDropdown() {
                     if (this.open) {
                         this.open = false;
                         this.search = ''; // Reset search string completely
+                        this.highlightedIndex = -1;
                     }
+                },
+                onKeydown(e) {
+                    if (!this.open) {
+                        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                            e.preventDefault();
+                            this.open = true;
+                        }
+                        return;
+                    }
+                    const options = this.defectOptions.filter(d => d.name.toLowerCase().includes(this.search.toLowerCase()));
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (options.length > 0) {
+                            this.highlightedIndex = (this.highlightedIndex + 1) % options.length;
+                            this.scrollToHighlighted();
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (options.length > 0) {
+                            this.highlightedIndex = this.highlightedIndex <= 0 ? options.length - 1 : this.highlightedIndex - 1;
+                            this.scrollToHighlighted();
+                        }
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (this.highlightedIndex >= 0 && this.highlightedIndex < options.length) {
+                            this.selectOption(options[this.highlightedIndex].name);
+                        } else if (this.search.trim().length > 0 && !options.some(d => d.name.toLowerCase() === this.search.trim().toLowerCase())) {
+                            // Criar novo se não houver destacada e não existir exato
+                            this.createDefectOption(this.search).then(ok => {
+                                if(ok) { this.selectOption(this.search); }
+                            });
+                        }
+                    } else if (e.key === 'Escape') {
+                        this.closeDropdown();
+                    }
+                },
+                scrollToHighlighted() {
+                    this.$nextTick(() => {
+                        const list = this.$refs.listbox;
+                        if (!list) return;
+                        const items = list.querySelectorAll('li.combobox-option');
+                        const item = items[this.highlightedIndex];
+                        if (item) {
+                            item.scrollIntoView({ block: 'nearest' });
+                        }
+                    });
                 }
             };
         },
