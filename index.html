@@ -751,42 +751,18 @@
 
                 <!-- VIEW: DASHBOARD (Welcome) ... existing views -->
                 <div x-show="view === 'dashboard' && (session || employeeSession)" class="p-8 overflow-y-auto h-full" x-transition.opacity>
-                    <header class="flex justify-between items-center mb-8">
+                    <header class="flex justify-between items-center mb-8 flex-wrap gap-y-4">
                         <div>
-                            <h1 class="text-3xl font-bold text-gray-800">Visão Geral</h1>
-                            <p class="text-gray-500">Resumo das atividades.</p>
+                            <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+                                Visão Geral
+                            </h1>
+                            <p class="text-gray-500 flex items-center">
+                                <i class="fa-solid fa-calendar-check text-brand-500 mr-2 text-sm"></i> Agenda Operacional
+                            </p>
                         </div>
-                        <button @click="openNewTicketModal()" class="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-brand-500 transition-colors shadow-lg flex items-center">
-                            <i class="fa-solid fa-plus mr-2"></i> Abrir Chamado
-                        </button>
-                    </header>
-
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                        <!-- Stats Cards -->
-                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                            <div class="text-gray-500 text-sm font-medium mb-1">Chamados Abertos</div>
-                            <div class="text-4xl font-bold text-gray-900" x-text="tickets.filter(t => t.status !== 'Finalizado').length">0</div>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                            <div class="text-gray-500 text-sm font-medium mb-1">Em Análise</div>
-                            <div class="text-4xl font-bold text-brand-500" x-text="tickets.filter(t => t.status === 'Analise Tecnica').length">0</div>
-                        </div>
-                         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                            <div class="text-gray-500 text-sm font-medium mb-1">Aguardando Aprovação</div>
-                            <div class="text-4xl font-bold text-blue-600" x-text="tickets.filter(t => t.status === 'Aprovacao').length">0</div>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                            <div class="text-gray-500 text-sm font-medium mb-1">Prontos p/ Retirada</div>
-                            <div class="text-4xl font-bold text-green-600" x-text="tickets.filter(t => t.status === 'Retirada Cliente').length">0</div>
-                        </div>
-                    </div>
-
-                    <!-- NOVO: Agenda Operacional -->
-                    <div class="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 class="text-lg font-bold text-gray-800 flex items-center mb-4">
-                            <i class="fa-solid fa-calendar-check text-brand-500 mr-2"></i> Agenda Operacional
-                        </h3>
-                        <div class="flex flex-wrap gap-4">
+                        <div class="flex-grow flex justify-center lg:px-4">
+                            <!-- Agenda Operacional Filtros -->
+                            <div class="flex flex-wrap gap-4">
                             <!-- Hoje -->
                             <button @click="applyHomeOperationalWindow('today')"
                                     class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
@@ -830,18 +806,33 @@
                                 <span class="bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full" :class="homeOperationalFilters.window === 'all' ? 'bg-gray-700' : ''" x-text="homeOperationalCounts.all">0</span>
                             </button>
                         </div>
+                        </div>
+                        <button @click="openNewTicketModal()" class="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-brand-500 transition-colors shadow-lg flex items-center shrink-0">
+                            <i class="fa-solid fa-plus mr-2"></i> Abrir Chamado
+                        </button>
+                    </header>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <!-- Stats Cards -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-gray-500 text-sm font-medium mb-1">Chamados Abertos</div>
+                            <div class="text-4xl font-bold text-gray-900" x-text="tickets.filter(t => t.status !== 'Finalizado').length">0</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-gray-500 text-sm font-medium mb-1">Em Análise</div>
+                            <div class="text-4xl font-bold text-brand-500" x-text="tickets.filter(t => t.status === 'Analise Tecnica').length">0</div>
+                        </div>
+                         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-gray-500 text-sm font-medium mb-1">Aguardando Aprovação</div>
+                            <div class="text-4xl font-bold text-blue-600" x-text="tickets.filter(t => t.status === 'Aprovacao').length">0</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-gray-500 text-sm font-medium mb-1">Prontos p/ Retirada</div>
+                            <div class="text-4xl font-bold text-green-600" x-text="tickets.filter(t => t.status === 'Retirada Cliente').length">0</div>
+                        </div>
                     </div>
 
-                    <!-- OPERATIONAL DASHBOARD (Atendente Focus) -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                        <!-- Col 1: Client Communication (2/3) -->
-                        <div class="lg:col-span-2">
-                            <h3 class="text-lg font-bold text-gray-800 flex items-center mb-6">
-                                <i class="fa-solid fa-comments text-brand-500 mr-2"></i> Pendências com Cliente
-                            </h3>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Budgets to Send -->
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-yellow-50 px-4 py-3 border-b border-yellow-100 flex justify-between items-center">
