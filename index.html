@@ -788,46 +788,46 @@
                         </h3>
                         <div class="flex flex-wrap gap-4">
                             <!-- Hoje -->
-                            <button @click="applyOperationalWindow('today')"
+                            <button @click="applyHomeOperationalWindow('today')"
                                     class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
-                                    :class="operationalFilters.window === 'today' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                    :class="homeOperationalFilters.window === 'today' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
                                 <span class="font-bold">Hoje</span>
-                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="operationalCounts.today">0</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="homeOperationalCounts.today">0</span>
                             </button>
                             <!-- Hoje + amanhã -->
-                            <button @click="applyOperationalWindow('today_tomorrow')"
+                            <button @click="applyHomeOperationalWindow('today_tomorrow')"
                                     class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
-                                    :class="operationalFilters.window === 'today_tomorrow' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                    :class="homeOperationalFilters.window === 'today_tomorrow' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
                                 <span class="font-bold">Hoje + Amanhã</span>
-                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="operationalCounts.today_tomorrow">0</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="homeOperationalCounts.today_tomorrow">0</span>
                             </button>
                             <!-- 7 dias -->
-                            <button @click="applyOperationalWindow('next_7_days')"
+                            <button @click="applyHomeOperationalWindow('next_7_days')"
                                     class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
-                                    :class="operationalFilters.window === 'next_7_days' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                    :class="homeOperationalFilters.window === 'next_7_days' ? 'bg-brand-50 border-brand-500 text-brand-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
                                 <span class="font-bold">7 dias</span>
-                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="operationalCounts.next_7_days">0</span>
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="homeOperationalCounts.next_7_days">0</span>
                             </button>
                             <!-- Atrasados -->
-                            <button @click="applyOperationalWindow('overdue')"
+                            <button @click="applyHomeOperationalWindow('overdue')"
                                     class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
-                                    :class="operationalFilters.window === 'overdue' ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                    :class="homeOperationalFilters.window === 'overdue' ? 'bg-red-50 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
                                 <span class="font-bold">Atrasados</span>
-                                <span class="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold" x-text="operationalCounts.overdue">0</span>
+                                <span class="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold" x-text="homeOperationalCounts.overdue">0</span>
                             </button>
                             <!-- Sem prazo -->
-                            <button @click="applyOperationalWindow('no_deadline')"
+                            <button @click="applyHomeOperationalWindow('no_deadline')"
                                     class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
-                                    :class="operationalFilters.window === 'no_deadline' ? 'bg-gray-100 border-gray-400 text-gray-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                    :class="homeOperationalFilters.window === 'no_deadline' ? 'bg-gray-100 border-gray-400 text-gray-700' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
                                 <span class="font-bold">Sem prazo</span>
-                                <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="operationalCounts.no_deadline">0</span>
+                                <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="homeOperationalCounts.no_deadline">0</span>
                             </button>
                             <!-- Todos -->
-                            <button @click="applyOperationalWindow('all')"
+                            <button @click="applyHomeOperationalWindow('all')"
                                     class="flex items-center space-x-2 px-4 py-2 rounded-full border shadow-sm transition-all hover:shadow-md"
-                                    :class="operationalFilters.window === 'all' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
+                                    :class="homeOperationalFilters.window === 'all' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'">
                                 <span class="font-bold">Todos</span>
-                                <span class="bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full" :class="operationalFilters.window === 'all' ? 'bg-gray-700' : ''" x-text="operationalCounts.all">0</span>
+                                <span class="bg-gray-600 text-white text-xs px-2 py-0.5 rounded-full" :class="homeOperationalFilters.window === 'all' ? 'bg-gray-700' : ''" x-text="homeOperationalCounts.all">0</span>
                             </button>
                         </div>
                     </div>
@@ -2333,7 +2333,7 @@
 
                                  <div class="flex items-center space-x-2">
                                     <!-- Clear Filter Button (Visible only when filter is active) -->
-                                    <button x-show="activeQuickFilter || searchQuery || isOperationalFilterActive()" @click="clearFilters()"
+                                    <button x-show="activeQuickFilter || searchQuery || isKanbanOperationalFilterActive()" @click="clearFilters()"
                                             class="text-xs px-3 py-2 rounded font-bold border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors flex items-center">
                                         <i class="fa-solid fa-filter-circle-xmark mr-1"></i>
                                         <span class="hidden sm:inline">Limpar Filtros</span>
@@ -2358,41 +2358,41 @@
                             <div class="flex flex-wrap gap-2 items-center">
                                 <span class="text-xs font-bold text-gray-500 uppercase mr-1">Fila:</span>
 
-                                <button @click="applyOperationalWindow('today')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
-                                        :class="operationalFilters.window === 'today' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
-                                    Hoje <span class="ml-1 font-bold" :class="operationalFilters.window === 'today' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.today"></span>
+                                <button @click="applyKanbanOperationalWindow('today')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'today' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    Hoje <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'today' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.today"></span>
                                 </button>
 
-                                <button @click="applyOperationalWindow('today_tomorrow')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
-                                        :class="operationalFilters.window === 'today_tomorrow' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
-                                    Hoje+Amanhã <span class="ml-1 font-bold" :class="operationalFilters.window === 'today_tomorrow' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.today_tomorrow"></span>
+                                <button @click="applyKanbanOperationalWindow('today_tomorrow')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'today_tomorrow' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    Hoje+Amanhã <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'today_tomorrow' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.today_tomorrow"></span>
                                 </button>
 
-                                <button @click="applyOperationalWindow('next_7_days')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
-                                        :class="operationalFilters.window === 'next_7_days' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
-                                    7 dias <span class="ml-1 font-bold" :class="operationalFilters.window === 'next_7_days' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.next_7_days"></span>
+                                <button @click="applyKanbanOperationalWindow('next_7_days')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'next_7_days' ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'">
+                                    7 dias <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'next_7_days' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.next_7_days"></span>
                                 </button>
 
-                                <button @click="applyOperationalWindow('overdue')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
-                                        :class="operationalFilters.window === 'overdue' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-200 hover:border-red-300'">
-                                    Atrasados <span class="ml-1 font-bold" :class="operationalFilters.window === 'overdue' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.overdue"></span>
+                                <button @click="applyKanbanOperationalWindow('overdue')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'overdue' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-200 hover:border-red-300'">
+                                    Atrasados <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'overdue' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.overdue"></span>
                                 </button>
 
-                                <button @click="applyOperationalWindow('no_deadline')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
-                                        :class="operationalFilters.window === 'no_deadline' ? 'bg-gray-600 text-white border-gray-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'">
-                                    Sem prazo <span class="ml-1 font-bold" :class="operationalFilters.window === 'no_deadline' ? 'text-white' : 'text-gray-400'" x-text="operationalCounts.no_deadline"></span>
+                                <button @click="applyKanbanOperationalWindow('no_deadline')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'no_deadline' ? 'bg-gray-600 text-white border-gray-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'">
+                                    Sem prazo <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'no_deadline' ? 'text-white' : 'text-gray-400'" x-text="kanbanOperationalCounts.no_deadline"></span>
                                 </button>
 
-                                <button @click="applyOperationalWindow('all')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
-                                        :class="operationalFilters.window === 'all' ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'">
-                                    Todos <span class="ml-1 font-bold" :class="operationalFilters.window === 'all' ? 'text-gray-300' : 'text-gray-400'" x-text="operationalCounts.all"></span>
+                                <button @click="applyKanbanOperationalWindow('all')" class="text-xs px-3 py-1.5 rounded-full border transition-all"
+                                        :class="kanbanOperationalFilters.window === 'all' ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'">
+                                    Todos <span class="ml-1 font-bold" :class="kanbanOperationalFilters.window === 'all' ? 'text-gray-300' : 'text-gray-400'" x-text="kanbanOperationalCounts.all"></span>
                                 </button>
                             </div>
 
                             <!-- Linha 2: Base do Cálculo -->
                             <div class="flex items-center space-x-2 border-l border-gray-200 pl-4">
                                 <span class="text-[10px] font-bold text-gray-400 uppercase">Base:</span>
-                                <select x-model="operationalFilters.basis" @change="fetchTickets()"
+                                <select x-model="kanbanOperationalFilters.basis" @change="fetchTickets()"
                                         class="text-xs border-transparent bg-transparent font-medium text-gray-700 focus:ring-0 cursor-pointer hover:text-brand-600">
                                     <option value="auto">Automático (Inteligente)</option>
                                     <option value="analysis">Análise</option>

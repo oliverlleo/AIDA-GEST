@@ -49,14 +49,15 @@ function app() {
         },
 
         // Operational Filters (New Backend feature)
-        operationalFilters: {
+        // Home/Dashboard specific state
+        homeOperationalFilters: {
             window: 'all',
             basis: 'auto',
             status: 'all',
             technician: 'all',
             search: ''
         },
-        operationalCounts: {
+        homeOperationalCounts: {
             today: 0,
             today_tomorrow: 0,
             next_7_days: 0,
@@ -64,8 +65,26 @@ function app() {
             no_deadline: 0,
             all: 0
         },
-        operationalLoading: false,
-        operationalLastResponse: null,
+        homeOperationalItems: [],
+        homeOperationalLoading: false,
+
+        // Kanban/Chamados specific state
+        kanbanOperationalFilters: {
+            window: 'all',
+            basis: 'auto',
+            status: 'all',
+            technician: 'all',
+            search: ''
+        },
+        kanbanOperationalCounts: {
+            today: 0,
+            today_tomorrow: 0,
+            next_7_days: 0,
+            overdue: 0,
+            no_deadline: 0,
+            all: 0
+        },
+        kanbanOperationalLastResponse: null,
 
         // Tracker Configuration (NEW)
         trackerConfig: {
@@ -551,7 +570,7 @@ function app() {
                         this.fetchGlobalLogs();
                     }
                     await this.requestDashboardMetrics({ reason: 'view_change' });
-                    await this.fetchOperationalCounts();
+                    await this.fetchHomeOperationalQueue();
                 } else if (currentView === 'admin_dashboard') {
                     await this.fetchTickets();
                     await this.requestDashboardMetrics({ reason: 'open_admin_dashboard' });
@@ -1436,9 +1455,11 @@ function app() {
             if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
-                // Synchronize search for operational filters if in kanban
+                // Synchronize search for operational filters based on view
                 if (this.view === 'kanban') {
-                    this.operationalFilters.search = (this.searchQuery || '').trim();
+                    this.kanbanOperationalFilters.search = (this.searchQuery || '').trim();
+                } else if (this.view === 'dashboard') {
+                    this.homeOperationalFilters.search = (this.searchQuery || '').trim();
                 }
                 this.fetchTickets();
                 if (this.view === 'dashboard') this.requestDashboardMetrics({ reason: 'search' });
@@ -1535,8 +1556,8 @@ function app() {
 
                 // OPERATIONAL RPC MODE HANDLING
                 if (result.mode === 'operational_rpc') {
-                    this.operationalCounts = result.counts;
-                    this.operationalLastResponse = result.data;
+                    this.kanbanOperationalCounts = result.counts;
+                    this.kanbanOperationalLastResponse = result.data;
 
                     if (loadMore) {
                         this.tickets = [...this.tickets, ...result.data];
@@ -2938,14 +2959,17 @@ function app() {
             this.searchQuery = '';
             this.activeQuickFilter = null;
             this.columnFilters = {};
-            this.resetOperationalFilters();
+            if (this.view === 'dashboard') {
+                this.resetHomeOperationalFilters();
+            } else if (this.view === 'kanban') {
+                this.resetKanbanOperationalFilters();
+            }
             this.fetchTickets();
         },
 
-        isOperationalFilterActive() {
-            const f = this.operationalFilters || {};
+        isHomeOperationalFilterActive() {
+            const f = this.homeOperationalFilters || {};
             const hasSearch = !!String(f.search || '').trim();
-            // Retorna true quando houver QUALQUER filtro operacional real, incluindo busca
             return (
                 f.window !== 'all' ||
                 f.basis !== 'auto' ||
@@ -2955,8 +2979,20 @@ function app() {
             );
         },
 
-        resetOperationalFilters() {
-            this.operationalFilters = {
+        isKanbanOperationalFilterActive() {
+            const f = this.kanbanOperationalFilters || {};
+            const hasSearch = !!String(f.search || '').trim();
+            return (
+                f.window !== 'all' ||
+                f.basis !== 'auto' ||
+                f.status !== 'all' ||
+                f.technician !== 'all' ||
+                hasSearch
+            );
+        },
+
+        resetHomeOperationalFilters() {
+            this.homeOperationalFilters = {
                 window: 'all',
                 basis: 'auto',
                 status: 'all',
@@ -2965,43 +3001,63 @@ function app() {
             };
         },
 
-        applyOperationalWindow(windowType) {
-            this.operationalFilters.window = windowType;
-            // Default basis if it's the first time interacting with the shortcut
-            if (this.operationalFilters.basis === 'all') this.operationalFilters.basis = 'auto';
-
-            if (this.view !== 'kanban') {
-                // Change to kanban view, which automatically calls fetchTickets
-                this.view = 'kanban';
-            } else {
-                // If already in kanban, manually refresh tickets
-                this.fetchTickets();
-            }
+        resetKanbanOperationalFilters() {
+            this.kanbanOperationalFilters = {
+                window: 'all',
+                basis: 'auto',
+                status: 'all',
+                technician: 'all',
+                search: ''
+            };
         },
 
-        applyOperationalBasis(basisType) {
-            this.operationalFilters.basis = basisType;
+        applyHomeOperationalWindow(windowType) {
+            this.homeOperationalFilters.window = windowType;
+            if (this.homeOperationalFilters.basis === 'all') this.homeOperationalFilters.basis = 'auto';
+            this.fetchHomeOperationalQueue();
+        },
+
+        applyHomeOperationalBasis(basisType) {
+            this.homeOperationalFilters.basis = basisType;
+            this.fetchHomeOperationalQueue();
+        },
+
+        applyKanbanOperationalWindow(windowType) {
+            this.kanbanOperationalFilters.window = windowType;
+            if (this.kanbanOperationalFilters.basis === 'all') this.kanbanOperationalFilters.basis = 'auto';
             this.fetchTickets();
         },
 
-        async fetchOperationalCounts() {
+        applyKanbanOperationalBasis(basisType) {
+            this.kanbanOperationalFilters.basis = basisType;
+            this.fetchTickets();
+        },
+
+        async fetchHomeOperationalQueue() {
             if (!this.user?.workspace_id) return;
             try {
-                this.operationalLoading = true;
+                this.homeOperationalLoading = true;
+                const f = this.homeOperationalFilters;
+                const search = String(f.search || '').trim();
+
                 const payload = {
-                    p_window: 'all',
-                    p_basis: this.operationalFilters.basis || 'auto',
-                    p_limit: 0,
+                    p_window: f.window,
+                    p_basis: f.basis,
+                    p_status: f.status !== 'all' ? f.status : null,
+                    p_technician_id: f.technician !== 'all' ? f.technician : null,
+                    p_search: search ? search : null,
+                    p_limit: 10, // Just a small sample limit for home display if needed
                     p_offset: 0
                 };
                 const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', payload);
-                if (response && response.counts) {
-                    this.operationalCounts = response.counts;
+                if (response) {
+                    if (response.counts) this.homeOperationalCounts = response.counts;
+                    if (response.items) this.homeOperationalItems = response.items;
                 }
             } catch (e) {
-                console.error("Failed to load operational counts", e);
+                console.error("Failed to load home operational queue", e);
             } finally {
-                this.operationalLoading = false;
+                this.homeOperationalLoading = false;
             }
         },
 

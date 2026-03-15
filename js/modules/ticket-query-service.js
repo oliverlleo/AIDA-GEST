@@ -8,8 +8,8 @@ window.AIDATicketQueryService = {
 
         // OPERATIONAL QUEUE RPC
         // Activate only when operational filter is active and we are exactly in the kanban view
-        if (state.isOperationalFilterActive() && state.view === 'kanban') {
-            const f = state.operationalFilters;
+        if (state.isKanbanOperationalFilterActive() && state.view === 'kanban') {
+            const f = state.kanbanOperationalFilters;
             const limit = state.ticketPagination.limit;
             const offset = state.ticketPagination.page * limit;
 
