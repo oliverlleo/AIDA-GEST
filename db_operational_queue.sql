@@ -190,49 +190,46 @@ BEGIN
     ),
     aggregated_counts AS (
         SELECT
-            COUNT(*) FILTER (WHERE urgency_bucket = 'today') AS today_count,
-            COUNT(*) FILTER (WHERE urgency_bucket IN ('today', 'tomorrow')) AS today_tomorrow_count,
-            COUNT(*) FILTER (WHERE urgency_bucket IN ('today', 'tomorrow', 'next_7_days')) AS next_7_days_count,
-            COUNT(*) FILTER (WHERE urgency_bucket = 'overdue') AS overdue_count,
-            COUNT(*) FILTER (WHERE urgency_bucket = 'no_deadline') AS no_deadline_count,
-            COUNT(*) AS all_count
+            jsonb_build_object(
+                'today', COALESCE(COUNT(*) FILTER (WHERE urgency_bucket = 'today'), 0),
+                'today_tomorrow', COALESCE(COUNT(*) FILTER (WHERE urgency_bucket IN ('today', 'tomorrow')), 0),
+                'next_7_days', COALESCE(COUNT(*) FILTER (WHERE urgency_bucket IN ('today', 'tomorrow', 'next_7_days')), 0),
+                'overdue', COALESCE(COUNT(*) FILTER (WHERE urgency_bucket = 'overdue'), 0),
+                'no_deadline', COALESCE(COUNT(*) FILTER (WHERE urgency_bucket = 'no_deadline'), 0),
+                'all', COALESCE(COUNT(*), 0)
+            ) AS counts
         FROM bucketed_tickets
+    ),
+    filtered_items AS (
+        SELECT COALESCE(jsonb_agg(row_to_json(filtered.*)), '[]'::jsonb) AS items
+        FROM (
+            SELECT * FROM bucketed_tickets ft
+            WHERE
+                (p_window = 'all') OR
+                (p_window = 'overdue' AND ft.urgency_bucket = 'overdue') OR
+                (p_window = 'no_deadline' AND ft.urgency_bucket = 'no_deadline') OR
+                (p_window = 'today' AND ft.urgency_bucket = 'today') OR
+                (p_window = 'today_tomorrow' AND ft.urgency_bucket IN ('today', 'tomorrow')) OR
+                (p_window = 'next_7_days' AND ft.urgency_bucket IN ('today', 'tomorrow', 'next_7_days'))
+            ORDER BY
+                ft.effective_due_at ASC NULLS LAST,
+                -- Safe and strict ordering based on actual columns
+                ft.priority_requested DESC NULLS LAST,
+                CASE ft.priority
+                    WHEN 'Urgente' THEN 1
+                    WHEN 'Alta' THEN 2
+                    WHEN 'Normal' THEN 3
+                    WHEN 'Baixa' THEN 4
+                    ELSE 5
+                END ASC,
+                ft.created_at ASC
+            LIMIT p_limit OFFSET p_offset
+        ) filtered
     )
     SELECT
-        jsonb_build_object(
-            'today', COALESCE((SELECT today_count FROM aggregated_counts), 0),
-            'today_tomorrow', COALESCE((SELECT today_tomorrow_count FROM aggregated_counts), 0),
-            'next_7_days', COALESCE((SELECT next_7_days_count FROM aggregated_counts), 0),
-            'overdue', COALESCE((SELECT overdue_count FROM aggregated_counts), 0),
-            'no_deadline', COALESCE((SELECT no_deadline_count FROM aggregated_counts), 0),
-            'all', COALESCE((SELECT all_count FROM aggregated_counts), 0)
-        ) INTO v_counts;
-
-    -- Retrieve items based on the window
-    SELECT COALESCE(jsonb_agg(row_to_json(filtered.*)), '[]'::jsonb) INTO v_items
-    FROM (
-        SELECT * FROM bucketed_tickets ft
-        WHERE
-            (p_window = 'all') OR
-            (p_window = 'overdue' AND ft.urgency_bucket = 'overdue') OR
-            (p_window = 'no_deadline' AND ft.urgency_bucket = 'no_deadline') OR
-            (p_window = 'today' AND ft.urgency_bucket = 'today') OR
-            (p_window = 'today_tomorrow' AND ft.urgency_bucket IN ('today', 'tomorrow')) OR
-            (p_window = 'next_7_days' AND ft.urgency_bucket IN ('today', 'tomorrow', 'next_7_days'))
-        ORDER BY
-            ft.effective_due_at ASC NULLS LAST,
-            -- Safe and strict ordering based on actual columns
-            ft.priority_requested DESC NULLS LAST,
-            CASE ft.priority
-                WHEN 'Urgente' THEN 1
-                WHEN 'Alta' THEN 2
-                WHEN 'Normal' THEN 3
-                WHEN 'Baixa' THEN 4
-                ELSE 5
-            END ASC,
-            ft.created_at ASC
-        LIMIT p_limit OFFSET p_offset
-    ) filtered;
+        (SELECT counts FROM aggregated_counts),
+        (SELECT items FROM filtered_items)
+    INTO v_counts, v_items;
 
     v_result := jsonb_build_object(
         'counts', v_counts,
