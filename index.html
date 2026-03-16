@@ -3503,7 +3503,7 @@
                                         <p class="text-gray-500 text-xs mb-2 line-clamp-2" x-text="ticket.defect_reported"></p>
 
                                          <div class="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
-                                            <span class="text-xs text-gray-400" x-text="formatDate(ticket.created_at)"></span>
+                                            <span class="text-xs text-gray-400" x-text="new Date(ticket.created_at).toLocaleDateString('pt-BR')"></span>
                                             <span class="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded" x-text="ticket.client_name"></span>
                                         </div>
                                     </div>
@@ -5961,7 +5961,7 @@
 
         <div class="px-4 py-2 bg-gray-50 border-b border-gray-100">
             <p class="text-xs font-bold text-gray-500 uppercase">Ações do Horário</p>
-            <p class="text-sm font-medium text-gray-800" x-text="`${formatDateLocal(scheduleManagement.slotActionPopover.date)} - ${scheduleManagement.slotActionPopover.slot?.start_time?.substring(0,5)}`"></p>
+            <p class="text-sm font-medium text-gray-800" x-text="`${formatScheduleDate(scheduleManagement.slotActionPopover.date)} - ${scheduleManagement.slotActionPopover.slot?.start_time?.substring(0,5) || formatTimeOnly(scheduleManagement.slotActionPopover.slot?.start)}`"></p>
         </div>
 
         <div class="py-1 flex flex-col">
