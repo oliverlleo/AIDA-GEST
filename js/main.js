@@ -1994,35 +1994,35 @@ function app() {
 
         async fetchManagerSchedule() {
             try {
-                // Determine how many days based on viewMode
-                const days = this.scheduleManagement.viewMode === 'day' ? 1 : 7;
                 const refDate = new Date(this.scheduleManagement.referenceDate);
-
-                // If weekly view, align to Sunday or Monday depending on standard.
-                // Let's just use the selected date as the start of the week for simplicity or rely on backend.
-                // Assuming backend takes reference_date and returns `days` from it.
-                // We'll format the local date correctly.
                 const tzOffset = refDate.getTimezoneOffset() * 60000;
                 const localDateStr = (new Date(refDate.getTime() - tzOffset)).toISOString().split('T')[0];
 
                 const response = await this.supabaseFetch('rpc/get_schedule_dashboard', 'POST', {
                     p_technician_id: this.scheduleManagement.selectedTechnicianId,
-                    p_type_filter: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
-                    p_reference_date: localDateStr,
-                    p_days: days
+                    p_view: this.scheduleManagement.viewMode,
+                    p_reference_date: localDateStr
                 });
 
                 if (response && response.days) {
+                    // Filter appointments client-side if a specific type filter is active
+                    // because the RPC `get_schedule_dashboard` does not accept `p_type_filter`
+                    if (this.scheduleManagement.typeFilter !== 'all') {
+                        response.days.forEach(day => {
+                            if (day.slots) {
+                                day.slots.forEach(slot => {
+                                    if (slot.appointments) {
+                                        slot.appointments = slot.appointments.filter(appt => appt.type === this.scheduleManagement.typeFilter);
+                                    }
+                                });
+                            }
+                        });
+                    }
+
                     this.scheduleManagement.data = response.days;
 
-                    // Trust backend entirely for capacity representation. If backend provides capacity_summary, use it.
-                    // If not, we fall back gracefully.
-                    if (response.capacity_summary) {
-                        this.scheduleManagement.capacitySummary = response.capacity_summary;
-                    } else {
-                         // Fallback for transition period if backend hasn't shipped the exact summary node yet
-                         this.scheduleManagement.capacitySummary = { booked: response.booked_slots || 0, total: response.total_slots || 0 };
-                    }
+                    // Trust backend entirely for capacity representation without fallback aliases.
+                    this.scheduleManagement.capacitySummary = response.capacity_summary;
                 } else if (response && Array.isArray(response)) {
                     this.scheduleManagement.data = response;
                 }
@@ -2037,8 +2037,11 @@ function app() {
             this.scheduleManagement.unscheduledTickets = [];
             try {
                 const response = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
-                    p_technician_id: this.scheduleManagement.selectedTechnicianId,
-                    p_type_filter: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter
+                    p_technician_id: this.scheduleManagement.selectedTechnicianId || null,
+                    p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
+                    p_status: null,
+                    p_limit: 100,
+                    p_offset: 0
                 });
 
                 if (response && Array.isArray(response)) {
@@ -2176,9 +2179,13 @@ function app() {
 
                 await this.supabaseFetch('rpc/create_schedule_block', 'POST', {
                     p_technician_id: this.scheduleManagement.selectedTechnicianId,
-                    p_block_start: startStr,
-                    p_block_end: endStr,
-                    p_notes: ea.notes || 'Bloqueio Administrativo'
+                    p_block_type: 'time_range',
+                    p_start_at: startStr,
+                    p_end_at: endStr,
+                    p_is_recurring: false,
+                    p_recurrence_type: null,
+                    p_recurrence_days: null,
+                    p_reason: ea.notes || 'Bloqueio Administrativo'
                 });
 
                 this.notify("Bloqueio salvo com sucesso!");
