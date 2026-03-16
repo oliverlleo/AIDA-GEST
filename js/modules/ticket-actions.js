@@ -70,6 +70,40 @@ window.AIDATicketActions = {
             const ctx = deps.getLogContext(createdTicket);
             await deps.logTicketAction(createdTicket.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
 
+            // Check and process appointments if present in state
+            if (deps.state.selectedAnalysisAppointment) {
+                try {
+                    const appt = deps.state.selectedAnalysisAppointment;
+                    await deps.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                        p_ticket_id: createdTicket.id,
+                        p_technician_id: deps.state.ticketForm.technician_id,
+                        p_appointment_type: 'analysis',
+                        p_scheduled_start: deps.toUTC(`${appt.date}T${appt.start}`),
+                        p_scheduled_end: deps.toUTC(`${appt.date}T${appt.end}`),
+                        p_notes: 'Agendamento de análise via painel'
+                    });
+                } catch (e) {
+                    console.error("Erro ao salvar agendamento de análise:", e);
+                    deps.notify("Chamado criado, mas falha ao salvar a agenda de análise.", "error");
+                }
+            }
+            if (deps.state.selectedRepairAppointment) {
+                try {
+                    const appt = deps.state.selectedRepairAppointment;
+                    await deps.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                        p_ticket_id: createdTicket.id,
+                        p_technician_id: deps.state.ticketForm.technician_id,
+                        p_appointment_type: 'repair',
+                        p_scheduled_start: deps.toUTC(`${appt.date}T${appt.start}`),
+                        p_scheduled_end: deps.toUTC(`${appt.date}T${appt.end}`),
+                        p_notes: 'Agendamento de reparo via painel'
+                    });
+                } catch (e) {
+                    console.error("Erro ao salvar agendamento de reparo:", e);
+                    deps.notify("Chamado criado, mas falha ao salvar a agenda de reparo.", "error");
+                }
+            }
+
             deps.notify("Chamado criado!");
             deps.closeModal('ticket');
             await deps.fetchTickets(true); // forceListRefetch flag to true

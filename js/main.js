@@ -1817,6 +1817,136 @@ function app() {
             if (tmpl) this.ticketForm.checklist_final = tmpl.items.map(s => ({ item: s, ok: false }));
         },
 
+
+        // ==========================================
+        // SCHEDULING METHODS
+        // ==========================================
+        openSchedulePanel(mode) {
+            if (!this.ticketForm.technician_id || this.ticketForm.technician_id === 'all') {
+                return this.notify("Selecione um técnico específico primeiro.", "error");
+            }
+            this.schedulePanelMode = mode;
+            this.scheduleCurrentWeekStart = new Date(); // Start with current week
+            this.schedulePanelOpen = true;
+            this.fetchScheduleAvailability();
+        },
+
+        getTechnicianName(techId) {
+            if (!techId || techId === 'all') return 'Nenhum técnico';
+            const tech = this.getTechnicians().find(t => t.id === techId);
+            return tech ? tech.name : 'Técnico Desconhecido';
+        },
+
+        async fetchScheduleAvailability() {
+            if (!this.ticketForm.technician_id || this.ticketForm.technician_id === 'all') return;
+
+            this.scheduleAvailabilityLoading = true;
+            this.scheduleAvailabilityData = [];
+
+            try {
+                // Ensure date is properly formatted as YYYY-MM-DD local timezone
+                const tzOffset = this.scheduleCurrentWeekStart.getTimezoneOffset() * 60000; // offset in milliseconds
+                const localISOTime = (new Date(this.scheduleCurrentWeekStart - tzOffset)).toISOString().slice(0, -1);
+                const refDate = localISOTime.split('T')[0];
+                const response = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
+                    p_technician_id: this.ticketForm.technician_id,
+                    p_mode: this.schedulePanelMode,
+                    p_reference_date: refDate,
+                    p_days: 7
+                });
+
+                if (response && response.days) {
+                    this.scheduleAvailabilityData = response.days;
+                } else if (response && Array.isArray(response)) {
+                    // Fallback in case the RPC returns an array directly instead of an object with 'days'
+                    this.scheduleAvailabilityData = response;
+                }
+            } catch (error) {
+                console.error("Error fetching schedule:", error);
+                this.notify("Erro ao buscar disponibilidade.", "error");
+            } finally {
+                this.scheduleAvailabilityLoading = false;
+            }
+        },
+
+        navigateScheduleWeek(direction) {
+            if (!this.scheduleCurrentWeekStart) this.scheduleCurrentWeekStart = new Date();
+            const date = new Date(this.scheduleCurrentWeekStart);
+            date.setDate(date.getDate() + (direction * 7));
+            this.scheduleCurrentWeekStart = date;
+            this.fetchScheduleAvailability();
+        },
+
+        formatScheduleWeekRange() {
+            if (!this.scheduleCurrentWeekStart) return '';
+            const start = new Date(this.scheduleCurrentWeekStart);
+            const end = new Date(this.scheduleCurrentWeekStart);
+            end.setDate(end.getDate() + 6);
+
+            const format = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            return `${format(start)} - ${format(end)}`;
+        },
+
+        formatScheduleDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr + 'T12:00:00'); // Prevent timezone shift
+            const weekDay = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+            const dayMonth = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            return `${weekDay}, ${dayMonth}`;
+        },
+
+        formatTimeOnly(timeStr) {
+            if (!timeStr) return '';
+            // Handle cases where time might be full ISO or just HH:mm:ss
+            if (timeStr.includes('T')) {
+                const d = new Date(timeStr);
+                return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            }
+            // For simple strings like '14:00:00'
+            const parts = timeStr.split(':');
+            return `${parts[0]}:${parts[1]}`;
+        },
+
+        selectScheduleSlot(dateStr, slot) {
+            const appointmentData = {
+                date: dateStr,
+                start: slot.start,
+                end: slot.end,
+                status: slot.status,
+                technician_id: this.ticketForm.technician_id
+            };
+
+            if (this.schedulePanelMode === 'analysis') {
+                this.selectedAnalysisAppointment = appointmentData;
+            } else if (this.schedulePanelMode === 'repair') {
+                this.selectedRepairAppointment = appointmentData;
+            }
+
+            this.schedulePanelOpen = false;
+        },
+
+        isSlotSelected(dateStr, slot) {
+            const current = this.schedulePanelMode === 'analysis' ? this.selectedAnalysisAppointment : this.selectedRepairAppointment;
+            if (!current) return false;
+            return current.date === dateStr && current.start === slot.start;
+        },
+
+        removeAppointment(mode) {
+            if (mode === 'analysis') {
+                this.selectedAnalysisAppointment = null;
+            } else if (mode === 'repair') {
+                this.selectedRepairAppointment = null;
+            }
+        },
+
+        formatAppointmentSummary(appt) {
+            if (!appt) return '';
+            const dayStr = this.formatScheduleDate(appt.date);
+            const startStr = this.formatTimeOnly(appt.start);
+            const endStr = this.formatTimeOnly(appt.end);
+            return `${dayStr}, ${startStr} - ${endStr}`;
+        },
+
         isFieldRequired(key) {
             return window.AIDAConfigHelpers.isFieldRequired(this.trackerConfig, key);
         },

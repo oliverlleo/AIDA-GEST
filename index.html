@@ -3795,6 +3795,47 @@
                             </div>
                         </div>
 
+                        <!-- Scheduling UI -->
+                        <div class="col-span-2" x-show="!ticketForm.is_outsourced">
+                            <label class="block text-xs font-bold text-gray-500 mb-2">Agendamento (Opcional)</label>
+
+                            <!-- Analysis Schedule -->
+                            <div class="mb-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                                <button type="button" @click="openSchedulePanel('analysis')"
+                                        class="text-xs px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors flex items-center justify-center gap-2">
+                                    <i class="fa-regular fa-calendar text-brand-500"></i> Agendar Análise
+                                </button>
+
+                                <template x-if="selectedAnalysisAppointment">
+                                    <div class="flex items-center gap-2 text-xs bg-brand-50 text-brand-700 px-3 py-1.5 rounded border border-brand-200">
+                                        <i class="fa-solid fa-clock"></i>
+                                        <span x-text="formatAppointmentSummary(selectedAnalysisAppointment)"></span>
+                                        <button type="button" @click="removeAppointment('analysis')" class="ml-2 text-brand-500 hover:text-red-500" title="Remover">
+                                            <i class="fa-solid fa-times"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Repair Schedule -->
+                            <div class="mb-2 flex flex-col sm:flex-row sm:items-center gap-2">
+                                <button type="button" @click="openSchedulePanel('repair')"
+                                        class="text-xs px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-wrench text-brand-500"></i> Agendar Reparo
+                                </button>
+
+                                <template x-if="selectedRepairAppointment">
+                                    <div class="flex items-center gap-2 text-xs bg-brand-50 text-brand-700 px-3 py-1.5 rounded border border-brand-200">
+                                        <i class="fa-solid fa-clock"></i>
+                                        <span x-text="formatAppointmentSummary(selectedRepairAppointment)"></span>
+                                        <button type="button" @click="removeAppointment('repair')" class="ml-2 text-brand-500 hover:text-red-500" title="Remover">
+                                            <i class="fa-solid fa-times"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
                         <!-- Defect Options Tag Input -->
                         <div class="col-span-2" x-data="defectCombobox()">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado <span x-show="isFieldRequired('defect_reported')" class="text-red-500">*</span></label>
@@ -3991,11 +4032,100 @@
                 </div>
 
                 <!-- Footer -->
-                <div class="bg-gray-50 px-6 py-4 flex justify-end space-x-3">
+                <div class="bg-gray-50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-200">
                     <button @click="modals.ticket = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors">Cancelar</button>
                     <button @click="createTicket()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-lg shadow-orange-500/30 transition-colors">Criar Chamado</button>
                 </div>
             </div>
+
+            <!-- SCHEDULING SIDE PANEL -->
+            <div x-show="schedulePanelOpen"
+                 x-transition:enter="transition ease-out duration-300 transform"
+                 x-transition:enter-start="translate-x-full"
+                 x-transition:enter-end="translate-x-0"
+                 x-transition:leave="transition ease-in duration-200 transform"
+                 x-transition:leave-start="translate-x-0"
+                 x-transition:leave-end="translate-x-full"
+                 class="fixed inset-y-0 right-0 w-80 sm:w-96 bg-gray-50 shadow-2xl border-l border-gray-200 flex flex-col z-[80]"
+                 @click.stop>
+
+                <!-- Header -->
+                <div class="px-4 py-3 bg-white border-b border-gray-200 flex items-center justify-between shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-brand-50 text-brand-600 border border-brand-200 flex items-center justify-center font-bold">
+                            <i :class="schedulePanelMode === 'analysis' ? 'fa-regular fa-calendar' : 'fa-solid fa-wrench'"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-800 text-sm" x-text="schedulePanelMode === 'analysis' ? 'Agendar Análise' : 'Agendar Reparo'"></h3>
+                            <p class="text-xs text-gray-500 font-medium truncate max-w-[180px]" x-text="getTechnicianName(ticketForm.technician_id)"></p>
+                        </div>
+                    </div>
+                    <button type="button" @click="schedulePanelOpen = false" class="text-gray-400 hover:text-gray-600 p-1 transition-colors">
+                        <i class="fa-solid fa-times text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Content/Availability -->
+                <div class="flex-1 overflow-y-auto p-4 relative">
+                    <!-- Loading state -->
+                    <div x-show="scheduleAvailabilityLoading" class="absolute inset-0 bg-gray-50 bg-opacity-90 z-10 flex flex-col items-center justify-center">
+                        <i class="fa-solid fa-circle-notch fa-spin text-brand-500 text-3xl mb-3"></i>
+                        <span class="text-sm text-gray-600 font-bold">Buscando agenda...</span>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="flex items-center justify-between mb-4 bg-white p-2 rounded-lg border border-gray-200 shadow-sm">
+                        <button type="button" @click="navigateScheduleWeek(-1)" class="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors" title="Semana Anterior">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <span class="text-xs font-bold text-gray-700 uppercase" x-text="formatScheduleWeekRange()"></span>
+                        <button type="button" @click="navigateScheduleWeek(1)" class="p-1.5 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors" title="Próxima Semana">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+
+                    <!-- Days / Slots -->
+                    <template x-if="scheduleAvailabilityData && scheduleAvailabilityData.length > 0">
+                        <div class="space-y-4 pb-4">
+                            <template x-for="day in scheduleAvailabilityData" :key="day.date">
+                                <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                                    <div class="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+                                        <h4 class="text-xs font-bold text-gray-700 capitalize" x-text="formatScheduleDate(day.date)"></h4>
+                                    </div>
+                                    <div class="p-2 grid grid-cols-3 gap-2">
+                                        <template x-for="slot in day.slots" :key="slot.start">
+                                            <button type="button"
+                                                    @click="slot.status === 'livre' ? selectScheduleSlot(day.date, slot) : null"
+                                                    :class="{
+                                                        'bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100 hover:border-brand-300 cursor-pointer shadow-sm': slot.status === 'livre' && !isSlotSelected(day.date, slot),
+                                                        'bg-brand-500 border-brand-600 text-white shadow-inner': isSlotSelected(day.date, slot),
+                                                        'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed': slot.status !== 'livre'
+                                                    }"
+                                                    class="border rounded text-xs py-1.5 text-center transition-colors relative font-medium">
+                                                <span x-text="formatTimeOnly(slot.start)"></span>
+                                                <span x-show="slot.status === 'ocupado'" class="absolute right-1 top-1 w-1.5 h-1.5 bg-yellow-400 rounded-full" title="Ocupado"></span>
+                                                <span x-show="slot.status === 'bloqueado' || slot.status === 'lotado'" class="absolute right-1 top-1 w-1.5 h-1.5 bg-red-400 rounded-full" title="Indisponível"></span>
+                                            </button>
+                                        </template>
+                                        <template x-if="!day.slots || day.slots.length === 0">
+                                            <div class="col-span-3 text-center py-3 text-xs text-gray-400 font-medium">Nenhum horário disponível.</div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <template x-if="!scheduleAvailabilityLoading && (!scheduleAvailabilityData || scheduleAvailabilityData.length === 0)">
+                        <div class="text-center py-12">
+                            <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fa-regular fa-calendar-xmark text-2xl text-gray-400"></i>
+                            </div>
+                            <p class="text-sm text-gray-500 font-medium px-4">Nenhuma disponibilidade encontrada para este técnico neste período.</p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
         </div>
     </div>
 
