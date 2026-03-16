@@ -379,6 +379,15 @@ function app() {
         currentTime: new Date(),
 
         // Modals
+        // Scheduling State
+        schedulePanelOpen: false,
+        schedulePanelMode: '', // 'analysis' or 'repair'
+        scheduleAvailabilityLoading: false,
+        scheduleAvailabilityData: null,
+        selectedAnalysisAppointment: null,
+        selectedRepairAppointment: null,
+        scheduleCurrentWeekStart: null,
+
         modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false },
 
         // Logistics State
@@ -422,7 +431,8 @@ function app() {
             { key: 'defect_reported', label: 'Defeito Relatado', col: 'defect_reported', type: 'text' },
             { key: 'checklist_entry', label: 'Checklist de Entrada', col: 'checklist_data', type: 'array' },
             { key: 'checklist_exit', label: 'Checklist de Saída', col: 'checklist_final_data', type: 'array' },
-            { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' }
+            { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' },
+            { key: 'analysis_schedule', label: 'Agendamento de Análise', col: 'analysis_schedule', type: 'schedule' }
         ],
 
         // ==========================================
@@ -1741,6 +1751,13 @@ function app() {
         },
 
         openNewTicketModal() {
+            this.schedulePanelOpen = false;
+            this.schedulePanelMode = '';
+            this.scheduleAvailabilityLoading = false;
+            this.scheduleAvailabilityData = null;
+            this.selectedAnalysisAppointment = null;
+            this.selectedRepairAppointment = null;
+            this.scheduleCurrentWeekStart = null;
             this.ticketForm = {
                 id: crypto.randomUUID(),
                 client_name: '', os_number: '', model: '', serial: '',
@@ -1968,6 +1985,9 @@ function app() {
                 } else {
                     // In legacy mode, technician_id can be NULL (Todos)
                 }
+
+                // Future-proof: if analysis_schedule becomes true in config, we could check here too,
+                // but legacy mode doesn't check dynamic configs.
                 return { valid: true };
             }
 
@@ -1993,6 +2013,10 @@ function app() {
                             if (!ticketData.outsourced_company_id) isValid = false;
                         } else {
                             if (!val) isValid = false; // Must have specific technician (Not NULL)
+                        }
+                    } else if (field.type === 'schedule') {
+                        if (field.key === 'analysis_schedule') {
+                            if (!this.selectedAnalysisAppointment) isValid = false;
                         }
                     }
 

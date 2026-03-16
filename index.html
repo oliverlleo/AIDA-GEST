@@ -3614,7 +3614,7 @@
             <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.ticket = false"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
-            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full duration-300 ease-in-out" :class="schedulePanelOpen ? '-translate-x-32 sm:-translate-x-48' : ''">
                 <!-- Header -->
                 <div class="bg-black px-6 py-4 flex justify-between items-center">
                     <h3 class="text-lg font-bold text-white">Novo Chamado</h3>
@@ -3804,6 +3804,7 @@
                                 <button type="button" @click="openSchedulePanel('analysis')"
                                         class="text-xs px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors flex items-center justify-center gap-2">
                                     <i class="fa-regular fa-calendar text-brand-500"></i> Agendar Análise
+                                    <span x-show="isFieldRequired('analysis_schedule')" class="text-red-500 font-bold">*</span>
                                 </button>
 
                                 <template x-if="selectedAnalysisAppointment">
