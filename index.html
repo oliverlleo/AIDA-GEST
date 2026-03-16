@@ -4178,16 +4178,19 @@
                         </div>
                     </div>
                 </div>
-                <div class="bg-gray-50 px-6 py-4 flex justify-between space-x-3 border-t border-gray-200">
-                    <button type="button" x-show="scheduleManagement.editingAppointment?.original?.id" @click="cancelAppointment()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 rounded-lg transition-colors">Cancelar Agendamento</button>
-                    <div class="flex space-x-3 ml-auto">
-                        <div class="flex items-center w-full justify-between">
-                            <button type="button" x-show="scheduleManagement.editingAppointment?.original?.id" @click="cancelAppointment()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 hover:border-red-200 border border-transparent rounded-lg transition-colors text-sm"><i class="fa-regular fa-trash-can mr-1"></i> Cancelar</button>
-                            <div class="flex gap-2 ml-auto">
-                                <button type="button" @click="modals.rescheduleAppointment = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors text-sm">Voltar</button>
-                                <button type="button" @click="submitReschedule()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors text-sm" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Salvar Alteração' : 'Agendar'"></button>
-                            </div>
-                        </div>
+                <div class="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+                    <div>
+                        <button type="button" x-show="scheduleManagement.editingAppointment?.original?.id" @click="cancelAppointment()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-colors text-sm shadow-sm flex items-center">
+                            <i class="fa-solid fa-trash-can mr-2"></i> Cancelar Agendamento
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button type="button" @click="closeRescheduleModal()" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors text-sm">Voltar</button>
+                        <button type="button" @click="submitReschedule()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors text-sm flex items-center">
+                            <i class="fa-solid fa-save mr-2" x-show="scheduleManagement.editingAppointment?.original?.id"></i>
+                            <i class="fa-solid fa-calendar-plus mr-2" x-show="!scheduleManagement.editingAppointment?.original?.id"></i>
+                            <span x-text="scheduleManagement.editingAppointment?.original?.id ? 'Salvar Alteração' : 'Agendar'"></span>
+                        </button>
                     </div>
                 </div>
             </div>

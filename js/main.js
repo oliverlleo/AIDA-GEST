@@ -2113,50 +2113,74 @@ function app() {
             this.scheduleManagement.lateWithoutScheduleTotal = 0;
 
             try {
-                // If a technician is selected, we fetch two queries:
-                // 1) Their unscheduled tickets
-                // 2) The global unscheduled tickets with NO technician.
-                // If no technician is selected, we fetch ALL unscheduled tickets (null for p_technician_id)
-                // but we DO NOT filter them by "no tech" if we want to show a global queue.
-                // Wait, if no tech is selected, we want the general queue. The RPC behavior for `p_technician_id = null`
-                // in get_unscheduled_tickets might return *all* unscheduled tickets (including assigned ones).
-                // The problem description says "fila lateral sempre visível, tickets sem agendamento do workspace carregados de forma coerente, tickets sem técnico separados".
+                const techId = this.scheduleManagement.selectedTechnicianId;
+                const requests = [];
 
-                // Let's make a broad fetch for the workspace's unscheduled tickets using `p_technician_id = null`.
-                const noTechRes = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                // 1. Fetch tickets with NO technician assigned (always visible for management queue)
+                requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
                     p_technician_id: null,
                     p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
                     p_status: null,
-                    p_limit: 200, // get a reasonable chunk of unscheduled queue
+                    p_limit: 200,
                     p_offset: 0
-                });
+                }));
 
-                const allItems = (noTechRes && noTechRes.items) ? noTechRes.items : [];
-
-                // Categorize locally
-                const techId = this.scheduleManagement.selectedTechnicianId;
-
-                // 1. Without Technician (Global)
-                const purelyUnassigned = allItems.filter(t => !t.technician_id);
-                this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
-                this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
-
-                // 2. Unscheduled for Selected Technician
+                // 2. Fetch tickets assigned specifically to the selected technician
                 if (techId) {
-                    const techUnscheduled = allItems.filter(t => t.technician_id === techId);
-                    this.scheduleManagement.unscheduledItems = techUnscheduled;
-                    this.scheduleManagement.unscheduledTotal = techUnscheduled.length;
+                    requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                        p_technician_id: techId,
+                        p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
+                        p_status: null,
+                        p_limit: 200,
+                        p_offset: 0
+                    }));
                 } else {
-                    // If no tech is selected, maybe we show ALL unscheduled that ARE assigned to someone in the unscheduledItems
-                    // Or we just show purelyUnassigned. We will show all assigned unscheduled.
-                    const assignedUnscheduled = allItems.filter(t => t.technician_id);
-                    this.scheduleManagement.unscheduledItems = assignedUnscheduled;
-                    this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
+                    requests.push(Promise.resolve({ items: [], total: 0 }));
+                }
+
+                const [noTechRes, techRes] = await Promise.all(requests);
+
+                let allItems = [];
+
+                // Depending on the backend implementation, `p_technician_id: null` might return
+                // specifically unassigned tickets OR all unscheduled tickets. We filter to be safe.
+                if (noTechRes && typeof noTechRes === 'object' && noTechRes.items) {
+                    const purelyUnassigned = noTechRes.items.filter(t => !t.technician_id);
+                    this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
+                    this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
+
+                    // If no technician is selected, we want to see ALL unscheduled in the main list
+                    // that are assigned to ANY technician.
+                    if (!techId) {
+                        const assignedUnscheduled = noTechRes.items.filter(t => t.technician_id);
+                        this.scheduleManagement.unscheduledItems = assignedUnscheduled;
+                        this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
+                        allItems = [...noTechRes.items];
+                    } else {
+                        allItems = [...purelyUnassigned];
+                    }
+                }
+
+                if (techId && techRes && typeof techRes === 'object' && techRes.items) {
+                    this.scheduleManagement.unscheduledItems = techRes.items;
+                    this.scheduleManagement.unscheduledTotal = techRes.total || techRes.items.length;
+                    allItems = [...allItems, ...techRes.items];
                 }
 
                 // 3. Late Without Schedule (Derived)
                 const now = new Date();
-                const lateItems = allItems.filter(t => {
+
+                // Deduplicate for derivation
+                const uniqueItems = [];
+                const map = new Map();
+                for (const item of allItems) {
+                    if (!map.has(item.id)) {
+                        map.set(item.id, true);
+                        uniqueItems.push(item);
+                    }
+                }
+
+                const lateItems = uniqueItems.filter(t => {
                     const deadlineToCheck = t.status === 'Analise Tecnica' ? t.analysis_deadline : t.deadline;
                     if (!deadlineToCheck) return false;
                     const d = new Date(deadlineToCheck);
@@ -2166,11 +2190,36 @@ function app() {
                 this.scheduleManagement.lateWithoutScheduleItems = lateItems;
                 this.scheduleManagement.lateWithoutScheduleTotal = lateItems.length;
 
-                // 4. Conflict Items (Derived logic placeholder: For instance, tickets that have multiple active appointments conflicting,
-                // but since the prompt mentioned they are currently empty, we will keep them as derived but empty until the backend supports it,
-                // or we could derive if they are past their schedule. For now, keep them isolated so they exist securely).
-                this.scheduleManagement.conflictItems = [];
-                this.scheduleManagement.conflictTotal = 0;
+                // 4. Conflict Items (Derived conservative visual proxy)
+                // A reasonable visual proxy for "conflict" in the unscheduled list is tickets that are assigned
+                // but whose deadline is extremely close (e.g. today or earlier) while there is NO available capacity today.
+                // We analyze the loaded schedule capacity to derive this warning list.
+                const conflicts = [];
+
+                // Only evaluate if we have a technician and capacity loaded for the current view
+                if (techId && this.scheduleManagement.capacitySummary && (this.scheduleManagement.capacitySummary.booked >= this.scheduleManagement.capacitySummary.total)) {
+                    const viewDateLimit = new Date(this.scheduleManagement.referenceDate);
+                    viewDateLimit.setHours(23, 59, 59, 999);
+
+                    for (const item of uniqueItems) {
+                        // Skip if it's not assigned to the completely booked technician
+                        if (item.technician_id !== techId) continue;
+
+                        const deadlineToCheck = item.status === 'Analise Tecnica' ? item.analysis_deadline : item.deadline;
+                        if (!deadlineToCheck) continue;
+
+                        const itemDeadline = new Date(deadlineToCheck);
+                        // If the deadline is before the end of the loaded (booked) view and it's not scheduled, it's a conflict
+                        if (itemDeadline <= viewDateLimit) {
+                            conflicts.push(item);
+                        }
+                    }
+                }
+
+                // Deduplicate from late items to prevent noise (ticket can only be in one visual group logic here ideally, but arrays are separate)
+                // Let's keep them purely in conflict if capacity is full, but user might just want the list
+                this.scheduleManagement.conflictItems = conflicts;
+                this.scheduleManagement.conflictTotal = conflicts.length;
 
             } catch (error) {
                 console.error("Error fetching unscheduled tickets:", error);
@@ -2336,7 +2385,7 @@ function app() {
                     this.notify("Agendamento criado com sucesso!");
                 }
 
-                this.modals.rescheduleAppointment = false;
+                this.closeRescheduleModal();
                 this.loadScheduleManagement();
 
             } catch (e) {
@@ -2360,7 +2409,7 @@ function app() {
                     p_reason: 'Cancelado pelo Gestor'
                 });
                 this.notify("Agendamento cancelado.");
-                this.modals.rescheduleAppointment = false;
+                this.closeRescheduleModal();
                 this.loadScheduleManagement();
             } catch (e) {
                 console.error(e);
