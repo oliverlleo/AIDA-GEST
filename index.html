@@ -360,15 +360,23 @@
                                                 <li class="p-4 text-center text-gray-400 text-xs italic">Nenhum chamado pendente sem agendamento.</li>
                                             </template>
                                             <template x-for="ticket in scheduleManagement.unscheduledItems" :key="ticket.id">
-                                                <li class="p-3 hover:bg-gray-50 transition-colors cursor-pointer group" @click="viewTicketDetails(ticket)">
-                                                    <div class="flex justify-between items-start mb-1">
-                                                        <span class="font-mono text-[10px] text-gray-500" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
+                                                <li class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0">
+                                                    <div class="flex justify-between items-start mb-1 cursor-pointer" @click="viewTicketDetails(ticket)">
+                                                        <span class="font-mono text-[10px] font-bold text-brand-600 group-hover:text-brand-800 transition-colors" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
                                                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
                                                               :class="ticket.status === 'Analise Tecnica' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
                                                               x-text="ticket.status === 'Analise Tecnica' ? 'Análise' : 'Reparo'"></span>
                                                     </div>
-                                                    <h4 class="font-bold text-gray-800 text-xs truncate" x-text="(ticket.device_model)"></h4>
-                                                    <p class="text-[10px] text-gray-500 truncate" x-text="(ticket.client_name)"></p>
+                                                    <h4 class="font-bold text-gray-800 text-xs truncate cursor-pointer" x-text="(ticket.device_model)" @click="viewTicketDetails(ticket)"></h4>
+                                                    <p class="text-[10px] text-gray-500 truncate cursor-pointer" x-text="(ticket.client_name)" @click="viewTicketDetails(ticket)"></p>
+                                                    <div class="mt-2 flex gap-2">
+                                                        <button type="button" @click.stop="viewTicketDetails(ticket)" class="text-[10px] border border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded font-bold transition-colors flex-1 text-center">
+                                                            Abrir Chamado
+                                                        </button>
+                                                        <button type="button" @click.stop="openRescheduleModal(ticket.id, ticket.status === 'Analise Tecnica' ? 'analysis' : 'repair')" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1 rounded font-bold transition-colors flex-1 text-center">
+                                                            Agendar
+                                                        </button>
+                                                    </div>
                                                 </li>
                                             </template>
                                         </ul>
@@ -385,15 +393,23 @@
                                                 <li class="p-4 text-center text-gray-400 text-xs italic">Nenhum chamado aguardando atribuição.</li>
                                             </template>
                                             <template x-for="ticket in scheduleManagement.withoutTechnicianItems" :key="ticket.id">
-                                                <li class="p-3 hover:bg-gray-50 transition-colors cursor-pointer group" @click="viewTicketDetails(ticket)">
-                                                    <div class="flex justify-between items-start mb-1">
-                                                        <span class="font-mono text-[10px] text-gray-500" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
+                                                <li class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0">
+                                                    <div class="flex justify-between items-start mb-1 cursor-pointer" @click="viewTicketDetails(ticket)">
+                                                        <span class="font-mono text-[10px] font-bold text-brand-600 group-hover:text-brand-800 transition-colors" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
                                                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
                                                               :class="ticket.status === 'Analise Tecnica' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
                                                               x-text="ticket.status === 'Analise Tecnica' ? 'Análise' : 'Reparo'"></span>
                                                     </div>
-                                                    <h4 class="font-bold text-gray-800 text-xs truncate" x-text="(ticket.device_model)"></h4>
-                                                    <p class="text-[10px] text-gray-500 truncate" x-text="(ticket.client_name)"></p>
+                                                    <h4 class="font-bold text-gray-800 text-xs truncate cursor-pointer" x-text="(ticket.device_model)" @click="viewTicketDetails(ticket)"></h4>
+                                                    <p class="text-[10px] text-gray-500 truncate cursor-pointer" x-text="(ticket.client_name)" @click="viewTicketDetails(ticket)"></p>
+                                                    <div class="mt-2 flex gap-2">
+                                                        <button type="button" @click.stop="viewTicketDetails(ticket)" class="text-[10px] border border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded font-bold transition-colors flex-1 text-center">
+                                                            Abrir Chamado
+                                                        </button>
+                                                        <button type="button" @click.stop="openRescheduleModal(ticket.id, ticket.status === 'Analise Tecnica' ? 'analysis' : 'repair')" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1 rounded font-bold transition-colors flex-1 text-center">
+                                                            Agendar
+                                                        </button>
+                                                    </div>
                                                 </li>
                                             </template>
                                         </ul>
@@ -410,8 +426,23 @@
                                                 <li class="p-4 text-center text-gray-400 text-xs italic">Nenhum conflito no período.</li>
                                             </template>
                                             <template x-for="ticket in scheduleManagement.conflictItems" :key="ticket.id">
-                                                <li class="p-3">
-                                                    <!-- Structure matches ticket item if data exists -->
+                                                <li class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0">
+                                                    <div class="flex justify-between items-start mb-1 cursor-pointer" @click="viewTicketDetails(ticket)">
+                                                        <span class="font-mono text-[10px] font-bold text-brand-600 group-hover:text-brand-800 transition-colors" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
+                                                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
+                                                              :class="ticket.status === 'Analise Tecnica' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
+                                                              x-text="ticket.status === 'Analise Tecnica' ? 'Análise' : 'Reparo'"></span>
+                                                    </div>
+                                                    <h4 class="font-bold text-gray-800 text-xs truncate cursor-pointer" x-text="(ticket.device_model)" @click="viewTicketDetails(ticket)"></h4>
+                                                    <p class="text-[10px] text-gray-500 truncate cursor-pointer" x-text="(ticket.client_name)" @click="viewTicketDetails(ticket)"></p>
+                                                    <div class="mt-2 flex gap-2">
+                                                        <button type="button" @click.stop="viewTicketDetails(ticket)" class="text-[10px] border border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded font-bold transition-colors flex-1 text-center">
+                                                            Abrir Chamado
+                                                        </button>
+                                                        <button type="button" @click.stop="openRescheduleModal(ticket.id, ticket.status === 'Analise Tecnica' ? 'analysis' : 'repair')" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1 rounded font-bold transition-colors flex-1 text-center">
+                                                            Agendar
+                                                        </button>
+                                                    </div>
                                                 </li>
                                             </template>
                                         </ul>
@@ -428,7 +459,23 @@
                                                 <li class="p-4 text-center text-gray-400 text-xs italic">Nenhuma pendência em atraso.</li>
                                             </template>
                                             <template x-for="ticket in scheduleManagement.lateWithoutScheduleItems" :key="ticket.id">
-                                                <li class="p-3">
+                                                <li class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0">
+                                                    <div class="flex justify-between items-start mb-1 cursor-pointer" @click="viewTicketDetails(ticket)">
+                                                        <span class="font-mono text-[10px] font-bold text-brand-600 group-hover:text-brand-800 transition-colors" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
+                                                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
+                                                              :class="ticket.status === 'Analise Tecnica' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
+                                                              x-text="ticket.status === 'Analise Tecnica' ? 'Análise' : 'Reparo'"></span>
+                                                    </div>
+                                                    <h4 class="font-bold text-gray-800 text-xs truncate cursor-pointer" x-text="(ticket.device_model)" @click="viewTicketDetails(ticket)"></h4>
+                                                    <p class="text-[10px] text-gray-500 truncate cursor-pointer" x-text="(ticket.client_name)" @click="viewTicketDetails(ticket)"></p>
+                                                    <div class="mt-2 flex gap-2">
+                                                        <button type="button" @click.stop="viewTicketDetails(ticket)" class="text-[10px] border border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded font-bold transition-colors flex-1 text-center">
+                                                            Abrir Chamado
+                                                        </button>
+                                                        <button type="button" @click.stop="openRescheduleModal(ticket.id, ticket.status === 'Analise Tecnica' ? 'analysis' : 'repair')" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1 rounded font-bold transition-colors flex-1 text-center">
+                                                            Agendar
+                                                        </button>
+                                                    </div>
                                                 </li>
                                             </template>
                                         </ul>
@@ -477,11 +524,11 @@
                                                     <!-- Content Column -->
                                                     <div class="flex-grow p-3 bg-white transition-colors cursor-pointer"
                                                          :class="{'hover:bg-brand-50': slot.status === 'livre', 'bg-stripes-gray': slot.status === 'bloqueado', 'bg-red-50 border-red-200': slot.status === 'lotado'}"
-                                                         @click="handleManagerSlotClick(scheduleManagement.data[0].date, slot)">
+                                                         @click="handleManagerSlotClick(scheduleManagement.data[0].date, slot, $event)">
 
                                                         <template x-if="slot.status === 'livre'">
-                                                            <div class="h-full flex items-center text-gray-400 text-xs italic opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <i class="fa-solid fa-plus mr-1"></i> Adicionar bloqueio administrativo
+                                                            <div class="h-full flex items-center text-brand-500 font-bold text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <i class="fa-solid fa-plus mr-1"></i> Adicionar ação neste horário
                                                             </div>
                                                         </template>
 
@@ -537,9 +584,10 @@
                                                 <div class="bg-gray-200 px-3 py-2 border-b border-gray-300 text-center relative">
                                                     <h3 class="font-bold text-gray-700 text-sm capitalize" x-text="formatScheduleDate(day.date)"></h3>
                                                     <div class="mt-1 flex items-center justify-center gap-1">
-                                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase"
-                                                              :class="(day.capacity?.booked >= day.capacity?.total && day.capacity?.total > 0) ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
-                                                              x-text="(day.capacity?.booked || 0) + '/' + (day.capacity?.total || 0)"></span>
+                                                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center justify-center gap-1"
+                                                              :class="(day.capacity?.booked >= day.capacity?.total && day.capacity?.total > 0) ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'">
+                                                              <i class="fa-solid fa-chart-pie text-[9px]"></i> <span x-text="(day.capacity?.booked || 0) + '/' + (day.capacity?.total || 0)"></span>
+                                                        </span>
                                                         <span x-show="(day.capacity?.booked >= day.capacity?.total && day.capacity?.total > 0)" class="text-[9px] font-bold text-red-500 uppercase">Lotado</span>
                                                     </div>
                                                 </div>
@@ -551,7 +599,7 @@
                                                                 'border-gray-300 bg-stripes-gray': slot.status === 'bloqueado',
                                                                 'border-red-200 bg-red-50': slot.status === 'lotado'
                                                              }"
-                                                             @click="handleManagerSlotClick(day.date, slot)">
+                                                             @click="handleManagerSlotClick(day.date, slot, $event)">
 
                                                             <div class="flex justify-between items-center mb-1">
                                                                 <span class="font-bold font-mono text-gray-600" x-text="formatTimeOnly(slot.start)"></span>
@@ -567,7 +615,9 @@
                                                                         <div class="bg-gray-100 rounded px-1.5 py-1 flex items-center gap-1 overflow-hidden hover:bg-gray-200"
                                                                              @click.stop="openRescheduleModal(appt.ticket_id, appt.type, appt)">
                                                                             <span class="w-1.5 h-full self-stretch rounded-full flex-shrink-0" :class="appt.type === 'analysis' ? 'bg-blue-500' : 'bg-purple-500'"></span>
-                                                                            <span class="text-[9px] text-gray-700 font-medium truncate" x-text="(appt.client_name || appt.os_number || 'OS')"></span>
+                                                                            <div class="flex flex-col truncate w-full">
+                                                                                <span class="text-[9px] text-gray-700 font-medium truncate" x-text="(appt.client_name || appt.os_number || 'OS')"></span>
+                                                                            </div>
                                                                         </div>
                                                                     </template>
                                                                 </div>
@@ -591,6 +641,28 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Contextual Popover for Empty Slot Actions -->
+                    <div x-show="scheduleManagement.slotActionPopover.open"
+                         @click.outside="closeSlotPopover()"
+                         class="fixed z-[100] bg-white border border-gray-200 rounded-lg shadow-2xl py-2 w-48 transition-all"
+                         :style="`top: ${Math.min(scheduleManagement.slotActionPopover.y, window.innerHeight - 150)}px; left: ${Math.min(scheduleManagement.slotActionPopover.x, window.innerWidth - 200)}px;`"
+                         x-cloak>
+                        <div class="px-3 pb-2 border-b border-gray-100 mb-1">
+                            <span class="text-xs font-bold text-gray-500 uppercase">Selecione uma Ação</span>
+                        </div>
+                        <button @click="initiateSlotAction('analysis')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-600 font-medium flex items-center transition-colors">
+                            <i class="fa-solid fa-microscope w-5 text-center mr-2"></i> Agendar Análise
+                        </button>
+                        <button @click="initiateSlotAction('repair')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-600 font-medium flex items-center transition-colors">
+                            <i class="fa-solid fa-wrench w-5 text-center mr-2"></i> Agendar Reparo
+                        </button>
+                        <div class="border-t border-gray-100 my-1"></div>
+                        <button @click="initiateSlotAction('block')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 font-medium flex items-center transition-colors">
+                            <i class="fa-solid fa-lock w-5 text-center mr-2"></i> Bloquear Horário
+                        </button>
+                    </div>
+
                 </div>
 
                  <!-- VIEW: TRACKER SETTINGS (NEW) -->
@@ -3988,7 +4060,7 @@
 
             <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
                 <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-gray-800" x-text="scheduleManagement.editingAppointment?.notes ? 'Editar Bloqueio' : 'Novo Bloqueio'"></h3>
+                    <h3 class="text-lg font-bold text-gray-800" x-text="scheduleManagement.editingAppointment?.block_id ? 'Editar Bloqueio' : 'Novo Bloqueio'"></h3>
                     <button type="button" @click="modals.scheduleBlock = false" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times"></i></button>
                 </div>
                 <div class="p-6">
@@ -4002,7 +4074,7 @@
                     </div>
                 </div>
                 <div class="bg-gray-50 px-6 py-4 flex justify-between space-x-3 border-t border-gray-200">
-                    <button type="button" x-show="scheduleManagement.editingAppointment?.notes" @click="removeBlock()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 rounded-lg transition-colors">Remover Bloqueio</button>
+                    <button type="button" x-show="scheduleManagement.editingAppointment?.block_id" @click="removeBlock()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 rounded-lg transition-colors">Remover Bloqueio</button>
                     <div class="flex space-x-3 ml-auto">
                         <button type="button" @click="modals.scheduleBlock = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors">Cancelar</button>
                         <button type="button" @click="submitBlock()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors">Salvar</button>
@@ -4020,19 +4092,27 @@
 
             <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
                 <div class="bg-black px-6 py-4 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-white">Gerenciar Agendamento</h3>
+                    <h3 class="text-lg font-bold text-white" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Gerenciar Agendamento' : 'Novo Agendamento'"></h3>
                     <button type="button" @click="modals.rescheduleAppointment = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times"></i></button>
                 </div>
                 <div class="p-6">
                     <div class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                         <div class="flex justify-between items-start mb-1">
-                            <span class="font-mono text-[10px] text-gray-500" x-text="'OS #' + (scheduleManagement.editingAppointment?.original?.os_number || '')"></span>
-                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
-                                  :class="scheduleManagement.editingAppointment?.type === 'analysis' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
-                                  x-text="scheduleManagement.editingAppointment?.type === 'analysis' ? 'Análise' : 'Reparo'"></span>
+                            <div class="flex flex-col">
+                                <span class="font-mono text-xs font-bold text-brand-600 mb-1" x-text="'OS #' + (scheduleManagement.editingAppointment?.ticketContext?.os_number || scheduleManagement.editingAppointment?.original?.os_number || 'S/N')"></span>
+                                <h4 class="font-bold text-gray-800 text-sm" x-text="scheduleManagement.editingAppointment?.ticketContext?.device_model || scheduleManagement.editingAppointment?.original?.device_model || 'Aparelho não identificado'"></h4>
+                                <p class="text-xs text-gray-500" x-text="scheduleManagement.editingAppointment?.ticketContext?.client_name || scheduleManagement.editingAppointment?.original?.client_name || ''"></p>
+                            </div>
+                            <div class="flex flex-col items-end gap-2">
+                                <span class="text-[9px] font-bold px-2 py-1 rounded uppercase"
+                                      :class="scheduleManagement.editingAppointment?.type === 'analysis' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
+                                      x-text="scheduleManagement.editingAppointment?.type === 'analysis' ? 'Análise' : 'Reparo'"></span>
+
+                                <button type="button" x-show="scheduleManagement.editingAppointment?.ticket_id" @click="viewTicketDetails({id: scheduleManagement.editingAppointment.ticket_id})" class="text-[10px] bg-white border border-brand-200 text-brand-600 hover:bg-brand-50 px-2 py-1 rounded font-bold transition-colors">
+                                    Abrir Chamado
+                                </button>
+                            </div>
                         </div>
-                        <h4 class="font-bold text-gray-800 text-sm" x-text="scheduleManagement.editingAppointment?.original?.device_model || 'Não agendado'"></h4>
-                        <p class="text-xs text-gray-500" x-text="scheduleManagement.editingAppointment?.original?.client_name || ''"></p>
                     </div>
 
                     <div class="space-y-4">

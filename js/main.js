@@ -383,7 +383,8 @@ function app() {
         scheduleManagement: {
             selectedTechnicianId: '',
             viewMode: 'week', // 'day' or 'week'
-            referenceDate: new Date(),
+            referenceDate: new Date().toLocaleDateString('en-CA'),
+            slotActionPopover: { open: false, date: '', slot: null, x: 0, y: 0 },
             typeFilter: 'all', // 'all', 'analysis', 'repair'
             loading: false,
             data: null,
@@ -2101,6 +2102,31 @@ function app() {
                     this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
                 }
 
+                // Conservatively derive "Late Without Schedule" from the fetched tickets
+                // Note: The prompt instructed: "se não trouxer, você pode derivar visualmente a partir dos tickets de não agendados/sem técnico APENAS para exibição, de forma conservadora"
+                const allUnscheduled = [...this.scheduleManagement.unscheduledItems, ...this.scheduleManagement.withoutTechnicianItems];
+                const now = new Date();
+
+                const lateItems = allUnscheduled.filter(t => {
+                    const deadlineToCheck = t.status === 'Analise Tecnica' ? t.analysis_deadline : t.deadline;
+                    if (!deadlineToCheck) return false;
+                    const d = new Date(deadlineToCheck);
+                    return d < now;
+                });
+
+                // Deduplicate by ID
+                const uniqueLate = [];
+                const map = new Map();
+                for (const item of lateItems) {
+                    if (!map.has(item.id)) {
+                        map.set(item.id, true);
+                        uniqueLate.push(item);
+                    }
+                }
+
+                this.scheduleManagement.lateWithoutScheduleItems = uniqueLate;
+                this.scheduleManagement.lateWithoutScheduleTotal = uniqueLate.length;
+
             } catch (error) {
                 console.error("Error fetching unscheduled tickets:", error);
             } finally {
@@ -2116,24 +2142,57 @@ function app() {
             this.loadScheduleManagement();
         },
 
-        handleManagerSlotClick(dateStr, slot) {
+        handleManagerSlotClick(dateStr, slot, event) {
             if (slot.status === 'livre') {
-                this.openBlockModal(dateStr, slot);
+                const rect = event.currentTarget.getBoundingClientRect();
+                this.scheduleManagement.slotActionPopover = {
+                    open: true,
+                    date: dateStr,
+                    slot: slot,
+                    x: rect.right + window.scrollX + 10, // Position to the right of the slot
+                    y: rect.top + window.scrollY
+                };
             }
         },
 
-        openRescheduleModal(ticketId, type, appointmentObj) {
-            // For now, we will log or handle this gracefully.
-            // The prompt says "abrir ação para remarcar".
-            // A dedicated modal for this is best.
+        closeSlotPopover() {
+            this.scheduleManagement.slotActionPopover.open = false;
+        },
+
+        initiateSlotAction(actionType) {
+            const dateStr = this.scheduleManagement.slotActionPopover.date;
+            const slot = this.scheduleManagement.slotActionPopover.slot;
+            this.closeSlotPopover();
+
+            if (actionType === 'block') {
+                this.openBlockModal(dateStr, slot);
+            } else if (actionType === 'analysis' || actionType === 'repair') {
+                // To schedule a new appointment from an empty slot, we need a ticket context.
+                // We'll open the reschedule modal in "creation mode" but without a predefined ticket.
+                // The user would then select a ticket or we present it gracefully.
+                // The prompt says: "pré-preencher: técnico, data, hora, tipo".
+                // We will pass ticketId as null, so the modal knows it needs one (or is just waiting for selection).
+                this.openRescheduleModal(null, actionType, null, { date: dateStr, start: slot.start, end: slot.end });
+            }
+        },
+
+        openRescheduleModal(ticketId, type, appointmentObj, prefillSlot = null) {
+            // Find ticket context from unscheduled lists if available to populate headers nicely during creation
+            let ctx = null;
+            if (ticketId && !appointmentObj) {
+                const allUnscheduled = [...this.scheduleManagement.unscheduledItems, ...this.scheduleManagement.withoutTechnicianItems];
+                ctx = allUnscheduled.find(t => t.id === ticketId);
+            }
+
             this.scheduleManagement.editingAppointment = {
                 ticket_id: ticketId,
                 type: type,
                 original: appointmentObj,
-                new_date: '',
-                new_start: '',
-                new_end: '',
-                new_technician_id: this.scheduleManagement.selectedTechnicianId
+                ticketContext: ctx,
+                new_date: prefillSlot ? prefillSlot.date : (appointmentObj ? appointmentObj.date : ''),
+                new_start: prefillSlot ? prefillSlot.start : (appointmentObj ? appointmentObj.start : ''),
+                new_end: prefillSlot ? prefillSlot.end : (appointmentObj ? appointmentObj.end : ''),
+                new_technician_id: appointmentObj ? appointmentObj.technician_id : this.scheduleManagement.selectedTechnicianId
             };
             this.modals.rescheduleAppointment = true;
         },
