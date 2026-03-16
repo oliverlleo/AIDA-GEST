@@ -2005,9 +2005,9 @@ function app() {
                 const tzOffset = refDate.getTimezoneOffset() * 60000;
                 const localDateStr = (new Date(refDate.getTime() - tzOffset)).toISOString().split('T')[0];
 
-                const response = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
+                const response = await this.supabaseFetch('rpc/get_schedule_dashboard', 'POST', {
                     p_technician_id: this.scheduleManagement.selectedTechnicianId,
-                    p_mode: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
+                    p_type_filter: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
                     p_reference_date: localDateStr,
                     p_days: days
                 });
@@ -2015,19 +2015,14 @@ function app() {
                 if (response && response.days) {
                     this.scheduleManagement.data = response.days;
 
-                    // Calculate capacity based on what's returned
-                    let total = 0;
-                    let booked = 0;
-                    response.days.forEach(day => {
-                        if(day.slots) {
-                            day.slots.forEach(slot => {
-                                if (slot.status !== 'bloqueado') total++; // Assuming blocked slots aren't part of core capacity
-                                if (slot.status === 'ocupado' || slot.status === 'lotado') booked++;
-                            });
-                        }
-                    });
-                    this.scheduleManagement.capacitySummary = { booked, total };
-
+                    // Trust backend entirely for capacity representation. If backend provides capacity_summary, use it.
+                    // If not, we fall back gracefully.
+                    if (response.capacity_summary) {
+                        this.scheduleManagement.capacitySummary = response.capacity_summary;
+                    } else {
+                         // Fallback for transition period if backend hasn't shipped the exact summary node yet
+                         this.scheduleManagement.capacitySummary = { booked: response.booked_slots || 0, total: response.total_slots || 0 };
+                    }
                 } else if (response && Array.isArray(response)) {
                     this.scheduleManagement.data = response;
                 }
@@ -2041,42 +2036,14 @@ function app() {
             this.scheduleManagement.unscheduledLoading = true;
             this.scheduleManagement.unscheduledTickets = [];
             try {
-                // To find unscheduled tickets, we can query the operational queue or directly query tickets
-                // that lack a scheduled appointment. We use a custom query against tickets and ticket_appointments.
-                // For this demo context, we'll query tickets directly that match the status criteria but don't have appointments.
-                // An RPC `get_unscheduled_tickets` would be ideal, but falling back to direct DB queries for flexibility.
+                const response = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                    p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                    p_type_filter: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter
+                });
 
-                let query = `tickets?workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null`;
-                // Filter by statuses that normally require scheduling
-                query += `&status=in.("Analise Tecnica","Andamento Reparo")`;
-
-                const typeFilter = this.scheduleManagement.typeFilter;
-                if (typeFilter === 'analysis') {
-                    query += `&status=eq.Analise Tecnica`;
-                } else if (typeFilter === 'repair') {
-                    query += `&status=eq.Andamento Reparo`;
+                if (response && Array.isArray(response)) {
+                    this.scheduleManagement.unscheduledTickets = response;
                 }
-
-                // If tech is selected, find tickets assigned to them or unassigned ones.
-                // Usually, unscheduled tickets are those assigned to the tech but without appointments, OR totally unassigned.
-                const techId = this.scheduleManagement.selectedTechnicianId;
-                if (techId) {
-                    query += `&technician_id=in.(${techId},null)`;
-                }
-
-                query += `&select=*,ticket_appointments(id,status,appointment_type)`;
-                query += `&order=created_at.desc`;
-
-                const allPending = await this.supabaseFetch(query, 'GET');
-                if (allPending) {
-                    // Filter client-side to only include those WITHOUT an active/scheduled appointment for the relevant phase
-                    this.scheduleManagement.unscheduledTickets = allPending.filter(ticket => {
-                        const appts = ticket.ticket_appointments || [];
-                        const hasActiveAppt = appts.some(a => a.status === 'Scheduled');
-                        return !hasActiveAppt;
-                    });
-                }
-
             } catch (error) {
                 console.error("Error fetching unscheduled tickets:", error);
             } finally {
@@ -2201,24 +2168,16 @@ function app() {
         },
 
         async submitBlock() {
-            // Note: Since the prompt didn't specify the exact RPC for blocks,
-            // we assume there's one called `create_schedule_block` or similar.
-            // If the backend handles blocks via appointments with a specific type (e.g. 'block'), we'd use that.
-            // Assuming `create_ticket_appointment` with type='block' and ticket_id=null based on standard patterns.
-
             const ea = this.scheduleManagement.editingAppointment;
             this.loading = true;
             try {
-                // Determine boundaries
                 const startStr = this.toUTC(`${ea.date}T${ea.start}`);
                 const endStr = this.toUTC(`${ea.date}T${ea.end}`);
 
-                await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
-                    p_ticket_id: null,
+                await this.supabaseFetch('rpc/create_schedule_block', 'POST', {
                     p_technician_id: this.scheduleManagement.selectedTechnicianId,
-                    p_appointment_type: 'block',
-                    p_scheduled_start: startStr,
-                    p_scheduled_end: endStr,
+                    p_block_start: startStr,
+                    p_block_end: endStr,
                     p_notes: ea.notes || 'Bloqueio Administrativo'
                 });
 
@@ -2234,8 +2193,6 @@ function app() {
         },
 
         async removeBlock() {
-            // Assume removal uses `cancel_ticket_appointment`
-            // But we need the ID. The `get_schedule_availability` must return `block_id` in the slot if it's a block.
             const ea = this.scheduleManagement.editingAppointment;
             if (!ea.block_id) {
                 this.notify("ID do bloqueio não encontrado.", "error");
@@ -2246,9 +2203,8 @@ function app() {
 
             this.loading = true;
             try {
-                await this.supabaseFetch('rpc/cancel_ticket_appointment', 'POST', {
-                    p_appointment_id: ea.block_id,
-                    p_reason: 'Bloqueio removido'
+                await this.supabaseFetch('rpc/delete_schedule_block', 'POST', {
+                    p_block_id: ea.block_id
                 });
                 this.notify("Bloqueio removido.");
                 this.modals.scheduleBlock = false;
