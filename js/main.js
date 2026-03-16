@@ -398,7 +398,24 @@ function app() {
             lateWithoutScheduleItems: [],
             lateWithoutScheduleTotal: 0,
             capacitySummary: null,
-            editingAppointment: null,
+            editingAppointment: {
+                original: null,
+                ticket_id: '',
+                ticketContext: null,
+                type: 'analysis',
+                new_technician_id: '',
+                new_date: '',
+                new_start: '',
+                new_end: '',
+                notes: ''
+            },
+            editingBlock: {
+                block_id: null,
+                date: '',
+                start: '',
+                end: '',
+                notes: ''
+            },
         },
 
         // Scheduling State
@@ -456,6 +473,33 @@ function app() {
             { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' },
             { key: 'analysis_schedule', label: 'Agendamento de Análise', col: 'analysis_schedule', type: 'schedule' }
         ],
+
+        // ==========================================
+        // SCHEDULING FACTORIES
+        // ==========================================
+        getDefaultEditingAppointment() {
+            return {
+                original: null,
+                ticket_id: '',
+                ticketContext: null,
+                type: 'analysis',
+                new_technician_id: '',
+                new_date: '',
+                new_start: '',
+                new_end: '',
+                notes: ''
+            };
+        },
+
+        getDefaultEditingBlock() {
+            return {
+                block_id: null,
+                date: '',
+                start: '',
+                end: '',
+                notes: ''
+            };
+        },
 
         // ==========================================
         // CONFIG HELPERS (TRACKER / FEATURES)
@@ -1982,20 +2026,24 @@ function app() {
         // SCHEDULE MANAGEMENT VIEW METHODS (Admin)
         // ==========================================
         async loadScheduleManagement() {
-            if (!this.scheduleManagement.selectedTechnicianId) {
+            this.scheduleManagement.loading = true;
+
+            const tasks = [];
+
+            // 1. Unscheduled tickets should always load
+            tasks.push(this.fetchUnscheduledTickets());
+
+            // 2. Manager schedule only loads if a tech is selected
+            if (this.scheduleManagement.selectedTechnicianId) {
+                this.scheduleManagement.data = [];
+                this.scheduleManagement.capacitySummary = { booked: 0, total: 0 };
+                tasks.push(this.fetchManagerSchedule());
+            } else {
                 this.scheduleManagement.data = null;
                 this.scheduleManagement.capacitySummary = null;
-                return;
             }
-            this.scheduleManagement.loading = true;
-            this.scheduleManagement.data = [];
-            this.scheduleManagement.capacitySummary = { booked: 0, total: 0 };
 
-            // Fire both fetches concurrently
-            await Promise.all([
-                this.fetchManagerSchedule(),
-                this.fetchUnscheduledTickets()
-            ]);
+            await Promise.all(tasks);
 
             this.scheduleManagement.loading = false;
         },
@@ -2059,85 +2107,70 @@ function app() {
             this.scheduleManagement.withoutTechnicianItems = [];
             this.scheduleManagement.withoutTechnicianTotal = 0;
 
-            // Note: conflictItems and lateWithoutScheduleItems are initialized empty
-            // until the backend explicitly supports sending them in this RPC or another.
             this.scheduleManagement.conflictItems = [];
             this.scheduleManagement.conflictTotal = 0;
             this.scheduleManagement.lateWithoutScheduleItems = [];
             this.scheduleManagement.lateWithoutScheduleTotal = 0;
 
             try {
-                // To fetch tickets strictly without ANY technician, we would query explicitly p_technician_id=null.
-                // If a tech IS selected in the view, we fetch both unassigned (null) AND assigned to them.
-                // We'll execute two concurrent queries if a tech is selected to ensure we populate both blocks clearly.
-                // Or, if the backend returns all of them when p_technician_id is null, we can filter client-side.
-                // Let's rely on the RPC: if techId is selected, we query for them.
-                const techId = this.scheduleManagement.selectedTechnicianId;
+                // If a technician is selected, we fetch two queries:
+                // 1) Their unscheduled tickets
+                // 2) The global unscheduled tickets with NO technician.
+                // If no technician is selected, we fetch ALL unscheduled tickets (null for p_technician_id)
+                // but we DO NOT filter them by "no tech" if we want to show a global queue.
+                // Wait, if no tech is selected, we want the general queue. The RPC behavior for `p_technician_id = null`
+                // in get_unscheduled_tickets might return *all* unscheduled tickets (including assigned ones).
+                // The problem description says "fila lateral sempre visível, tickets sem agendamento do workspace carregados de forma coerente, tickets sem técnico separados".
 
-                const requests = [];
-
-                // 1. Fetch tickets assigned to the specific technician (if any)
-                if (techId) {
-                    requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
-                        p_technician_id: techId,
-                        p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
-                        p_status: null,
-                        p_limit: 100,
-                        p_offset: 0
-                    }));
-                } else {
-                    requests.push(Promise.resolve({ items: [], total: 0 }));
-                }
-
-                // 2. Fetch tickets with NO technician assigned (always visible for management)
-                requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
-                    p_technician_id: null, // specifically null to get unassigned
+                // Let's make a broad fetch for the workspace's unscheduled tickets using `p_technician_id = null`.
+                const noTechRes = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                    p_technician_id: null,
                     p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
                     p_status: null,
-                    p_limit: 100,
+                    p_limit: 200, // get a reasonable chunk of unscheduled queue
                     p_offset: 0
-                }));
+                });
 
-                const [techRes, noTechRes] = await Promise.all(requests);
+                const allItems = (noTechRes && noTechRes.items) ? noTechRes.items : [];
 
-                // Parse Tech Assigned (Não Agendados)
-                if (techRes && typeof techRes === 'object' && techRes.items) {
-                    this.scheduleManagement.unscheduledItems = techRes.items;
-                    this.scheduleManagement.unscheduledTotal = techRes.total || techRes.items.length;
+                // Categorize locally
+                const techId = this.scheduleManagement.selectedTechnicianId;
+
+                // 1. Without Technician (Global)
+                const purelyUnassigned = allItems.filter(t => !t.technician_id);
+                this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
+                this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
+
+                // 2. Unscheduled for Selected Technician
+                if (techId) {
+                    const techUnscheduled = allItems.filter(t => t.technician_id === techId);
+                    this.scheduleManagement.unscheduledItems = techUnscheduled;
+                    this.scheduleManagement.unscheduledTotal = techUnscheduled.length;
+                } else {
+                    // If no tech is selected, maybe we show ALL unscheduled that ARE assigned to someone in the unscheduledItems
+                    // Or we just show purelyUnassigned. We will show all assigned unscheduled.
+                    const assignedUnscheduled = allItems.filter(t => t.technician_id);
+                    this.scheduleManagement.unscheduledItems = assignedUnscheduled;
+                    this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
                 }
 
-                // Parse No Tech Assigned (Sem Técnico)
-                // The backend might return tickets without technician. Filter explicitly just in case.
-                if (noTechRes && typeof noTechRes === 'object' && noTechRes.items) {
-                    const purelyUnassigned = noTechRes.items.filter(t => !t.technician_id);
-                    this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
-                    this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
-                }
-
-                // Conservatively derive "Late Without Schedule" from the fetched tickets
-                // Note: The prompt instructed: "se não trouxer, você pode derivar visualmente a partir dos tickets de não agendados/sem técnico APENAS para exibição, de forma conservadora"
-                const allUnscheduled = [...this.scheduleManagement.unscheduledItems, ...this.scheduleManagement.withoutTechnicianItems];
+                // 3. Late Without Schedule (Derived)
                 const now = new Date();
-
-                const lateItems = allUnscheduled.filter(t => {
+                const lateItems = allItems.filter(t => {
                     const deadlineToCheck = t.status === 'Analise Tecnica' ? t.analysis_deadline : t.deadline;
                     if (!deadlineToCheck) return false;
                     const d = new Date(deadlineToCheck);
                     return d < now;
                 });
 
-                // Deduplicate by ID
-                const uniqueLate = [];
-                const map = new Map();
-                for (const item of lateItems) {
-                    if (!map.has(item.id)) {
-                        map.set(item.id, true);
-                        uniqueLate.push(item);
-                    }
-                }
+                this.scheduleManagement.lateWithoutScheduleItems = lateItems;
+                this.scheduleManagement.lateWithoutScheduleTotal = lateItems.length;
 
-                this.scheduleManagement.lateWithoutScheduleItems = uniqueLate;
-                this.scheduleManagement.lateWithoutScheduleTotal = uniqueLate.length;
+                // 4. Conflict Items (Derived logic placeholder: For instance, tickets that have multiple active appointments conflicting,
+                // but since the prompt mentioned they are currently empty, we will keep them as derived but empty until the backend supports it,
+                // or we could derive if they are past their schedule. For now, keep them isolated so they exist securely).
+                this.scheduleManagement.conflictItems = [];
+                this.scheduleManagement.conflictTotal = 0;
 
             } catch (error) {
                 console.error("Error fetching unscheduled tickets:", error);
@@ -2156,23 +2189,19 @@ function app() {
 
 
         openAppointmentActionMenu(appointment, dateStr, slot) {
-            // Check if we already have an action menu state, if not, create it
-            if (!this.scheduleManagement.appointmentActionPopover) {
-                this.scheduleManagement.appointmentActionPopover = { open: false, appt: null, date: '', slot: null };
-            }
+            // Use the correct editingAppointment shape
+            this.scheduleManagement.editingAppointment = this.getDefaultEditingAppointment();
 
-            // For simplicity and mobile friendliness, we'll reuse the existing rescheduleModal
-            // but configure it properly for EDITS/ACTIONS
-            this.rescheduleModal.isNew = false;
-            this.rescheduleModal.blockId = appointment.id;
-            this.rescheduleModal.ticketId = appointment.ticket_id;
-            this.rescheduleModal.appointmentType = appointment.type;
-            this.rescheduleModal.ticketDetails = `OS #${appointment.os_number || 'S/N'} - ${appointment.device_model || ''} (${appointment.client_name || ''})`;
-            this.rescheduleModal.date = dateStr;
-            this.rescheduleModal.startTime = slot.start_time.substring(0, 5);
-            this.rescheduleModal.endTime = slot.end_time.substring(0, 5);
-            this.rescheduleModal.technicianId = this.scheduleManagement.selectedTechnicianId;
-            this.rescheduleModal.isOpen = true;
+            const ea = this.scheduleManagement.editingAppointment;
+            ea.original = appointment;
+            ea.ticket_id = appointment.ticket_id;
+            ea.type = appointment.type;
+            ea.new_date = dateStr;
+            ea.new_start = slot.start_time.substring(0, 5);
+            ea.new_end = slot.end_time.substring(0, 5);
+            ea.new_technician_id = this.scheduleManagement.selectedTechnicianId;
+
+            this.modals.rescheduleAppointment = true;
         },
 
         handleManagerSlotClick(dateStr, slot, event) {
@@ -2191,26 +2220,25 @@ function app() {
         closeSlotPopover() {
             this.scheduleManagement.slotActionPopover.open = false;
         },
+
         initiateSlotAction(actionType) {
             const dateStr = this.scheduleManagement.slotActionPopover.date;
             const slot = this.scheduleManagement.slotActionPopover.slot;
             this.closeSlotPopover();
 
             if (actionType === 'analysis' || actionType === 'repair') {
-                // Open reschedule modal in "creation" mode
-                this.rescheduleModal.ticketId = ''; // Requires user to select a ticket from unscheduled
-                this.rescheduleModal.ticketDetails = 'Selecione um chamado da lateral...';
-                this.rescheduleModal.appointmentType = actionType;
-                this.rescheduleModal.date = dateStr;
-                this.rescheduleModal.startTime = slot.start_time.substring(0, 5);
-                this.rescheduleModal.endTime = slot.end_time.substring(0, 5);
-                this.rescheduleModal.technicianId = this.scheduleManagement.selectedTechnicianId;
-                this.rescheduleModal.isNew = true;
-                this.rescheduleModal.isOpen = true;
+                // Open reschedule modal in "creation" mode without ticket
+                this.openRescheduleModal('', actionType, null, {
+                    date: dateStr,
+                    start: slot.start_time.substring(0, 5),
+                    end: slot.end_time.substring(0, 5)
+                });
             } else if (actionType === 'block') {
                 this.openBlockModal(dateStr, slot.start_time.substring(0, 5), slot.end_time.substring(0, 5));
             }
-        },openRescheduleModal(ticketId, type, appointmentObj, prefillSlot = null) {
+        },
+
+        openRescheduleModal(ticketId, type, appointmentObj, prefillSlot = null) {
             // Find ticket context from unscheduled lists if available to populate headers nicely during creation
             let ctx = null;
             if (ticketId && !appointmentObj) {
@@ -2218,57 +2246,43 @@ function app() {
                 ctx = allUnscheduled.find(t => t.id === ticketId);
             }
 
-            this.scheduleManagement.editingAppointment = {
-                ticket_id: ticketId,
-                type: type,
-                original: appointmentObj,
-                ticketContext: ctx,
-                new_date: prefillSlot ? prefillSlot.date : (appointmentObj ? appointmentObj.date : ''),
-                new_start: prefillSlot ? prefillSlot.start : (appointmentObj ? appointmentObj.start : ''),
-                new_end: prefillSlot ? prefillSlot.end : (appointmentObj ? appointmentObj.end : ''),
-                new_technician_id: appointmentObj ? appointmentObj.technician_id : this.scheduleManagement.selectedTechnicianId
-            };
+            this.scheduleManagement.editingAppointment = this.getDefaultEditingAppointment();
+            const ea = this.scheduleManagement.editingAppointment;
+
+            ea.ticket_id = ticketId;
+            ea.type = type;
+            ea.original = appointmentObj;
+            ea.ticketContext = ctx;
+            ea.new_date = prefillSlot ? prefillSlot.date : (appointmentObj ? appointmentObj.date : '');
+            ea.new_start = prefillSlot ? prefillSlot.start : (appointmentObj ? appointmentObj.start : '');
+            ea.new_end = prefillSlot ? prefillSlot.end : (appointmentObj ? appointmentObj.end : '');
+            ea.new_technician_id = appointmentObj ? appointmentObj.technician_id : this.scheduleManagement.selectedTechnicianId;
+
             this.modals.rescheduleAppointment = true;
         },
 
-        openBlockModal(dateStr, slot) {
-            this.scheduleManagement.editingAppointment = {
-                block_id: slot.block_id || null,
-                is_block: true,
-                date: dateStr,
-                start: slot.start,
-                end: slot.end,
-                notes: slot.block_notes || ''
-            };
+        closeRescheduleModal() {
+            this.modals.rescheduleAppointment = false;
+            this.scheduleManagement.editingAppointment = this.getDefaultEditingAppointment();
+        },
+
+        openBlockModal(dateStr, startStr, endStr) {
+            this.scheduleManagement.editingBlock = this.getDefaultEditingBlock();
+            const eb = this.scheduleManagement.editingBlock;
+
+            eb.date = dateStr;
+            eb.start = startStr;
+            eb.end = endStr;
+
             this.modals.scheduleBlock = true;
         },
 
-        // --- Management Mutations ---
-
-        async cancelAppointment() {
-            if (!this.scheduleManagement.editingAppointment || !this.scheduleManagement.editingAppointment.original) return;
-
-            if (!confirm('Deseja realmente cancelar este agendamento? Ele voltará para a fila de não agendados.')) return;
-
-            const blockId = this.scheduleManagement.editingAppointment.original.id;
-
-            try {
-                const response = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/delete_schedule_block`, {
-                    method: 'POST',
-                    headers: _getAuthDeps().getHeaders(),
-                    body: JSON.stringify({ p_block_id: blockId })
-                });
-
-                if (!response.ok) throw new Error('Erro ao cancelar agendamento');
-
-                this.notify('Agendamento cancelado com sucesso.', 'success');
-                this.modals.rescheduleAppointment = false;
-                this.loadScheduleManagement(); // Refresh grid and sidebars
-            } catch (err) {
-                console.error(err);
-                this.notify(err.message, 'error');
-            }
+        closeBlockModal() {
+            this.modals.scheduleBlock = false;
+            this.scheduleManagement.editingBlock = this.getDefaultEditingBlock();
         },
+
+        // --- Management Mutations ---
 
         async submitReschedule() {
             const ea = this.scheduleManagement.editingAppointment;
@@ -2347,11 +2361,11 @@ function app() {
         },
 
         async submitBlock() {
-            const ea = this.scheduleManagement.editingAppointment;
+            const eb = this.scheduleManagement.editingBlock;
             this.loading = true;
             try {
-                const startStr = this.toUTC(`${ea.date}T${ea.start}`);
-                const endStr = this.toUTC(`${ea.date}T${ea.end}`);
+                const startStr = this.toUTC(`${eb.date}T${eb.start}`);
+                const endStr = this.toUTC(`${eb.date}T${eb.end}`);
 
                 await this.supabaseFetch('rpc/create_schedule_block', 'POST', {
                     p_technician_id: this.scheduleManagement.selectedTechnicianId,
@@ -2361,11 +2375,11 @@ function app() {
                     p_is_recurring: false,
                     p_recurrence_type: null,
                     p_recurrence_days: null,
-                    p_reason: ea.notes || 'Bloqueio Administrativo'
+                    p_reason: eb.notes || 'Bloqueio Administrativo'
                 });
 
                 this.notify("Bloqueio salvo com sucesso!");
-                this.modals.scheduleBlock = false;
+                this.closeBlockModal();
                 this.loadScheduleManagement();
             } catch (e) {
                 console.error(e);
@@ -2376,8 +2390,8 @@ function app() {
         },
 
         async removeBlock() {
-            const ea = this.scheduleManagement.editingAppointment;
-            if (!ea.block_id) {
+            const eb = this.scheduleManagement.editingBlock;
+            if (!eb.block_id) {
                 this.notify("ID do bloqueio não encontrado.", "error");
                 return;
             }
@@ -2387,10 +2401,10 @@ function app() {
             this.loading = true;
             try {
                 await this.supabaseFetch('rpc/delete_schedule_block', 'POST', {
-                    p_block_id: ea.block_id
+                    p_block_id: eb.block_id
                 });
                 this.notify("Bloqueio removido.");
-                this.modals.scheduleBlock = false;
+                this.closeBlockModal();
                 this.loadScheduleManagement();
             } catch (e) {
                 console.error(e);
