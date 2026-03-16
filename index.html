@@ -1304,7 +1304,7 @@
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
                                                         <div class="flex justify-between items-center">
                                                             <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-red-200 text-red-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
-                                                            <span class="text-[9px] font-bold text-red-700 uppercase"><i class="fa-solid fa-clock mr-1"></i> Vencida: <span x-text="getOverdueTime(t.delivery_deadline)"></span></span>
+                                                            <span class="text-[9px] font-bold text-red-700 uppercase"><i class="fa-solid fa-clock mr-1"></i> Vencida: <span x-text="getOverdueTime(t.effective_due_at)"></span></span>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -1354,7 +1354,7 @@
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
                                                         <div class="flex justify-between items-center">
                                                             <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-red-200 text-red-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
-                                                            <span class="text-[9px] font-bold text-red-700 uppercase"><i class="fa-solid fa-stopwatch mr-1 animate-pulse"></i> Vencida: <span x-text="getOverdueTime(t.analysis_deadline)"></span></span>
+                                                            <span class="text-[9px] font-bold text-red-700 uppercase"><i class="fa-solid fa-stopwatch mr-1 animate-pulse"></i> Vencida: <span x-text="getOverdueTime(t.effective_due_at)"></span></span>
                                                         </div>
                                                     </div>
                                                 </template>
