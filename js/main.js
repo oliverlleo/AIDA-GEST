@@ -2242,7 +2242,7 @@ function app() {
                     end: slot.end_time.substring(0, 5)
                 });
             } else if (actionType === 'block') {
-                this.openBlockModal(dateStr, slot.start_time.substring(0, 5), slot.end_time.substring(0, 5));
+                this.openBlockModal(dateStr, slot);
             }
         },
 
@@ -2274,13 +2274,15 @@ function app() {
             this.scheduleManagement.editingAppointment = this.getDefaultEditingAppointment();
         },
 
-        openBlockModal(dateStr, startStr, endStr) {
+        openBlockModal(dateStr, slot) {
             this.scheduleManagement.editingBlock = this.getDefaultEditingBlock();
             const eb = this.scheduleManagement.editingBlock;
 
+            eb.block_id = slot.block_id || null;
             eb.date = dateStr;
-            eb.start = startStr;
-            eb.end = endStr;
+            eb.start = slot.start_time ? slot.start_time.substring(0, 5) : slot.start;
+            eb.end = slot.end_time ? slot.end_time.substring(0, 5) : slot.end;
+            eb.notes = slot.block_notes || '';
 
             this.modals.scheduleBlock = true;
         },
@@ -3307,6 +3309,123 @@ function app() {
                             this.createDeviceModel(this.search).then(ok => {
                                 if(ok) { this.selectOption(this.search); }
                             });
+                        }
+                    } else if (e.key === 'Escape') {
+                        this.closeDropdown();
+                    }
+                },
+                scrollToHighlighted() {
+                    this.$nextTick(() => {
+                        const list = this.$refs.listbox;
+                        if (!list) return;
+                        const items = list.querySelectorAll('li.combobox-option');
+                        const item = items[this.highlightedIndex];
+                        if (item) {
+                            item.scrollIntoView({ block: 'nearest' });
+                        }
+                    });
+                }
+            };
+        },
+
+        ticketCombobox() {
+            return {
+                open: false,
+                search: '',
+                highlightedIndex: -1,
+                init() {
+                    this.$watch('search', () => {
+                        this.highlightedIndex = -1;
+                    });
+                },
+                getFilteredTickets() {
+                    const eaType = this.scheduleManagement.editingAppointment?.type;
+
+                    // Combine and deduplicate tickets from unscheduled and withoutTechnician lists
+                    const combined = [...this.scheduleManagement.unscheduledItems, ...this.scheduleManagement.withoutTechnicianItems];
+                    const uniqueMap = new Map();
+                    combined.forEach(t => uniqueMap.set(t.id, t));
+                    let tickets = Array.from(uniqueMap.values());
+
+                    // Filter based on appointment type strictly
+                    if (eaType === 'analysis') {
+                        tickets = tickets.filter(t => t.status === 'Analise Tecnica');
+                    } else if (eaType === 'repair') {
+                        // Most non-analysis pending statuses can be booked as repair, but normally "Andamento Reparo"
+                        // is the classic state. Let's allow anything that isn't explicitly analysis or finished.
+                        tickets = tickets.filter(t => t.status !== 'Analise Tecnica' && t.status !== 'Finalizado' && t.status !== 'Retirada Cliente');
+                    }
+
+                    // Search filter
+                    if (this.search.trim()) {
+                        const q = this.search.toLowerCase().trim();
+                        tickets = tickets.filter(t =>
+                            (t.client_name && t.client_name.toLowerCase().includes(q)) ||
+                            (t.os_number && t.os_number.toLowerCase().includes(q)) ||
+                            (t.device_model && t.device_model.toLowerCase().includes(q))
+                        );
+                    }
+
+                    return tickets;
+                },
+                toggleArrow() {
+                    if (this.open) {
+                        this.closeDropdown();
+                    } else {
+                        this.open = true;
+                        this.search = '';
+                        this.highlightedIndex = -1;
+                        this.$nextTick(() => this.$refs.ticketSearch?.focus());
+                    }
+                },
+                onInput() {
+                    this.open = true;
+                },
+                onFocus() {
+                    this.open = true;
+                    this.highlightedIndex = -1;
+                },
+                selectOption(ticket) {
+                    // When a ticket is selected from the combobox, populate the editingAppointment
+                    this.scheduleManagement.editingAppointment.ticket_id = ticket.id;
+                    this.scheduleManagement.editingAppointment.ticketContext = ticket;
+
+                    // Attempt to pre-fill notes or extra context if needed here
+                    this.search = '';
+                    this.open = false;
+                    this.highlightedIndex = -1;
+                },
+                closeDropdown() {
+                    if (this.open) {
+                        this.open = false;
+                        this.highlightedIndex = -1;
+                    }
+                },
+                onKeydown(e) {
+                    if (!this.open) {
+                        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                            e.preventDefault();
+                            this.open = true;
+                        }
+                        return;
+                    }
+                    const options = this.getFilteredTickets();
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (options.length > 0) {
+                            this.highlightedIndex = (this.highlightedIndex + 1) % options.length;
+                            this.scrollToHighlighted();
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (options.length > 0) {
+                            this.highlightedIndex = this.highlightedIndex <= 0 ? options.length - 1 : this.highlightedIndex - 1;
+                            this.scrollToHighlighted();
+                        }
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (this.highlightedIndex >= 0 && this.highlightedIndex < options.length) {
+                            this.selectOption(options[this.highlightedIndex]);
                         }
                     } else if (e.key === 'Escape') {
                         this.closeDropdown();
