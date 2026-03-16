@@ -2030,7 +2030,19 @@ function app() {
                     this.scheduleManagement.data = response.days;
 
                     // Trust backend entirely for capacity representation without fallback aliases.
-                    this.scheduleManagement.capacitySummary = response.capacity_summary;
+
+                    // Backend returns an array per day. Sum it for the sidebar.
+                    this.scheduleManagement.capacitySummary = { total: 0, booked: 0, blocked: 0, overbooked: 0 };
+                    response.capacity_summary.forEach(daySum => {
+                        this.scheduleManagement.capacitySummary.total += (daySum.total || 0);
+                        this.scheduleManagement.capacitySummary.booked += (daySum.booked || 0);
+                        this.scheduleManagement.capacitySummary.blocked += (daySum.blocked || 0);
+
+                        if ((daySum.booked || 0) > (daySum.total || 0)) {
+                            this.scheduleManagement.capacitySummary.overbooked += ((daySum.booked || 0) - (daySum.total || 0));
+                        }
+                    });
+
                 } else if (response && Array.isArray(response)) {
                     this.scheduleManagement.data = response;
                 }
@@ -2142,6 +2154,27 @@ function app() {
             this.loadScheduleManagement();
         },
 
+
+        openAppointmentActionMenu(appointment, dateStr, slot) {
+            // Check if we already have an action menu state, if not, create it
+            if (!this.scheduleManagement.appointmentActionPopover) {
+                this.scheduleManagement.appointmentActionPopover = { open: false, appt: null, date: '', slot: null };
+            }
+
+            // For simplicity and mobile friendliness, we'll reuse the existing rescheduleModal
+            // but configure it properly for EDITS/ACTIONS
+            this.rescheduleModal.isNew = false;
+            this.rescheduleModal.blockId = appointment.id;
+            this.rescheduleModal.ticketId = appointment.ticket_id;
+            this.rescheduleModal.appointmentType = appointment.type;
+            this.rescheduleModal.ticketDetails = `OS #${appointment.os_number || 'S/N'} - ${appointment.device_model || ''} (${appointment.client_name || ''})`;
+            this.rescheduleModal.date = dateStr;
+            this.rescheduleModal.startTime = slot.start_time.substring(0, 5);
+            this.rescheduleModal.endTime = slot.end_time.substring(0, 5);
+            this.rescheduleModal.technicianId = this.scheduleManagement.selectedTechnicianId;
+            this.rescheduleModal.isOpen = true;
+        },
+
         handleManagerSlotClick(dateStr, slot, event) {
             if (slot.status === 'livre') {
                 const rect = event.currentTarget.getBoundingClientRect();
@@ -2158,25 +2191,26 @@ function app() {
         closeSlotPopover() {
             this.scheduleManagement.slotActionPopover.open = false;
         },
-
         initiateSlotAction(actionType) {
             const dateStr = this.scheduleManagement.slotActionPopover.date;
             const slot = this.scheduleManagement.slotActionPopover.slot;
             this.closeSlotPopover();
 
-            if (actionType === 'block') {
-                this.openBlockModal(dateStr, slot);
-            } else if (actionType === 'analysis' || actionType === 'repair') {
-                // To schedule a new appointment from an empty slot, we need a ticket context.
-                // We'll open the reschedule modal in "creation mode" but without a predefined ticket.
-                // The user would then select a ticket or we present it gracefully.
-                // The prompt says: "pré-preencher: técnico, data, hora, tipo".
-                // We will pass ticketId as null, so the modal knows it needs one (or is just waiting for selection).
-                this.openRescheduleModal(null, actionType, null, { date: dateStr, start: slot.start, end: slot.end });
+            if (actionType === 'analysis' || actionType === 'repair') {
+                // Open reschedule modal in "creation" mode
+                this.rescheduleModal.ticketId = ''; // Requires user to select a ticket from unscheduled
+                this.rescheduleModal.ticketDetails = 'Selecione um chamado da lateral...';
+                this.rescheduleModal.appointmentType = actionType;
+                this.rescheduleModal.date = dateStr;
+                this.rescheduleModal.startTime = slot.start_time.substring(0, 5);
+                this.rescheduleModal.endTime = slot.end_time.substring(0, 5);
+                this.rescheduleModal.technicianId = this.scheduleManagement.selectedTechnicianId;
+                this.rescheduleModal.isNew = true;
+                this.rescheduleModal.isOpen = true;
+            } else if (actionType === 'block') {
+                this.openBlockModal(dateStr, slot.start_time.substring(0, 5), slot.end_time.substring(0, 5));
             }
-        },
-
-        openRescheduleModal(ticketId, type, appointmentObj, prefillSlot = null) {
+        },openRescheduleModal(ticketId, type, appointmentObj, prefillSlot = null) {
             // Find ticket context from unscheduled lists if available to populate headers nicely during creation
             let ctx = null;
             if (ticketId && !appointmentObj) {
@@ -2210,6 +2244,32 @@ function app() {
         },
 
         // --- Management Mutations ---
+
+        async cancelAppointment() {
+            if (!this.scheduleManagement.editingAppointment || !this.scheduleManagement.editingAppointment.original) return;
+
+            if (!confirm('Deseja realmente cancelar este agendamento? Ele voltará para a fila de não agendados.')) return;
+
+            const blockId = this.scheduleManagement.editingAppointment.original.id;
+
+            try {
+                const response = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/delete_schedule_block`, {
+                    method: 'POST',
+                    headers: _getAuthDeps().getHeaders(),
+                    body: JSON.stringify({ p_block_id: blockId })
+                });
+
+                if (!response.ok) throw new Error('Erro ao cancelar agendamento');
+
+                this.notify('Agendamento cancelado com sucesso.', 'success');
+                this.modals.rescheduleAppointment = false;
+                this.loadScheduleManagement(); // Refresh grid and sidebars
+            } catch (err) {
+                console.error(err);
+                this.notify(err.message, 'error');
+            }
+        },
+
         async submitReschedule() {
             const ea = this.scheduleManagement.editingAppointment;
             if (!ea.new_date || !ea.new_start || !ea.new_technician_id) {
