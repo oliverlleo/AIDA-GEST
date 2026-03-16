@@ -2221,6 +2221,14 @@ function app() {
             this.scheduleManagement.slotActionPopover.open = false;
         },
 
+        initiateSidebarAction(ticket, action) {
+            if (action === 'reschedule') {
+                const type = ticket.status === 'Analise Tecnica' ? 'analysis' : 'repair';
+                // Open reschedule modal for a specific ticket, without pre-filling a slot
+                this.openRescheduleModal(ticket.id, type, null, null);
+            }
+        },
+
         initiateSlotAction(actionType) {
             const dateStr = this.scheduleManagement.slotActionPopover.date;
             const slot = this.scheduleManagement.slotActionPopover.slot;
