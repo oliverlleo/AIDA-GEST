@@ -188,8 +188,10 @@ function app() {
             pendingBudgets: [],
             waitingBudgetResponse: [],
             pendingPickups: [],
-            urgentAnalysis: [],
-            delayedDeliveries: [],
+            expiringAnalysis: [],
+            expiredAnalysis: [],
+            expiringDeliveries: [],
+            expiredDeliveries: [],
             priorityTickets: [],
             pendingPurchase: [],
             pendingReceipt: [],
@@ -205,8 +207,10 @@ function app() {
             pendingBudgets: [],
             waitingBudgetResponse: [],
             pendingPickups: [],
-            urgentAnalysis: [],
-            delayedDeliveries: [],
+            expiringAnalysis: [],
+            expiredAnalysis: [],
+            expiringDeliveries: [],
+            expiredDeliveries: [],
             priorityTickets: [],
             pendingPurchase: [],
             pendingReceipt: [],
@@ -1683,8 +1687,8 @@ function app() {
             });
         },
 
-        async createOutsourcedCompany(name, phone) {
-            return await window.AIDACatalogService.createOutsourcedCompany(name, phone, {
+        async createOutsourcedCompany(name, phone, services) {
+            return await window.AIDACatalogService.createOutsourcedCompany(name, phone, services, {
                 state: this,
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                 notify: (msg, type) => this.notify(msg, type),
@@ -2461,6 +2465,10 @@ function app() {
              const c = this.outsourcedCompanies.find(x => x.id === id);
              return c ? c.phone : '';
         },
+        getOutsourcedServices(id) {
+             const c = this.outsourcedCompanies.find(x => x.id === id);
+             return c && c.services ? c.services : '';
+        },
 
         openOutsourcedModal(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
@@ -3089,8 +3097,10 @@ function app() {
                             pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca'),
                             pendingReceipt: [],
                             priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
-                            delayedDeliveries: this.homeOperationalItems.filter(t => t.is_overdue === true && t.effective_due_type === 'delivery'),
-                            urgentAnalysis: this.homeOperationalItems.filter(t => t.is_overdue === true && t.effective_due_type === 'analysis'),
+                            expiringDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === false && ['today', 'tomorrow'].includes(t.urgency_bucket)),
+                            expiredDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === true),
+                            expiringAnalysis: this.homeOperationalItems.filter(t => t.effective_due_type === 'analysis' && t.is_overdue === false && ['today', 'tomorrow'].includes(t.urgency_bucket)),
+                            expiredAnalysis: this.homeOperationalItems.filter(t => t.effective_due_type === 'analysis' && t.is_overdue === true),
                         };
                     }
                 }

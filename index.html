@@ -597,17 +597,25 @@
                                 </div>
 
                                 <div x-show="expanded" class="mt-4" x-transition>
-                                <div class="flex gap-2 mb-4" x-data="{ name: '', phone: '' }">
-                                    <input type="text" x-model="name" class="flex-grow border rounded p-2 text-sm focus:ring-brand-500 outline-none" placeholder="Nome da Empresa">
-                                    <input type="text" x-model="phone" class="w-1/3 border rounded p-2 text-sm focus:ring-brand-500 outline-none" placeholder="Telefone / WhatsApp">
-                                    <button @click="createOutsourcedCompany(name, phone); name=''; phone=''" class="bg-black text-white px-4 rounded font-bold hover:bg-gray-800 text-sm">Adicionar</button>
+                                <div class="flex flex-col gap-2 mb-4" x-data="{ name: '', phone: '', services: '' }">
+                                    <div class="flex gap-2">
+                                        <input type="text" x-model="name" class="flex-grow border rounded p-2 text-sm focus:ring-brand-500 outline-none" placeholder="Nome da Empresa">
+                                        <input type="text" x-model="phone" class="w-1/3 border rounded p-2 text-sm focus:ring-brand-500 outline-none" placeholder="Telefone / WhatsApp">
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <input type="text" x-model="services" class="flex-grow border rounded p-2 text-sm focus:ring-brand-500 outline-none" placeholder="Serviço(s) executado(s) (Ex: Placa, Face ID, Micro solda)">
+                                        <button @click="createOutsourcedCompany(name, phone, services); name=''; phone=''; services=''" class="bg-black text-white px-4 rounded font-bold hover:bg-gray-800 text-sm whitespace-nowrap">Adicionar</button>
+                                    </div>
                                 </div>
 
                                 <ul class="space-y-2">
                                     <template x-for="comp in outsourcedCompanies" :key="comp.id">
                                         <li class="bg-white p-3 rounded border border-gray-200 flex justify-between items-center">
                                             <div>
-                                                <div class="font-bold text-sm text-gray-800" x-text="comp.name"></div>
+                                                <div class="flex items-center gap-2">
+                                                    <div class="font-bold text-sm text-gray-800" x-text="comp.name"></div>
+                                                    <span x-show="comp.services" x-text="comp.services" class="px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs font-medium border border-gray-300"></span>
+                                                </div>
                                                 <div class="text-xs text-gray-500" x-show="comp.phone"><i class="fa-brands fa-whatsapp mr-1"></i> <span x-text="comp.phone"></span></div>
                                             </div>
                                             <button @click="deleteOutsourcedCompany(comp.id)" class="text-red-500 hover:text-red-700 p-2"><i class="fa-solid fa-trash"></i></button>
@@ -1254,60 +1262,99 @@
                                         </div>
                                     </template>
 
-                                    <!-- Delayed List -->
-                                    <template x-if="homeOps.delayedDeliveries.length">
+                                    <!-- Entrega Expirando -->
+                                    <template x-if="homeOps.expiringDeliveries.length">
                                         <div class="mb-2">
-                                            <div class="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-orange-200" @click="applyQuickFilter('delayed')">
-                                                <span>ATRASADOS (<span x-text="homeOps.delayedDeliveries.length"></span>)</span>
-                                                <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                            <div class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-amber-200">
+                                                <span>ENTREGA EXPIRANDO (<span x-text="homeOps.expiringDeliveries.length"></span>)</span>
+                                                <i class="fa-solid fa-clock text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
-                                                <template x-for="t in homeOps.delayedDeliveries.slice(0, 5)" :key="t.id">
-                                                    <div @click="viewTicketDetails(t)" class="bg-orange-50 border-l-2 border-orange-500 p-2 cursor-pointer hover:bg-orange-100 transition-colors rounded-r">
+                                                <template x-for="t in homeOps.expiringDeliveries.slice(0, 5)" :key="t.id">
+                                                    <div @click="viewTicketDetails(t)" class="bg-amber-50 border-l-2 border-amber-500 p-2 cursor-pointer hover:bg-amber-100 transition-colors rounded-r group relative">
                                                         <div class="flex justify-between items-center text-xs mb-0.5">
                                                              <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
-                                                             <span class="font-mono text-orange-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                             <span class="font-mono text-amber-600 font-bold" x-text="'OS ' + t.os_number"></span>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
-                                                        <div class="flex flex-col">
-                                                            <span class="text-[9px] font-bold text-orange-700 uppercase"><i class="fa-solid fa-clock mr-1"></i> Entrega Atrasada</span>
-                                                            <span class="text-[9px] text-gray-600" x-text="'Etapa: ' + getStatusLabel(t.status)"></span>
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-amber-200 text-amber-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
+                                                            <span class="text-[9px] font-bold text-amber-700 uppercase"><i class="fa-regular fa-clock mr-1"></i><span x-text="t.urgency_bucket === 'today' ? 'Vence Hoje' : 'Vence Amanhã'"></span></span>
                                                         </div>
                                                     </div>
                                                 </template>
-                                                <div x-show="homeOps.delayedDeliveries.length > 5" class="text-center text-[10px] text-orange-400 cursor-pointer hover:underline" @click="applyQuickFilter('delayed')">
-                                                    Ver mais...
-                                                </div>
                                             </div>
                                         </div>
                                     </template>
 
-                                    <!-- Analysis Expiring -->
-                                    <template x-if="homeOps.urgentAnalysis.length">
+                                    <!-- Entrega Expirada -->
+                                    <template x-if="homeOps.expiredDeliveries.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200">
-                                                <span>ANÁLISE EXPIRANDO (<span x-text="homeOps.urgentAnalysis.length"></span>)</span>
-                                                <i class="fa-solid fa-stopwatch text-[10px]"></i>
+                                                <span>ENTREGA EXPIRADA (<span x-text="homeOps.expiredDeliveries.length"></span>)</span>
+                                                <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
-                                                <template x-for="t in homeOps.urgentAnalysis" :key="t.id">
+                                                <template x-for="t in homeOps.expiredDeliveries.slice(0, 5)" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-red-50 border-l-2 border-red-500 p-2 cursor-pointer hover:bg-red-100 transition-colors rounded-r group relative">
                                                         <div class="flex justify-between items-center text-xs mb-0.5">
                                                              <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
                                                              <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
-                                                        <!-- Deadlines -->
-                                                        <div class="flex gap-2 mb-1">
-                                                            <template x-if="t.analysis_deadline">
-                                                                <span class="text-[9px]" :class="new Date(t.analysis_deadline) < new Date() ? 'text-red-700 font-bold' : 'text-red-400'">
-                                                                    <i class="fa-solid fa-stopwatch mr-0.5"></i> <span x-text="new Date(t.analysis_deadline).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})"></span>
-                                                                </span>
-                                                            </template>
-                                                        </div>
                                                         <div class="flex justify-between items-center">
                                                             <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-red-200 text-red-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
-                                                            <span class="text-[9px] font-bold text-red-600" x-text="getOverdueTime(t.analysis_deadline)"></span>
+                                                            <span class="text-[9px] font-bold text-red-700 uppercase"><i class="fa-solid fa-clock mr-1"></i> Vencida: <span x-text="getOverdueTime(t.effective_due_at)"></span></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- Analysis Expiring -->
+                                    <template x-if="homeOps.expiringAnalysis.length">
+                                        <div class="mb-2">
+                                            <div class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-amber-200">
+                                                <span>ANÁLISE EXPIRANDO (<span x-text="homeOps.expiringAnalysis.length"></span>)</span>
+                                                <i class="fa-solid fa-stopwatch text-[10px]"></i>
+                                            </div>
+                                            <div class="space-y-1">
+                                                <template x-for="t in homeOps.expiringAnalysis" :key="t.id">
+                                                    <div @click="viewTicketDetails(t)" class="bg-amber-50 border-l-2 border-amber-500 p-2 cursor-pointer hover:bg-amber-100 transition-colors rounded-r group relative">
+                                                        <div class="flex justify-between items-center text-xs mb-0.5">
+                                                             <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
+                                                             <span class="font-mono text-amber-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                        </div>
+                                                        <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-amber-200 text-amber-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
+                                                            <span class="text-[9px] font-bold text-amber-700 uppercase"><i class="fa-regular fa-clock mr-1"></i><span x-text="t.urgency_bucket === 'today' ? 'Vence Hoje' : 'Vence Amanhã'"></span></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- Analysis Expired -->
+                                    <template x-if="homeOps.expiredAnalysis.length">
+                                        <div class="mb-2">
+                                            <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200">
+                                                <span>ANÁLISE EXPIRADA (<span x-text="homeOps.expiredAnalysis.length"></span>)</span>
+                                                <i class="fa-solid fa-stopwatch animate-pulse text-[10px]"></i>
+                                            </div>
+                                            <div class="space-y-1">
+                                                <template x-for="t in homeOps.expiredAnalysis" :key="t.id">
+                                                    <div @click="viewTicketDetails(t)" class="bg-red-50 border-l-2 border-red-500 p-2 cursor-pointer hover:bg-red-100 transition-colors rounded-r group relative">
+                                                        <div class="flex justify-between items-center text-xs mb-0.5">
+                                                             <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
+                                                             <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                        </div>
+                                                        <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-[9px] bg-white bg-opacity-60 px-1.5 py-0.5 rounded border border-red-200 text-red-800 font-bold uppercase" x-text="getStatusLabel(t.status)"></span>
+                                                            <span class="text-[9px] font-bold text-red-700 uppercase"><i class="fa-solid fa-stopwatch mr-1 animate-pulse"></i> Vencida: <span x-text="getOverdueTime(t.effective_due_at)"></span></span>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -1316,7 +1363,7 @@
                                     </template>
 
                                     <!-- Empty State -->
-                                    <div x-show="!homeOps.priorityTickets.length && !homeOps.delayedDeliveries.length && !homeOps.urgentAnalysis.length" class="text-center py-4 text-gray-400 text-xs italic">
+                                    <div x-show="!homeOps.priorityTickets.length && !homeOps.expiringDeliveries.length && !homeOps.expiredDeliveries.length && !homeOps.expiringAnalysis.length && !homeOps.expiredAnalysis.length" class="text-center py-4 text-gray-400 text-xs italic">
                                         Nenhum alerta crítico.
                                     </div>
                                 </div>
@@ -3710,12 +3757,40 @@
 
                             <!-- Outsourced Select -->
                             <div x-show="ticketForm.is_outsourced" class="flex space-x-2">
-                                <select x-model="ticketForm.outsourced_company_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all">
-                                    <option value="">-- Selecione a Empresa --</option>
-                                    <template x-for="comp in outsourcedCompanies" :key="comp.id">
-                                        <option :value="comp.id" x-text="comp.name"></option>
-                                    </template>
-                                </select>
+                                <div class="relative w-full" x-data="{ open: false }" @click.outside="open = false">
+                                    <button type="button" @click="open = !open" class="w-full border rounded-lg p-2.5 bg-gray-50 outline-none transition-all flex items-center justify-between hover:bg-gray-100" :class="open ? 'ring-2 ring-purple-500 border-purple-500' : ''">
+                                        <span class="text-left flex items-center gap-2 truncate">
+                                            <template x-if="ticketForm.outsourced_company_id">
+                                                <div class="flex items-center gap-2">
+                                                    <span x-text="getOutsourcedCompany(ticketForm.outsourced_company_id)"></span>
+                                                    <template x-if="getOutsourcedServices(ticketForm.outsourced_company_id)">
+                                                        <span x-text="getOutsourcedServices(ticketForm.outsourced_company_id)" class="px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs font-medium border border-gray-300"></span>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                            <template x-if="!ticketForm.outsourced_company_id">
+                                                <span class="text-gray-500">-- Selecione a Empresa --</span>
+                                            </template>
+                                        </span>
+                                        <i class="fa-solid fa-chevron-down text-gray-400 text-xs ml-2"></i>
+                                    </button>
+
+                                    <div x-show="open" x-transition.opacity.duration.200ms style="display: none;" class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                        <ul class="py-1">
+                                            <li @click="ticketForm.outsourced_company_id = ''; open = false" class="px-4 py-2 hover:bg-gray-100 cursor-pointer text-gray-500 text-sm">
+                                                -- Selecione a Empresa --
+                                            </li>
+                                            <template x-for="comp in outsourcedCompanies" :key="comp.id">
+                                                <li @click="ticketForm.outsourced_company_id = comp.id; open = false" class="px-4 py-2 hover:bg-gray-100 cursor-pointer text-gray-800 text-sm flex items-center gap-2">
+                                                    <span x-text="comp.name"></span>
+                                                    <template x-if="comp.services">
+                                                        <span x-text="comp.services" class="px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-[10px] font-medium border border-gray-300"></span>
+                                                    </template>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </div>
                                 <button x-show="hasRole('admin')" @click="view = 'management_settings'; modals.ticket = false" class="bg-gray-200 px-3 rounded text-gray-600 hover:bg-gray-300" title="Gerenciar Empresas"><i class="fa-solid fa-cog"></i></button>
                             </div>
                         </div>
