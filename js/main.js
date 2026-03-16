@@ -398,7 +398,7 @@ function app() {
             lateWithoutScheduleItems: [],
             lateWithoutScheduleTotal: 0,
             capacitySummary: null,
-            editingAppointment: null,
+            editingAppointment: { block_id: null, ticket_id: null, type: 'analysis', original: null, ticketContext: null, date: '', start: '', end: '', notes: '', new_date: '', new_start: '', new_end: '', new_technician_id: '' },
         },
 
         // Scheduling State
@@ -2245,6 +2245,13 @@ function app() {
 
         // --- Management Mutations ---
 
+
+        closeAppointmentModal() {
+            this.closeAppointmentModal();
+            // Ensure state resets fully so next open starts fresh
+            this.scheduleManagement.editingAppointment = this._getDefaultEditingAppointment();
+        },
+
         async cancelAppointment() {
             if (!this.scheduleManagement.editingAppointment || !this.scheduleManagement.editingAppointment.original) return;
 
@@ -2262,7 +2269,7 @@ function app() {
                 if (!response.ok) throw new Error('Erro ao cancelar agendamento');
 
                 this.notify('Agendamento cancelado com sucesso.', 'success');
-                this.modals.rescheduleAppointment = false;
+                this.closeAppointmentModal();
                 this.loadScheduleManagement(); // Refresh grid and sidebars
             } catch (err) {
                 console.error(err);
@@ -2312,7 +2319,7 @@ function app() {
                     this.notify("Agendamento criado com sucesso!");
                 }
 
-                this.modals.rescheduleAppointment = false;
+                this.closeAppointmentModal();
                 this.loadScheduleManagement();
 
             } catch (e) {
@@ -2321,30 +2328,7 @@ function app() {
             } finally {
                 this.loading = false;
             }
-        },
-
-        async cancelAppointment() {
-            const ea = this.scheduleManagement.editingAppointment;
-            if (!ea || !ea.original || !ea.original.id) return;
-
-            if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
-
-            this.loading = true;
-            try {
-                await this.supabaseFetch('rpc/cancel_ticket_appointment', 'POST', {
-                    p_appointment_id: ea.original.id,
-                    p_reason: 'Cancelado pelo Gestor'
-                });
-                this.notify("Agendamento cancelado.");
-                this.modals.rescheduleAppointment = false;
-                this.loadScheduleManagement();
-            } catch (e) {
-                console.error(e);
-                this.notify("Erro ao cancelar.", "error");
-            } finally {
-                this.loading = false;
-            }
-        },
+        },,
 
         async submitBlock() {
             const ea = this.scheduleManagement.editingAppointment;
