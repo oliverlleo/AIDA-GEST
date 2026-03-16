@@ -388,7 +388,14 @@ function app() {
             loading: false,
             data: null,
             unscheduledLoading: false,
-            unscheduledTickets: [],
+            unscheduledItems: [],
+            unscheduledTotal: 0,
+            withoutTechnicianItems: [],
+            withoutTechnicianTotal: 0,
+            conflictItems: [],
+            conflictTotal: 0,
+            lateWithoutScheduleItems: [],
+            lateWithoutScheduleTotal: 0,
             capacitySummary: null,
             editingAppointment: null,
         },
@@ -2034,19 +2041,66 @@ function app() {
 
         async fetchUnscheduledTickets() {
             this.scheduleManagement.unscheduledLoading = true;
-            this.scheduleManagement.unscheduledTickets = [];
+            this.scheduleManagement.unscheduledItems = [];
+            this.scheduleManagement.unscheduledTotal = 0;
+            this.scheduleManagement.withoutTechnicianItems = [];
+            this.scheduleManagement.withoutTechnicianTotal = 0;
+
+            // Note: conflictItems and lateWithoutScheduleItems are initialized empty
+            // until the backend explicitly supports sending them in this RPC or another.
+            this.scheduleManagement.conflictItems = [];
+            this.scheduleManagement.conflictTotal = 0;
+            this.scheduleManagement.lateWithoutScheduleItems = [];
+            this.scheduleManagement.lateWithoutScheduleTotal = 0;
+
             try {
-                const response = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
-                    p_technician_id: this.scheduleManagement.selectedTechnicianId || null,
+                // To fetch tickets strictly without ANY technician, we would query explicitly p_technician_id=null.
+                // If a tech IS selected in the view, we fetch both unassigned (null) AND assigned to them.
+                // We'll execute two concurrent queries if a tech is selected to ensure we populate both blocks clearly.
+                // Or, if the backend returns all of them when p_technician_id is null, we can filter client-side.
+                // Let's rely on the RPC: if techId is selected, we query for them.
+                const techId = this.scheduleManagement.selectedTechnicianId;
+
+                const requests = [];
+
+                // 1. Fetch tickets assigned to the specific technician (if any)
+                if (techId) {
+                    requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                        p_technician_id: techId,
+                        p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
+                        p_status: null,
+                        p_limit: 100,
+                        p_offset: 0
+                    }));
+                } else {
+                    requests.push(Promise.resolve({ items: [], total: 0 }));
+                }
+
+                // 2. Fetch tickets with NO technician assigned (always visible for management)
+                requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                    p_technician_id: null, // specifically null to get unassigned
                     p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
                     p_status: null,
                     p_limit: 100,
                     p_offset: 0
-                });
+                }));
 
-                if (response && Array.isArray(response)) {
-                    this.scheduleManagement.unscheduledTickets = response;
+                const [techRes, noTechRes] = await Promise.all(requests);
+
+                // Parse Tech Assigned (Não Agendados)
+                if (techRes && typeof techRes === 'object' && techRes.items) {
+                    this.scheduleManagement.unscheduledItems = techRes.items;
+                    this.scheduleManagement.unscheduledTotal = techRes.total || techRes.items.length;
                 }
+
+                // Parse No Tech Assigned (Sem Técnico)
+                // The backend might return tickets without technician. Filter explicitly just in case.
+                if (noTechRes && typeof noTechRes === 'object' && noTechRes.items) {
+                    const purelyUnassigned = noTechRes.items.filter(t => !t.technician_id);
+                    this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
+                    this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
+                }
+
             } catch (error) {
                 console.error("Error fetching unscheduled tickets:", error);
             } finally {
@@ -2109,11 +2163,14 @@ function app() {
                 // If not, it's a new appointment from the unscheduled list.
                 const startStr = this.toUTC(`${ea.new_date}T${ea.new_start}`);
 
-                // Estimate end time simply by adding 1 hour (or rely on backend default)
-                // For simplicity, we just pass an end time 1 hour later
+                // Estimate end time simply by adding 1 hour
                 const startDate = new Date(`${ea.new_date}T${ea.new_start}`);
                 startDate.setHours(startDate.getHours() + 1);
-                const endStr = this.toUTC(startDate.toISOString().slice(0, 16));
+
+                // Format back to YYYY-MM-DDTHH:mm local string to pass into toUTC safely
+                const pad = (n) => n < 10 ? '0' + n : n;
+                const localEndStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}T${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
+                const endStr = this.toUTC(localEndStr);
 
                 if (ea.original && ea.original.id) {
                     await this.supabaseFetch('rpc/reschedule_ticket_appointment', 'POST', {
