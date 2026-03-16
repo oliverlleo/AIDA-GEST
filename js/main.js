@@ -2784,19 +2784,7 @@ function app() {
             this.showMentionList = false;
         },
 
-        formatNoteContent(text) {
-            if (!text) return '';
-            let safe = text
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-
-            safe = safe.replace(/@(\w+(\s\w+)?)/g, '<span class="text-brand-500 font-bold">@$1</span>');
-
-            return safe.replace(/\n/g, '<br>');
-        },
+        // formatNoteContent was removed to eliminate x-html and innerHTML usage completely.
 
         async sendNote(ticketId = null, isGeneral = false) {
             return await window.AIDANotesService.sendNote(ticketId, isGeneral, {
@@ -3606,42 +3594,8 @@ function app() {
         },
 
         // --- UTILS ---
-        safeLogHTML(input) {
-            if (!input) return '';
-            // Convert \n to <br> before parsing to preserve line breaks
-            const inputWithBreaks = input.replace(/\n/g, '<br>');
-
-            const doc = new DOMParser().parseFromString(inputWithBreaks, 'text/html');
-            const allowedTags = ['B', 'STRONG', 'BR'];
-
-            const walk = (root) => {
-                const children = Array.from(root.childNodes);
-                for (const child of children) {
-                    if (child.nodeType === Node.ELEMENT_NODE) {
-                        const tagName = child.tagName.toUpperCase();
-                        if (allowedTags.includes(tagName)) {
-                            // Allowed: strip attributes, recurse
-                            while (child.attributes.length > 0) {
-                                child.removeAttribute(child.attributes[0].name);
-                            }
-                            walk(child);
-                        } else {
-                            // Disallowed: Unwrap (replace element with its children)
-                            const fragment = document.createDocumentFragment();
-                            while (child.firstChild) {
-                                fragment.appendChild(child.firstChild);
-                            }
-                            // Process the moved children (now in fragment)
-                            walk(fragment);
-                            child.parentNode.replaceChild(fragment, child);
-                        }
-                    }
-                }
-            };
-
-            walk(doc.body);
-            return doc.body.innerHTML;
-        },
+        // Removed safeLogHTML entirely to eliminate innerHTML usage.
+        // We now rely on escapeHtml and direct parsing for text nodes.
 
         escapeHtml(text) {
             if (!text) return '';
@@ -3654,19 +3608,19 @@ function app() {
         },
 
         getLogContext(ticket) {
-            if (!ticket) return { client: '<b>Cliente</b>', device: '<b>Aparelho</b>' };
+            if (!ticket) return { client: 'Cliente', device: 'Aparelho' };
 
-            const safeClientName = this.escapeHtml(ticket.client_name);
-            const safeOsNumber = this.escapeHtml(ticket.os_number);
-            const safeDevice = this.escapeHtml(ticket.device_model);
+            const safeClientName = ticket.client_name || '';
+            const safeOsNumber = ticket.os_number || '';
+            const safeDevice = ticket.device_model || '';
 
-            let client = `<b>${safeClientName} da OS ${safeOsNumber}</b>`;
-            const device = `<b>${safeDevice}</b>`;
+            let client = `${safeClientName} da OS ${safeOsNumber}`;
+            const device = `${safeDevice}`;
 
             // Add outsourced context if applicable as requested by user
             if (ticket.is_outsourced && ticket.outsourced_company_id) {
-                const company = this.escapeHtml(this.getOutsourcedCompany(ticket.outsourced_company_id));
-                client += ` (Terceirizado: <b>${company}</b>)`;
+                const company = this.getOutsourcedCompany(ticket.outsourced_company_id);
+                client += ` (Terceirizado: ${company})`;
             }
 
             return { client, device };
