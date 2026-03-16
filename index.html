@@ -186,6 +186,13 @@
                                 <i class="fa-solid fa-chart-line w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'admin_dashboard' ? 'text-brand-500' : 'text-gray-400'"></i>
                                 <span class="ml-3 font-medium text-sm hidden md:block">Dashboard Gestor</span>
                             </a>
+                            <!-- NEW: Schedule Management Link -->
+                            <a href="#" @click.prevent="view = 'schedule_management'"
+                               :class="view === 'schedule_management' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-regular fa-calendar-days w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'schedule_management' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Agenda Técnica</span>
+                            </a>
                             <!-- NEW: Tracker Settings Link -->
                             <a href="#" @click.prevent="view = 'tracker_settings'"
                                :class="view === 'tracker_settings' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
@@ -221,6 +228,283 @@
             <main class="flex-grow bg-gray-50 relative overflow-hidden flex flex-col">
 
                 <!-- VIEW: DASHBOARD (Welcome) -->
+                <!-- VIEW: SCHEDULE MANAGEMENT (Agenda Técnica) -->
+                <div x-show="view === 'schedule_management' && hasRole('admin')" class="h-full flex flex-col" style="display: none;" x-cloak>
+                    <header class="bg-white px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center shadow-sm z-10 flex-shrink-0">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 tracking-tight flex items-center gap-2">
+                                <i class="fa-regular fa-calendar-days text-brand-500"></i> Agenda Técnica
+                            </h2>
+                            <p class="text-gray-500 text-sm mt-1">Gerenciamento de capacidade e horários da equipe técnica.</p>
+                        </div>
+                    </header>
+
+                    <!-- Schedule Toolbar -->
+                    <div class="bg-white px-6 py-3 border-b border-gray-200 flex flex-wrap gap-4 items-center justify-between shadow-sm z-[9] flex-shrink-0">
+                        <div class="flex items-center gap-4 flex-wrap">
+                            <!-- Technician Selector -->
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-gray-500 uppercase">Técnico</span>
+                                <select x-model="scheduleManagement.selectedTechnicianId" @change="loadScheduleManagement()" class="border-gray-300 text-sm rounded focus:ring-brand-500 focus:border-brand-500 py-1.5 pl-3 pr-8 font-medium bg-gray-50">
+                                    <option value="">Selecione...</option>
+                                    <template x-for="tech in getTechnicians()" :key="tech.id">
+                                        <option :value="tech.id" x-text="tech.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            <div class="h-6 w-px bg-gray-300 hidden sm:block"></div>
+
+                            <!-- View Mode -->
+                            <div class="bg-gray-100 rounded-lg p-1 flex">
+                                <button @click="scheduleManagement.viewMode = 'day'; loadScheduleManagement()" :class="scheduleManagement.viewMode === 'day' ? 'bg-white shadow text-gray-800 font-bold' : 'text-gray-500 hover:text-gray-700 font-medium'" class="px-3 py-1 text-xs rounded transition-all">Dia</button>
+                                <button @click="scheduleManagement.viewMode = 'week'; loadScheduleManagement()" :class="scheduleManagement.viewMode === 'week' ? 'bg-white shadow text-gray-800 font-bold' : 'text-gray-500 hover:text-gray-700 font-medium'" class="px-3 py-1 text-xs rounded transition-all">Semana</button>
+                            </div>
+
+                            <div class="h-6 w-px bg-gray-300 hidden sm:block"></div>
+
+                            <!-- Date Navigation -->
+                            <div class="flex items-center gap-2">
+                                <button @click="navigateScheduleManagement(-1)" class="p-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors" title="Anterior">
+                                    <i class="fa-solid fa-chevron-left text-xs"></i>
+                                </button>
+                                <div class="relative">
+                                    <!-- Use a generic string representation instead of full iso to avoid tz bugs visually, but bind properly in js -->
+                                    <input type="date" x-model="scheduleManagement.referenceDate" @change="loadScheduleManagement()" class="text-sm border-gray-300 rounded focus:ring-brand-500 focus:border-brand-500 py-1.5 font-bold text-gray-700 bg-gray-50">
+                                </div>
+                                <button @click="navigateScheduleManagement(1)" class="p-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors" title="Próxima">
+                                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                                </button>
+                                <button @click="scheduleManagement.referenceDate = new Date().toLocaleDateString('en-CA'); loadScheduleManagement()" class="text-xs font-bold text-brand-600 hover:text-brand-800 ml-1">Hoje</button>
+                            </div>
+                        </div>
+
+                        <!-- Type Filter -->
+                        <div class="flex items-center gap-2">
+                             <span class="text-xs font-bold text-gray-500 uppercase">Filtro</span>
+                             <select x-model="scheduleManagement.typeFilter" @change="loadScheduleManagement()" class="border-gray-300 text-xs rounded focus:ring-brand-500 focus:border-brand-500 py-1 pl-2 pr-6 font-medium bg-gray-50">
+                                <option value="all">Todos</option>
+                                <option value="analysis">Análise</option>
+                                <option value="repair">Reparo</option>
+                             </select>
+                        </div>
+                    </div>
+
+                    <!-- Main Content Grid -->
+                    <div class="flex-grow flex flex-col md:flex-row overflow-hidden bg-gray-100 p-4 gap-4">
+
+                        <!-- Left Column: Auxiliary Data -->
+                        <div class="w-full md:w-80 flex flex-col gap-4 flex-shrink-0">
+                            <!-- Capacity Summary Card -->
+                            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                                <div class="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+                                    <h3 class="font-bold text-gray-700 text-sm"><i class="fa-solid fa-chart-pie mr-2 text-brand-500"></i>Capacidade</h3>
+                                </div>
+                                <div class="p-4 flex-grow flex items-center justify-center relative min-h-[120px]">
+                                    <template x-if="scheduleManagement.loading">
+                                         <i class="fa-solid fa-circle-notch fa-spin text-gray-300 text-2xl"></i>
+                                    </template>
+                                    <template x-if="!scheduleManagement.loading && !scheduleManagement.selectedTechnicianId">
+                                         <p class="text-xs text-gray-400 text-center italic">Selecione um técnico</p>
+                                    </template>
+                                    <template x-if="!scheduleManagement.loading && scheduleManagement.selectedTechnicianId && scheduleManagement.capacitySummary">
+                                        <div class="w-full">
+                                            <div class="flex justify-between text-xs mb-1">
+                                                <span class="font-bold text-gray-600">Ocupação do Período</span>
+                                                <span class="font-bold text-brand-600" x-text="scheduleManagement.capacitySummary.booked + ' / ' + scheduleManagement.capacitySummary.total + ' slots'"></span>
+                                            </div>
+                                            <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2 overflow-hidden">
+                                                <div class="bg-brand-500 h-2.5 rounded-full transition-all duration-500" :style="`width: ${Math.min(100, (scheduleManagement.capacitySummary.booked / Math.max(1, scheduleManagement.capacitySummary.total)) * 100)}%`"></div>
+                                            </div>
+                                            <p class="text-[10px] text-gray-500 text-right" x-text="(Math.min(100, (scheduleManagement.capacitySummary.booked / Math.max(1, scheduleManagement.capacitySummary.total)) * 100)).toFixed(0) + '% Lotado'"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Unscheduled / Conflicts List -->
+                            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col flex-grow">
+                                <div class="bg-red-50 border-b border-red-100 px-4 py-3 flex items-center justify-between">
+                                    <h3 class="font-bold text-red-700 text-sm"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Sem Agendamento</h3>
+                                    <span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold" x-text="scheduleManagement.unscheduledTickets.length"></span>
+                                </div>
+                                <div class="p-0 overflow-y-auto flex-grow relative" style="min-h: 200px;">
+                                    <div x-show="scheduleManagement.unscheduledLoading" class="absolute inset-0 bg-white bg-opacity-80 flex items-center justify-center z-10">
+                                        <i class="fa-solid fa-circle-notch fa-spin text-red-500"></i>
+                                    </div>
+                                    <template x-if="scheduleManagement.unscheduledTickets.length === 0 && !scheduleManagement.unscheduledLoading">
+                                        <div class="p-6 text-center text-gray-400 text-xs italic">
+                                            Nenhuma pendência ou chamado sem agendamento encontrado.
+                                        </div>
+                                    </template>
+                                    <ul class="divide-y divide-gray-100">
+                                        <template x-for="ticket in scheduleManagement.unscheduledTickets" :key="ticket.id">
+                                            <li class="p-3 hover:bg-gray-50 transition-colors cursor-pointer group" @click="viewTicketDetails(ticket)">
+                                                <div class="flex justify-between items-start mb-1">
+                                                    <span class="font-mono text-[10px] text-gray-500" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
+                                                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
+                                                          :class="ticket.status === 'Analise Tecnica' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
+                                                          x-text="ticket.status === 'Analise Tecnica' ? 'Análise' : 'Reparo'"></span>
+                                                </div>
+                                                <h4 class="font-bold text-gray-800 text-xs truncate" x-text="(ticket.device_model)"></h4>
+                                                <p class="text-[10px] text-gray-500 truncate" x-text="(ticket.client_name)"></p>
+
+                                                <!-- Hint to drag or click -->
+                                                <div class="mt-2 text-[9px] text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                     Clique para abrir detalhes ou selecione um horário na grade.
+                                                </div>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Main Schedule Grid -->
+                        <div class="flex-grow bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col relative">
+                            <div x-show="scheduleManagement.loading" class="absolute inset-0 bg-white bg-opacity-70 flex flex-col items-center justify-center z-20">
+                                <i class="fa-solid fa-circle-notch fa-spin text-brand-500 text-4xl mb-3"></i>
+                                <span class="font-bold text-gray-500 text-sm">Carregando agenda...</span>
+                            </div>
+
+                            <!-- Blank State (No Tech) -->
+                            <div x-show="!scheduleManagement.selectedTechnicianId" class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-gray-50">
+                                <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4 text-gray-400 text-2xl">
+                                    <i class="fa-solid fa-user-astronaut"></i>
+                                </div>
+                                <h3 class="text-gray-600 font-bold text-lg">Nenhum Técnico Selecionado</h3>
+                                <p class="text-gray-500 text-sm mt-1">Selecione um técnico no topo para visualizar e gerenciar sua agenda.</p>
+                            </div>
+
+                            <!-- Agenda Grid Area -->
+                            <div x-show="scheduleManagement.selectedTechnicianId && scheduleManagement.data" class="flex-grow overflow-y-auto p-4">
+                                <!-- DAY VIEW -->
+                                <template x-if="scheduleManagement.viewMode === 'day' && scheduleManagement.data && scheduleManagement.data.length > 0">
+                                    <div class="max-w-3xl mx-auto">
+                                        <div class="mb-4 text-center">
+                                            <h2 class="text-xl font-bold text-brand-600 capitalize" x-text="formatScheduleDateFull(scheduleManagement.data[0].date)"></h2>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <template x-for="slot in scheduleManagement.data[0].slots" :key="slot.start">
+                                                <div class="flex items-stretch border border-gray-200 rounded-lg overflow-hidden group shadow-sm relative">
+                                                    <!-- Time Column -->
+                                                    <div class="bg-gray-50 w-24 flex-shrink-0 flex items-center justify-center border-r border-gray-200 py-3 px-2">
+                                                        <span class="font-mono font-bold text-gray-700 text-sm" x-text="formatTimeOnly(slot.start)"></span>
+                                                    </div>
+                                                    <!-- Content Column -->
+                                                    <div class="flex-grow p-3 bg-white transition-colors cursor-pointer"
+                                                         :class="{'hover:bg-brand-50': slot.status === 'livre', 'bg-stripes-gray': slot.status === 'bloqueado', 'bg-red-50 border-red-200': slot.status === 'lotado'}"
+                                                         @click="handleManagerSlotClick(scheduleManagement.data[0].date, slot)">
+
+                                                        <template x-if="slot.status === 'livre'">
+                                                            <div class="h-full flex items-center text-gray-400 text-xs italic opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <i class="fa-solid fa-plus mr-1"></i> Adicionar bloqueio administrativo
+                                                            </div>
+                                                        </template>
+
+                                                        <template x-if="slot.status === 'bloqueado'">
+                                                            <div class="h-full flex flex-col justify-center text-gray-600 text-sm font-bold" @click.stop="openBlockModal(scheduleManagement.data[0].date, slot)">
+                                                                <div class="flex items-center">
+                                                                    <i class="fa-solid fa-lock mr-2 text-gray-400"></i> Bloqueio Administrativo
+                                                                </div>
+                                                                <p class="text-xs font-normal text-gray-500 mt-1" x-text="slot.block_notes ? 'Motivo: ' + (slot.block_notes) : 'Clique para editar/remover'"></p>
+                                                            </div>
+                                                        </template>
+
+                                                        <template x-if="slot.appointments && slot.appointments.length > 0">
+                                                            <div class="space-y-2">
+                                                                <template x-for="appt in slot.appointments" :key="appt.id">
+                                                                    <div class="bg-white border rounded p-2 shadow-sm flex justify-between items-center hover:shadow-md transition-shadow"
+                                                                         :class="appt.type === 'analysis' ? 'border-blue-200 border-l-4 border-l-blue-500' : 'border-purple-200 border-l-4 border-l-purple-500'"
+                                                                         @click.stop="openRescheduleModal(appt.ticket_id, appt.type, appt)">
+                                                                        <div>
+                                                                            <div class="flex items-center gap-2 mb-1">
+                                                                                <span class="text-[9px] font-bold uppercase tracking-wider"
+                                                                                      :class="appt.type === 'analysis' ? 'text-blue-600' : 'text-purple-600'"
+                                                                                      x-text="appt.type === 'analysis' ? 'Análise' : 'Reparo'"></span>
+                                                                                <span class="text-[10px] text-gray-500 font-mono" x-text="'OS #' + (appt.os_number || 'S/N')"></span>
+                                                                            </div>
+                                                                            <p class="text-xs font-bold text-gray-800" x-text="(appt.client_name || 'Desconhecido')"></p>
+                                                                            <p class="text-[10px] text-gray-500" x-text="(appt.device_model || '')"></p>
+                                                                        </div>
+                                                                        <div class="text-right flex flex-col items-end">
+                                                                            <button type="button" class="text-gray-400 hover:text-brand-500 p-1 rounded-full hover:bg-gray-100 transition-colors" title="Opções/Remarcar">
+                                                                                <i class="fa-solid fa-pencil"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="scheduleManagement.data[0].slots.length === 0">
+                                                <div class="text-center py-10 text-gray-500">Nenhum slot disponível configurado para este dia.</div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- WEEK VIEW -->
+                                <template x-if="scheduleManagement.viewMode === 'week' && scheduleManagement.data && scheduleManagement.data.length > 0">
+                                    <div class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-7" >
+                                        <template x-for="day in scheduleManagement.data" :key="day.date">
+                                            <div class="border border-gray-200 rounded-lg overflow-hidden bg-gray-50 flex flex-col shadow-sm">
+                                                <div class="bg-gray-200 px-3 py-2 border-b border-gray-300 text-center">
+                                                    <h3 class="font-bold text-gray-700 text-sm capitalize" x-text="formatScheduleDate(day.date)"></h3>
+                                                    <p class="text-[10px] text-gray-500 mt-0.5" x-text="day.slots.filter(s => s.status === 'livre').length + ' livres'"></p>
+                                                </div>
+                                                <div class="p-2 space-y-2 flex-grow overflow-y-auto">
+                                                    <template x-for="slot in day.slots" :key="slot.start">
+                                                        <div class="border rounded bg-white text-xs p-2 cursor-pointer transition-colors relative group"
+                                                             :class="{
+                                                                'border-gray-200 hover:border-brand-300 hover:shadow-sm': slot.status === 'livre',
+                                                                'border-gray-300 bg-stripes-gray': slot.status === 'bloqueado',
+                                                                'border-red-200 bg-red-50': slot.status === 'lotado'
+                                                             }"
+                                                             @click="handleManagerSlotClick(day.date, slot)">
+
+                                                            <div class="flex justify-between items-center mb-1">
+                                                                <span class="font-bold font-mono text-gray-600" x-text="formatTimeOnly(slot.start)"></span>
+                                                                <span x-show="slot.status === 'livre'" class="w-1.5 h-1.5 rounded-full bg-green-400" title="Livre"></span>
+                                                                <span x-show="slot.status === 'ocupado' || slot.status === 'lotado'" class="w-1.5 h-1.5 rounded-full bg-red-500" title="Ocupado/Lotado"></span>
+                                                                <span x-show="slot.status === 'bloqueado'" class="text-gray-400" title="Bloqueado"><i class="fa-solid fa-lock text-[8px]"></i></span>
+                                                            </div>
+
+                                                            <!-- Appointments Summary in Week View -->
+                                                            <template x-if="slot.appointments && slot.appointments.length > 0">
+                                                                <div class="mt-1 space-y-1">
+                                                                    <template x-for="appt in slot.appointments" :key="appt.id">
+                                                                        <div class="bg-gray-100 rounded px-1.5 py-1 flex items-center gap-1 overflow-hidden hover:bg-gray-200"
+                                                                             @click.stop="openRescheduleModal(appt.ticket_id, appt.type, appt)">
+                                                                            <span class="w-1.5 h-full self-stretch rounded-full flex-shrink-0" :class="appt.type === 'analysis' ? 'bg-blue-500' : 'bg-purple-500'"></span>
+                                                                            <span class="text-[9px] text-gray-700 font-medium truncate" x-text="(appt.client_name || appt.os_number || 'OS')"></span>
+                                                                        </div>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Empty State for Both -->
+                                <template x-if="scheduleManagement.data && scheduleManagement.data.length === 0">
+                                    <div class="text-center py-20">
+                                        <i class="fa-regular fa-calendar-xmark text-5xl text-gray-300 mb-4"></i>
+                                        <h3 class="text-lg font-bold text-gray-600">Nenhum dado de agenda</h3>
+                                        <p class="text-gray-500 text-sm mt-1">O período selecionado não possui horários configurados para este técnico.</p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                  <!-- VIEW: TRACKER SETTINGS (NEW) -->
                 <div x-show="view === 'tracker_settings' && hasRole('admin')" class="p-8 h-full flex flex-col overflow-hidden" x-transition.opacity x-cloak>
                     <header class="mb-6 flex justify-between items-center">
@@ -3603,6 +3887,96 @@
                 <div class="bg-gray-50 px-6 py-4 flex justify-end space-x-3">
                     <button @click="modals.newEmployee = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors">Cancelar</button>
                     <button @click="createEmployee()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-lg shadow-orange-500/30 transition-colors">Criar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SCHEDULE BLOCK (Agenda Técnica) -->
+    <div x-show="modals.scheduleBlock" class="fixed inset-0 z-[80] overflow-y-auto" x-cloak>
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.scheduleBlock = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+                <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-gray-800" x-text="scheduleManagement.editingAppointment?.notes ? 'Editar Bloqueio' : 'Novo Bloqueio'"></h3>
+                    <button type="button" @click="modals.scheduleBlock = false" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times"></i></button>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4 text-sm text-gray-600">
+                        <p><span class="font-bold">Data:</span> <span x-text="formatScheduleDateFull(scheduleManagement.editingAppointment?.date)"></span></p>
+                        <p><span class="font-bold">Horário:</span> <span x-text="formatTimeOnly(scheduleManagement.editingAppointment?.start) + ' às ' + formatTimeOnly(scheduleManagement.editingAppointment?.end)"></span></p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Motivo do Bloqueio (Opcional)</label>
+                        <input type="text" x-model="scheduleManagement.editingAppointment.notes" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none" placeholder="Ex: Almoço, Reunião, Férias...">
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-6 py-4 flex justify-between space-x-3 border-t border-gray-200">
+                    <button type="button" x-show="scheduleManagement.editingAppointment?.notes" @click="removeBlock()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 rounded-lg transition-colors">Remover Bloqueio</button>
+                    <div class="flex space-x-3 ml-auto">
+                        <button type="button" @click="modals.scheduleBlock = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors">Cancelar</button>
+                        <button type="button" @click="submitBlock()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors">Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: RESCHEDULE APPOINTMENT (Agenda Técnica) -->
+    <div x-show="modals.rescheduleAppointment" class="fixed inset-0 z-[80] overflow-y-auto" x-cloak>
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.rescheduleAppointment = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+                <div class="bg-black px-6 py-4 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-white">Gerenciar Agendamento</h3>
+                    <button type="button" @click="modals.rescheduleAppointment = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times"></i></button>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="font-mono text-[10px] text-gray-500" x-text="'OS #' + (scheduleManagement.editingAppointment?.original?.os_number || '')"></span>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
+                                  :class="scheduleManagement.editingAppointment?.type === 'analysis' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
+                                  x-text="scheduleManagement.editingAppointment?.type === 'analysis' ? 'Análise' : 'Reparo'"></span>
+                        </div>
+                        <h4 class="font-bold text-gray-800 text-sm" x-text="scheduleManagement.editingAppointment?.original?.device_model || 'Não agendado'"></h4>
+                        <p class="text-xs text-gray-500" x-text="scheduleManagement.editingAppointment?.original?.client_name || ''"></p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Técnico</label>
+                            <select x-model="scheduleManagement.editingAppointment.new_technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <template x-for="tech in getTechnicians()" :key="tech.id">
+                                    <option :value="tech.id" x-text="tech.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">Nova Data</label>
+                                <input type="date" x-model="scheduleManagement.editingAppointment.new_date" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">Horário (Início)</label>
+                                <input type="time" x-model="scheduleManagement.editingAppointment.new_start" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-400 italic">
+                            * A duração padrão do agendamento será calculada ou mantida pelo backend a partir do horário de início.
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-6 py-4 flex justify-between space-x-3 border-t border-gray-200">
+                    <button type="button" x-show="scheduleManagement.editingAppointment?.original?.id" @click="cancelAppointment()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 rounded-lg transition-colors">Cancelar Agendamento</button>
+                    <div class="flex space-x-3 ml-auto">
+                        <button type="button" @click="modals.rescheduleAppointment = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors">Voltar</button>
+                        <button type="button" @click="submitReschedule()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Remarcar' : 'Agendar'"></button>
+                    </div>
                 </div>
             </div>
         </div>

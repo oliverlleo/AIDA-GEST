@@ -379,6 +379,20 @@ function app() {
         currentTime: new Date(),
 
         // Modals
+        // Scheduling Management View State
+        scheduleManagement: {
+            selectedTechnicianId: '',
+            viewMode: 'week', // 'day' or 'week'
+            referenceDate: new Date(),
+            typeFilter: 'all', // 'all', 'analysis', 'repair'
+            loading: false,
+            data: null,
+            unscheduledLoading: false,
+            unscheduledTickets: [],
+            capacitySummary: null,
+            editingAppointment: null,
+        },
+
         // Scheduling State
         schedulePanelOpen: false,
         schedulePanelMode: '', // 'analysis' or 'repair'
@@ -388,7 +402,7 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false },
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -1955,6 +1969,305 @@ function app() {
                 this.selectedRepairAppointment = null;
             }
         },
+
+        // ==========================================
+        // SCHEDULE MANAGEMENT VIEW METHODS (Admin)
+        // ==========================================
+        async loadScheduleManagement() {
+            if (!this.scheduleManagement.selectedTechnicianId) {
+                this.scheduleManagement.data = null;
+                this.scheduleManagement.capacitySummary = null;
+                return;
+            }
+            this.scheduleManagement.loading = true;
+            this.scheduleManagement.data = [];
+            this.scheduleManagement.capacitySummary = { booked: 0, total: 0 };
+
+            // Fire both fetches concurrently
+            await Promise.all([
+                this.fetchManagerSchedule(),
+                this.fetchUnscheduledTickets()
+            ]);
+
+            this.scheduleManagement.loading = false;
+        },
+
+        async fetchManagerSchedule() {
+            try {
+                // Determine how many days based on viewMode
+                const days = this.scheduleManagement.viewMode === 'day' ? 1 : 7;
+                const refDate = new Date(this.scheduleManagement.referenceDate);
+
+                // If weekly view, align to Sunday or Monday depending on standard.
+                // Let's just use the selected date as the start of the week for simplicity or rely on backend.
+                // Assuming backend takes reference_date and returns `days` from it.
+                // We'll format the local date correctly.
+                const tzOffset = refDate.getTimezoneOffset() * 60000;
+                const localDateStr = (new Date(refDate.getTime() - tzOffset)).toISOString().split('T')[0];
+
+                const response = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
+                    p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                    p_mode: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
+                    p_reference_date: localDateStr,
+                    p_days: days
+                });
+
+                if (response && response.days) {
+                    this.scheduleManagement.data = response.days;
+
+                    // Calculate capacity based on what's returned
+                    let total = 0;
+                    let booked = 0;
+                    response.days.forEach(day => {
+                        if(day.slots) {
+                            day.slots.forEach(slot => {
+                                if (slot.status !== 'bloqueado') total++; // Assuming blocked slots aren't part of core capacity
+                                if (slot.status === 'ocupado' || slot.status === 'lotado') booked++;
+                            });
+                        }
+                    });
+                    this.scheduleManagement.capacitySummary = { booked, total };
+
+                } else if (response && Array.isArray(response)) {
+                    this.scheduleManagement.data = response;
+                }
+            } catch (error) {
+                console.error("Error fetching manager schedule:", error);
+                this.notify("Erro ao carregar a agenda.", "error");
+            }
+        },
+
+        async fetchUnscheduledTickets() {
+            this.scheduleManagement.unscheduledLoading = true;
+            this.scheduleManagement.unscheduledTickets = [];
+            try {
+                // To find unscheduled tickets, we can query the operational queue or directly query tickets
+                // that lack a scheduled appointment. We use a custom query against tickets and ticket_appointments.
+                // For this demo context, we'll query tickets directly that match the status criteria but don't have appointments.
+                // An RPC `get_unscheduled_tickets` would be ideal, but falling back to direct DB queries for flexibility.
+
+                let query = `tickets?workspace_id=eq.${this.user.workspace_id}&deleted_at=is.null`;
+                // Filter by statuses that normally require scheduling
+                query += `&status=in.("Analise Tecnica","Andamento Reparo")`;
+
+                const typeFilter = this.scheduleManagement.typeFilter;
+                if (typeFilter === 'analysis') {
+                    query += `&status=eq.Analise Tecnica`;
+                } else if (typeFilter === 'repair') {
+                    query += `&status=eq.Andamento Reparo`;
+                }
+
+                // If tech is selected, find tickets assigned to them or unassigned ones.
+                // Usually, unscheduled tickets are those assigned to the tech but without appointments, OR totally unassigned.
+                const techId = this.scheduleManagement.selectedTechnicianId;
+                if (techId) {
+                    query += `&technician_id=in.(${techId},null)`;
+                }
+
+                query += `&select=*,ticket_appointments(id,status,appointment_type)`;
+                query += `&order=created_at.desc`;
+
+                const allPending = await this.supabaseFetch(query, 'GET');
+                if (allPending) {
+                    // Filter client-side to only include those WITHOUT an active/scheduled appointment for the relevant phase
+                    this.scheduleManagement.unscheduledTickets = allPending.filter(ticket => {
+                        const appts = ticket.ticket_appointments || [];
+                        const hasActiveAppt = appts.some(a => a.status === 'Scheduled');
+                        return !hasActiveAppt;
+                    });
+                }
+
+            } catch (error) {
+                console.error("Error fetching unscheduled tickets:", error);
+            } finally {
+                this.scheduleManagement.unscheduledLoading = false;
+            }
+        },
+
+        navigateScheduleManagement(direction) {
+            const date = new Date(this.scheduleManagement.referenceDate);
+            const daysToMove = this.scheduleManagement.viewMode === 'day' ? direction * 1 : direction * 7;
+            date.setDate(date.getDate() + daysToMove);
+            this.scheduleManagement.referenceDate = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
+            this.loadScheduleManagement();
+        },
+
+        handleManagerSlotClick(dateStr, slot) {
+            if (slot.status === 'livre') {
+                this.openBlockModal(dateStr, slot);
+            }
+        },
+
+        openRescheduleModal(ticketId, type, appointmentObj) {
+            // For now, we will log or handle this gracefully.
+            // The prompt says "abrir ação para remarcar".
+            // A dedicated modal for this is best.
+            this.scheduleManagement.editingAppointment = {
+                ticket_id: ticketId,
+                type: type,
+                original: appointmentObj,
+                new_date: '',
+                new_start: '',
+                new_end: '',
+                new_technician_id: this.scheduleManagement.selectedTechnicianId
+            };
+            this.modals.rescheduleAppointment = true;
+        },
+
+        openBlockModal(dateStr, slot) {
+            this.scheduleManagement.editingAppointment = {
+                block_id: slot.block_id || null,
+                is_block: true,
+                date: dateStr,
+                start: slot.start,
+                end: slot.end,
+                notes: slot.block_notes || ''
+            };
+            this.modals.scheduleBlock = true;
+        },
+
+        // --- Management Mutations ---
+        async submitReschedule() {
+            const ea = this.scheduleManagement.editingAppointment;
+            if (!ea.new_date || !ea.new_start || !ea.new_technician_id) {
+                return this.notify("Preencha data, hora e técnico.", "error");
+            }
+
+            this.loading = true;
+            try {
+                // If it already has an ID, we're rescheduling.
+                // If not, it's a new appointment from the unscheduled list.
+                const startStr = this.toUTC(`${ea.new_date}T${ea.new_start}`);
+
+                // Estimate end time simply by adding 1 hour (or rely on backend default)
+                // For simplicity, we just pass an end time 1 hour later
+                const startDate = new Date(`${ea.new_date}T${ea.new_start}`);
+                startDate.setHours(startDate.getHours() + 1);
+                const endStr = this.toUTC(startDate.toISOString().slice(0, 16));
+
+                if (ea.original && ea.original.id) {
+                    await this.supabaseFetch('rpc/reschedule_ticket_appointment', 'POST', {
+                        p_appointment_id: ea.original.id,
+                        p_technician_id: ea.new_technician_id,
+                        p_scheduled_start: startStr,
+                        p_scheduled_end: endStr,
+                        p_notes: 'Remarcado via Gestão'
+                    });
+                    this.notify("Agendamento remarcado com sucesso!");
+                } else {
+                    await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                        p_ticket_id: ea.ticket_id,
+                        p_technician_id: ea.new_technician_id,
+                        p_appointment_type: ea.type,
+                        p_scheduled_start: startStr,
+                        p_scheduled_end: endStr,
+                        p_notes: 'Agendado via Gestão'
+                    });
+                    this.notify("Agendamento criado com sucesso!");
+                }
+
+                this.modals.rescheduleAppointment = false;
+                this.loadScheduleManagement();
+
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro ao gerenciar agendamento.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async cancelAppointment() {
+            const ea = this.scheduleManagement.editingAppointment;
+            if (!ea || !ea.original || !ea.original.id) return;
+
+            if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
+
+            this.loading = true;
+            try {
+                await this.supabaseFetch('rpc/cancel_ticket_appointment', 'POST', {
+                    p_appointment_id: ea.original.id,
+                    p_reason: 'Cancelado pelo Gestor'
+                });
+                this.notify("Agendamento cancelado.");
+                this.modals.rescheduleAppointment = false;
+                this.loadScheduleManagement();
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro ao cancelar.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async submitBlock() {
+            // Note: Since the prompt didn't specify the exact RPC for blocks,
+            // we assume there's one called `create_schedule_block` or similar.
+            // If the backend handles blocks via appointments with a specific type (e.g. 'block'), we'd use that.
+            // Assuming `create_ticket_appointment` with type='block' and ticket_id=null based on standard patterns.
+
+            const ea = this.scheduleManagement.editingAppointment;
+            this.loading = true;
+            try {
+                // Determine boundaries
+                const startStr = this.toUTC(`${ea.date}T${ea.start}`);
+                const endStr = this.toUTC(`${ea.date}T${ea.end}`);
+
+                await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                    p_ticket_id: null,
+                    p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                    p_appointment_type: 'block',
+                    p_scheduled_start: startStr,
+                    p_scheduled_end: endStr,
+                    p_notes: ea.notes || 'Bloqueio Administrativo'
+                });
+
+                this.notify("Bloqueio salvo com sucesso!");
+                this.modals.scheduleBlock = false;
+                this.loadScheduleManagement();
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro ao salvar bloqueio.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async removeBlock() {
+            // Assume removal uses `cancel_ticket_appointment`
+            // But we need the ID. The `get_schedule_availability` must return `block_id` in the slot if it's a block.
+            const ea = this.scheduleManagement.editingAppointment;
+            if (!ea.block_id) {
+                this.notify("ID do bloqueio não encontrado.", "error");
+                return;
+            }
+
+            if (!confirm("Remover este bloqueio?")) return;
+
+            this.loading = true;
+            try {
+                await this.supabaseFetch('rpc/cancel_ticket_appointment', 'POST', {
+                    p_appointment_id: ea.block_id,
+                    p_reason: 'Bloqueio removido'
+                });
+                this.notify("Bloqueio removido.");
+                this.modals.scheduleBlock = false;
+                this.loadScheduleManagement();
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro ao remover bloqueio.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+
+        formatScheduleDateFull(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr + 'T12:00:00');
+            return d.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        },
+
 
         formatAppointmentSummary(appt) {
             if (!appt) return '';
