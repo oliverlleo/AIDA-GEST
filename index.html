@@ -4075,13 +4075,13 @@
     <!-- MODAL: RESCHEDULE APPOINTMENT (Agenda Técnica) -->
     <div x-show="modals.rescheduleAppointment" class="fixed inset-0 z-[80] overflow-y-auto" x-cloak>
         <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.rescheduleAppointment = false"></div>
+            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="closeAppointmentModal()"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
             <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
                 <div class="bg-black px-6 py-4 flex justify-between items-center">
                     <h3 class="text-lg font-bold text-white" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Gerenciar Agendamento' : 'Novo Agendamento'"></h3>
-                    <button type="button" @click="modals.rescheduleAppointment = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times"></i></button>
+                    <button type="button" @click="closeAppointmentModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times"></i></button>
                 </div>
                 <div class="p-6">
                     <div class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
@@ -4131,7 +4131,7 @@
                         <div class="flex items-center w-full justify-between">
                             <button type="button" x-show="scheduleManagement.editingAppointment?.original?.id" @click="cancelAppointment()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 hover:border-red-200 border border-transparent rounded-lg transition-colors text-sm"><i class="fa-regular fa-trash-can mr-1"></i> Cancelar</button>
                             <div class="flex gap-2 ml-auto">
-                                <button type="button" @click="modals.rescheduleAppointment = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors text-sm">Voltar</button>
+                                <button type="button" @click="closeAppointmentModal()" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors text-sm">Voltar</button>
                                 <button type="button" @click="submitReschedule()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors text-sm" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Salvar Alteração' : 'Agendar'"></button>
                             </div>
                         </div>
