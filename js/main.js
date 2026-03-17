@@ -2391,13 +2391,17 @@ function app() {
 
             this.loading = true;
             try {
-                // In a real scenario, this would fetch from `technician_schedule_settings`.
-                // If no setting exists, the defaults in the state are kept.
+                // Fetch from `technician_schedule_settings`.
+                // Use maybeSingle() to avoid 406 Not Acceptable error when the technician has no custom setting yet
                 const { data, error } = await supabaseClient
                     .from('technician_schedule_settings')
                     .select('*')
                     .eq('technician_id', techId)
-                    .single();
+                    .maybeSingle();
+
+                if (error && error.code !== 'PGRST116') {
+                    console.error("Error fetching tech config:", error);
+                }
 
                 if (data && data.settings) {
                     const s = data.settings;
