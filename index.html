@@ -4167,7 +4167,7 @@
 
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">Técnico</label>
+                            <label class="block text-xs font-bold text-gray-500 mb-1" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Trocar Técnico (Opcional)' : 'Técnico Alocado'"></label>
                             <select x-model="scheduleManagement.editingAppointment.new_technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
                                 <template x-for="tech in getTechnicians()" :key="tech.id">
                                     <option :value="tech.id" x-text="tech.name"></option>
@@ -4176,28 +4176,28 @@
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">Nova Data</label>
+                                <label class="block text-xs font-bold text-gray-500 mb-1" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Remarcar Data' : 'Data'"></label>
                                 <input type="date" x-model="scheduleManagement.editingAppointment.new_date" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">Horário (Início)</label>
+                                <label class="block text-xs font-bold text-gray-500 mb-1" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Alterar Horário (Início)' : 'Horário (Início)'"></label>
                                 <input type="time" x-model="scheduleManagement.editingAppointment.new_start" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
                             </div>
                         </div>
-                        <div class="text-xs text-gray-400 italic">
-                            * A duração padrão do agendamento será calculada ou mantida pelo backend a partir do horário de início.
+                        <div class="text-xs text-gray-400 italic mt-1">
+                            * A duração padrão é mantida/calculada pelo sistema.
                         </div>
                     </div>
                 </div>
-                <div class="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
-                    <div>
-                        <button type="button" x-show="scheduleManagement.editingAppointment?.original?.id" @click="cancelAppointment()" class="px-4 py-2 text-red-600 font-bold hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-colors text-sm shadow-sm flex items-center">
+                <div class="bg-gray-50 px-6 py-4 flex flex-col-reverse sm:flex-row items-center justify-between border-t border-gray-200 gap-3">
+                    <div class="w-full sm:w-auto">
+                        <button type="button" x-show="scheduleManagement.editingAppointment?.original?.id" @click="cancelAppointment()" class="w-full sm:w-auto px-4 py-2 text-red-600 font-bold hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-colors text-sm shadow-sm flex items-center justify-center">
                             <i class="fa-solid fa-trash-can mr-2"></i> Cancelar Agendamento
                         </button>
                     </div>
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
                         <button type="button" @click="closeRescheduleModal()" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors text-sm">Voltar</button>
-                        <button type="button" @click="submitReschedule()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors text-sm flex items-center">
+                        <button type="button" @click="submitReschedule()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors text-sm flex items-center justify-center min-w-[140px]">
                             <i class="fa-solid fa-save mr-2" x-show="scheduleManagement.editingAppointment?.original?.id"></i>
                             <i class="fa-solid fa-calendar-plus mr-2" x-show="!scheduleManagement.editingAppointment?.original?.id"></i>
                             <span x-text="scheduleManagement.editingAppointment?.original?.id ? 'Salvar Alteração' : 'Agendar'"></span>
