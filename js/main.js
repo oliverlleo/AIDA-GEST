@@ -1361,6 +1361,18 @@ function app() {
             return this.getStatusLabel(status);
         },
 
+        extractTime(timeStr) {
+            if (!timeStr) return '';
+            if (timeStr.includes('T')) {
+                const d = new Date(timeStr);
+                // Extract HH:mm safely from a valid date regardless of locale string behavior
+                const h = String(d.getHours()).padStart(2, '0');
+                const m = String(d.getMinutes()).padStart(2, '0');
+                return `${h}:${m}`;
+            }
+            return timeStr.substring(0, 5);
+        },
+
         toggleTrackerStage(stage) {
             const idx = this.trackerConfig.visible_stages.indexOf(stage);
             if (idx > -1) {
@@ -2267,8 +2279,8 @@ function app() {
             ea.ticket_id = appointment.ticket_id;
             ea.type = appointment.type;
             ea.new_date = dateStr;
-            ea.new_start = slot.start_time.substring(0, 5);
-            ea.new_end = slot.end_time.substring(0, 5);
+            ea.new_start = this.extractTime(slot.start_time);
+            ea.new_end = this.extractTime(slot.end_time);
             ea.new_technician_id = this.scheduleManagement.selectedTechnicianId;
 
             this.modals.rescheduleAppointment = true;
@@ -2312,8 +2324,8 @@ function app() {
                 // Open reschedule modal in "creation" mode without ticket
                 this.openRescheduleModal('', actionType, null, {
                     date: dateStr,
-                    start: slot.start_time.substring(0, 5),
-                    end: slot.end_time.substring(0, 5)
+                    start: this.extractTime(slot.start),
+                    end: this.extractTime(slot.end)
                 });
             } else if (actionType === 'block') {
                 this.openBlockModal(dateStr, slot);
@@ -2355,8 +2367,8 @@ function app() {
             eb.block_id = slot?.block_id || null;
             eb.date = dateStr || new Date().toLocaleDateString('en-CA');
             if (slot) {
-                eb.start = slot.start_time ? slot.start_time.substring(0, 5) : slot.start;
-                eb.end = slot.end_time ? slot.end_time.substring(0, 5) : slot.end;
+                eb.start = this.extractTime(slot.start_time || slot.start);
+                eb.end = this.extractTime(slot.end_time || slot.end);
                 eb.notes = slot.block_notes || '';
             } else {
                 eb.start = '09:00';

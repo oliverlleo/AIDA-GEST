@@ -4329,7 +4329,7 @@
                             <div class="flex justify-between items-start mb-1">
                                 <div class="flex flex-col">
                                     <span class="font-mono text-xs font-bold text-brand-600 mb-1" x-text="'OS #' + (scheduleManagement.editingAppointment?.ticketContext?.os_number || scheduleManagement.editingAppointment?.original?.os_number || 'S/N')"></span>
-                                    <h4 class="font-bold text-gray-800 text-sm" x-text="scheduleManagement.editingAppointment?.ticketContext?.device_model || scheduleManagement.editingAppointment?.original?.device_model || 'Aparelho não identificado'"></h4>
+                                    <h4 class="font-bold text-gray-800 text-sm" x-text="scheduleManagement.editingAppointment?.ticketContext?.device_model || scheduleManagement.editingAppointment?.original?.device_model || scheduleManagement.editingAppointment?.ticketContext?.model || scheduleManagement.editingAppointment?.original?.model || 'Aparelho não identificado'"></h4>
                                     <p class="text-xs text-gray-500" x-text="scheduleManagement.editingAppointment?.ticketContext?.client_name || scheduleManagement.editingAppointment?.original?.client_name || ''"></p>
                                 </div>
                                 <div class="flex flex-col items-end gap-2">
@@ -4423,10 +4423,10 @@
                                 <div class="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
                                     <template x-for="slot in availableSlots" :key="slot.start">
                                         <button type="button"
-                                                @click="if(slot.status === 'livre') { scheduleManagement.editingAppointment.new_start = slot.start.substring(0,5); scheduleManagement.editingAppointment.new_end = slot.end.substring(0,5); }"
+                                                @click="if(slot.status === 'livre') { scheduleManagement.editingAppointment.new_start = extractTime(slot.start); scheduleManagement.editingAppointment.new_end = extractTime(slot.end); }"
                                                 :class="{
-                                                    'bg-brand-50 border-brand-500 text-brand-700 ring-1 ring-brand-500': scheduleManagement.editingAppointment.new_start === slot.start.substring(0,5),
-                                                    'bg-white border-gray-200 text-gray-700 hover:border-brand-300 hover:bg-gray-50': slot.status === 'livre' && scheduleManagement.editingAppointment.new_start !== slot.start.substring(0,5),
+                                                    'bg-brand-50 border-brand-500 text-brand-700 ring-1 ring-brand-500': scheduleManagement.editingAppointment.new_start === extractTime(slot.start),
+                                                    'bg-white border-gray-200 text-gray-700 hover:border-brand-300 hover:bg-gray-50': slot.status === 'livre' && scheduleManagement.editingAppointment.new_start !== extractTime(slot.start),
                                                     'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60': slot.status !== 'livre'
                                                 }"
                                                 :disabled="slot.status !== 'livre'"
