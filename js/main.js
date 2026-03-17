@@ -2026,8 +2026,8 @@ function app() {
         selectScheduleSlot(dateStr, slot) {
             const appointmentData = {
                 date: dateStr,
-                start: slot.start,
-                end: slot.end,
+                start: this.extractTime(slot.start),
+                end: this.extractTime(slot.end),
                 status: slot.status,
                 technician_id: this.ticketForm.technician_id
             };
@@ -2044,7 +2044,7 @@ function app() {
         isSlotSelected(dateStr, slot) {
             const current = this.schedulePanelMode === 'analysis' ? this.selectedAnalysisAppointment : this.selectedRepairAppointment;
             if (!current) return false;
-            return current.date === dateStr && current.start === slot.start;
+            return current.date === dateStr && current.start === this.extractTime(slot.start);
         },
 
         removeAppointment(mode) {
@@ -2093,39 +2093,66 @@ function app() {
                     p_reference_date: localDateStr
                 });
 
-                if (response && response.days) {
-                    // Filter appointments client-side if a specific type filter is active
-                    // because the RPC `get_schedule_dashboard` does not accept `p_type_filter`
-                    if (this.scheduleManagement.typeFilter !== 'all') {
-                        response.days.forEach(day => {
+                if (response && response.schedule) {
+                    // A nova RPC retorna obj schedule contendo os appointments agrupados
+                    // O frontend precisa remontar a visão estruturada (dias e slots) baseada nisso
+                    // Ou utilizar os dados vindos direto de get_schedule_availability (se compatível)
+
+                    // Como a RPC original (get_schedule_availability) estrutura dias e slots perfeitamente,
+                    // precisamos chamar a RPC de availability se a dashboard não nos der `days`.
+                    const availResponse = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
+                        p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                        p_mode: 'all',
+                        p_reference_date: localDateStr,
+                        p_days: this.scheduleManagement.viewMode === 'day' ? 1 : 7
+                    });
+
+                    if (availResponse && availResponse.days) {
+                        // Mesclar os appointments do backend (response.schedule.appointments) nos dias
+                        const apps = response.schedule.appointments || [];
+                        const blocks = response.schedule.blocks || [];
+
+                        availResponse.days.forEach(day => {
                             if (day.slots) {
                                 day.slots.forEach(slot => {
-                                    if (slot.appointments) {
-                                        slot.appointments = slot.appointments.filter(appt => appt.type === this.scheduleManagement.typeFilter);
-                                    }
+                                    slot.appointments = [];
+                                    const slotStart = new Date(slot.start).getTime();
+
+                                    apps.forEach(app => {
+                                        const appStart = new Date(app.scheduled_start).getTime();
+                                        if (appStart === slotStart) {
+                                            if (this.scheduleManagement.typeFilter === 'all' || app.appointment_type === this.scheduleManagement.typeFilter) {
+                                                slot.appointments.push({
+                                                    id: app.id,
+                                                    ticket_id: app.ticket_id,
+                                                    type: app.appointment_type,
+                                                    start: app.scheduled_start,
+                                                    end: app.scheduled_end,
+                                                    status: app.status,
+                                                    notes: app.notes,
+                                                    os_number: app.os_number,
+                                                    client_name: app.client_name
+                                                });
+                                            }
+                                        }
+                                    });
                                 });
                             }
                         });
+                        this.scheduleManagement.data = availResponse.days;
+
+                        // Fake a basic capacity summary until backend gives `capacity_summary` properly
+                        this.scheduleManagement.capacitySummary = {
+                            total: response.schedule.counts?.total_appointments || 0,
+                            booked: response.schedule.counts?.total_appointments || 0,
+                            blocked: response.schedule.counts?.total_blocks || 0,
+                            overbooked: 0
+                        };
+                    } else {
+                        this.scheduleManagement.data = [];
                     }
-
-                    this.scheduleManagement.data = response.days;
-
-                    // Trust backend entirely for capacity representation without fallback aliases.
-
-                    // Backend returns an array per day. Sum it for the sidebar.
-                    this.scheduleManagement.capacitySummary = { total: 0, booked: 0, blocked: 0, overbooked: 0 };
-                    response.capacity_summary.forEach(daySum => {
-                        this.scheduleManagement.capacitySummary.total += (daySum.total || 0);
-                        this.scheduleManagement.capacitySummary.booked += (daySum.booked || 0);
-                        this.scheduleManagement.capacitySummary.blocked += (daySum.blocked || 0);
-
-                        if ((daySum.booked || 0) > (daySum.total || 0)) {
-                            this.scheduleManagement.capacitySummary.overbooked += ((daySum.booked || 0) - (daySum.total || 0));
-                        }
-                    });
-
-                } else if (response && Array.isArray(response)) {
-                    this.scheduleManagement.data = response;
+                } else {
+                    this.scheduleManagement.data = [];
                 }
             } catch (error) {
                 console.error("Error fetching manager schedule:", error);
