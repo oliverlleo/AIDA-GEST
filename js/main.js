@@ -2349,6 +2349,12 @@ function app() {
 
         async submitReschedule() {
             const ea = this.scheduleManagement.editingAppointment;
+
+            // Explicit guard against submitting a creation without selecting a ticket
+            if (!ea.ticket_id && (!ea.original || !ea.original.id)) {
+                return this.notify("Selecione um chamado pendente para agendar.", "error");
+            }
+
             if (!ea.new_date || !ea.new_start || !ea.new_technician_id) {
                 return this.notify("Preencha data, hora e técnico.", "error");
             }
@@ -3382,8 +3388,13 @@ function app() {
                 getFilteredTickets() {
                     const eaType = this.scheduleManagement.editingAppointment?.type;
 
-                    // Combine and deduplicate tickets from unscheduled and withoutTechnician lists
-                    const combined = [...this.scheduleManagement.unscheduledItems, ...this.scheduleManagement.withoutTechnicianItems];
+                    // Combine and deduplicate tickets from unscheduled, withoutTechnician, and lateWithoutSchedule lists
+                    const combined = [
+                        ...this.scheduleManagement.unscheduledItems,
+                        ...this.scheduleManagement.withoutTechnicianItems,
+                        ...this.scheduleManagement.lateWithoutScheduleItems
+                    ];
+
                     const uniqueMap = new Map();
                     combined.forEach(t => uniqueMap.set(t.id, t));
                     let tickets = Array.from(uniqueMap.values());
