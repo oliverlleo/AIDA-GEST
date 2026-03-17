@@ -399,14 +399,14 @@ function app() {
             lateWithoutScheduleTotal: 0,
             capacitySummary: null,
             editingAppointment: {
-                original: null,
                 ticket_id: '',
-                ticketContext: null,
                 type: 'analysis',
-                new_technician_id: '',
+                original: null,
+                ticketContext: null,
                 new_date: '',
                 new_start: '',
                 new_end: '',
+                new_technician_id: '',
                 notes: ''
             },
             editingBlock: {
@@ -477,21 +477,21 @@ function app() {
         // ==========================================
         // SCHEDULING FACTORIES
         // ==========================================
-        getDefaultEditingAppointment() {
+        getDefaultScheduleEditingAppointment() {
             return {
-                original: null,
                 ticket_id: '',
-                ticketContext: null,
                 type: 'analysis',
-                new_technician_id: '',
+                original: null,
+                ticketContext: null,
                 new_date: '',
                 new_start: '',
                 new_end: '',
+                new_technician_id: '',
                 notes: ''
             };
         },
 
-        getDefaultEditingBlock() {
+        getDefaultScheduleEditingBlock() {
             return {
                 block_id: null,
                 date: '',
@@ -2239,7 +2239,7 @@ function app() {
 
         openAppointmentActionMenu(appointment, dateStr, slot) {
             // Use the correct editingAppointment shape
-            this.scheduleManagement.editingAppointment = this.getDefaultEditingAppointment();
+            this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
 
             const ea = this.scheduleManagement.editingAppointment;
             ea.original = appointment;
@@ -2307,7 +2307,7 @@ function app() {
                 ctx = allUnscheduled.find(t => t.id === ticketId);
             }
 
-            this.scheduleManagement.editingAppointment = this.getDefaultEditingAppointment();
+            this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
             const ea = this.scheduleManagement.editingAppointment;
 
             ea.ticket_id = ticketId;
@@ -2324,11 +2324,11 @@ function app() {
 
         closeRescheduleModal() {
             this.modals.rescheduleAppointment = false;
-            this.scheduleManagement.editingAppointment = this.getDefaultEditingAppointment();
+            this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
         },
 
         openBlockModal(dateStr, slot) {
-            this.scheduleManagement.editingBlock = this.getDefaultEditingBlock();
+            this.scheduleManagement.editingBlock = this.getDefaultScheduleEditingBlock();
             const eb = this.scheduleManagement.editingBlock;
 
             eb.block_id = slot.block_id || null;
@@ -2342,7 +2342,7 @@ function app() {
 
         closeBlockModal() {
             this.modals.scheduleBlock = false;
-            this.scheduleManagement.editingBlock = this.getDefaultEditingBlock();
+            this.scheduleManagement.editingBlock = this.getDefaultScheduleEditingBlock();
         },
 
         // --- Management Mutations ---
