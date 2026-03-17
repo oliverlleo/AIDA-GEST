@@ -398,6 +398,23 @@ function app() {
             lateWithoutScheduleItems: [],
             lateWithoutScheduleTotal: 0,
             capacitySummary: null,
+            techConfig: {
+                technician_id: '',
+                workDays: [
+                    { active: false, start: '09:00', end: '18:00' }, // Sunday
+                    { active: true, start: '09:00', end: '18:00' }, // Monday
+                    { active: true, start: '09:00', end: '18:00' }, // Tuesday
+                    { active: true, start: '09:00', end: '18:00' }, // Wednesday
+                    { active: true, start: '09:00', end: '18:00' }, // Thursday
+                    { active: true, start: '09:00', end: '18:00' }, // Friday
+                    { active: false, start: '09:00', end: '12:00' }  // Saturday
+                ],
+                hasBreak: true,
+                breakStart: '12:00',
+                breakEnd: '13:00',
+                slotDuration: 30,
+                maxConcurrent: 1
+            },
             editingAppointment: {
                 ticket_id: '',
                 type: 'analysis',
@@ -427,7 +444,7 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false },
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -497,6 +514,10 @@ function app() {
                 date: '',
                 start: '',
                 end: '',
+                full_day: false,
+                is_recurring: false,
+                recurrence_type: 'daily',
+                recurrence_end_date: '',
                 notes: ''
             };
         },
@@ -2331,11 +2352,16 @@ function app() {
             this.scheduleManagement.editingBlock = this.getDefaultScheduleEditingBlock();
             const eb = this.scheduleManagement.editingBlock;
 
-            eb.block_id = slot.block_id || null;
-            eb.date = dateStr;
-            eb.start = slot.start_time ? slot.start_time.substring(0, 5) : slot.start;
-            eb.end = slot.end_time ? slot.end_time.substring(0, 5) : slot.end;
-            eb.notes = slot.block_notes || '';
+            eb.block_id = slot?.block_id || null;
+            eb.date = dateStr || new Date().toLocaleDateString('en-CA');
+            if (slot) {
+                eb.start = slot.start_time ? slot.start_time.substring(0, 5) : slot.start;
+                eb.end = slot.end_time ? slot.end_time.substring(0, 5) : slot.end;
+                eb.notes = slot.block_notes || '';
+            } else {
+                eb.start = '09:00';
+                eb.end = '18:00';
+            }
 
             this.modals.scheduleBlock = true;
         },
@@ -2343,6 +2369,92 @@ function app() {
         closeBlockModal() {
             this.modals.scheduleBlock = false;
             this.scheduleManagement.editingBlock = this.getDefaultScheduleEditingBlock();
+        },
+
+        // --- Tech Schedule Configuration ---
+
+        openTechConfigModal() {
+            this.scheduleManagement.techConfig.technician_id = this.scheduleManagement.selectedTechnicianId || '';
+            if (this.scheduleManagement.techConfig.technician_id) {
+                this.loadTechConfig();
+            }
+            this.modals.techScheduleSettings = true;
+        },
+
+        closeTechConfigModal() {
+            this.modals.techScheduleSettings = false;
+        },
+
+        async loadTechConfig() {
+            const techId = this.scheduleManagement.techConfig.technician_id;
+            if (!techId) return;
+
+            this.loading = true;
+            try {
+                // In a real scenario, this would fetch from `technician_schedule_settings`.
+                // If no setting exists, the defaults in the state are kept.
+                const { data, error } = await supabaseClient
+                    .from('technician_schedule_settings')
+                    .select('*')
+                    .eq('technician_id', techId)
+                    .single();
+
+                if (data && data.settings) {
+                    const s = data.settings;
+                    this.scheduleManagement.techConfig = {
+                        technician_id: techId,
+                        workDays: s.workDays || this.scheduleManagement.techConfig.workDays,
+                        hasBreak: s.hasBreak !== undefined ? s.hasBreak : true,
+                        breakStart: s.breakStart || '12:00',
+                        breakEnd: s.breakEnd || '13:00',
+                        slotDuration: s.slotDuration || 30,
+                        maxConcurrent: s.maxConcurrent || 1
+                    };
+                }
+            } catch (e) {
+                console.warn("Could not load tech config (maybe none exists yet):", e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async saveTechConfig() {
+            const techId = this.scheduleManagement.techConfig.technician_id;
+            if (!techId) return this.notify("Técnico inválido.", "error");
+
+            this.loading = true;
+            try {
+                const payload = {
+                    workDays: this.scheduleManagement.techConfig.workDays,
+                    hasBreak: this.scheduleManagement.techConfig.hasBreak,
+                    breakStart: this.scheduleManagement.techConfig.breakStart,
+                    breakEnd: this.scheduleManagement.techConfig.breakEnd,
+                    slotDuration: this.scheduleManagement.techConfig.slotDuration,
+                    maxConcurrent: this.scheduleManagement.techConfig.maxConcurrent
+                };
+
+                // Upsert logic for technician_schedule_settings
+                const { error } = await supabaseClient
+                    .from('technician_schedule_settings')
+                    .upsert({
+                        technician_id: techId,
+                        workspace_id: this.user.workspace_id,
+                        settings: payload
+                    }, { onConflict: 'technician_id' });
+
+                if (error) throw error;
+
+                this.notify("Configuração de agenda salva com sucesso!");
+                this.closeTechConfigModal();
+                if (this.scheduleManagement.selectedTechnicianId === techId) {
+                    this.loadScheduleManagement(); // Refresh the grid to show new availability
+                }
+            } catch (e) {
+                console.error("Error saving tech config:", e);
+                this.notify("Erro ao salvar a configuração.", "error");
+            } finally {
+                this.loading = false;
+            }
         },
 
         // --- Management Mutations ---
@@ -2356,7 +2468,7 @@ function app() {
             }
 
             if (!ea.new_date || !ea.new_start || !ea.new_technician_id) {
-                return this.notify("Preencha data, hora e técnico.", "error");
+                return this.notify("Selecione data, técnico e um horário livre disponível.", "error");
             }
 
             this.loading = true;
@@ -2365,14 +2477,18 @@ function app() {
                 // If not, it's a new appointment from the unscheduled list.
                 const startStr = this.toUTC(`${ea.new_date}T${ea.new_start}`);
 
-                // Estimate end time simply by adding 1 hour
-                const startDate = new Date(`${ea.new_date}T${ea.new_start}`);
-                startDate.setHours(startDate.getHours() + 1);
-
-                // Format back to YYYY-MM-DDTHH:mm local string to pass into toUTC safely
-                const pad = (n) => n < 10 ? '0' + n : n;
-                const localEndStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}T${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
-                const endStr = this.toUTC(localEndStr);
+                // Em modo remarcação com busca de slots reais, ea.new_end já deve estar populado.
+                // Se não estiver, fazemos fallback de 1 hora.
+                let endStr;
+                if (ea.new_end) {
+                    endStr = this.toUTC(`${ea.new_date}T${ea.new_end}`);
+                } else {
+                    const startDate = new Date(`${ea.new_date}T${ea.new_start}`);
+                    startDate.setHours(startDate.getHours() + 1);
+                    const pad = (n) => n < 10 ? '0' + n : n;
+                    const localEndStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}T${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
+                    endStr = this.toUTC(localEndStr);
+                }
 
                 if (ea.original && ea.original.id) {
                     await this.supabaseFetch('rpc/reschedule_ticket_appointment', 'POST', {
@@ -2431,20 +2547,40 @@ function app() {
 
         async submitBlock() {
             const eb = this.scheduleManagement.editingBlock;
+            if (!eb.date) return this.notify("Informe a data do bloqueio.", "error");
+
             this.loading = true;
             try {
-                const startStr = this.toUTC(`${eb.date}T${eb.start}`);
-                const endStr = this.toUTC(`${eb.date}T${eb.end}`);
+                let startStr, endStr;
+                let blockType = eb.full_day ? 'full_day' : 'time_range';
+
+                if (eb.full_day) {
+                    startStr = this.toUTC(`${eb.date}T00:00:00`);
+                    endStr = this.toUTC(`${eb.date}T23:59:59`);
+                } else {
+                    if (!eb.start || !eb.end) {
+                        this.loading = false;
+                        return this.notify("Informe o horário de início e fim do bloqueio.", "error");
+                    }
+                    startStr = this.toUTC(`${eb.date}T${eb.start}`);
+                    endStr = this.toUTC(`${eb.date}T${eb.end}`);
+                }
+
+                let recurrenceEndDateStr = null;
+                if (eb.is_recurring && eb.recurrence_end_date) {
+                    recurrenceEndDateStr = this.toUTC(`${eb.recurrence_end_date}T23:59:59`);
+                }
 
                 await this.supabaseFetch('rpc/create_schedule_block', 'POST', {
                     p_technician_id: this.scheduleManagement.selectedTechnicianId,
-                    p_block_type: 'time_range',
+                    p_block_type: blockType,
                     p_start_at: startStr,
                     p_end_at: endStr,
-                    p_is_recurring: false,
-                    p_recurrence_type: null,
+                    p_is_recurring: eb.is_recurring,
+                    p_recurrence_type: eb.is_recurring ? eb.recurrence_type : null,
                     p_recurrence_days: null,
-                    p_reason: eb.notes || 'Bloqueio Administrativo'
+                    p_reason: eb.notes || 'Bloqueio Administrativo',
+                    p_recurrence_end_date: recurrenceEndDateStr
                 });
 
                 this.notify("Bloqueio salvo com sucesso!");

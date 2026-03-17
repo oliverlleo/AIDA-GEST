@@ -481,12 +481,51 @@
                             </div>
 
                             <!-- Blank State (No Tech) -->
-                            <div x-show="!scheduleManagement.selectedTechnicianId" class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-gray-50">
-                                <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4 text-gray-400 text-2xl">
-                                    <i class="fa-solid fa-user-astronaut"></i>
+                            <div x-show="!scheduleManagement.selectedTechnicianId" class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-gray-50 p-6 overflow-y-auto">
+                                <div class="max-w-2xl w-full text-center space-y-6">
+                                    <div class="inline-flex items-center justify-center w-20 h-20 bg-brand-100 text-brand-600 rounded-full mb-2 shadow-sm border border-brand-200">
+                                        <i class="fa-solid fa-users-gear text-3xl"></i>
+                                    </div>
+
+                                    <div>
+                                        <h3 class="text-2xl font-bold text-gray-800 tracking-tight">Gestão Operacional da Agenda</h3>
+                                        <p class="text-gray-500 mt-2 text-sm max-w-lg mx-auto">
+                                            A lateral já exibe todos os chamados pendentes de alocação da sua operação.
+                                            Para começar a encaixar ou visualizar a disponibilidade:
+                                        </p>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 text-left">
+                                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col items-start hover:shadow-md transition-shadow">
+                                            <div class="bg-blue-100 text-blue-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3">
+                                                <i class="fa-solid fa-user-check text-lg"></i>
+                                            </div>
+                                            <h4 class="font-bold text-gray-800 text-sm mb-1">1. Selecione um Técnico</h4>
+                                            <p class="text-xs text-gray-500 mb-4 flex-grow">Escolha um técnico no menu superior para abrir sua grade horária e visualizar slots livres.</p>
+                                            <div class="w-full text-center p-2 bg-gray-50 border border-dashed border-gray-300 rounded text-xs text-gray-400 font-bold uppercase tracking-widest">
+                                                <i class="fa-solid fa-arrow-up mr-1"></i> Barra Superior
+                                            </div>
+                                        </div>
+
+                                        <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col items-start hover:shadow-md transition-shadow">
+                                            <div class="bg-purple-100 text-purple-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3">
+                                                <i class="fa-solid fa-calendar-plus text-lg"></i>
+                                            </div>
+                                            <h4 class="font-bold text-gray-800 text-sm mb-1">2. Encaixe os Pendentes</h4>
+                                            <p class="text-xs text-gray-500 mb-4 flex-grow">Use os botões de <b>Agendar</b> na lateral ou clique em <b>Slots Livres</b> na grade para alocar os chamados.</p>
+                                            <div class="w-full flex space-x-2">
+                                                <span class="flex-1 text-center bg-brand-50 text-brand-700 py-1.5 rounded text-[10px] font-bold border border-brand-200"><i class="fa-solid fa-arrow-left"></i> Agendar Lateral</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-8 pt-6 border-t border-gray-200">
+                                        <p class="text-sm text-gray-600 mb-4 font-medium">A agenda do técnico precisa ser ajustada? (Dias, horários, capacidade)</p>
+                                        <button @click="openTechConfigModal()" class="bg-white text-gray-800 border border-gray-300 px-6 py-2.5 rounded-lg font-bold hover:bg-gray-50 hover:text-black transition-colors shadow-sm flex items-center justify-center mx-auto">
+                                            <i class="fa-solid fa-cog mr-2 text-gray-500"></i> Configurar Agenda Base dos Técnicos
+                                        </button>
+                                    </div>
                                 </div>
-                                <h3 class="text-gray-600 font-bold text-lg">Nenhum Técnico Selecionado</h3>
-                                <p class="text-gray-500 text-sm mt-1">Selecione um técnico no topo para visualizar e gerenciar sua agenda.</p>
                             </div>
 
                             <!-- Agenda Grid Area -->
@@ -4051,6 +4090,146 @@
         </div>
     </div>
 
+    <!-- MODAL: TECH SCHEDULE CONFIGURATION (Agenda Técnica) -->
+    <div x-show="modals.techScheduleSettings" class="fixed inset-0 z-[80] overflow-y-auto" x-cloak>
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="closeTechConfigModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+                <div class="bg-black px-6 py-4 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-white flex items-center">
+                        <i class="fa-solid fa-user-clock mr-2 text-brand-500"></i>
+                        Configurar Agenda Base
+                    </h3>
+                    <button type="button" @click="closeTechConfigModal()" class="text-gray-400 hover:text-white transition-colors"><i class="fa-solid fa-times text-xl"></i></button>
+                </div>
+
+                <div class="p-6 overflow-y-auto max-h-[70vh] bg-gray-50">
+                    <div class="mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                        <label class="block text-sm font-bold text-gray-800 mb-2">Técnico a Configurar</label>
+                        <select x-model="scheduleManagement.techConfig.technician_id" @change="loadTechConfig()" class="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium text-gray-700">
+                            <option value="">Selecione um técnico...</option>
+                            <template x-for="tech in getTechnicians()" :key="tech.id">
+                                <option :value="tech.id" x-text="tech.name"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <template x-if="scheduleManagement.techConfig.technician_id">
+                        <div class="space-y-6">
+                            <!-- Dias e Horários (Geral) -->
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                                <h4 class="font-bold text-gray-800 text-sm mb-4 pb-2 border-b border-gray-100 flex items-center"><i class="fa-solid fa-calendar-week text-brand-500 mr-2"></i> Dias da Semana</h4>
+
+                                <div class="space-y-3">
+                                    <template x-for="(dayConfig, index) in scheduleManagement.techConfig.workDays" :key="index">
+                                        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
+                                             :class="dayConfig.active ? 'bg-white' : 'bg-gray-50 opacity-60'">
+
+                                            <div class="w-full sm:w-32 flex items-center gap-2">
+                                                <input type="checkbox" x-model="dayConfig.active" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer">
+                                                <span class="text-sm font-bold text-gray-700 uppercase" x-text="['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][index]"></span>
+                                            </div>
+
+                                            <div class="flex-1 flex gap-2 w-full" x-show="dayConfig.active">
+                                                <div class="flex-1">
+                                                    <label class="block text-[10px] font-bold text-gray-500 mb-0.5">Início</label>
+                                                    <input type="time" x-model="dayConfig.start" class="w-full border border-gray-300 rounded p-1.5 text-xs bg-white">
+                                                </div>
+                                                <div class="flex-1">
+                                                    <label class="block text-[10px] font-bold text-gray-500 mb-0.5">Fim</label>
+                                                    <input type="time" x-model="dayConfig.end" class="w-full border border-gray-300 rounded p-1.5 text-xs bg-white">
+                                                </div>
+                                            </div>
+
+                                            <div class="flex-1 w-full" x-show="!dayConfig.active">
+                                                <span class="text-xs text-gray-400 font-bold italic">Não atende</span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Intervalo / Almoço -->
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                                <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
+                                    <h4 class="font-bold text-gray-800 text-sm flex items-center"><i class="fa-solid fa-mug-hot text-brand-500 mr-2"></i> Intervalo / Almoço Fixo</h4>
+                                    <label class="flex items-center cursor-pointer">
+                                        <div class="relative">
+                                            <input type="checkbox" x-model="scheduleManagement.techConfig.hasBreak" class="sr-only">
+                                            <div class="block bg-gray-300 w-8 h-5 rounded-full" :class="scheduleManagement.techConfig.hasBreak ? 'bg-brand-500' : ''"></div>
+                                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition transform" :class="scheduleManagement.techConfig.hasBreak ? 'translate-x-3' : ''"></div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div x-show="scheduleManagement.techConfig.hasBreak" class="flex gap-4">
+                                    <div class="flex-1">
+                                        <label class="block text-xs font-bold text-gray-600 mb-1">Início do Intervalo</label>
+                                        <input type="time" x-model="scheduleManagement.techConfig.breakStart" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                    </div>
+                                    <div class="flex-1">
+                                        <label class="block text-xs font-bold text-gray-600 mb-1">Fim do Intervalo</label>
+                                        <input type="time" x-model="scheduleManagement.techConfig.breakEnd" class="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Duração e Capacidade -->
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                                <h4 class="font-bold text-gray-800 text-sm mb-4 pb-2 border-b border-gray-100 flex items-center"><i class="fa-solid fa-stopwatch text-brand-500 mr-2"></i> Slots e Capacidade Máxima</h4>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-600 mb-1">Duração do Slot (Minutos)</label>
+                                        <div class="flex items-center gap-2">
+                                            <select x-model.number="scheduleManagement.techConfig.slotDuration" class="flex-1 border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                                <option value="15">15 min</option>
+                                                <option value="30">30 min</option>
+                                                <option value="45">45 min</option>
+                                                <option value="60">1 hora</option>
+                                                <option value="90">1 hora e meia</option>
+                                                <option value="120">2 horas</option>
+                                            </select>
+                                        </div>
+                                        <p class="text-[10px] text-gray-400 mt-1">Tamanho de cada bloco de agendamento na grade.</p>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-600 mb-1">Capacidade Simultânea (Overbook)</label>
+                                        <div class="flex items-center gap-2">
+                                            <input type="number" min="1" max="10" x-model.number="scheduleManagement.techConfig.maxConcurrent" class="flex-1 border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none text-center">
+                                            <span class="text-sm font-bold text-gray-500">Tickets/Slot</span>
+                                        </div>
+                                        <p class="text-[10px] text-gray-400 mt-1">Quantos tickets o técnico pode atender ao mesmo tempo no mesmo horário.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="!scheduleManagement.techConfig.technician_id">
+                        <div class="text-center py-10 opacity-50">
+                            <i class="fa-solid fa-cogs text-4xl text-gray-300 mb-3"></i>
+                            <p class="text-sm font-bold text-gray-500">Selecione um técnico acima para configurar a agenda.</p>
+                        </div>
+                    </template>
+
+                </div>
+
+                <div class="bg-gray-100 px-6 py-4 flex justify-end space-x-3 border-t border-gray-200">
+                    <button type="button" @click="closeTechConfigModal()" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors text-sm">Cancelar</button>
+                    <button type="button" @click="saveTechConfig()" :disabled="!scheduleManagement.techConfig.technician_id || loading" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors text-sm flex items-center justify-center min-w-[140px] disabled:opacity-50">
+                        <i class="fa-solid fa-save mr-2" x-show="!loading"></i>
+                        <i class="fa-solid fa-circle-notch fa-spin mr-2" x-show="loading"></i>
+                        Salvar Configuração
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: SCHEDULE BLOCK (Agenda Técnica) -->
     <div x-show="modals.scheduleBlock" class="fixed inset-0 z-[80] overflow-y-auto" x-cloak>
         <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -4063,13 +4242,62 @@
                     <button type="button" @click="closeBlockModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times"></i></button>
                 </div>
                 <div class="p-6">
-                    <div class="mb-4 text-sm text-gray-600">
-                        <p><span class="font-bold">Data:</span> <span x-text="formatScheduleDateFull(scheduleManagement.editingBlock.date)"></span></p>
-                        <p><span class="font-bold">Horário:</span> <span x-text="formatTimeOnly(scheduleManagement.editingBlock.start) + ' às ' + formatTimeOnly(scheduleManagement.editingBlock.end)"></span></p>
+                    <!-- Base Details -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Data do Bloqueio</label>
+                            <input type="date" x-model="scheduleManagement.editingBlock.date" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                        </div>
+
+                        <!-- Time / Full Day Toggle -->
+                        <div class="col-span-2 flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            <div>
+                                <span class="font-bold text-gray-700 text-sm">Dia Inteiro?</span>
+                                <p class="text-[10px] text-gray-500 mt-0.5">Bloqueia das 00:00 às 23:59</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" x-model="scheduleManagement.editingBlock.full_day" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                            </label>
+                        </div>
+
+                        <div class="col-span-1" x-show="!scheduleManagement.editingBlock.full_day">
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Início</label>
+                            <input type="time" x-model="scheduleManagement.editingBlock.start" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                        </div>
+                        <div class="col-span-1" x-show="!scheduleManagement.editingBlock.full_day">
+                            <label class="block text-xs font-bold text-gray-500 mb-1">Fim</label>
+                            <input type="time" x-model="scheduleManagement.editingBlock.end" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                        </div>
                     </div>
+
+                    <!-- Recurrence -->
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" x-model="scheduleManagement.editingBlock.is_recurring" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+                                <span class="text-sm font-bold text-gray-700">Repetir este bloqueio?</span>
+                            </label>
+                        </div>
+                        <div x-show="scheduleManagement.editingBlock.is_recurring" class="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-lg border border-gray-200 mt-2" x-transition>
+                            <div class="col-span-2">
+                                <label class="block text-xs font-bold text-gray-500 mb-1">Como repetir?</label>
+                                <select x-model="scheduleManagement.editingBlock.recurrence_type" class="w-full border rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                                    <option value="daily">Todos os dias</option>
+                                    <option value="weekdays">Dias úteis (Seg-Sex)</option>
+                                    <option value="weekly">Semanalmente</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-xs font-bold text-gray-500 mb-1">Data Fim da Recorrência (Opcional)</label>
+                                <input type="date" x-model="scheduleManagement.editingBlock.recurrence_end_date" class="w-full border rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                            </div>
+                        </div>
+                    </div>
+
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">Motivo do Bloqueio (Opcional)</label>
-                        <input type="text" x-model="scheduleManagement.editingBlock.notes" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none" placeholder="Ex: Almoço, Reunião, Férias...">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Motivo do Bloqueio (Recomendado)</label>
+                        <input type="text" x-model="scheduleManagement.editingBlock.notes" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm" placeholder="Ex: Almoço, Reunião, Férias...">
                     </div>
                 </div>
                 <div class="bg-gray-50 px-6 py-4 flex justify-between space-x-3 border-t border-gray-200">
@@ -4165,27 +4393,64 @@
                         </div>
                     </template>
 
-                    <div class="space-y-4">
+                    <div class="space-y-4" x-data="{ localLoadingSlots: false, availableSlots: [], showSlots: false, fetchSlots() { if(!scheduleManagement.editingAppointment.new_technician_id || !scheduleManagement.editingAppointment.new_date) return; this.localLoadingSlots = true; const refDate = scheduleManagement.editingAppointment.new_date; const tId = scheduleManagement.editingAppointment.new_technician_id; supabaseFetch('rpc/get_schedule_availability', 'POST', {p_technician_id: tId, p_mode: scheduleManagement.editingAppointment.type, p_reference_date: refDate, p_days: 1}).then(res => { this.availableSlots = (res && res.days && res.days[0] && res.days[0].slots) ? res.days[0].slots : []; this.showSlots = true; }).catch(() => { this.availableSlots = []; this.showSlots = true; }).finally(() => { this.localLoadingSlots = false; }); } }">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Trocar Técnico (Opcional)' : 'Técnico Alocado'"></label>
-                            <select x-model="scheduleManagement.editingAppointment.new_technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                            <select x-model="scheduleManagement.editingAppointment.new_technician_id" @change="showSlots = false; scheduleManagement.editingAppointment.new_start = ''" class="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <option value="">Selecione...</option>
                                 <template x-for="tech in getTechnicians()" :key="tech.id">
                                     <option :value="tech.id" x-text="tech.name"></option>
                                 </template>
                             </select>
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-2 gap-3 items-end">
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 mb-1" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Remarcar Data' : 'Data'"></label>
-                                <input type="date" x-model="scheduleManagement.editingAppointment.new_date" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <input type="date" x-model="scheduleManagement.editingAppointment.new_date" @change="showSlots = false; scheduleManagement.editingAppointment.new_start = ''" class="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Alterar Horário (Início)' : 'Horário (Início)'"></label>
-                                <input type="time" x-model="scheduleManagement.editingAppointment.new_start" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <button type="button" @click="fetchSlots()" :disabled="localLoadingSlots || !scheduleManagement.editingAppointment.new_technician_id || !scheduleManagement.editingAppointment.new_date" class="w-full bg-black text-white p-2.5 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-800 disabled:opacity-50 transition-colors flex justify-center items-center">
+                                    <span x-show="!localLoadingSlots"><i class="fa-solid fa-search mr-2"></i> Buscar Horários</span>
+                                    <span x-show="localLoadingSlots"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+                                </button>
                             </div>
                         </div>
-                        <div class="text-xs text-gray-400 italic mt-1">
-                            * A duração padrão é mantida/calculada pelo sistema.
+
+                        <!-- Slots Result Area -->
+                        <div x-show="showSlots" class="mt-4 border-t border-gray-200 pt-4" x-transition>
+                            <label class="block text-xs font-bold text-gray-500 mb-2">Horários Disponíveis (Início - Fim)</label>
+
+                            <template x-if="availableSlots.length > 0">
+                                <div class="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+                                    <template x-for="slot in availableSlots" :key="slot.start">
+                                        <button type="button"
+                                                @click="if(slot.status === 'livre') { scheduleManagement.editingAppointment.new_start = slot.start.substring(0,5); scheduleManagement.editingAppointment.new_end = slot.end.substring(0,5); }"
+                                                :class="{
+                                                    'bg-brand-50 border-brand-500 text-brand-700 ring-1 ring-brand-500': scheduleManagement.editingAppointment.new_start === slot.start.substring(0,5),
+                                                    'bg-white border-gray-200 text-gray-700 hover:border-brand-300 hover:bg-gray-50': slot.status === 'livre' && scheduleManagement.editingAppointment.new_start !== slot.start.substring(0,5),
+                                                    'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60': slot.status !== 'livre'
+                                                }"
+                                                :disabled="slot.status !== 'livre'"
+                                                class="border rounded p-2 text-xs text-center font-medium transition-all shadow-sm flex flex-col items-center">
+                                                <span class="font-bold text-[13px]" x-text="formatTimeOnly(slot.start)"></span>
+                                                <span class="text-[9px] mt-0.5 opacity-70" x-text="`até ${formatTimeOnly(slot.end)}`"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <template x-if="availableSlots.length === 0">
+                                <div class="text-center p-4 bg-red-50 border border-red-100 rounded-lg">
+                                    <i class="fa-solid fa-calendar-xmark text-red-400 text-2xl mb-2"></i>
+                                    <p class="text-xs font-bold text-red-800">Nenhum horário configurado/livre</p>
+                                    <p class="text-[10px] text-red-600 mt-1">O técnico não possui agenda configurada ou não há disponibilidade para esta data. Edite a agenda base do técnico.</p>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div class="text-[10px] bg-gray-50 border border-gray-200 p-2 rounded text-gray-500 flex items-start gap-2 mt-2" x-show="scheduleManagement.editingAppointment.new_start && scheduleManagement.editingAppointment.new_end">
+                            <i class="fa-solid fa-circle-info text-brand-500 mt-0.5"></i>
+                            <span class="font-medium">Atendimento selecionado das <b class="text-gray-800" x-text="scheduleManagement.editingAppointment.new_start"></b> às <b class="text-gray-800" x-text="scheduleManagement.editingAppointment.new_end"></b>.</span>
                         </div>
                     </div>
                 </div>
