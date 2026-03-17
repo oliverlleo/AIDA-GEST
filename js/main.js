@@ -2270,11 +2270,15 @@ function app() {
             this.scheduleManagement.slotActionPopover.open = false;
         },
 
+        openScheduleModalFromSidebar(ticket) {
+            const type = ticket.status === 'Analise Tecnica' ? 'analysis' : 'repair';
+            // Abre o modal de agendamento em modo criação passando o ticket, tipo inferido, e sem slot pré-definido
+            this.openRescheduleModal(ticket.id, type, null, null);
+        },
+
         initiateSidebarAction(ticket, action) {
             if (action === 'reschedule') {
-                const type = ticket.status === 'Analise Tecnica' ? 'analysis' : 'repair';
-                // Open reschedule modal for a specific ticket, without pre-filling a slot
-                this.openRescheduleModal(ticket.id, type, null, null);
+                this.openScheduleModalFromSidebar(ticket);
             }
         },
 
