@@ -2011,6 +2011,17 @@ function app() {
             return `${weekDay}, ${dayMonth}`;
         },
 
+        formatDateLocal(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return '';
+
+            const dayMonth = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+            return `${dayMonth}, ${time}`;
+        },
+
         formatTimeOnly(timeStr) {
             if (!timeStr) return '';
             // Handle cases where time might be full ISO or just HH:mm:ss
@@ -2363,8 +2374,25 @@ function app() {
             // Find ticket context from unscheduled lists if available to populate headers nicely during creation
             let ctx = null;
             if (ticketId && !appointmentObj) {
-                const allUnscheduled = [...this.scheduleManagement.unscheduledItems, ...this.scheduleManagement.withoutTechnicianItems];
-                ctx = allUnscheduled.find(t => t.id === ticketId);
+                // Sempre dar prioridade ao selectedTicket se houver um modal de OS aberto,
+                // pois ele contém a carga de dados mais rica de Kanban (prazos, cliente, etc).
+                if (this.selectedTicket && this.selectedTicket.id === ticketId) {
+                    ctx = this.selectedTicket;
+                } else {
+                    // Fallback para as listas globais da lateral
+                    const allUnscheduled = [
+                        ...this.scheduleManagement.unscheduledItems,
+                        ...this.scheduleManagement.withoutTechnicianItems,
+                        ...this.scheduleManagement.lateWithoutScheduleItems,
+                        ...this.scheduleManagement.conflictItems
+                    ];
+                    ctx = allUnscheduled.find(t => t.id === ticketId);
+                }
+
+                // Em último caso, se a gente clicou pela tela de Bancada onde não abriu o ticket details, busca na array global do Kanban
+                if (!ctx && this.tickets) {
+                    ctx = this.tickets.find(t => t.id === ticketId);
+                }
             }
 
             this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
@@ -2377,7 +2405,13 @@ function app() {
             ea.new_date = prefillSlot ? prefillSlot.date : (appointmentObj ? appointmentObj.date : '');
             ea.new_start = prefillSlot ? prefillSlot.start : (appointmentObj ? appointmentObj.start : '');
             ea.new_end = prefillSlot ? prefillSlot.end : (appointmentObj ? appointmentObj.end : '');
-            ea.new_technician_id = appointmentObj ? appointmentObj.technician_id : this.scheduleManagement.selectedTechnicianId;
+
+            // Set technician intelligently based on available context
+            let techId = appointmentObj ? appointmentObj.technician_id : this.scheduleManagement.selectedTechnicianId;
+            if (!techId && ctx && ctx.technician_id) {
+                techId = ctx.technician_id; // Puxa do contexto do ticket se houver técnico associado lá e não na aba lateral global
+            }
+            ea.new_technician_id = techId;
 
             this.modals.rescheduleAppointment = true;
         },
@@ -4038,8 +4072,8 @@ function app() {
                             pendingTech: this.homeOperationalItems.filter(t => ['Aberto', 'Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(t.status)),
                             outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
                             pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado'),
-                            pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca'),
-                            pendingReceipt: [],
+                            pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca' && t.parts_status !== 'Comprado'),
+                            pendingReceipt: this.homeOperationalItems.filter(t => t.status === 'Compra Peca' && t.parts_status === 'Comprado'),
                             priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
                             expiringDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === false && ['today', 'tomorrow'].includes(t.urgency_bucket)),
                             expiredDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === true),
