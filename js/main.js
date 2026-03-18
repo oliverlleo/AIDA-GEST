@@ -2011,6 +2011,17 @@ function app() {
             return `${weekDay}, ${dayMonth}`;
         },
 
+        formatDateLocal(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return '';
+
+            const dayMonth = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+            return `${dayMonth}, ${time}`;
+        },
+
         formatTimeOnly(timeStr) {
             if (!timeStr) return '';
             // Handle cases where time might be full ISO or just HH:mm:ss
