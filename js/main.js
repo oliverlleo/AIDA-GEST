@@ -2374,8 +2374,14 @@ function app() {
             // Find ticket context from unscheduled lists if available to populate headers nicely during creation
             let ctx = null;
             if (ticketId && !appointmentObj) {
+                // Procurar no array de sem agendamento e sem tecnico
                 const allUnscheduled = [...this.scheduleManagement.unscheduledItems, ...this.scheduleManagement.withoutTechnicianItems];
                 ctx = allUnscheduled.find(t => t.id === ticketId);
+
+                // Se não achou na agenda lateral, e é o ticket atualmente selecionado (Kanban view), usar ele
+                if (!ctx && this.selectedTicket && this.selectedTicket.id === ticketId) {
+                    ctx = this.selectedTicket;
+                }
             }
 
             this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
@@ -2388,7 +2394,13 @@ function app() {
             ea.new_date = prefillSlot ? prefillSlot.date : (appointmentObj ? appointmentObj.date : '');
             ea.new_start = prefillSlot ? prefillSlot.start : (appointmentObj ? appointmentObj.start : '');
             ea.new_end = prefillSlot ? prefillSlot.end : (appointmentObj ? appointmentObj.end : '');
-            ea.new_technician_id = appointmentObj ? appointmentObj.technician_id : this.scheduleManagement.selectedTechnicianId;
+
+            // Set technician intelligently based on available context
+            let techId = appointmentObj ? appointmentObj.technician_id : this.scheduleManagement.selectedTechnicianId;
+            if (!techId && ctx && ctx.technician_id) {
+                techId = ctx.technician_id; // Puxa do contexto do ticket se houver técnico associado lá e não na aba lateral global
+            }
+            ea.new_technician_id = techId;
 
             this.modals.rescheduleAppointment = true;
         },

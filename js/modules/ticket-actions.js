@@ -606,14 +606,6 @@ window.AIDATicketActions = {
                 window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
             }
 
-            // Pergunta de engajamento do Kanban: agendar reparo agora mesmo?
-            if (!ticket.repair_scheduled) {
-                setTimeout(() => {
-                    if (confirm("Compra confirmada. Deseja já agendar o reparo deste aparelho?")) {
-                        deps.state.openScheduleModalFromSidebar(ticket);
-                    }
-                }, 500);
-            }
         }
     },
 
