@@ -139,6 +139,11 @@ window.AIDATicketActions = {
         const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
         const ctx = deps.getLogContext(ticket);
         await deps.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: `${ctx.client} aprovou o orçamento do ${ctx.device}.` });
+
+        // Se aprovou sem compra de peças, já inicia fluxo para agendar reparo
+        if (!ticket.parts_needed && !ticket.repair_scheduled) {
+            deps.state.openScheduleModalFromSidebar(ticket);
+        }
     },
 
     async denyRepair(ticketOrId, deps) {
@@ -158,6 +163,11 @@ window.AIDATicketActions = {
              parts_status: 'Recebido',
              parts_received_at: new Date().toISOString()
          }, { action: 'Recebeu Peças', details: `Peça ${part} recebida para o ${ctx.device} de ${ctx.client}. Reparo liberado.` });
+
+         // Se não há agendamento de reparo ativo, sugere criar
+         if (!ticket.repair_scheduled) {
+             deps.state.openScheduleModalFromSidebar(ticket);
+         }
     },
 
     async markDelivered(ticketOrId, deps) {
@@ -594,6 +604,15 @@ window.AIDATicketActions = {
                 msg += `\nPara o aparelho: ${ticket.device_model}\nOS: ${ticket.os_number || ticket.id.slice(0, 8)}`;
 
                 window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+            }
+
+            // Pergunta de engajamento do Kanban: agendar reparo agora mesmo?
+            if (!ticket.repair_scheduled) {
+                setTimeout(() => {
+                    if (confirm("Compra confirmada. Deseja já agendar o reparo deste aparelho?")) {
+                        deps.state.openScheduleModalFromSidebar(ticket);
+                    }
+                }, 500);
             }
         }
     },

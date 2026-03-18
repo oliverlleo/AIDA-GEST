@@ -4762,23 +4762,6 @@
                                 </template>
                             </div>
 
-                            <!-- Repair Schedule -->
-                            <div class="mb-2 flex flex-col sm:flex-row sm:items-center gap-2">
-                                <button type="button" @click="openSchedulePanel('repair')"
-                                        class="text-xs px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors flex items-center justify-center gap-2">
-                                    <i class="fa-solid fa-wrench text-brand-500"></i> Agendar Reparo
-                                </button>
-
-                                <template x-if="selectedRepairAppointment">
-                                    <div class="flex items-center gap-2 text-xs bg-brand-50 text-brand-700 px-3 py-1.5 rounded border border-brand-200">
-                                        <i class="fa-solid fa-clock"></i>
-                                        <span x-text="formatAppointmentSummary(selectedRepairAppointment)"></span>
-                                        <button type="button" @click="removeAppointment('repair')" class="ml-2 text-brand-500 hover:text-red-500" title="Remover">
-                                            <i class="fa-solid fa-times"></i>
-                                        </button>
-                                    </div>
-                                </template>
-                            </div>
                         </div>
 
                         <!-- Defect Options Tag Input -->
@@ -5229,22 +5212,28 @@
 
                         <!-- 4. Compra Flow -->
                         <template x-if="selectedTicket.status === 'Compra Peca'">
-                            <div class="flex space-x-3 items-center">
-                                <button @click="markPurchased(selectedTicket)"
-                                        :disabled="!canExecuteAction(selectedTicket, 'markPurchased')"
-                                        class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                        :class="!canExecuteAction(selectedTicket, 'markPurchased') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'">
-                                    <i class="fa-solid fa-cart-shopping mr-2"></i>
-                                    <span x-text="selectedTicket.parts_status === 'Comprado' ? 'Peça Comprada' : 'Confirmar Compra'"></span>
-                                </button>
+                            <div class="flex flex-col space-y-3">
+                                <div class="flex space-x-3 items-center">
+                                    <button @click="markPurchased(selectedTicket)"
+                                            :disabled="!canExecuteAction(selectedTicket, 'markPurchased')"
+                                            class="px-4 py-2 rounded font-bold text-sm transition-colors"
+                                            :class="!canExecuteAction(selectedTicket, 'markPurchased') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'">
+                                        <i class="fa-solid fa-cart-shopping mr-2"></i>
+                                        <span x-text="selectedTicket.parts_status === 'Comprado' ? 'Peça Comprada' : 'Confirmar Compra'"></span>
+                                    </button>
 
-                                <div class="h-8 w-px bg-gray-300 mx-2"></div>
+                                    <div class="h-8 w-px bg-gray-300 mx-2"></div>
 
-                                <button @click="confirmReceived(selectedTicket)"
-                                        :disabled="!canExecuteAction(selectedTicket, 'confirmReceived')"
-                                        class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                        :class="!canExecuteAction(selectedTicket, 'confirmReceived') ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-teal-600 text-white hover:bg-teal-700'">
-                                    <i class="fa-solid fa-box-open mr-1"></i> Recebido (Iniciar Reparo)
+                                    <button @click="confirmReceived(selectedTicket)"
+                                            :disabled="!canExecuteAction(selectedTicket, 'confirmReceived')"
+                                            class="px-4 py-2 rounded font-bold text-sm transition-colors"
+                                            :class="!canExecuteAction(selectedTicket, 'confirmReceived') ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-teal-600 text-white hover:bg-teal-700'">
+                                        <i class="fa-solid fa-box-open mr-1"></i> Recebido (Iniciar Reparo)
+                                    </button>
+                                </div>
+
+                                <button type="button" @click="openScheduleModalFromSidebar(selectedTicket)" x-show="selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                    <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
                         </template>
