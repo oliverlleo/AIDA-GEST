@@ -3437,6 +3437,7 @@
                                             <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
                                         </div>
                                         <h4 class="font-bold text-gray-900 text-sm mb-1 leading-tight" x-text="ticket.device_model"></h4>
+                                        <p class="text-gray-500 text-xs mb-1 truncate font-medium" x-text="ticket.client_name"></p>
                                         <p class="text-gray-500 text-xs mb-2 line-clamp-2" x-text="ticket.defect_reported"></p>
 
                                         <div class="mt-2 pt-2 border-t border-gray-50 space-y-1">
@@ -3521,6 +3522,7 @@
                                             <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
                                         </div>
                                         <h4 class="font-bold text-gray-900 text-sm mb-1 leading-tight" x-text="ticket.device_model"></h4>
+                                        <p class="text-gray-500 text-xs mb-2 truncate font-medium" x-text="ticket.client_name"></p>
 
                                         <div class="mt-2 pt-2 border-t border-gray-50 space-y-1">
                                             <!-- Deadlines Section -->
