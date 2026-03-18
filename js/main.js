@@ -2374,13 +2374,24 @@ function app() {
             // Find ticket context from unscheduled lists if available to populate headers nicely during creation
             let ctx = null;
             if (ticketId && !appointmentObj) {
-                // Procurar no array de sem agendamento e sem tecnico
-                const allUnscheduled = [...this.scheduleManagement.unscheduledItems, ...this.scheduleManagement.withoutTechnicianItems];
-                ctx = allUnscheduled.find(t => t.id === ticketId);
-
-                // Se não achou na agenda lateral, e é o ticket atualmente selecionado (Kanban view), usar ele
-                if (!ctx && this.selectedTicket && this.selectedTicket.id === ticketId) {
+                // Sempre dar prioridade ao selectedTicket se houver um modal de OS aberto,
+                // pois ele contém a carga de dados mais rica de Kanban (prazos, cliente, etc).
+                if (this.selectedTicket && this.selectedTicket.id === ticketId) {
                     ctx = this.selectedTicket;
+                } else {
+                    // Fallback para as listas globais da lateral
+                    const allUnscheduled = [
+                        ...this.scheduleManagement.unscheduledItems,
+                        ...this.scheduleManagement.withoutTechnicianItems,
+                        ...this.scheduleManagement.lateWithoutScheduleItems,
+                        ...this.scheduleManagement.conflictItems
+                    ];
+                    ctx = allUnscheduled.find(t => t.id === ticketId);
+                }
+
+                // Em último caso, se a gente clicou pela tela de Bancada onde não abriu o ticket details, busca na array global do Kanban
+                if (!ctx && this.tickets) {
+                    ctx = this.tickets.find(t => t.id === ticketId);
                 }
             }
 
