@@ -4096,11 +4096,11 @@ function app() {
                         this.homeOperationalItems = response.items;
                         // Build homeOps locally
                         this.homeOps = {
-                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao'),
-                            waitingBudgetResponse: [], // Approximate since we dont have budget_status often
-                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente'),
-                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Logistica' || t.status === 'Envio'),
-                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Entrega' || t.status === 'Pronto para Entrega'),
+                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && (!t.budget_status || t.budget_status === 'Pendente' || t.budget_status === '') && !t.budget_sent_at),
+                            waitingBudgetResponse: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && (t.budget_status === 'Enviado' || t.budget_sent_at)),
+                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available),
+                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && t.delivery_method === 'carrier' && !t.tracking_code),
+                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && (t.delivery_method !== 'carrier' || (t.delivery_method === 'carrier' && t.tracking_code))),
                             pendingTech: this.homeOperationalItems.filter(t => ['Aberto', 'Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(t.status)),
                             outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
                             pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado'),
