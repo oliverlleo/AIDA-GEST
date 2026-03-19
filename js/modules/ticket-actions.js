@@ -160,7 +160,7 @@ window.AIDATicketActions = {
          if (!ticket) return;
          const ctx = deps.getLogContext(ticket);
          const rawPart = ticket.parts_needed || 'peça';
-         const part = `<span class="text-brand-500 font-bold">${deps.escapeHtml(rawPart)}</span>`;
+         const part = `"${rawPart}"`;
          await deps.updateStatus(ticket, 'Andamento Reparo', {
              parts_status: 'Recebido',
              parts_received_at: new Date().toISOString()
@@ -523,14 +523,14 @@ window.AIDATicketActions = {
 
         // For this specific action, we don't want the (Terceirizado: X) suffix in the context
         // because the log message already says "recebido da X".
-        const safeClientName = deps.escapeHtml(ticket.client_name);
-        const safeOsNumber = deps.escapeHtml(ticket.os_number);
-        const safeDevice = deps.escapeHtml(ticket.device_model);
+        const safeClientName = ticket.client_name || '';
+        const safeOsNumber = ticket.os_number || '';
+        const safeDevice = ticket.device_model || '';
 
         // Custom context without duplication
         const cleanContext = {
-            client: `<b>${safeClientName} da OS ${safeOsNumber}</b>`,
-            device: `<b>${safeDevice}</b>`
+            client: `${safeClientName} da OS ${safeOsNumber}`,
+            device: `${safeDevice}`
         };
 
         const companyName = deps.getOutsourcedCompany(ticket.outsourced_company_id);
@@ -539,7 +539,7 @@ window.AIDATicketActions = {
             test_start_at: null // Reset test status to ensure "Start Test" appears
         }, {
             action: 'Recebeu de Terceiro',
-            details: `${cleanContext.device} de ${cleanContext.client} recebido da ${companyName}. Enviado para testes.`
+            details: `O aparelho ${cleanContext.device} de ${cleanContext.client} foi recebido da parceira ${companyName} e enviado para testes.`
         });
     },
 
@@ -585,11 +585,10 @@ window.AIDATicketActions = {
         const updatedPurchases = [...currentPurchases, purchaseData];
 
         let itemsStr = deps.state.purchaseFlow.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
-        const itemsHtml = `<span class="text-brand-500 font-bold">${deps.escapeHtml(itemsStr)}</span>`;
 
         const actionLog = {
             action: 'Confirmou Compra',
-            details: `Compra de ${itemsHtml} do fornecedor <b>${deps.escapeHtml(supplier.razao_social)}</b> para o ${ctx.device} de ${ctx.client} foi realizada.`
+            details: `Compra de "${itemsStr}" do fornecedor "${supplier.razao_social || 'Desconhecido'}" para o ${ctx.device} de ${ctx.client} foi realizada.`
         };
 
         const updates = {
