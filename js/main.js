@@ -1940,13 +1940,17 @@ function app() {
         // SCHEDULING METHODS
         // ==========================================
         openSchedulePanel(mode) {
-            if (!this.ticketForm.technician_id || this.ticketForm.technician_id === 'all') {
-                return this.notify("Selecione um técnico específico primeiro.", "error");
+            // No Kanban mode (viewTicket modal is open), the technician is derived from selectedTicket.
+            // In creation mode, it's ticketForm.technician_id.
+            const targetTechId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
+
+            if (!targetTechId || targetTechId === 'all') {
+                return this.notify("Selecione/Alocado a um técnico específico primeiro.", "error");
             }
             this.schedulePanelMode = mode;
             this.scheduleCurrentWeekStart = new Date(); // Start with current week
             this.schedulePanelOpen = true;
-            this.fetchScheduleAvailability();
+            this.fetchScheduleAvailability(targetTechId);
         },
 
         getTechnicianName(techId) {
@@ -1955,8 +1959,9 @@ function app() {
             return tech ? tech.name : 'Técnico Desconhecido';
         },
 
-        async fetchScheduleAvailability() {
-            if (!this.ticketForm.technician_id || this.ticketForm.technician_id === 'all') return;
+        async fetchScheduleAvailability(targetTechId = null) {
+            const techId = targetTechId || (this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id);
+            if (!techId || techId === 'all') return;
 
             this.scheduleAvailabilityLoading = true;
             this.scheduleAvailabilityData = [];
@@ -1967,7 +1972,7 @@ function app() {
                 const localISOTime = (new Date(this.scheduleCurrentWeekStart - tzOffset)).toISOString().slice(0, -1);
                 const refDate = localISOTime.split('T')[0];
                 const response = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
-                    p_technician_id: this.ticketForm.technician_id,
+                    p_technician_id: techId,
                     p_mode: this.schedulePanelMode,
                     p_reference_date: refDate,
                     p_days: 7
@@ -2248,13 +2253,13 @@ function app() {
                 const conflicts = [];
 
                 // Only evaluate if we have a technician and capacity loaded for the current view
-                if (techId && this.scheduleManagement.capacitySummary && (this.scheduleManagement.capacitySummary.booked >= this.scheduleManagement.capacitySummary.total)) {
+                if (filterTechId && this.scheduleManagement.capacitySummary && (this.scheduleManagement.capacitySummary.booked >= this.scheduleManagement.capacitySummary.total)) {
                     const viewDateLimit = new Date(this.scheduleManagement.referenceDate);
                     viewDateLimit.setHours(23, 59, 59, 999);
 
                     for (const item of uniqueItems) {
                         // Skip if it's not assigned to the completely booked technician
-                        if (item.technician_id !== techId) continue;
+                        if (item.technician_id !== filterTechId) continue;
 
                         const deadlineToCheck = item.status === 'Analise Tecnica' ? item.analysis_deadline : item.deadline;
                         if (!deadlineToCheck) continue;

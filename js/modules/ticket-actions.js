@@ -144,7 +144,7 @@ window.AIDATicketActions = {
 
         // Se aprovou sem compra de peças, já inicia fluxo para agendar reparo
         if (!ticket.parts_needed && !ticket.repair_scheduled) {
-            deps.state.openScheduleModalFromSidebar(ticket);
+            deps.state.openSchedulePanel('repair');
         }
     },
 
@@ -168,7 +168,7 @@ window.AIDATicketActions = {
 
          // Se não há agendamento de reparo ativo, sugere criar
          if (!ticket.repair_scheduled) {
-             deps.state.openScheduleModalFromSidebar(ticket);
+             deps.state.openSchedulePanel('repair');
          }
     },
 
@@ -459,7 +459,7 @@ window.AIDATicketActions = {
             deps.notify("Retornado para reparo com urgência!");
             // Aciona fluxo visual de Agendamento do Novo Reparo (Cenario de Retrabalho)
             if (!ticket.repair_scheduled) {
-                deps.state.openScheduleModalFromSidebar(ticket);
+                deps.state.openSchedulePanel('repair');
             }
         }
     },

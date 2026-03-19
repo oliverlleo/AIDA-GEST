@@ -5071,7 +5071,7 @@
             <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.viewTicket = false"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
-            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full duration-300 ease-in-out" :class="schedulePanelOpen ? '-translate-x-32 sm:-translate-x-48' : ''">
 
                 <template x-if="selectedTicket">
                 <div x-data="{ tab: 'details' }">
@@ -5142,8 +5142,11 @@
                                 <div x-show="canExecuteAction(selectedTicket, 'startTicketAnalysis')" class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-center">
                                     <h4 class="font-bold text-yellow-800 mb-2">Iniciar Procedimento</h4>
                                     <p class="text-xs text-yellow-700 mb-3">Clique abaixo para registrar o início oficial da análise técnica.</p>
-                                    <button @click="startTicketAnalysis(selectedTicket)" class="bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-yellow-700 text-sm shadow flex items-center justify-center w-full">
+                                    <button @click="startTicketAnalysis(selectedTicket)" class="bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-yellow-700 text-sm shadow flex items-center justify-center w-full mb-3">
                                         <i class="fa-solid fa-play mr-2"></i> Iniciar Análise
+                                    </button>
+                                    <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                        <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
                                     </button>
                                 </div>
 
@@ -5243,7 +5246,7 @@
                                     </button>
                                 </div>
 
-                                <button type="button" @click="openScheduleModalFromSidebar(selectedTicket)" x-show="selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
@@ -5270,7 +5273,7 @@
                                     <div class="text-xl font-mono font-bold text-gray-800" x-text="getDuration(selectedTicket.repair_start_at)"></div>
                                 </div>
 
-                                <button type="button" @click="openScheduleModalFromSidebar(selectedTicket)" x-show="!selectedTicket.repair_scheduled && canExecuteAction(selectedTicket, 'startRepair')" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="!selectedTicket.repair_scheduled && canExecuteAction(selectedTicket, 'startRepair')" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo (Retrabalho)
                                 </button>
                             </div>
@@ -6081,7 +6084,7 @@
 
     <!-- 5. OUTCOME MODAL (Success/Fail Logic) -->
     <div x-show="modals.outcome" class="fixed inset-0 z-[80] flex items-center justify-center" x-cloak>
-        <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.outcome = false"></div>
+        <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.outcome = false"></div>
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md z-10 relative">
             <h3 class="text-lg font-bold mb-4" x-text="outcomeMode === 'repair' ? 'Finalizar Reparo' : 'Concluir Testes'"></h3>
 
