@@ -3135,12 +3135,16 @@ function app() {
         async refreshPostMutation(forceListRefetch = false) {
             // Se foi especificado um refetch forçado (ex: createTicket) OU
             // se estivermos em uma view operacional que depende de consistência forte na UI após ações
-            // (kanban, tech_orders, tester_bench, admin_dashboard), disparamos o fetch.
-            const operationalViews = ['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'];
+            // (kanban, tech_orders, tester_bench, admin_dashboard, home/dashboard), disparamos o fetch.
+            const operationalViews = ['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard', 'home', 'dashboard'];
             const needsFetch = forceListRefetch || operationalViews.includes(this.view);
 
             if (needsFetch) {
-                 await this.fetchTickets();
+                 if (this.view === 'dashboard' || this.view === 'home') {
+                     await this.fetchHomeOperationalQueue();
+                 } else {
+                     await this.fetchTickets();
+                 }
             }
 
             // Atualiza métricas ou alertas complementares dependendo da view
