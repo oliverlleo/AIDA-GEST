@@ -3254,6 +3254,20 @@
                                                         </div>
                                                     </template>
 
+                                                    <!-- Reparo -->
+                                                    <template x-if="ticket.status === 'Andamento Reparo'">
+                                                        <div class="space-y-2">
+                                                            <template x-if="!ticket.repair_scheduled">
+                                                                <button @click.stop="openScheduleModalFromSidebar(ticket)" class="w-full border border-brand-200 bg-brand-50 text-brand-700 text-[11px] font-bold py-1.5 rounded hover:bg-brand-100 flex justify-center items-center gap-1.5 transition-colors shadow-sm">
+                                                                    <i class="fa-regular fa-calendar-plus"></i> Agendar Reparo
+                                                                </button>
+                                                            </template>
+                                                            <button @click.stop="openOutcomeModal('repair', ticket)" class="w-full bg-orange-50 text-orange-600 text-xs font-bold py-2 rounded hover:bg-orange-100 transition-colors">
+                                                                <i class="fa-solid fa-flag-checkered mr-1"></i> Finalizar
+                                                            </button>
+                                                        </div>
+                                                    </template>
+
                                                     <!-- Teste Final -->
                                                     <template x-if="ticket.status === 'Teste Final'">
                                                         <div>
@@ -3575,6 +3589,10 @@
                                                         <span x-text="getDuration(ticket.repair_start_at)"></span>
                                                     </div>
                                                 </template>
+
+                                                <button type="button" @click.stop="openScheduleModalFromSidebar(ticket)" x-show="!ticket.repair_scheduled" class="w-full px-2 py-1.5 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-[10px] font-bold flex items-center justify-center transition-colors">
+                                                    <i class="fa-regular fa-calendar-plus mr-1"></i> Agendar Reparo
+                                                </button>
                                             </div>
                                         </div>
                                      </div>
@@ -5149,6 +5167,9 @@
                                         <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
                                     </button>
                                 </div>
+                                <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled && !canExecuteAction(selectedTicket, 'startTicketAnalysis')" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors mt-2">
+                                    <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
+                                </button>
 
                                 <!-- Step 2.2: Finish Analysis (Only if started) -->
                                 <div x-show="canExecuteAction(selectedTicket, 'finishAnalysis')" class="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -5273,8 +5294,8 @@
                                     <div class="text-xl font-mono font-bold text-gray-800" x-text="getDuration(selectedTicket.repair_start_at)"></div>
                                 </div>
 
-                                <button type="button" @click="openSchedulePanel('repair')" x-show="!selectedTicket.repair_scheduled && canExecuteAction(selectedTicket, 'startRepair')" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
-                                    <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo (Retrabalho)
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="!selectedTicket.repair_scheduled" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors mb-2">
+                                    <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
                         </template>

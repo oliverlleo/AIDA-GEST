@@ -1945,7 +1945,8 @@ function app() {
             const targetTechId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
 
             if (!targetTechId || targetTechId === 'all') {
-                return this.notify("Selecione/Alocado a um técnico específico primeiro.", "error");
+                // Ao invés de travar com erro, vamos usar a variável global ou abortar graciosamente alertando pra trocar pelo modal inteiro
+                return this.notify("O chamado precisa estar alocado a um técnico para agendar usando este atalho de calendário lateral. Tente alterar o técnico ou agendar via painel 'Gerenciamento de Agenda'.", "error");
             }
             this.schedulePanelMode = mode;
             this.scheduleCurrentWeekStart = new Date(); // Start with current week
@@ -2041,19 +2042,52 @@ function app() {
             return `${parts[0]}:${parts[1]}`;
         },
 
-        selectScheduleSlot(dateStr, slot) {
+        async selectScheduleSlot(dateStr, slot) {
+            const techId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
+
             const appointmentData = {
                 date: dateStr,
                 start: this.extractTime(slot.start),
                 end: this.extractTime(slot.end),
                 status: slot.status,
-                technician_id: this.ticketForm.technician_id
+                technician_id: techId
             };
 
-            if (this.schedulePanelMode === 'analysis') {
-                this.selectedAnalysisAppointment = appointmentData;
-            } else if (this.schedulePanelMode === 'repair') {
-                this.selectedRepairAppointment = appointmentData;
+            if (this.modals.viewTicket && this.selectedTicket) {
+                // Em modo de edição de ticket, clicar no calendário lateral salva a RPC diretamente.
+                this.loading = true;
+                try {
+                    const startStr = this.toUTC(`${dateStr}T${appointmentData.start}`);
+                    const endStr = this.toUTC(`${dateStr}T${appointmentData.end}`);
+
+                    await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                        p_ticket_id: this.selectedTicket.id,
+                        p_technician_id: techId,
+                        p_appointment_type: this.schedulePanelMode,
+                        p_scheduled_start: startStr,
+                        p_scheduled_end: endStr,
+                        p_notes: 'Agendado pelo painel lateral'
+                    });
+
+                    // Update state reativamente pro botão sumir na mesma hora
+                    if (this.schedulePanelMode === 'analysis') this.selectedTicket.analysis_scheduled = true;
+                    if (this.schedulePanelMode === 'repair') this.selectedTicket.repair_scheduled = true;
+
+                    this.notify("Agendamento criado com sucesso!");
+                    this.fetchTicketAppointments(this.selectedTicket.id); // Atualiza aba de Agendamentos histórico
+                } catch (e) {
+                    console.error("Erro ao salvar agendamento:", e);
+                    this.notify("Falha ao salvar agendamento.", "error");
+                } finally {
+                    this.loading = false;
+                }
+            } else {
+                // Em modo de Criação de Ticket, apenas guarda no buffer
+                if (this.schedulePanelMode === 'analysis') {
+                    this.selectedAnalysisAppointment = appointmentData;
+                } else if (this.schedulePanelMode === 'repair') {
+                    this.selectedRepairAppointment = appointmentData;
+                }
             }
 
             this.schedulePanelOpen = false;
