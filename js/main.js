@@ -321,6 +321,7 @@ function app() {
         newTemplateNameFinal: '',
 
         // UI State for Actions
+        selectedTicketAppointments: [],
         analysisForm: { needsParts: false, partsList: '' },
         outcomeMode: '',
         showTestFailureForm: false,
@@ -382,6 +383,7 @@ function app() {
         // Scheduling Management View State
         scheduleManagement: {
             selectedTechnicianId: '',
+            gridTechnicianId: '', // Added so clicking a card updates grid without affecting dropdown
             viewMode: 'week', // 'day' or 'week'
             referenceDate: new Date().toLocaleDateString('en-CA'),
             slotActionPopover: { open: false, date: '', slot: null, x: 0, y: 0 },
@@ -2071,6 +2073,7 @@ function app() {
         // ==========================================
         async loadScheduleManagement() {
             this.scheduleManagement.loading = true;
+            this.scheduleManagement.gridTechnicianId = this.scheduleManagement.selectedTechnicianId;
 
             const tasks = [];
 
@@ -2078,7 +2081,7 @@ function app() {
             tasks.push(this.fetchUnscheduledTickets());
 
             // 2. Manager schedule only loads if a tech is selected
-            if (this.scheduleManagement.selectedTechnicianId) {
+            if (this.scheduleManagement.gridTechnicianId) {
                 this.scheduleManagement.data = [];
                 this.scheduleManagement.capacitySummary = { booked: 0, total: 0 };
                 tasks.push(this.fetchManagerSchedule());
@@ -2092,6 +2095,13 @@ function app() {
             this.scheduleManagement.loading = false;
         },
 
+        previewTechnicianSchedule(ticket) {
+            if (ticket.technician_id) {
+                this.scheduleManagement.gridTechnicianId = ticket.technician_id;
+                this.fetchManagerSchedule();
+            }
+        },
+
         async fetchManagerSchedule() {
             try {
                 const refDate = new Date(this.scheduleManagement.referenceDate);
@@ -2099,7 +2109,7 @@ function app() {
                 const localDateStr = (new Date(refDate.getTime() - tzOffset)).toISOString().split('T')[0];
 
                 const response = await this.supabaseFetch('rpc/get_schedule_dashboard', 'POST', {
-                    p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                    p_technician_id: this.scheduleManagement.gridTechnicianId,
                     p_view: this.scheduleManagement.viewMode,
                     p_reference_date: localDateStr
                 });
@@ -2112,7 +2122,7 @@ function app() {
                     // Como a RPC original (get_schedule_availability) estrutura dias e slots perfeitamente,
                     // precisamos chamar a RPC de availability se a dashboard não nos der `days`.
                     const availResponse = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
-                        p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                        p_technician_id: this.scheduleManagement.gridTechnicianId,
                         p_mode: 'all',
                         p_reference_date: localDateStr,
                         p_days: this.scheduleManagement.viewMode === 'day' ? 1 : 7
@@ -2184,72 +2194,42 @@ function app() {
             this.scheduleManagement.lateWithoutScheduleTotal = 0;
 
             try {
-                const techId = this.scheduleManagement.selectedTechnicianId;
-                const requests = [];
+                const filterTechId = this.scheduleManagement.selectedTechnicianId;
 
-                // 1. Fetch tickets with NO technician assigned (always visible for management queue)
-                requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                // Sempre puxamos a lista geral de não agendados enviando null
+                // porque queremos que a lateral se comporte como se não houvesse filtro caso techId = ''
+                const response = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
                     p_technician_id: null,
                     p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
                     p_status: null,
-                    p_limit: 200,
+                    p_limit: 500,
                     p_offset: 0
-                }));
-
-                // 2. Fetch tickets assigned specifically to the selected technician
-                if (techId) {
-                    requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
-                        p_technician_id: techId,
-                        p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
-                        p_status: null,
-                        p_limit: 200,
-                        p_offset: 0
-                    }));
-                } else {
-                    requests.push(Promise.resolve({ items: [], total: 0 }));
-                }
-
-                const [noTechRes, techRes] = await Promise.all(requests);
+                });
 
                 let allItems = [];
-
-                // Depending on the backend implementation, `p_technician_id: null` might return
-                // specifically unassigned tickets OR all unscheduled tickets. We filter to be safe.
-                if (noTechRes && typeof noTechRes === 'object' && noTechRes.items) {
-                    const purelyUnassigned = noTechRes.items.filter(t => !t.technician_id);
-                    this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
-                    this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
-
-                    // If no technician is selected, we want to see ALL unscheduled in the main list
-                    // that are assigned to ANY technician.
-                    if (!techId) {
-                        const assignedUnscheduled = noTechRes.items.filter(t => t.technician_id);
-                        this.scheduleManagement.unscheduledItems = assignedUnscheduled;
-                        this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
-                        allItems = [...noTechRes.items];
-                    } else {
-                        allItems = [...purelyUnassigned];
-                    }
+                if (response && typeof response === 'object' && response.items) {
+                    allItems = response.items;
                 }
 
-                if (techId && techRes && typeof techRes === 'object' && techRes.items) {
-                    this.scheduleManagement.unscheduledItems = techRes.items;
-                    this.scheduleManagement.unscheduledTotal = techRes.total || techRes.items.length;
-                    allItems = [...allItems, ...techRes.items];
+                // O usuário pediu: se não tem técnico selecionado, aparece todos os cards (de todos os técnicos)
+                // Se TEM técnico selecionado no select lá em cima, filtramos a lateral SOMENTE para aquele técnico e os SEM TÉCNICO.
+                let filteredItems = allItems;
+                if (filterTechId) {
+                    filteredItems = allItems.filter(t => !t.technician_id || t.technician_id === filterTechId);
                 }
 
-                // 3. Late Without Schedule (Derived)
+                // Sem Técnico Block
+                const purelyUnassigned = filteredItems.filter(t => !t.technician_id);
+                this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
+                this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
+
+                // Com Técnico (Não Agendados)
+                const assignedUnscheduled = filteredItems.filter(t => t.technician_id);
+                this.scheduleManagement.unscheduledItems = assignedUnscheduled;
+                this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
+
                 const now = new Date();
-
-                // Deduplicate for derivation
-                const uniqueItems = [];
-                const map = new Map();
-                for (const item of allItems) {
-                    if (!map.has(item.id)) {
-                        map.set(item.id, true);
-                        uniqueItems.push(item);
-                    }
-                }
+                const uniqueItems = filteredItems;
 
                 const lateItems = uniqueItems.filter(t => {
                     const deadlineToCheck = t.status === 'Analise Tecnica' ? t.analysis_deadline : t.deadline;
@@ -2792,6 +2772,7 @@ function app() {
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
 
             this.fetchInternalNotes(ticket.id);
+            this.fetchTicketAppointments(ticket.id);
             this.newNoteText = '';
             this.noteIsChecklist = false;
             this.noteChecklistItems = [];
@@ -2952,6 +2933,18 @@ function app() {
         },
 
         // --- INTERNAL NOTES SYSTEM ---
+
+        async fetchTicketAppointments(ticketId) {
+            try {
+                this.selectedTicketAppointments = [];
+                const response = await this.supabaseFetch('rpc/get_ticket_appointments', 'POST', { p_ticket_id: ticketId });
+                if (response && Array.isArray(response)) {
+                    this.selectedTicketAppointments = response;
+                }
+            } catch (error) {
+                console.error("Error fetching ticket appointments:", error);
+            }
+        },
 
         async fetchInternalNotes(ticketId) {
             return await window.AIDANotesService.fetchInternalNotes(ticketId, {

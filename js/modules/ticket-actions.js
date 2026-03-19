@@ -131,6 +131,8 @@ window.AIDATicketActions = {
             parts_needed: deps.state.analysisForm.partsList,
             tech_notes: techNotes
         }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
+
+        await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
     },
 
     async approveRepair(ticketOrId, deps) {
@@ -306,6 +308,7 @@ window.AIDATicketActions = {
             action: 'Iniciou Atendimento',
             details: `${ctx.device} de ${ctx.client} enviado para análise do técnico.`
         });
+        await deps.supabaseFetch('rpc/start_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
     },
 
     async startTicketAnalysis(ticket, deps) {
@@ -315,6 +318,7 @@ window.AIDATicketActions = {
             await deps.supabaseFetch('rpc/start_ticket_analysis', 'POST', {
                 p_ticket_id: ticket.id
             });
+            await deps.supabaseFetch('rpc/start_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
 
             // Update Local State
             if (deps.state.selectedTicket && deps.state.selectedTicket.id === ticket.id) {
@@ -343,6 +347,7 @@ window.AIDATicketActions = {
         };
         const now = new Date().toISOString();
         await deps.mutateTicket(ticket, 'startRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
+        await deps.supabaseFetch('rpc/start_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'repair' });
     },
 
     async finishRepair(success, deps) {
@@ -366,6 +371,8 @@ window.AIDATicketActions = {
             action: 'Finalizou Reparo',
             details: detailMsg
         });
+
+        await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'repair' });
     },
 
     async startTest(ticketOrId, deps) {
@@ -448,7 +455,12 @@ window.AIDATicketActions = {
                 status: 'Andamento Reparo',
                 test_notes: updatedNotes
             }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Defeito: ' + deps.state.testFailureData.reason });
+
             deps.notify("Retornado para reparo com urgência!");
+            // Aciona fluxo visual de Agendamento do Novo Reparo (Cenario de Retrabalho)
+            if (!ticket.repair_scheduled) {
+                deps.state.openScheduleModalFromSidebar(ticket);
+            }
         }
     },
 
