@@ -45,6 +45,7 @@ DECLARE
   v_eb_end_ts timestamp with time zone;
   v_eb_recurrence_type text;
   v_eb_recurrence_days jsonb;
+  v_eb_specific_date date;
   v_eb_matches_day boolean;
   v_slot_in_extra_break boolean;
 BEGIN
@@ -132,6 +133,14 @@ BEGIN
                           ELSIF v_eb_recurrence_type = 'specific_days' THEN
                               IF v_eb_recurrence_days IS NOT NULL AND v_eb_recurrence_days @> to_jsonb(v_dow) THEN
                                   v_eb_matches_day := true;
+                              END IF;
+                          ELSIF v_eb_recurrence_type = 'none' THEN
+                              -- Não recorrente, checa apenas a data especifica
+                              IF v_eb->>'specific_date' IS NOT NULL THEN
+                                  v_eb_specific_date := (v_eb->>'specific_date')::date;
+                                  IF v_current_date = v_eb_specific_date THEN
+                                      v_eb_matches_day := true;
+                                  END IF;
                               END IF;
                           END IF;
 

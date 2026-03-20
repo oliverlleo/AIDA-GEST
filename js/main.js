@@ -2507,12 +2507,21 @@ function app() {
             if (!this.scheduleManagement.techConfig.extraBreaks) {
                 this.scheduleManagement.techConfig.extraBreaks = [];
             }
+
+            // Generate today's date in YYYY-MM-DD format
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const formattedToday = `${yyyy}-${mm}-${dd}`;
+
             this.scheduleManagement.techConfig.extraBreaks.push({
                 active: true,
                 name: 'Novo Intervalo',
                 start: '15:00',
                 end: '15:30',
-                recurrence_type: 'daily',
+                recurrence_type: 'none',
+                specific_date: formattedToday,
                 recurrence_days: []
             });
         },
@@ -2574,6 +2583,7 @@ function app() {
                     hasBreak: this.scheduleManagement.techConfig.hasBreak,
                     breakStart: this.scheduleManagement.techConfig.breakStart,
                     breakEnd: this.scheduleManagement.techConfig.breakEnd,
+                    extraBreaks: this.scheduleManagement.techConfig.extraBreaks || [],
                     slotDuration: this.scheduleManagement.techConfig.slotDuration,
                     maxConcurrent: this.scheduleManagement.techConfig.maxConcurrent
                 };

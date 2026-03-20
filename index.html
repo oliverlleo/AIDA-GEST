@@ -4327,11 +4327,18 @@
                                                 <div class="col-span-2">
                                                     <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Repetição</label>
                                                     <select x-model="eb.recurrence_type" class="w-full border border-gray-300 rounded p-2 text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                                                        <option value="none">Data Específica (Não repete)</option>
                                                         <option value="daily">Todos os dias</option>
                                                         <option value="weekdays">Dias úteis (Seg-Sex)</option>
-                                                        <option value="specific_days">Dias Específicos</option>
+                                                        <option value="specific_days">Dias Específicos da Semana</option>
                                                     </select>
                                                 </div>
+                                            </div>
+
+                                            <!-- Seleção de Data Específica -->
+                                            <div x-show="eb.recurrence_type === 'none'" class="pt-2 border-t border-gray-200 mt-2">
+                                                <label class="block text-[10px] font-bold text-gray-500 mb-2 uppercase">Qual data?</label>
+                                                <input type="date" x-model="eb.specific_date" class="w-full border border-gray-300 rounded p-2 text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none max-w-xs">
                                             </div>
 
                                             <!-- Seleção de Dias Específicos -->
