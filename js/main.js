@@ -1774,9 +1774,13 @@ function app() {
                             relevantTickets = relevantTickets.filter(t => t.technician_id == this.user.id || t.technician_id == null);
                         }
 
-                        this.techTickets = relevantTickets.filter(t =>
-                            ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
-                        ).sort((a, b) => {
+                        this.techTickets = relevantTickets.filter(t => {
+                            const testFlow = this.trackerConfig?.test_flow || 'kanban';
+                            const allowedStatuses = testFlow === 'technician' ?
+                                ['Analise Tecnica', 'Andamento Reparo', 'Teste Final'] :
+                                ['Analise Tecnica', 'Andamento Reparo'];
+                            return allowedStatuses.includes(t.status);
+                        }).sort((a, b) => {
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
                             const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
@@ -3472,7 +3476,10 @@ function app() {
             }
 
             if (!this.showAllCalendarTickets) {
-                const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
+                const testFlow = this.trackerConfig?.test_flow || 'kanban';
+                const techStatuses = testFlow === 'technician' ?
+                    ['Analise Tecnica', 'Andamento Reparo', 'Teste Final'] :
+                    ['Analise Tecnica', 'Andamento Reparo'];
                 source = source.filter(t => techStatuses.includes(t.status));
             }
             return source;
