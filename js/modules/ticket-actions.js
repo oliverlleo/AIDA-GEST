@@ -502,6 +502,7 @@ window.AIDATicketActions = {
                 outsourced_deadline: deps.toUTC(deps.state.outsourcedForm.deadline),
                 outsourced_company_id: companyId,
                 is_outsourced: true,
+                outsourced_at: new Date().toISOString(),
                 // If moving from Aberto, ensure analysis logic is skipped or marked as handled externally
                 status: 'Terceirizado'
             }, {
