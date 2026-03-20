@@ -20,6 +20,32 @@ try {
 let isUnloading = false;
 window.addEventListener('beforeunload', () => { isUnloading = true; });
 
+
+// ==========================================
+// GLOBAL UI HELPERS (XSS SAFE)
+// ==========================================
+window.formatLogDetails = function(text) {
+    if (!text) return '';
+
+    // 1. Convert plain text unsafe chars first to prevent arbitrary HTML injection
+    let html = String(text).replace(/&/g, "&amp;")
+                   .replace(/</g, "&lt;")
+                   .replace(/>/g, "&gt;")
+                   .replace(/"/g, "&quot;")
+                   .replace(/'/g, "&#039;");
+
+    // 2. Restore previously valid and safe tags (for old DB records)
+    // Example: &lt;span class=&quot;text-brand-500 font-bold&quot;&gt;tela&lt;/span&gt;
+    html = html.replace(/&lt;span class=&quot;([^&quot;]+)&quot;&gt;(.*?)&lt;\/span&gt;/gi, '<span class="$1">$2</span>');
+    html = html.replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, '<b>$1</b>');
+
+    // 3. Restore new markdown-style **bold** tags for future logs
+    html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+    return html;
+};
+
+
 function app() {
     return {
         // State
@@ -711,8 +737,7 @@ function app() {
         },
 
         async init() {
-            window.formatLogDetails = this.formatLogDetails.bind(this);
-                if (this.initInFlight) return;
+            if (this.initInFlight) return;
             this.initInFlight = true;
 
             console.log("App initializing...");
@@ -1260,35 +1285,6 @@ function app() {
 
         async loginEmployee() {
             return await window.AIDAAuthSessionService.loginEmployee(this._getAuthDeps());
-        },
-
-        async
-
-    // ----------------------------------------------------
-    // UI Helpers
-    // ----------------------------------------------------
-        // ----------------------------------------------------
-        // UI Helpers
-        // ----------------------------------------------------
-        formatLogDetails(text) {
-            if (!text) return '';
-
-            // 1. Convert plain text unsafe chars first to prevent arbitrary HTML injection
-            let html = String(text).replace(/&/g, "&amp;")
-                           .replace(/</g, "&lt;")
-                           .replace(/>/g, "&gt;")
-                           .replace(/"/g, "&quot;")
-                           .replace(/'/g, "&#039;");
-
-            // 2. Restore previously valid and safe tags (for old DB records)
-            // Example: &lt;span class=&quot;text-brand-500 font-bold&quot;&gt;tela&lt;/span&gt;
-            html = html.replace(/&lt;span class=&quot;([^&quot;]+)&quot;&gt;(.*?)&lt;\/span&gt;/gi, '<span class="$1">$2</span>');
-            html = html.replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, '<b>$1</b>');
-
-            // 3. Restore new markdown-style **bold** tags for future logs
-            html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-
-            return html;
         },
 
         async logout() {
