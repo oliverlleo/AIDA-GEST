@@ -67,8 +67,8 @@ window.AIDAWorkflowRules = {
                 return isAdmin || isAttendant || isTech;
             case 'markDelivered':
             case 'confirmCarrier': // Equivalent to final mile in logistics
-                if (status !== 'Retirada Cliente' || !ticket.pickup_available) return false;
-                return isAdmin || isAttendant;
+                if (status !== 'Retirada Cliente') return false;
+                return isAdmin || isAttendant || isTech;
             case 'receiveFromOutsourced':
             case 'cobrarOutsourced':
                 if (status !== 'Terceirizado') return false;
