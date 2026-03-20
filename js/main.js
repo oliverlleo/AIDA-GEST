@@ -2503,6 +2503,33 @@ function app() {
             this.modals.techScheduleSettings = true;
         },
 
+        addExtraBreak() {
+            if (!this.scheduleManagement.techConfig.extraBreaks) {
+                this.scheduleManagement.techConfig.extraBreaks = [];
+            }
+
+            // Generate today's date in YYYY-MM-DD format
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const formattedToday = `${yyyy}-${mm}-${dd}`;
+
+            this.scheduleManagement.techConfig.extraBreaks.push({
+                active: true,
+                name: 'Novo Intervalo',
+                start: '15:00',
+                end: '15:30',
+                recurrence_type: 'none',
+                specific_date: formattedToday,
+                recurrence_days: []
+            });
+        },
+
+        removeExtraBreak(index) {
+            this.scheduleManagement.techConfig.extraBreaks.splice(index, 1);
+        },
+
         closeTechConfigModal() {
             this.modals.techScheduleSettings = false;
         },
@@ -2533,6 +2560,7 @@ function app() {
                         hasBreak: s.hasBreak !== undefined ? s.hasBreak : true,
                         breakStart: s.breakStart || '12:00',
                         breakEnd: s.breakEnd || '13:00',
+                        extraBreaks: s.extraBreaks || [],
                         slotDuration: s.slotDuration || 30,
                         maxConcurrent: s.maxConcurrent || 1
                     };
@@ -2555,6 +2583,7 @@ function app() {
                     hasBreak: this.scheduleManagement.techConfig.hasBreak,
                     breakStart: this.scheduleManagement.techConfig.breakStart,
                     breakEnd: this.scheduleManagement.techConfig.breakEnd,
+                    extraBreaks: this.scheduleManagement.techConfig.extraBreaks || [],
                     slotDuration: this.scheduleManagement.techConfig.slotDuration,
                     maxConcurrent: this.scheduleManagement.techConfig.maxConcurrent
                 };
