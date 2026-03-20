@@ -3911,13 +3911,13 @@ function app() {
             const safeOsNumber = ticket.os_number || '';
             const safeDevice = ticket.device_model || '';
 
-            let client = `${safeClientName} da OS ${safeOsNumber}`;
-            const device = `${safeDevice}`;
+            let client = `**${safeClientName}** da OS **${safeOsNumber}**`;
+            const device = `**${safeDevice}**`;
 
             // Add outsourced context if applicable as requested by user
             if (ticket.is_outsourced && ticket.outsourced_company_id) {
                 const company = this.getOutsourcedCompany(ticket.outsourced_company_id);
-                client += ` (Terceirizado: ${company})`;
+                client += ` (Terceirizado: **${company}**)`;
             }
 
             return { client, device };
