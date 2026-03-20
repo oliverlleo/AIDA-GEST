@@ -82,7 +82,11 @@ window.AIDATicketQueryService = {
             } else if (state.user?.id) {
                  endpoint += `&or=(technician_id.eq.${state.user.id},technician_id.is.null)`;
             }
-            endpoint += `&status=in.(Analise Tecnica,Andamento Reparo)`;
+            if (state.getTestFlowMode && state.getTestFlowMode() === 'technician') {
+                endpoint += `&status=in.(Analise Tecnica,Andamento Reparo,Teste Final)`;
+            } else {
+                endpoint += `&status=in.(Analise Tecnica,Andamento Reparo)`;
+            }
             endpoint += `&order=created_at.asc`;
         } else {
             // Dashboard/History/List: Apply Filters & Pagination
