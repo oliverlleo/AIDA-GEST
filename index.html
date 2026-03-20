@@ -620,7 +620,7 @@
                                                     </div>
                                                     <!-- Content Column -->
                                                     <div class="flex-grow p-3 bg-white transition-colors cursor-pointer"
-                                                         :class="{'hover:bg-brand-50': slot.status === 'livre', 'bg-stripes-gray': slot.status === 'bloqueado', 'bg-red-50 border-red-200': slot.status === 'lotado'}"
+                                                         :class="{'hover:bg-brand-50': slot.status === 'livre', 'bg-stripes-gray': slot.status === 'bloqueado' || slot.status === 'passado', 'bg-red-50 border-red-200': slot.status === 'lotado'}"
                                                          @click="handleManagerSlotClick(scheduleManagement.data[0].date, slot, $event)">
 
                                                         <template x-if="slot.status === 'livre'">
@@ -697,7 +697,7 @@
                                                         <div class="border rounded bg-white text-xs p-2 cursor-pointer transition-colors relative group"
                                                              :class="{
                                                                 'border-gray-200 hover:border-brand-300 hover:shadow-sm': slot.status === 'livre',
-                                                                'border-gray-300 bg-stripes-gray': slot.status === 'bloqueado',
+                                                                'border-gray-300 bg-stripes-gray': slot.status === 'bloqueado' || slot.status === 'passado',
                                                                 'border-red-200 bg-red-50': slot.status === 'lotado'
                                                              }"
                                                              @click="handleManagerSlotClick(day.date, slot, $event)">
@@ -706,7 +706,7 @@
                                                                 <span class="font-bold font-mono text-gray-600" x-text="formatTimeOnly(slot.start)"></span>
                                                                 <span x-show="slot.status === 'livre'" class="w-1.5 h-1.5 rounded-full bg-green-400" title="Livre"></span>
                                                                 <span x-show="slot.status === 'ocupado' || slot.status === 'lotado'" class="w-1.5 h-1.5 rounded-full bg-red-500" title="Ocupado/Lotado"></span>
-                                                                <span x-show="slot.status === 'bloqueado'" class="text-gray-400" title="Bloqueado"><i class="fa-solid fa-lock text-[8px]"></i></span>
+                                                                <span x-show="slot.status === 'bloqueado' || slot.status === 'passado'" class="text-gray-400" title="Indisponível"><i class="fa-solid fa-lock text-[8px]"></i></span>
                                                             </div>
 
                                                             <!-- Appointments Summary in Week View -->
@@ -4433,7 +4433,7 @@
                     <div class="grid grid-cols-2 gap-4 mb-4">
                         <div class="col-span-2">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Data do Bloqueio</label>
-                            <input type="date" x-model="scheduleManagement.editingBlock.date" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                            <input type="date" :min="new Date().toLocaleDateString('en-CA')" x-model="scheduleManagement.editingBlock.date" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none text-sm">
                         </div>
 
                         <!-- Time / Full Day Toggle -->
@@ -4477,7 +4477,7 @@
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-xs font-bold text-gray-500 mb-1">Data Fim da Recorrência (Opcional)</label>
-                                <input type="date" x-model="scheduleManagement.editingBlock.recurrence_end_date" class="w-full border rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
+                                <input type="date" :min="new Date().toLocaleDateString('en-CA')" x-model="scheduleManagement.editingBlock.recurrence_end_date" class="w-full border rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-brand-500 outline-none text-sm">
                             </div>
                         </div>
                     </div>
@@ -4609,7 +4609,7 @@
                         <div class="grid grid-cols-2 gap-3 items-end">
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 mb-1" x-text="scheduleManagement.editingAppointment?.original?.id ? 'Remarcar Data' : 'Data'"></label>
-                                <input type="date" x-model="scheduleManagement.editingAppointment.new_date" @change="showSlots = false; scheduleManagement.editingAppointment.new_start = ''" class="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <input type="date" :min="new Date().toLocaleDateString('en-CA')" x-model="scheduleManagement.editingAppointment.new_date" @change="showSlots = false; scheduleManagement.editingAppointment.new_start = ''" class="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 outline-none">
                             </div>
                             <div>
                                 <button type="button" @click="fetchSlots()" :disabled="localLoadingSlots || !scheduleManagement.editingAppointment.new_technician_id || !scheduleManagement.editingAppointment.new_date" class="w-full bg-black text-white p-2.5 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-800 disabled:opacity-50 transition-colors flex justify-center items-center">
@@ -5156,7 +5156,7 @@
                                                     class="border rounded text-xs py-1.5 text-center transition-colors relative font-medium">
                                                 <span x-text="formatTimeOnly(slot.start)"></span>
                                                 <span x-show="slot.status === 'ocupado'" class="absolute right-1 top-1 w-1.5 h-1.5 bg-yellow-400 rounded-full" title="Ocupado"></span>
-                                                <span x-show="slot.status === 'bloqueado' || slot.status === 'lotado'" class="absolute right-1 top-1 w-1.5 h-1.5 bg-red-400 rounded-full" title="Indisponível"></span>
+                                                <span x-show="slot.status === 'bloqueado' || slot.status === 'lotado' || slot.status === 'passado'" class="absolute right-1 top-1 w-1.5 h-1.5 bg-red-400 rounded-full" title="Indisponível"></span>
                                             </button>
                                         </template>
                                         <template x-if="!day.slots || day.slots.length === 0">
