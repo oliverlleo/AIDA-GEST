@@ -472,7 +472,8 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false },
+        bypassAnalysisCheck: false,
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -1889,6 +1890,7 @@ function app() {
             this.selectedAnalysisAppointment = null;
             this.selectedRepairAppointment = null;
             this.scheduleCurrentWeekStart = null;
+            this.bypassAnalysisCheck = false;
             this.ticketForm = {
                 id: crypto.randomUUID(),
                 client_name: '', os_number: '', model: '', serial: '',
@@ -3266,7 +3268,19 @@ function app() {
         // == SUBFASE 1 — FLUXO ADMINISTRATIVO BASE ==
 
         async createTicket() {
-            return await window.AIDATicketActions.createTicket(this._getActionDeps());
+            if (!this.bypassAnalysisCheck && this.ticketForm.analysis_deadline && this.selectedAnalysisAppointment) {
+                const deadlineDate = new Date(this.ticketForm.analysis_deadline);
+                const appendDate = new Date(`${this.selectedAnalysisAppointment.date}T${this.selectedAnalysisAppointment.end}`);
+
+                if (appendDate > deadlineDate) {
+                    this.modals.confirmCreateTicket = true;
+                    return;
+                }
+            }
+
+            const result = await window.AIDATicketActions.createTicket(this._getActionDeps());
+            this.bypassAnalysisCheck = false;
+            return result;
         },
 
         async finishAnalysis(ticketOrId) {
