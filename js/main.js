@@ -2503,6 +2503,24 @@ function app() {
             this.modals.techScheduleSettings = true;
         },
 
+        addExtraBreak() {
+            if (!this.scheduleManagement.techConfig.extraBreaks) {
+                this.scheduleManagement.techConfig.extraBreaks = [];
+            }
+            this.scheduleManagement.techConfig.extraBreaks.push({
+                active: true,
+                name: 'Novo Intervalo',
+                start: '15:00',
+                end: '15:30',
+                recurrence_type: 'daily',
+                recurrence_days: []
+            });
+        },
+
+        removeExtraBreak(index) {
+            this.scheduleManagement.techConfig.extraBreaks.splice(index, 1);
+        },
+
         closeTechConfigModal() {
             this.modals.techScheduleSettings = false;
         },
@@ -2533,6 +2551,7 @@ function app() {
                         hasBreak: s.hasBreak !== undefined ? s.hasBreak : true,
                         breakStart: s.breakStart || '12:00',
                         breakEnd: s.breakEnd || '13:00',
+                        extraBreaks: s.extraBreaks || [],
                         slotDuration: s.slotDuration || 30,
                         maxConcurrent: s.maxConcurrent || 1
                     };
