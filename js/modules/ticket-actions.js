@@ -131,6 +131,8 @@ window.AIDATicketActions = {
             parts_needed: deps.state.analysisForm.partsList,
             tech_notes: techNotes
         }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
+
+        await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
     },
 
     async approveRepair(ticketOrId, deps) {
@@ -142,7 +144,7 @@ window.AIDATicketActions = {
 
         // Se aprovou sem compra de peças, já inicia fluxo para agendar reparo
         if (!ticket.parts_needed && !ticket.repair_scheduled) {
-            deps.state.openScheduleModalFromSidebar(ticket);
+            deps.state.openSchedulePanel('repair');
         }
     },
 
@@ -158,7 +160,7 @@ window.AIDATicketActions = {
          if (!ticket) return;
          const ctx = deps.getLogContext(ticket);
          const rawPart = ticket.parts_needed || 'peça';
-         const part = `<span class="text-brand-500 font-bold">${deps.escapeHtml(rawPart)}</span>`;
+         const part = `"${rawPart}"`;
          await deps.updateStatus(ticket, 'Andamento Reparo', {
              parts_status: 'Recebido',
              parts_received_at: new Date().toISOString()
@@ -166,7 +168,7 @@ window.AIDATicketActions = {
 
          // Se não há agendamento de reparo ativo, sugere criar
          if (!ticket.repair_scheduled) {
-             deps.state.openScheduleModalFromSidebar(ticket);
+             deps.state.openSchedulePanel('repair');
          }
     },
 
@@ -306,6 +308,7 @@ window.AIDATicketActions = {
             action: 'Iniciou Atendimento',
             details: `${ctx.device} de ${ctx.client} enviado para análise do técnico.`
         });
+        await deps.supabaseFetch('rpc/start_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
     },
 
     async startTicketAnalysis(ticket, deps) {
@@ -315,6 +318,7 @@ window.AIDATicketActions = {
             await deps.supabaseFetch('rpc/start_ticket_analysis', 'POST', {
                 p_ticket_id: ticket.id
             });
+            await deps.supabaseFetch('rpc/start_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
 
             // Update Local State
             if (deps.state.selectedTicket && deps.state.selectedTicket.id === ticket.id) {
@@ -343,6 +347,7 @@ window.AIDATicketActions = {
         };
         const now = new Date().toISOString();
         await deps.mutateTicket(ticket, 'startRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
+        await deps.supabaseFetch('rpc/start_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'repair' });
     },
 
     async finishRepair(success, deps) {
@@ -366,6 +371,8 @@ window.AIDATicketActions = {
             action: 'Finalizou Reparo',
             details: detailMsg
         });
+
+        await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'repair' });
     },
 
     async startTest(ticketOrId, deps) {
@@ -448,7 +455,12 @@ window.AIDATicketActions = {
                 status: 'Andamento Reparo',
                 test_notes: updatedNotes
             }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Defeito: ' + deps.state.testFailureData.reason });
+
             deps.notify("Retornado para reparo com urgência!");
+            // Aciona fluxo visual de Agendamento do Novo Reparo (Cenario de Retrabalho)
+            if (!ticket.repair_scheduled) {
+                deps.state.openSchedulePanel('repair');
+            }
         }
     },
 
@@ -511,14 +523,14 @@ window.AIDATicketActions = {
 
         // For this specific action, we don't want the (Terceirizado: X) suffix in the context
         // because the log message already says "recebido da X".
-        const safeClientName = deps.escapeHtml(ticket.client_name);
-        const safeOsNumber = deps.escapeHtml(ticket.os_number);
-        const safeDevice = deps.escapeHtml(ticket.device_model);
+        const safeClientName = ticket.client_name || '';
+        const safeOsNumber = ticket.os_number || '';
+        const safeDevice = ticket.device_model || '';
 
         // Custom context without duplication
         const cleanContext = {
-            client: `<b>${safeClientName} da OS ${safeOsNumber}</b>`,
-            device: `<b>${safeDevice}</b>`
+            client: `${safeClientName} da OS ${safeOsNumber}`,
+            device: `${safeDevice}`
         };
 
         const companyName = deps.getOutsourcedCompany(ticket.outsourced_company_id);
@@ -527,7 +539,7 @@ window.AIDATicketActions = {
             test_start_at: null // Reset test status to ensure "Start Test" appears
         }, {
             action: 'Recebeu de Terceiro',
-            details: `${cleanContext.device} de ${cleanContext.client} recebido da ${companyName}. Enviado para testes.`
+            details: `O aparelho ${cleanContext.device} de ${cleanContext.client} foi recebido da parceira ${companyName} e enviado para testes.`
         });
     },
 
@@ -573,11 +585,10 @@ window.AIDATicketActions = {
         const updatedPurchases = [...currentPurchases, purchaseData];
 
         let itemsStr = deps.state.purchaseFlow.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
-        const itemsHtml = `<span class="text-brand-500 font-bold">${deps.escapeHtml(itemsStr)}</span>`;
 
         const actionLog = {
             action: 'Confirmou Compra',
-            details: `Compra de ${itemsHtml} do fornecedor <b>${deps.escapeHtml(supplier.razao_social)}</b> para o ${ctx.device} de ${ctx.client} foi realizada.`
+            details: `Compra de "${itemsStr}" do fornecedor "${supplier.razao_social || 'Desconhecido'}" para o ${ctx.device} de ${ctx.client} foi realizada.`
         };
 
         const updates = {

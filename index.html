@@ -365,7 +365,7 @@
                                                 <li class="p-4 text-center text-gray-400 text-xs italic">Nenhum chamado pendente sem agendamento.</li>
                                             </template>
                                             <template x-for="ticket in scheduleManagement.unscheduledItems" :key="ticket.id">
-                                                <li class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0">
+                                                <li @click="previewTechnicianSchedule(ticket)" class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0 cursor-pointer">
                                                     <div class="flex justify-between items-start mb-1">
                                                         <span class="font-mono text-[10px] font-bold text-brand-600 transition-colors" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
                                                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
@@ -411,7 +411,7 @@
                                                 <li class="p-4 text-center text-gray-400 text-xs italic">Nenhum chamado aguardando atribuição.</li>
                                             </template>
                                             <template x-for="ticket in scheduleManagement.withoutTechnicianItems" :key="ticket.id">
-                                                <li class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0">
+                                                <li @click="previewTechnicianSchedule(ticket)" class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0 cursor-pointer">
                                                     <div class="flex justify-between items-start mb-1">
                                                         <span class="font-mono text-[10px] font-bold text-brand-600 transition-colors" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
                                                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
@@ -457,7 +457,7 @@
                                                 <li class="p-4 text-center text-gray-400 text-xs italic">Nenhum conflito no período.</li>
                                             </template>
                                             <template x-for="ticket in scheduleManagement.conflictItems" :key="ticket.id">
-                                                <li class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0">
+                                                <li @click="previewTechnicianSchedule(ticket)" class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0 cursor-pointer">
                                                     <div class="flex justify-between items-start mb-1">
                                                         <span class="font-mono text-[10px] font-bold text-brand-600 transition-colors" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
                                                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
@@ -503,7 +503,7 @@
                                                 <li class="p-4 text-center text-gray-400 text-xs italic">Nenhuma pendência em atraso.</li>
                                             </template>
                                             <template x-for="ticket in scheduleManagement.lateWithoutScheduleItems" :key="ticket.id">
-                                                <li class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0">
+                                                <li @click="previewTechnicianSchedule(ticket)" class="p-3 hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-b-0 cursor-pointer">
                                                     <div class="flex justify-between items-start mb-1">
                                                         <span class="font-mono text-[10px] font-bold text-brand-600 transition-colors" x-text="'OS #' + (ticket.os_number || 'S/N')"></span>
                                                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase"
@@ -3254,6 +3254,17 @@
                                                         </div>
                                                     </template>
 
+                                                    <!-- Reparo -->
+                                                    <template x-if="ticket.status === 'Andamento Reparo'">
+                                                        <div class="space-y-2">
+                                                            <template x-if="!ticket.repair_scheduled">
+                                                                <button @click.stop="openScheduleModalFromSidebar(ticket)" class="w-full border border-brand-200 bg-brand-50 text-brand-700 text-[11px] font-bold py-1.5 rounded hover:bg-brand-100 flex justify-center items-center gap-1.5 transition-colors shadow-sm">
+                                                                    <i class="fa-regular fa-calendar-plus"></i> Agendar Reparo
+                                                                </button>
+                                                            </template>
+                                                        </div>
+                                                    </template>
+
                                                     <!-- Teste Final -->
                                                     <template x-if="ticket.status === 'Teste Final'">
                                                         <div>
@@ -3575,6 +3586,10 @@
                                                         <span x-text="getDuration(ticket.repair_start_at)"></span>
                                                     </div>
                                                 </template>
+
+                                                <button type="button" @click.stop="openSchedulePanel('repair')" x-show="!ticket.repair_scheduled" class="w-full px-2 py-1.5 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-[10px] font-bold flex items-center justify-center transition-colors">
+                                                    <i class="fa-regular fa-calendar-plus mr-1"></i> Agendar Reparo
+                                                </button>
                                             </div>
                                         </div>
                                      </div>
@@ -5071,7 +5086,7 @@
             <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.viewTicket = false"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
-            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full duration-300 ease-in-out" :class="schedulePanelOpen ? '-translate-x-32 sm:-translate-x-48' : ''">
 
                 <template x-if="selectedTicket">
                 <div x-data="{ tab: 'details' }">
@@ -5109,6 +5124,9 @@
                             Notas Internas
                             <span x-show="internalNotes.length > 0" class="ml-2 bg-gray-200 text-gray-700 text-xs px-1.5 rounded-full" x-text="internalNotes.length"></span>
                          </button>
+                         <button @click="tab = 'appointments'; fetchTicketAppointments(selectedTicket.id)" :class="tab === 'appointments' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'" class="py-3 border-b-2 font-bold text-sm transition-colors flex items-center">
+                            Agendamentos
+                         </button>
                     </div>
 
                     <!-- TAB: DETAILS -->
@@ -5139,10 +5157,16 @@
                                 <div x-show="canExecuteAction(selectedTicket, 'startTicketAnalysis')" class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-center">
                                     <h4 class="font-bold text-yellow-800 mb-2">Iniciar Procedimento</h4>
                                     <p class="text-xs text-yellow-700 mb-3">Clique abaixo para registrar o início oficial da análise técnica.</p>
-                                    <button @click="startTicketAnalysis(selectedTicket)" class="bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-yellow-700 text-sm shadow flex items-center justify-center w-full">
+                                    <button @click="startTicketAnalysis(selectedTicket)" class="bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-yellow-700 text-sm shadow flex items-center justify-center w-full mb-3">
                                         <i class="fa-solid fa-play mr-2"></i> Iniciar Análise
                                     </button>
+                                    <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                        <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
+                                    </button>
                                 </div>
+                                <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled && !canExecuteAction(selectedTicket, 'startTicketAnalysis')" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors mt-2">
+                                    <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
+                                </button>
 
                                 <!-- Step 2.2: Finish Analysis (Only if started) -->
                                 <div x-show="canExecuteAction(selectedTicket, 'finishAnalysis')" class="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -5240,7 +5264,7 @@
                                     </button>
                                 </div>
 
-                                <button type="button" @click="openScheduleModalFromSidebar(selectedTicket)" x-show="selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
@@ -5262,10 +5286,14 @@
                                         <i class="fa-solid fa-flag-checkered mr-2"></i> Finalizar Reparo
                                     </button>
                                 </div>
-                                <div x-show="selectedTicket.repair_start_at" class="text-center bg-gray-100 rounded p-1">
+                                <div x-show="selectedTicket.repair_start_at" class="text-center bg-gray-100 rounded p-1 mb-2">
                                     <span class="text-xs text-gray-500 font-bold uppercase">Tempo Decorrido</span>
                                     <div class="text-xl font-mono font-bold text-gray-800" x-text="getDuration(selectedTicket.repair_start_at)"></div>
                                 </div>
+
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="!selectedTicket.repair_scheduled" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors mb-2">
+                                    <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
+                                </button>
                             </div>
                         </template>
 
@@ -5663,6 +5691,52 @@
                          </div>
                     </div>
 
+                    <!-- TAB: APPOINTMENTS -->
+                    <div x-show="tab === 'appointments'" class="flex flex-col h-[60vh]">
+                         <div class="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
+                             <template x-for="app in selectedTicketAppointments" :key="app.id">
+                                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 relative">
+                                     <div class="flex justify-between items-start mb-3">
+                                         <h4 class="font-bold text-gray-800 flex items-center">
+                                             <i class="mr-2 text-brand-500" :class="app.appointment_type === 'analysis' ? 'fa-solid fa-microscope' : 'fa-solid fa-wrench'"></i>
+                                             <span x-text="app.appointment_type === 'analysis' ? 'Análise' : 'Reparo'"></span>
+                                         </h4>
+                                         <span class="text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider"
+                                               :class="{
+                                                   'bg-gray-100 text-gray-600': app.status === 'scheduled',
+                                                   'bg-green-100 text-green-700': app.status === 'completed',
+                                                   'bg-red-100 text-red-700': app.status === 'cancelled'
+                                               }"
+                                               x-text="app.status === 'scheduled' ? 'Agendado' : (app.status === 'completed' ? 'Realizado' : 'Cancelado')">
+                                         </span>
+                                     </div>
+
+                                     <div class="grid grid-cols-2 gap-4 text-xs mt-2">
+                                         <div class="bg-blue-50 text-blue-800 p-2 rounded border border-blue-100">
+                                             <p class="font-bold mb-1"><i class="fa-regular fa-calendar-days"></i> Planejado</p>
+                                             <p>Início: <span x-text="app.scheduled_start ? formatDateLocal(app.scheduled_start) : '--'"></span></p>
+                                             <p>Fim: <span x-text="app.scheduled_end ? formatDateLocal(app.scheduled_end) : '--'"></span></p>
+                                         </div>
+                                         <div class="bg-green-50 text-green-800 p-2 rounded border border-green-100">
+                                             <p class="font-bold mb-1"><i class="fa-solid fa-play"></i> Realizado</p>
+                                             <p>Início: <span x-text="app.actual_start ? formatDateLocal(app.actual_start) : 'Não iniciado'"></span></p>
+                                             <p>Fim: <span x-text="app.actual_end ? formatDateLocal(app.actual_end) : 'Não finalizado'"></span></p>
+                                         </div>
+                                     </div>
+
+                                     <div class="mt-3 flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-100">
+                                         <p><i class="fa-solid fa-user-gear mr-1"></i> <span x-text="app.technician_name || 'Sem Técnico'"></span></p>
+                                         <p x-show="app.notes" class="italic w-1/2 text-right truncate"><i class="fa-solid fa-sticky-note mr-1"></i> <span x-text="app.notes"></span></p>
+                                     </div>
+                                 </div>
+                             </template>
+                             <div x-show="selectedTicketAppointments.length === 0" class="text-center text-gray-400 py-10 italic text-sm">
+                                 <i class="fa-regular fa-calendar-xmark text-2xl mb-2"></i>
+                                 <p>Nenhum agendamento registrado.</p>
+                             </div>
+                         </div>
+                    </div>
+
                 </div>
                 </template>
 
@@ -6028,7 +6102,7 @@
 
     <!-- 5. OUTCOME MODAL (Success/Fail Logic) -->
     <div x-show="modals.outcome" class="fixed inset-0 z-[80] flex items-center justify-center" x-cloak>
-        <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.outcome = false"></div>
+        <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.outcome = false"></div>
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md z-10 relative">
             <h3 class="text-lg font-bold mb-4" x-text="outcomeMode === 'repair' ? 'Finalizar Reparo' : 'Concluir Testes'"></h3>
 

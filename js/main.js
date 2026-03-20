@@ -321,6 +321,7 @@ function app() {
         newTemplateNameFinal: '',
 
         // UI State for Actions
+        selectedTicketAppointments: [],
         analysisForm: { needsParts: false, partsList: '' },
         outcomeMode: '',
         showTestFailureForm: false,
@@ -382,6 +383,7 @@ function app() {
         // Scheduling Management View State
         scheduleManagement: {
             selectedTechnicianId: '',
+            gridTechnicianId: '', // Added so clicking a card updates grid without affecting dropdown
             viewMode: 'week', // 'day' or 'week'
             referenceDate: new Date().toLocaleDateString('en-CA'),
             slotActionPopover: { open: false, date: '', slot: null, x: 0, y: 0 },
@@ -1938,13 +1940,18 @@ function app() {
         // SCHEDULING METHODS
         // ==========================================
         openSchedulePanel(mode) {
-            if (!this.ticketForm.technician_id || this.ticketForm.technician_id === 'all') {
-                return this.notify("Selecione um técnico específico primeiro.", "error");
+            // No Kanban mode (viewTicket modal is open), the technician is derived from selectedTicket.
+            // In creation mode, it's ticketForm.technician_id.
+            const targetTechId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
+
+            if (!targetTechId || targetTechId === 'all') {
+                // Ao invés de travar com erro, vamos usar a variável global ou abortar graciosamente alertando pra trocar pelo modal inteiro
+                return this.notify("O chamado precisa estar alocado a um técnico para agendar usando este atalho de calendário lateral. Tente alterar o técnico ou agendar via painel 'Gerenciamento de Agenda'.", "error");
             }
             this.schedulePanelMode = mode;
             this.scheduleCurrentWeekStart = new Date(); // Start with current week
             this.schedulePanelOpen = true;
-            this.fetchScheduleAvailability();
+            this.fetchScheduleAvailability(targetTechId);
         },
 
         getTechnicianName(techId) {
@@ -1953,8 +1960,9 @@ function app() {
             return tech ? tech.name : 'Técnico Desconhecido';
         },
 
-        async fetchScheduleAvailability() {
-            if (!this.ticketForm.technician_id || this.ticketForm.technician_id === 'all') return;
+        async fetchScheduleAvailability(targetTechId = null) {
+            const techId = targetTechId || (this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id);
+            if (!techId || techId === 'all') return;
 
             this.scheduleAvailabilityLoading = true;
             this.scheduleAvailabilityData = [];
@@ -1965,7 +1973,7 @@ function app() {
                 const localISOTime = (new Date(this.scheduleCurrentWeekStart - tzOffset)).toISOString().slice(0, -1);
                 const refDate = localISOTime.split('T')[0];
                 const response = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
-                    p_technician_id: this.ticketForm.technician_id,
+                    p_technician_id: techId,
                     p_mode: this.schedulePanelMode,
                     p_reference_date: refDate,
                     p_days: 7
@@ -2034,19 +2042,52 @@ function app() {
             return `${parts[0]}:${parts[1]}`;
         },
 
-        selectScheduleSlot(dateStr, slot) {
+        async selectScheduleSlot(dateStr, slot) {
+            const techId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
+
             const appointmentData = {
                 date: dateStr,
                 start: this.extractTime(slot.start),
                 end: this.extractTime(slot.end),
                 status: slot.status,
-                technician_id: this.ticketForm.technician_id
+                technician_id: techId
             };
 
-            if (this.schedulePanelMode === 'analysis') {
-                this.selectedAnalysisAppointment = appointmentData;
-            } else if (this.schedulePanelMode === 'repair') {
-                this.selectedRepairAppointment = appointmentData;
+            if (this.modals.viewTicket && this.selectedTicket) {
+                // Em modo de edição de ticket, clicar no calendário lateral salva a RPC diretamente.
+                this.loading = true;
+                try {
+                    const startStr = this.toUTC(`${dateStr}T${appointmentData.start}`);
+                    const endStr = this.toUTC(`${dateStr}T${appointmentData.end}`);
+
+                    await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                        p_ticket_id: this.selectedTicket.id,
+                        p_technician_id: techId,
+                        p_appointment_type: this.schedulePanelMode,
+                        p_scheduled_start: startStr,
+                        p_scheduled_end: endStr,
+                        p_notes: 'Agendado pelo painel lateral'
+                    });
+
+                    // Update state reativamente pro botão sumir na mesma hora
+                    if (this.schedulePanelMode === 'analysis') this.selectedTicket.analysis_scheduled = true;
+                    if (this.schedulePanelMode === 'repair') this.selectedTicket.repair_scheduled = true;
+
+                    this.notify("Agendamento criado com sucesso!");
+                    this.fetchTicketAppointments(this.selectedTicket.id); // Atualiza aba de Agendamentos histórico
+                } catch (e) {
+                    console.error("Erro ao salvar agendamento:", e);
+                    this.notify("Falha ao salvar agendamento.", "error");
+                } finally {
+                    this.loading = false;
+                }
+            } else {
+                // Em modo de Criação de Ticket, apenas guarda no buffer
+                if (this.schedulePanelMode === 'analysis') {
+                    this.selectedAnalysisAppointment = appointmentData;
+                } else if (this.schedulePanelMode === 'repair') {
+                    this.selectedRepairAppointment = appointmentData;
+                }
             }
 
             this.schedulePanelOpen = false;
@@ -2071,6 +2112,7 @@ function app() {
         // ==========================================
         async loadScheduleManagement() {
             this.scheduleManagement.loading = true;
+            this.scheduleManagement.gridTechnicianId = this.scheduleManagement.selectedTechnicianId;
 
             const tasks = [];
 
@@ -2078,7 +2120,7 @@ function app() {
             tasks.push(this.fetchUnscheduledTickets());
 
             // 2. Manager schedule only loads if a tech is selected
-            if (this.scheduleManagement.selectedTechnicianId) {
+            if (this.scheduleManagement.gridTechnicianId) {
                 this.scheduleManagement.data = [];
                 this.scheduleManagement.capacitySummary = { booked: 0, total: 0 };
                 tasks.push(this.fetchManagerSchedule());
@@ -2092,6 +2134,13 @@ function app() {
             this.scheduleManagement.loading = false;
         },
 
+        previewTechnicianSchedule(ticket) {
+            if (ticket.technician_id) {
+                this.scheduleManagement.gridTechnicianId = ticket.technician_id;
+                this.fetchManagerSchedule();
+            }
+        },
+
         async fetchManagerSchedule() {
             try {
                 const refDate = new Date(this.scheduleManagement.referenceDate);
@@ -2099,7 +2148,7 @@ function app() {
                 const localDateStr = (new Date(refDate.getTime() - tzOffset)).toISOString().split('T')[0];
 
                 const response = await this.supabaseFetch('rpc/get_schedule_dashboard', 'POST', {
-                    p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                    p_technician_id: this.scheduleManagement.gridTechnicianId,
                     p_view: this.scheduleManagement.viewMode,
                     p_reference_date: localDateStr
                 });
@@ -2112,7 +2161,7 @@ function app() {
                     // Como a RPC original (get_schedule_availability) estrutura dias e slots perfeitamente,
                     // precisamos chamar a RPC de availability se a dashboard não nos der `days`.
                     const availResponse = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
-                        p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                        p_technician_id: this.scheduleManagement.gridTechnicianId,
                         p_mode: 'all',
                         p_reference_date: localDateStr,
                         p_days: this.scheduleManagement.viewMode === 'day' ? 1 : 7
@@ -2184,72 +2233,42 @@ function app() {
             this.scheduleManagement.lateWithoutScheduleTotal = 0;
 
             try {
-                const techId = this.scheduleManagement.selectedTechnicianId;
-                const requests = [];
+                const filterTechId = this.scheduleManagement.selectedTechnicianId;
 
-                // 1. Fetch tickets with NO technician assigned (always visible for management queue)
-                requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                // Sempre puxamos a lista geral de não agendados enviando null
+                // porque queremos que a lateral se comporte como se não houvesse filtro caso techId = ''
+                const response = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
                     p_technician_id: null,
                     p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
                     p_status: null,
-                    p_limit: 200,
+                    p_limit: 500,
                     p_offset: 0
-                }));
-
-                // 2. Fetch tickets assigned specifically to the selected technician
-                if (techId) {
-                    requests.push(this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
-                        p_technician_id: techId,
-                        p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
-                        p_status: null,
-                        p_limit: 200,
-                        p_offset: 0
-                    }));
-                } else {
-                    requests.push(Promise.resolve({ items: [], total: 0 }));
-                }
-
-                const [noTechRes, techRes] = await Promise.all(requests);
+                });
 
                 let allItems = [];
-
-                // Depending on the backend implementation, `p_technician_id: null` might return
-                // specifically unassigned tickets OR all unscheduled tickets. We filter to be safe.
-                if (noTechRes && typeof noTechRes === 'object' && noTechRes.items) {
-                    const purelyUnassigned = noTechRes.items.filter(t => !t.technician_id);
-                    this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
-                    this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
-
-                    // If no technician is selected, we want to see ALL unscheduled in the main list
-                    // that are assigned to ANY technician.
-                    if (!techId) {
-                        const assignedUnscheduled = noTechRes.items.filter(t => t.technician_id);
-                        this.scheduleManagement.unscheduledItems = assignedUnscheduled;
-                        this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
-                        allItems = [...noTechRes.items];
-                    } else {
-                        allItems = [...purelyUnassigned];
-                    }
+                if (response && typeof response === 'object' && response.items) {
+                    allItems = response.items;
                 }
 
-                if (techId && techRes && typeof techRes === 'object' && techRes.items) {
-                    this.scheduleManagement.unscheduledItems = techRes.items;
-                    this.scheduleManagement.unscheduledTotal = techRes.total || techRes.items.length;
-                    allItems = [...allItems, ...techRes.items];
+                // O usuário pediu: se não tem técnico selecionado, aparece todos os cards (de todos os técnicos)
+                // Se TEM técnico selecionado no select lá em cima, filtramos a lateral SOMENTE para aquele técnico e os SEM TÉCNICO.
+                let filteredItems = allItems;
+                if (filterTechId) {
+                    filteredItems = allItems.filter(t => !t.technician_id || t.technician_id === filterTechId);
                 }
 
-                // 3. Late Without Schedule (Derived)
+                // Sem Técnico Block
+                const purelyUnassigned = filteredItems.filter(t => !t.technician_id);
+                this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
+                this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
+
+                // Com Técnico (Não Agendados)
+                const assignedUnscheduled = filteredItems.filter(t => t.technician_id);
+                this.scheduleManagement.unscheduledItems = assignedUnscheduled;
+                this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
+
                 const now = new Date();
-
-                // Deduplicate for derivation
-                const uniqueItems = [];
-                const map = new Map();
-                for (const item of allItems) {
-                    if (!map.has(item.id)) {
-                        map.set(item.id, true);
-                        uniqueItems.push(item);
-                    }
-                }
+                const uniqueItems = filteredItems;
 
                 const lateItems = uniqueItems.filter(t => {
                     const deadlineToCheck = t.status === 'Analise Tecnica' ? t.analysis_deadline : t.deadline;
@@ -2268,13 +2287,13 @@ function app() {
                 const conflicts = [];
 
                 // Only evaluate if we have a technician and capacity loaded for the current view
-                if (techId && this.scheduleManagement.capacitySummary && (this.scheduleManagement.capacitySummary.booked >= this.scheduleManagement.capacitySummary.total)) {
+                if (filterTechId && this.scheduleManagement.capacitySummary && (this.scheduleManagement.capacitySummary.booked >= this.scheduleManagement.capacitySummary.total)) {
                     const viewDateLimit = new Date(this.scheduleManagement.referenceDate);
                     viewDateLimit.setHours(23, 59, 59, 999);
 
                     for (const item of uniqueItems) {
                         // Skip if it's not assigned to the completely booked technician
-                        if (item.technician_id !== techId) continue;
+                        if (item.technician_id !== filterTechId) continue;
 
                         const deadlineToCheck = item.status === 'Analise Tecnica' ? item.analysis_deadline : item.deadline;
                         if (!deadlineToCheck) continue;
@@ -2792,6 +2811,7 @@ function app() {
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
 
             this.fetchInternalNotes(ticket.id);
+            this.fetchTicketAppointments(ticket.id);
             this.newNoteText = '';
             this.noteIsChecklist = false;
             this.noteChecklistItems = [];
@@ -2953,6 +2973,18 @@ function app() {
 
         // --- INTERNAL NOTES SYSTEM ---
 
+        async fetchTicketAppointments(ticketId) {
+            try {
+                this.selectedTicketAppointments = [];
+                const response = await this.supabaseFetch('rpc/get_ticket_appointments', 'POST', { p_ticket_id: ticketId });
+                if (response && Array.isArray(response)) {
+                    this.selectedTicketAppointments = response;
+                }
+            } catch (error) {
+                console.error("Error fetching ticket appointments:", error);
+            }
+        },
+
         async fetchInternalNotes(ticketId) {
             return await window.AIDANotesService.fetchInternalNotes(ticketId, {
                 state: this,
@@ -3103,12 +3135,16 @@ function app() {
         async refreshPostMutation(forceListRefetch = false) {
             // Se foi especificado um refetch forçado (ex: createTicket) OU
             // se estivermos em uma view operacional que depende de consistência forte na UI após ações
-            // (kanban, tech_orders, tester_bench, admin_dashboard), disparamos o fetch.
-            const operationalViews = ['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'];
+            // (kanban, tech_orders, tester_bench, admin_dashboard, home/dashboard), disparamos o fetch.
+            const operationalViews = ['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard', 'home', 'dashboard'];
             const needsFetch = forceListRefetch || operationalViews.includes(this.view);
 
             if (needsFetch) {
-                 await this.fetchTickets();
+                 if (this.view === 'dashboard' || this.view === 'home') {
+                     await this.fetchHomeOperationalQueue();
+                 } else {
+                     await this.fetchTickets();
+                 }
             }
 
             // Atualiza métricas ou alertas complementares dependendo da view
@@ -4064,16 +4100,16 @@ function app() {
                         this.homeOperationalItems = response.items;
                         // Build homeOps locally
                         this.homeOps = {
-                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao'),
-                            waitingBudgetResponse: [], // Approximate since we dont have budget_status often
-                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente'),
-                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Logistica' || t.status === 'Envio'),
-                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Entrega' || t.status === 'Pronto para Entrega'),
-                            pendingTech: this.homeOperationalItems.filter(t => ['Aberto', 'Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(t.status)),
+                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && (!t.budget_status || t.budget_status === 'Pendente' || t.budget_status === '') && !t.budget_sent_at),
+                            waitingBudgetResponse: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && (t.budget_status === 'Enviado' || t.budget_sent_at)),
+                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available),
+                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && t.delivery_method === 'carrier' && !t.tracking_code),
+                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && (t.delivery_method !== 'carrier' || (t.delivery_method === 'carrier' && t.tracking_code))),
+                            pendingTech: this.homeOperationalItems.filter(t => t.status === 'Aberto'),
                             outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
-                            pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado'),
-                            pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca' && t.parts_status !== 'Comprado'),
-                            pendingReceipt: this.homeOperationalItems.filter(t => t.status === 'Compra Peca' && t.parts_status === 'Comprado'),
+                            pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && t.outsourced_at),
+                            pendingPurchase: this.homeOperationalItems.filter(t => (t.status === 'Compra Peca' || (t.status === 'Aprovacao' && t.parts_needed)) && t.parts_status !== 'Comprado'),
+                            pendingReceipt: this.homeOperationalItems.filter(t => (t.status === 'Compra Peca' || (t.status === 'Aprovacao' && t.parts_needed)) && t.parts_status === 'Comprado'),
                             priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
                             expiringDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === false && ['today', 'tomorrow'].includes(t.urgency_bucket)),
                             expiredDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === true),

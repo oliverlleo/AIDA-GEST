@@ -42,10 +42,10 @@ window.AIDAWorkflowRules = {
                 if (status !== 'Aprovacao' || ticket.budget_status !== 'Enviado') return false;
                 return isAdmin || isAttendant;
             case 'markPurchased':
-                if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
+                if ((status !== 'Compra Peca' && status !== 'Aprovacao') || ticket.parts_status === 'Comprado') return false;
                 return isAdmin || isAttendant;
             case 'confirmReceived':
-                if (status !== 'Compra Peca' || ticket.parts_status !== 'Comprado') return false;
+                if ((status !== 'Compra Peca' && status !== 'Aprovacao') || ticket.parts_status !== 'Comprado') return false;
                 return isAdmin || isAttendant;
             case 'startRepair':
                 if (status !== 'Andamento Reparo' || ticket.repair_start_at) return false;
@@ -82,7 +82,7 @@ window.AIDAWorkflowRules = {
             case 'saveDeadlines':
                 return isAdmin || isTech || isAttendant;
             case 'submitPurchase':
-                if (status !== 'Compra Peca' || ticket.parts_status === 'Comprado') return false;
+                if ((status !== 'Compra Peca' && status !== 'Aprovacao') || ticket.parts_status === 'Comprado') return false;
                 return isAdmin || isAttendant;
             case 'updateStatus':
                 // Generic status update wrapper validation
