@@ -164,7 +164,7 @@ window.AIDATicketActions = {
          await deps.updateStatus(ticket, 'Andamento Reparo', {
              parts_status: 'Recebido',
              parts_received_at: new Date().toISOString()
-         }, { action: 'Recebeu Peças', details: `Peça ${part} recebida para o ${ctx.device} de ${ctx.client}. Reparo liberado.` });
+         }, { action: 'Recebeu Peças', details: `Peça **${part}** recebida para o **${ctx.device}** de **${ctx.client}**. Reparo liberado.` });
 
          // Se não há agendamento de reparo ativo, sugere criar
          if (!ticket.repair_scheduled) {
@@ -178,7 +178,7 @@ window.AIDATicketActions = {
 
         const ctx = deps.getLogContext(ticket);
         let action = 'Finalizou Entrega';
-        let details = `${ctx.device} de ${ctx.client} foi retirado.`;
+        let details = `**${ctx.device}** de **${ctx.client}** foi retirado.`;
 
         if (ticket.delivery_method === 'carrier') {
             action = 'Entrega Confirmada';
@@ -588,7 +588,7 @@ window.AIDATicketActions = {
 
         const actionLog = {
             action: 'Confirmou Compra',
-            details: `Compra de "${itemsStr}" do fornecedor "${supplier.razao_social || 'Desconhecido'}" para o ${ctx.device} de ${ctx.client} foi realizada.`
+            details: `Compra de **${itemsStr}** do fornecedor **${supplier.razao_social || 'Desconhecido'}** para o **${ctx.device}** de **${ctx.client}** foi realizada.`
         };
 
         const updates = {
