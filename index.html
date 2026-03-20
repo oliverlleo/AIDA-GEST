@@ -1927,7 +1927,7 @@
                                                 <div class="h-2 w-2 rounded-full bg-brand-500"></div>
                                             </div>
                                             <div class="flex-grow min-w-0">
-                                                <p class="text-xs text-gray-800 leading-snug whitespace-pre-wrap" x-text="(log.details || log.action)"></p>
+                                                <p class="text-xs text-gray-800 leading-snug whitespace-pre-wrap" x-html="formatLogDetails(log.details || log.action)"></p>
                                                 <div class="flex items-center gap-2 mt-1">
                                                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide" x-text="log.user_name"></span>
                                                     <span class="text-[10px] text-gray-300">•</span>
@@ -3630,6 +3630,26 @@
                                          <div class="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
                                             <span class="text-xs text-gray-400" x-text="new Date(ticket.created_at).toLocaleDateString('pt-BR')"></span>
                                             <span class="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded" x-text="ticket.client_name"></span>
+                                        </div>
+
+                                        <!-- Kanban Actions -->
+                                        <div class="pt-2 mt-1 border-t border-gray-100 flex flex-col space-y-2" @click.stop>
+                                            <div class="flex space-x-2">
+                                                <button x-show="canExecuteAction(ticket, 'startTest')" @click.stop="startTest(ticket)" :disabled="loading" class="flex-1 bg-indigo-500 text-white text-[10px] font-bold py-1.5 rounded hover:bg-indigo-600 transition-colors disabled:opacity-50">
+                                                    <i class="fa-solid fa-vial mr-1"></i> Iniciar
+                                                </button>
+                                                <button x-show="canExecuteAction(ticket, 'concludeTest')" @click.stop="openOutcomeModal('test', ticket)" :disabled="loading" class="flex-1 bg-green-600 text-white text-[10px] font-bold py-1.5 rounded hover:bg-green-700 transition-colors disabled:opacity-50">
+                                                    <i class="fa-solid fa-clipboard-check mr-1"></i> Concluir
+                                                </button>
+                                            </div>
+
+                                            <!-- Timer below buttons -->
+                                            <template x-if="ticket.test_start_at">
+                                                <div class="bg-indigo-50 text-indigo-700 px-2 py-1 rounded text-xs font-bold text-center border border-indigo-100">
+                                                    <i class="fa-solid fa-stopwatch mr-1"></i>
+                                                    <span x-text="getDuration(ticket.test_start_at)"></span>
+                                                </div>
+                                            </template>
                                         </div>
                                     </div>
                                 </template>
@@ -5981,7 +6001,7 @@
 
                                 <!-- Content -->
                                 <div class="flex-grow pb-6 border-b border-gray-50 last:border-0 last:pb-0">
-                                    <p class="text-sm text-gray-900 font-medium leading-relaxed whitespace-pre-wrap" x-text="(log.details || log.action)"></p>
+                                    <p class="text-sm text-gray-900 font-medium leading-relaxed whitespace-pre-wrap" x-html="formatLogDetails(log.details || log.action)"></p>
                                     <div class="flex items-center gap-3 mt-2">
                                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                                             <i class="fa-solid fa-user text-gray-300"></i>
@@ -6016,7 +6036,7 @@
                                             <span class="text-xs font-bold text-gray-500 uppercase tracking-wide" x-text="log.user_name || 'Sistema'"></span>
                                             <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(log.created_at).toLocaleString()"></span>
                                         </div>
-                                        <p class="text-sm text-gray-900 font-medium whitespace-pre-wrap" x-text="(log.details || log.action)"></p>
+                                        <p class="text-sm text-gray-900 font-medium whitespace-pre-wrap" x-html="formatLogDetails(log.details || log.action)"></p>
                                         <span x-show="log.action && log.action !== log.details" class="inline-block mt-2 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded font-bold border border-gray-200" x-text="log.action"></span>
                                     </div>
                                 </div>

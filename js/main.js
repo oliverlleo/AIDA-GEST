@@ -20,6 +20,32 @@ try {
 let isUnloading = false;
 window.addEventListener('beforeunload', () => { isUnloading = true; });
 
+
+// ==========================================
+// GLOBAL UI HELPERS (XSS SAFE)
+// ==========================================
+window.formatLogDetails = function(text) {
+    if (!text) return '';
+
+    // 1. Convert plain text unsafe chars first to prevent arbitrary HTML injection
+    let html = String(text).replace(/&/g, "&amp;")
+                   .replace(/</g, "&lt;")
+                   .replace(/>/g, "&gt;")
+                   .replace(/"/g, "&quot;")
+                   .replace(/'/g, "&#039;");
+
+    // 2. Restore previously valid and safe tags (for old DB records)
+    // Example: &lt;span class=&quot;text-brand-500 font-bold&quot;&gt;tela&lt;/span&gt;
+    html = html.replace(/&lt;span class=&quot;([^&quot;]+)&quot;&gt;(.*?)&lt;\/span&gt;/gi, '<span class="$1">$2</span>');
+    html = html.replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, '<b>$1</b>');
+
+    // 3. Restore new markdown-style **bold** tags for future logs
+    html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+    return html;
+};
+
+
 function app() {
     return {
         // State
@@ -1748,9 +1774,13 @@ function app() {
                             relevantTickets = relevantTickets.filter(t => t.technician_id == this.user.id || t.technician_id == null);
                         }
 
-                        this.techTickets = relevantTickets.filter(t =>
-                            ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
-                        ).sort((a, b) => {
+                        this.techTickets = relevantTickets.filter(t => {
+                            const allowedStatuses = ['Analise Tecnica', 'Andamento Reparo'];
+                            if (this.getTestFlowMode() === 'technician') {
+                                allowedStatuses.push('Teste Final');
+                            }
+                            return allowedStatuses.includes(t.status);
+                        }).sort((a, b) => {
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
                             const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
@@ -3447,6 +3477,9 @@ function app() {
 
             if (!this.showAllCalendarTickets) {
                 const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
+                if (this.getTestFlowMode() === 'technician') {
+                    techStatuses.push('Teste Final');
+                }
                 source = source.filter(t => techStatuses.includes(t.status));
             }
             return source;
@@ -3532,7 +3565,7 @@ function app() {
                 search: '',
                 highlightedIndex: -1,
                 init() {
-                    this.search = this.ticketForm.model || '';
+        this.search = this.ticketForm.model || '';
                     this.$watch('ticketForm.model', (val) => {
                         if (!this.open) this.search = val || '';
                     });
@@ -3630,7 +3663,7 @@ function app() {
                 search: '',
                 highlightedIndex: -1,
                 init() {
-                    this.$watch('search', () => {
+        this.$watch('search', () => {
                         this.highlightedIndex = -1;
                     });
                 },
@@ -3752,7 +3785,7 @@ function app() {
                 search: '',
                 highlightedIndex: -1,
                 init() {
-                    this.$watch('search', () => {
+        this.$watch('search', () => {
                         this.highlightedIndex = -1;
                     });
                 },
@@ -3878,13 +3911,13 @@ function app() {
             const safeOsNumber = ticket.os_number || '';
             const safeDevice = ticket.device_model || '';
 
-            let client = `${safeClientName} da OS ${safeOsNumber}`;
-            const device = `${safeDevice}`;
+            let client = `**${safeClientName}** da OS **${safeOsNumber}**`;
+            const device = `**${safeDevice}**`;
 
             // Add outsourced context if applicable as requested by user
             if (ticket.is_outsourced && ticket.outsourced_company_id) {
                 const company = this.getOutsourcedCompany(ticket.outsourced_company_id);
-                client += ` (Terceirizado: ${company})`;
+                client += ` (Terceirizado: **${company}**)`;
             }
 
             return { client, device };
@@ -4105,9 +4138,9 @@ function app() {
                             pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available),
                             pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && t.delivery_method === 'carrier' && !t.tracking_code),
                             pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && (t.delivery_method !== 'carrier' || (t.delivery_method === 'carrier' && t.tracking_code))),
-                            pendingTech: this.homeOperationalItems.filter(t => t.status === 'Aberto'),
-                            outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
-                            pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && t.outsourced_at),
+                            pendingTech: this.homeOperationalItems.filter(t => t.status === 'Aberto' && !t.is_outsourced),
+                            outsourcedToSend: this.homeOperationalItems.filter(t => t.is_outsourced && (t.status === 'Aberto' || t.status === 'Terceirizado') && !t.outsourced_at),
+                            pendingOutsourced: this.homeOperationalItems.filter(t => t.is_outsourced && t.status === 'Terceirizado' && t.outsourced_at),
                             pendingPurchase: this.homeOperationalItems.filter(t => (t.status === 'Compra Peca' || (t.status === 'Aprovacao' && t.parts_needed)) && t.parts_status !== 'Comprado'),
                             pendingReceipt: this.homeOperationalItems.filter(t => (t.status === 'Compra Peca' || (t.status === 'Aprovacao' && t.parts_needed)) && t.parts_status === 'Comprado'),
                             priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
