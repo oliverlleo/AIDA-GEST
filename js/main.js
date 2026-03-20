@@ -1775,10 +1775,10 @@ function app() {
                         }
 
                         this.techTickets = relevantTickets.filter(t => {
-                            const testFlow = this.trackerConfig?.test_flow || 'kanban';
-                            const allowedStatuses = testFlow === 'technician' ?
-                                ['Analise Tecnica', 'Andamento Reparo', 'Teste Final'] :
-                                ['Analise Tecnica', 'Andamento Reparo'];
+                            const allowedStatuses = ['Analise Tecnica', 'Andamento Reparo'];
+                            if (this.getTestFlowMode() === 'technician') {
+                                allowedStatuses.push('Teste Final');
+                            }
                             return allowedStatuses.includes(t.status);
                         }).sort((a, b) => {
                             if (a.priority_requested && !b.priority_requested) return -1;
@@ -3476,10 +3476,10 @@ function app() {
             }
 
             if (!this.showAllCalendarTickets) {
-                const testFlow = this.trackerConfig?.test_flow || 'kanban';
-                const techStatuses = testFlow === 'technician' ?
-                    ['Analise Tecnica', 'Andamento Reparo', 'Teste Final'] :
-                    ['Analise Tecnica', 'Andamento Reparo'];
+                const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
+                if (this.getTestFlowMode() === 'technician') {
+                    techStatuses.push('Teste Final');
+                }
                 source = source.filter(t => techStatuses.includes(t.status));
             }
             return source;
