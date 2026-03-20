@@ -2221,7 +2221,11 @@ function app() {
                                                     status: app.status,
                                                     notes: app.notes,
                                                     os_number: app.os_number,
-                                                    client_name: app.client_name
+                                                    client_name: app.client_name,
+                                                    device_model: app.device_model,
+                                                    defect_reported: app.defect_reported,
+                                                    analysis_deadline: app.analysis_deadline,
+                                                    deadline: app.deadline
                                                 });
                                             }
                                         }
