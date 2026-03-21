@@ -472,8 +472,9 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
         bypassAnalysisCheck: false,
+        bypassRepairCheck: false,
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -2632,6 +2633,60 @@ function app() {
                 return this.notify("Selecione data, técnico e um horário livre disponível.", "error");
             }
 
+            // --- REPAIR DEADLINE CHECK ---
+            if (ea.type === 'repair' && !this.bypassRepairCheck) {
+                // Try to find the ticket deadline
+                let ticketDeadline = null;
+                const ticketId = ea.ticket_id || (ea.original ? ea.original.ticket_id : null);
+
+                if (ticketId) {
+                    // Search in main tickets list
+                    let ticket = this.tickets.find(t => t.id === ticketId);
+                    // Search in schedule management unscheduled items if not found
+                    if (!ticket && this.scheduleManagement.unscheduledItems) {
+                        ticket = this.scheduleManagement.unscheduledItems.find(t => t.id === ticketId);
+                    }
+                    if (!ticket && this.scheduleManagement.conflictItems) {
+                        ticket = this.scheduleManagement.conflictItems.find(t => t.id === ticketId);
+                    }
+                    if (!ticket && this.scheduleManagement.lateWithoutScheduleItems) {
+                        ticket = this.scheduleManagement.lateWithoutScheduleItems.find(t => t.id === ticketId);
+                    }
+                    if (!ticket && this.scheduleManagement.withoutTechnicianItems) {
+                        ticket = this.scheduleManagement.withoutTechnicianItems.find(t => t.id === ticketId);
+                    }
+                    // Search in selectedTicket (e.g., if viewing the ticket directly)
+                    if (!ticket && this.selectedTicket && this.selectedTicket.id === ticketId) {
+                        ticket = this.selectedTicket;
+                    }
+
+                    if (ticket && ticket.deadline) {
+                        ticketDeadline = new Date(ticket.deadline);
+                    }
+                }
+
+                if (ticketDeadline) {
+                    // Determine end time
+                    let localEndStr;
+                    if (ea.new_end) {
+                        localEndStr = `${ea.new_date}T${ea.new_end}`;
+                    } else {
+                        const startDate = new Date(`${ea.new_date}T${ea.new_start}`);
+                        startDate.setHours(startDate.getHours() + 1);
+                        const pad = (n) => n < 10 ? '0' + n : n;
+                        localEndStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}T${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
+                    }
+
+                    const appendDate = new Date(localEndStr);
+
+                    if (appendDate > ticketDeadline) {
+                        this.modals.confirmScheduleRepair = true;
+                        return; // Stop execution, wait for user confirmation
+                    }
+                }
+            }
+            // --- END REPAIR DEADLINE CHECK ---
+
             this.loading = true;
             try {
                 // If it already has an ID, we're rescheduling.
@@ -2680,6 +2735,7 @@ function app() {
                 this.notify("Erro ao gerenciar agendamento.", "error");
             } finally {
                 this.loading = false;
+                this.bypassRepairCheck = false;
             }
         },
 
