@@ -6380,6 +6380,29 @@
         </div>
     </div>
 
+    <!-- 1.2 CONFIRM SCHEDULE REPAIR MODAL -->
+    <div x-show="modals.confirmScheduleRepair" class="fixed inset-0 z-[200] flex items-center justify-center" x-cloak>
+        <div class="fixed inset-0 transition-opacity bg-black bg-opacity-75" @click="modals.confirmScheduleRepair = false"></div>
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm z-10 relative border-t-8 border-brand-500 text-center">
+            <div class="mb-4">
+                 <div class="bg-brand-100 text-brand-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-brand-200">
+                     <i class="fa-solid fa-triangle-exclamation text-3xl"></i>
+                 </div>
+                 <h3 class="text-xl font-bold text-gray-900 mb-2 tracking-tight">Atenção ao Prazo</h3>
+                 <p class="text-sm text-gray-600 leading-relaxed font-medium">A data/hora agendada para o reparo é <b>posterior</b> ao Prazo de Entrega do chamado. Deseja realmente agendar com esta configuração?</p>
+            </div>
+
+            <div class="flex space-x-3 mt-6">
+                <button @click="modals.confirmScheduleRepair = false" class="flex-1 text-gray-500 font-bold text-sm bg-gray-100 hover:bg-gray-200 py-3 rounded-lg transition-colors shadow-sm">
+                    Revisar
+                </button>
+                <button @click="bypassRepairCheck = true; modals.confirmScheduleRepair = false; submitReschedule()" class="flex-1 bg-brand-500 text-white py-3 rounded-lg font-bold hover:bg-brand-600 shadow-md transition-colors flex justify-center items-center">
+                    Agendar Reparo
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 8.1 FINISH ANALYSIS MINI MODAL (New) -->
     <div x-show="modals.finishAnalysis" class="fixed inset-0 z-[80] flex items-center justify-center" x-cloak>
         <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.finishAnalysis = false"></div>
