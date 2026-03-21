@@ -20,6 +20,32 @@ try {
 let isUnloading = false;
 window.addEventListener('beforeunload', () => { isUnloading = true; });
 
+
+// ==========================================
+// GLOBAL UI HELPERS (XSS SAFE)
+// ==========================================
+window.formatLogDetails = function(text) {
+    if (!text) return '';
+
+    // 1. Convert plain text unsafe chars first to prevent arbitrary HTML injection
+    let html = String(text).replace(/&/g, "&amp;")
+                   .replace(/</g, "&lt;")
+                   .replace(/>/g, "&gt;")
+                   .replace(/"/g, "&quot;")
+                   .replace(/'/g, "&#039;");
+
+    // 2. Restore previously valid and safe tags (for old DB records)
+    // Example: &lt;span class=&quot;text-brand-500 font-bold&quot;&gt;tela&lt;/span&gt;
+    html = html.replace(/&lt;span class=&quot;([^&quot;]+)&quot;&gt;(.*?)&lt;\/span&gt;/gi, '<span class="$1">$2</span>');
+    html = html.replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, '<b>$1</b>');
+
+    // 3. Restore new markdown-style **bold** tags for future logs
+    html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+    return html;
+};
+
+
 function app() {
     return {
         // State
@@ -321,6 +347,7 @@ function app() {
         newTemplateNameFinal: '',
 
         // UI State for Actions
+        selectedTicketAppointments: [],
         analysisForm: { needsParts: false, partsList: '' },
         outcomeMode: '',
         showTestFailureForm: false,
@@ -379,7 +406,75 @@ function app() {
         currentTime: new Date(),
 
         // Modals
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false },
+        // Scheduling Management View State
+        scheduleManagement: {
+            selectedTechnicianId: '',
+            gridTechnicianId: '', // Added so clicking a card updates grid without affecting dropdown
+            viewMode: 'week', // 'day' or 'week'
+            referenceDate: new Date().toLocaleDateString('en-CA'),
+            slotActionPopover: { open: false, date: '', slot: null, x: 0, y: 0 },
+            typeFilter: 'all', // 'all', 'analysis', 'repair'
+            loading: false,
+            data: null,
+            unscheduledLoading: false,
+            unscheduledItems: [],
+            unscheduledTotal: 0,
+            withoutTechnicianItems: [],
+            withoutTechnicianTotal: 0,
+            conflictItems: [],
+            conflictTotal: 0,
+            lateWithoutScheduleItems: [],
+            lateWithoutScheduleTotal: 0,
+            capacitySummary: null,
+            techConfig: {
+                technician_id: '',
+                workDays: [
+                    { active: false, start: '09:00', end: '18:00' }, // Sunday
+                    { active: true, start: '09:00', end: '18:00' }, // Monday
+                    { active: true, start: '09:00', end: '18:00' }, // Tuesday
+                    { active: true, start: '09:00', end: '18:00' }, // Wednesday
+                    { active: true, start: '09:00', end: '18:00' }, // Thursday
+                    { active: true, start: '09:00', end: '18:00' }, // Friday
+                    { active: false, start: '09:00', end: '12:00' }  // Saturday
+                ],
+                hasBreak: true,
+                breakStart: '12:00',
+                breakEnd: '13:00',
+                slotDuration: 30,
+                maxConcurrent: 1
+            },
+            editingAppointment: {
+                ticket_id: '',
+                type: 'analysis',
+                original: null,
+                ticketContext: null,
+                new_date: '',
+                new_start: '',
+                new_end: '',
+                new_technician_id: '',
+                notes: ''
+            },
+            editingBlock: {
+                block_id: null,
+                date: '',
+                start: '',
+                end: '',
+                notes: ''
+            },
+        },
+
+        // Scheduling State
+        schedulePanelOpen: false,
+        schedulePanelMode: '', // 'analysis' or 'repair'
+        scheduleAvailabilityLoading: false,
+        scheduleAvailabilityData: null,
+        selectedAnalysisAppointment: null,
+        selectedRepairAppointment: null,
+        scheduleCurrentWeekStart: null,
+
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
+        bypassAnalysisCheck: false,
+        bypassRepairCheck: false,
 
         // Logistics State
         logisticsMode: 'initial', // 'initial', 'carrier_form', 'add_tracking'
@@ -422,8 +517,40 @@ function app() {
             { key: 'defect_reported', label: 'Defeito Relatado', col: 'defect_reported', type: 'text' },
             { key: 'checklist_entry', label: 'Checklist de Entrada', col: 'checklist_data', type: 'array' },
             { key: 'checklist_exit', label: 'Checklist de Saída', col: 'checklist_final_data', type: 'array' },
-            { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' }
+            { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' },
+            { key: 'analysis_schedule', label: 'Agendamento de Análise', col: 'analysis_schedule', type: 'schedule' }
         ],
+
+        // ==========================================
+        // SCHEDULING FACTORIES
+        // ==========================================
+        getDefaultScheduleEditingAppointment() {
+            return {
+                ticket_id: '',
+                type: 'analysis',
+                original: null,
+                ticketContext: null,
+                new_date: '',
+                new_start: '',
+                new_end: '',
+                new_technician_id: '',
+                notes: ''
+            };
+        },
+
+        getDefaultScheduleEditingBlock() {
+            return {
+                block_id: null,
+                date: '',
+                start: '',
+                end: '',
+                full_day: false,
+                is_recurring: false,
+                recurrence_type: 'daily',
+                recurrence_end_date: '',
+                notes: ''
+            };
+        },
 
         // ==========================================
         // CONFIG HELPERS (TRACKER / FEATURES)
@@ -1264,6 +1391,18 @@ function app() {
             return this.getStatusLabel(status);
         },
 
+        extractTime(timeStr) {
+            if (!timeStr) return '';
+            if (timeStr.includes('T')) {
+                const d = new Date(timeStr);
+                // Extract HH:mm safely from a valid date regardless of locale string behavior
+                const h = String(d.getHours()).padStart(2, '0');
+                const m = String(d.getMinutes()).padStart(2, '0');
+                return `${h}:${m}`;
+            }
+            return timeStr.substring(0, 5);
+        },
+
         toggleTrackerStage(stage) {
             const idx = this.trackerConfig.visible_stages.indexOf(stage);
             if (idx > -1) {
@@ -1637,9 +1776,13 @@ function app() {
                             relevantTickets = relevantTickets.filter(t => t.technician_id == this.user.id || t.technician_id == null);
                         }
 
-                        this.techTickets = relevantTickets.filter(t =>
-                            ['Analise Tecnica', 'Andamento Reparo'].includes(t.status)
-                        ).sort((a, b) => {
+                        this.techTickets = relevantTickets.filter(t => {
+                            const allowedStatuses = ['Analise Tecnica', 'Andamento Reparo'];
+                            if (this.getTestFlowMode() === 'technician') {
+                                allowedStatuses.push('Teste Final');
+                            }
+                            return allowedStatuses.includes(t.status);
+                        }).sort((a, b) => {
                             if (a.priority_requested && !b.priority_requested) return -1;
                             if (!a.priority_requested && b.priority_requested) return 1;
                             const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
@@ -1741,6 +1884,14 @@ function app() {
         },
 
         openNewTicketModal() {
+            this.schedulePanelOpen = false;
+            this.schedulePanelMode = '';
+            this.scheduleAvailabilityLoading = false;
+            this.scheduleAvailabilityData = null;
+            this.selectedAnalysisAppointment = null;
+            this.selectedRepairAppointment = null;
+            this.scheduleCurrentWeekStart = null;
+            this.bypassAnalysisCheck = false;
             this.ticketForm = {
                 id: crypto.randomUUID(),
                 client_name: '', os_number: '', model: '', serial: '',
@@ -1817,6 +1968,890 @@ function app() {
             if (tmpl) this.ticketForm.checklist_final = tmpl.items.map(s => ({ item: s, ok: false }));
         },
 
+
+        // ==========================================
+        // SCHEDULING METHODS
+        // ==========================================
+        openSchedulePanel(mode) {
+            // No Kanban mode (viewTicket modal is open), the technician is derived from selectedTicket.
+            // In creation mode, it's ticketForm.technician_id.
+            const targetTechId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
+
+            if (!targetTechId || targetTechId === 'all') {
+                // Ao invés de travar com erro, vamos usar a variável global ou abortar graciosamente alertando pra trocar pelo modal inteiro
+                return this.notify("O chamado precisa estar alocado a um técnico para agendar usando este atalho de calendário lateral. Tente alterar o técnico ou agendar via painel 'Gerenciamento de Agenda'.", "error");
+            }
+            this.schedulePanelMode = mode;
+            this.scheduleCurrentWeekStart = new Date(); // Start with current week
+            this.schedulePanelOpen = true;
+            this.fetchScheduleAvailability(targetTechId);
+        },
+
+        getTechnicianName(techId) {
+            if (!techId || techId === 'all') return 'Nenhum técnico';
+            const tech = this.getTechnicians().find(t => t.id === techId);
+            return tech ? tech.name : 'Técnico Desconhecido';
+        },
+
+        async fetchScheduleAvailability(targetTechId = null) {
+            const techId = targetTechId || (this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id);
+            if (!techId || techId === 'all') return;
+
+            this.scheduleAvailabilityLoading = true;
+            this.scheduleAvailabilityData = [];
+
+            try {
+                // Ensure date is properly formatted as YYYY-MM-DD local timezone
+                const tzOffset = this.scheduleCurrentWeekStart.getTimezoneOffset() * 60000; // offset in milliseconds
+                const localISOTime = (new Date(this.scheduleCurrentWeekStart - tzOffset)).toISOString().slice(0, -1);
+                const refDate = localISOTime.split('T')[0];
+                const response = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
+                    p_technician_id: techId,
+                    p_mode: this.schedulePanelMode,
+                    p_reference_date: refDate,
+                    p_days: 7
+                });
+
+                if (response && response.days) {
+                    this.scheduleAvailabilityData = response.days;
+                } else if (response && Array.isArray(response)) {
+                    // Fallback in case the RPC returns an array directly instead of an object with 'days'
+                    this.scheduleAvailabilityData = response;
+                }
+            } catch (error) {
+                console.error("Error fetching schedule:", error);
+                this.notify("Erro ao buscar disponibilidade.", "error");
+            } finally {
+                this.scheduleAvailabilityLoading = false;
+            }
+        },
+
+        navigateScheduleWeek(direction) {
+            if (!this.scheduleCurrentWeekStart) this.scheduleCurrentWeekStart = new Date();
+            const date = new Date(this.scheduleCurrentWeekStart);
+            date.setDate(date.getDate() + (direction * 7));
+            this.scheduleCurrentWeekStart = date;
+            this.fetchScheduleAvailability();
+        },
+
+        formatScheduleWeekRange() {
+            if (!this.scheduleCurrentWeekStart) return '';
+            const start = new Date(this.scheduleCurrentWeekStart);
+            const end = new Date(this.scheduleCurrentWeekStart);
+            end.setDate(end.getDate() + 6);
+
+            const format = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            return `${format(start)} - ${format(end)}`;
+        },
+
+        formatScheduleDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr + 'T12:00:00'); // Prevent timezone shift
+            const weekDay = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+            const dayMonth = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            return `${weekDay}, ${dayMonth}`;
+        },
+
+        formatDateLocal(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return '';
+
+            const dayMonth = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+            return `${dayMonth}, ${time}`;
+        },
+
+        formatTimeOnly(timeStr) {
+            if (!timeStr) return '';
+            // Handle cases where time might be full ISO or just HH:mm:ss
+            if (timeStr.includes('T')) {
+                const d = new Date(timeStr);
+                return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            }
+            // For simple strings like '14:00:00'
+            const parts = timeStr.split(':');
+            return `${parts[0]}:${parts[1]}`;
+        },
+
+        async selectScheduleSlot(dateStr, slot) {
+            const techId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
+
+            const appointmentData = {
+                date: dateStr,
+                start: this.extractTime(slot.start),
+                end: this.extractTime(slot.end),
+                status: slot.status,
+                technician_id: techId
+            };
+
+            if (this.modals.viewTicket && this.selectedTicket) {
+                // Em modo de edição de ticket, clicar no calendário lateral salva a RPC diretamente.
+                this.loading = true;
+                try {
+                    const startStr = this.toUTC(`${dateStr}T${appointmentData.start}`);
+                    const endStr = this.toUTC(`${dateStr}T${appointmentData.end}`);
+
+                    await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                        p_ticket_id: this.selectedTicket.id,
+                        p_technician_id: techId,
+                        p_appointment_type: this.schedulePanelMode,
+                        p_scheduled_start: startStr,
+                        p_scheduled_end: endStr,
+                        p_notes: 'Agendado pelo painel lateral'
+                    });
+
+                    // Update state reativamente pro botão sumir na mesma hora
+                    if (this.schedulePanelMode === 'analysis') this.selectedTicket.analysis_scheduled = true;
+                    if (this.schedulePanelMode === 'repair') this.selectedTicket.repair_scheduled = true;
+
+                    this.notify("Agendamento criado com sucesso!");
+                    this.fetchTicketAppointments(this.selectedTicket.id); // Atualiza aba de Agendamentos histórico
+                } catch (e) {
+                    console.error("Erro ao salvar agendamento:", e);
+                    this.notify("Falha ao salvar agendamento.", "error");
+                } finally {
+                    this.loading = false;
+                }
+            } else {
+                // Em modo de Criação de Ticket, apenas guarda no buffer
+                if (this.schedulePanelMode === 'analysis') {
+                    this.selectedAnalysisAppointment = appointmentData;
+                } else if (this.schedulePanelMode === 'repair') {
+                    this.selectedRepairAppointment = appointmentData;
+                }
+            }
+
+            this.schedulePanelOpen = false;
+        },
+
+        isSlotSelected(dateStr, slot) {
+            const current = this.schedulePanelMode === 'analysis' ? this.selectedAnalysisAppointment : this.selectedRepairAppointment;
+            if (!current) return false;
+            return current.date === dateStr && current.start === this.extractTime(slot.start);
+        },
+
+        removeAppointment(mode) {
+            if (mode === 'analysis') {
+                this.selectedAnalysisAppointment = null;
+            } else if (mode === 'repair') {
+                this.selectedRepairAppointment = null;
+            }
+        },
+
+        // ==========================================
+        // SCHEDULE MANAGEMENT VIEW METHODS (Admin)
+        // ==========================================
+        async loadScheduleManagement() {
+            this.scheduleManagement.loading = true;
+            this.scheduleManagement.gridTechnicianId = this.scheduleManagement.selectedTechnicianId;
+
+            const tasks = [];
+
+            // 1. Unscheduled tickets should always load
+            tasks.push(this.fetchUnscheduledTickets());
+
+            // 2. Manager schedule only loads if a tech is selected
+            if (this.scheduleManagement.gridTechnicianId) {
+                this.scheduleManagement.data = [];
+                this.scheduleManagement.capacitySummary = { booked: 0, total: 0 };
+                tasks.push(this.fetchManagerSchedule());
+            } else {
+                this.scheduleManagement.data = null;
+                this.scheduleManagement.capacitySummary = null;
+            }
+
+            await Promise.all(tasks);
+
+            this.scheduleManagement.loading = false;
+        },
+
+        previewTechnicianSchedule(ticket) {
+            if (ticket.technician_id) {
+                this.scheduleManagement.gridTechnicianId = ticket.technician_id;
+                this.fetchManagerSchedule();
+            }
+        },
+
+        async fetchManagerSchedule() {
+            try {
+                const refDate = new Date(this.scheduleManagement.referenceDate);
+                const tzOffset = refDate.getTimezoneOffset() * 60000;
+                const localDateStr = (new Date(refDate.getTime() - tzOffset)).toISOString().split('T')[0];
+
+                const response = await this.supabaseFetch('rpc/get_schedule_dashboard', 'POST', {
+                    p_technician_id: this.scheduleManagement.gridTechnicianId,
+                    p_view: this.scheduleManagement.viewMode,
+                    p_reference_date: localDateStr
+                });
+
+                if (response && response.schedule) {
+                    // A nova RPC retorna obj schedule contendo os appointments agrupados
+                    // O frontend precisa remontar a visão estruturada (dias e slots) baseada nisso
+                    // Ou utilizar os dados vindos direto de get_schedule_availability (se compatível)
+
+                    // Como a RPC original (get_schedule_availability) estrutura dias e slots perfeitamente,
+                    // precisamos chamar a RPC de availability se a dashboard não nos der `days`.
+                    const availResponse = await this.supabaseFetch('rpc/get_schedule_availability', 'POST', {
+                        p_technician_id: this.scheduleManagement.gridTechnicianId,
+                        p_mode: 'all',
+                        p_reference_date: localDateStr,
+                        p_days: this.scheduleManagement.viewMode === 'day' ? 1 : 7
+                    });
+
+                    if (availResponse && availResponse.days) {
+                        // Mesclar os appointments do backend (response.schedule.appointments) nos dias
+                        const apps = response.schedule.appointments || [];
+                        const blocks = response.schedule.blocks || [];
+
+                        availResponse.days.forEach(day => {
+                            if (day.slots) {
+                                day.slots.forEach(slot => {
+                                    slot.appointments = [];
+                                    const slotStart = new Date(slot.start).getTime();
+
+                                    apps.forEach(app => {
+                                        const appStart = new Date(app.scheduled_start).getTime();
+                                        if (appStart === slotStart) {
+                                            if (this.scheduleManagement.typeFilter === 'all' || app.appointment_type === this.scheduleManagement.typeFilter) {
+                                                slot.appointments.push({
+                                                    id: app.id,
+                                                    ticket_id: app.ticket_id,
+                                                    type: app.appointment_type,
+                                                    start: app.scheduled_start,
+                                                    end: app.scheduled_end,
+                                                    status: app.status,
+                                                    notes: app.notes,
+                                                    os_number: app.os_number,
+                                                    client_name: app.client_name,
+                                                    device_model: app.device_model,
+                                                    defect_reported: app.defect_reported,
+                                                    analysis_deadline: app.analysis_deadline,
+                                                    deadline: app.deadline
+                                                });
+                                            }
+                                        }
+                                    });
+                                });
+                            }
+                        });
+                        this.scheduleManagement.data = availResponse.days;
+
+                        // Fake a basic capacity summary until backend gives `capacity_summary` properly
+                        this.scheduleManagement.capacitySummary = {
+                            total: response.schedule.counts?.total_appointments || 0,
+                            booked: response.schedule.counts?.total_appointments || 0,
+                            blocked: response.schedule.counts?.total_blocks || 0,
+                            overbooked: 0
+                        };
+                    } else {
+                        this.scheduleManagement.data = [];
+                    }
+                } else {
+                    this.scheduleManagement.data = [];
+                }
+            } catch (error) {
+                console.error("Error fetching manager schedule:", error);
+                this.notify("Erro ao carregar a agenda.", "error");
+            }
+        },
+
+        async fetchUnscheduledTickets() {
+            this.scheduleManagement.unscheduledLoading = true;
+            this.scheduleManagement.unscheduledItems = [];
+            this.scheduleManagement.unscheduledTotal = 0;
+            this.scheduleManagement.withoutTechnicianItems = [];
+            this.scheduleManagement.withoutTechnicianTotal = 0;
+
+            this.scheduleManagement.conflictItems = [];
+            this.scheduleManagement.conflictTotal = 0;
+            this.scheduleManagement.lateWithoutScheduleItems = [];
+            this.scheduleManagement.lateWithoutScheduleTotal = 0;
+
+            try {
+                const filterTechId = this.scheduleManagement.selectedTechnicianId;
+
+                // Sempre puxamos a lista geral de não agendados enviando null
+                // porque queremos que a lateral se comporte como se não houvesse filtro caso techId = ''
+                const response = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
+                    p_technician_id: null,
+                    p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
+                    p_status: null,
+                    p_limit: 500,
+                    p_offset: 0
+                });
+
+                let allItems = [];
+                if (response && typeof response === 'object' && response.items) {
+                    allItems = response.items;
+                }
+
+                // O usuário pediu: se não tem técnico selecionado, aparece todos os cards (de todos os técnicos)
+                // Se TEM técnico selecionado no select lá em cima, filtramos a lateral SOMENTE para aquele técnico e os SEM TÉCNICO.
+                let filteredItems = allItems;
+                if (filterTechId) {
+                    filteredItems = allItems.filter(t => !t.technician_id || t.technician_id === filterTechId);
+                }
+
+                // Sem Técnico Block
+                const purelyUnassigned = filteredItems.filter(t => !t.technician_id);
+                this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
+                this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
+
+                // Com Técnico (Não Agendados)
+                const assignedUnscheduled = filteredItems.filter(t => t.technician_id);
+                this.scheduleManagement.unscheduledItems = assignedUnscheduled;
+                this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
+
+                const now = new Date();
+                const uniqueItems = filteredItems;
+
+                const lateItems = uniqueItems.filter(t => {
+                    const deadlineToCheck = t.status === 'Analise Tecnica' ? t.analysis_deadline : t.deadline;
+                    if (!deadlineToCheck) return false;
+                    const d = new Date(deadlineToCheck);
+                    return d < now;
+                });
+
+                this.scheduleManagement.lateWithoutScheduleItems = lateItems;
+                this.scheduleManagement.lateWithoutScheduleTotal = lateItems.length;
+
+                // 4. Conflict Items (Derived conservative visual proxy)
+                // A reasonable visual proxy for "conflict" in the unscheduled list is tickets that are assigned
+                // but whose deadline is extremely close (e.g. today or earlier) while there is NO available capacity today.
+                // We analyze the loaded schedule capacity to derive this warning list.
+                const conflicts = [];
+
+                // Only evaluate if we have a technician and capacity loaded for the current view
+                if (filterTechId && this.scheduleManagement.capacitySummary && (this.scheduleManagement.capacitySummary.booked >= this.scheduleManagement.capacitySummary.total)) {
+                    const viewDateLimit = new Date(this.scheduleManagement.referenceDate);
+                    viewDateLimit.setHours(23, 59, 59, 999);
+
+                    for (const item of uniqueItems) {
+                        // Skip if it's not assigned to the completely booked technician
+                        if (item.technician_id !== filterTechId) continue;
+
+                        const deadlineToCheck = item.status === 'Analise Tecnica' ? item.analysis_deadline : item.deadline;
+                        if (!deadlineToCheck) continue;
+
+                        const itemDeadline = new Date(deadlineToCheck);
+                        // If the deadline is before the end of the loaded (booked) view and it's not scheduled, it's a conflict
+                        if (itemDeadline <= viewDateLimit) {
+                            conflicts.push(item);
+                        }
+                    }
+                }
+
+                // Deduplicate from late items to prevent noise (ticket can only be in one visual group logic here ideally, but arrays are separate)
+                // Let's keep them purely in conflict if capacity is full, but user might just want the list
+                this.scheduleManagement.conflictItems = conflicts;
+                this.scheduleManagement.conflictTotal = conflicts.length;
+
+            } catch (error) {
+                console.error("Error fetching unscheduled tickets:", error);
+            } finally {
+                this.scheduleManagement.unscheduledLoading = false;
+            }
+        },
+
+        navigateScheduleManagement(direction) {
+            const date = new Date(this.scheduleManagement.referenceDate);
+            const daysToMove = this.scheduleManagement.viewMode === 'day' ? direction * 1 : direction * 7;
+            date.setDate(date.getDate() + daysToMove);
+            this.scheduleManagement.referenceDate = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
+            this.loadScheduleManagement();
+        },
+
+
+        openAppointmentActionMenu(appointment, dateStr, slot) {
+            // Use the correct editingAppointment shape
+            this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
+
+            const ea = this.scheduleManagement.editingAppointment;
+            ea.original = appointment;
+            ea.ticket_id = appointment.ticket_id;
+            ea.type = appointment.type;
+            ea.new_date = dateStr;
+            ea.new_start = this.extractTime(slot.start_time);
+            ea.new_end = this.extractTime(slot.end_time);
+            ea.new_technician_id = this.scheduleManagement.selectedTechnicianId;
+
+            this.modals.rescheduleAppointment = true;
+        },
+
+        handleManagerSlotClick(dateStr, slot, event) {
+            if (slot.status === 'livre') {
+                const rect = event.currentTarget.getBoundingClientRect();
+                this.scheduleManagement.slotActionPopover = {
+                    open: true,
+                    date: dateStr,
+                    slot: slot,
+                    x: rect.right + window.scrollX + 10, // Position to the right of the slot
+                    y: rect.top + window.scrollY
+                };
+            }
+        },
+
+        closeSlotPopover() {
+            this.scheduleManagement.slotActionPopover.open = false;
+        },
+
+        openScheduleModalFromSidebar(ticket) {
+            const type = ticket.status === 'Analise Tecnica' ? 'analysis' : 'repair';
+            // Abre o modal de agendamento em modo criação passando o ticket, tipo inferido, e sem slot pré-definido
+            this.openRescheduleModal(ticket.id, type, null, null);
+        },
+
+        initiateSidebarAction(ticket, action) {
+            if (action === 'reschedule') {
+                this.openScheduleModalFromSidebar(ticket);
+            }
+        },
+
+        initiateSlotAction(actionType) {
+            const dateStr = this.scheduleManagement.slotActionPopover.date;
+            const slot = this.scheduleManagement.slotActionPopover.slot;
+            this.closeSlotPopover();
+
+            if (actionType === 'analysis' || actionType === 'repair') {
+                // Open reschedule modal in "creation" mode without ticket
+                this.openRescheduleModal('', actionType, null, {
+                    date: dateStr,
+                    start: this.extractTime(slot.start),
+                    end: this.extractTime(slot.end)
+                });
+            } else if (actionType === 'block') {
+                this.openBlockModal(dateStr, slot);
+            }
+        },
+
+        openRescheduleModal(ticketId, type, appointmentObj, prefillSlot = null) {
+            // Find ticket context from unscheduled lists if available to populate headers nicely during creation
+            let ctx = null;
+            if (ticketId && !appointmentObj) {
+                // Sempre dar prioridade ao selectedTicket se houver um modal de OS aberto,
+                // pois ele contém a carga de dados mais rica de Kanban (prazos, cliente, etc).
+                if (this.selectedTicket && this.selectedTicket.id === ticketId) {
+                    ctx = this.selectedTicket;
+                } else {
+                    // Fallback para as listas globais da lateral
+                    const allUnscheduled = [
+                        ...this.scheduleManagement.unscheduledItems,
+                        ...this.scheduleManagement.withoutTechnicianItems,
+                        ...this.scheduleManagement.lateWithoutScheduleItems,
+                        ...this.scheduleManagement.conflictItems
+                    ];
+                    ctx = allUnscheduled.find(t => t.id === ticketId);
+                }
+
+                // Em último caso, se a gente clicou pela tela de Bancada onde não abriu o ticket details, busca na array global do Kanban
+                if (!ctx && this.tickets) {
+                    ctx = this.tickets.find(t => t.id === ticketId);
+                }
+            }
+
+            this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
+            const ea = this.scheduleManagement.editingAppointment;
+
+            ea.ticket_id = ticketId;
+            ea.type = type;
+            ea.original = appointmentObj;
+            ea.ticketContext = ctx;
+            ea.new_date = prefillSlot ? prefillSlot.date : (appointmentObj ? appointmentObj.date : '');
+            ea.new_start = prefillSlot ? prefillSlot.start : (appointmentObj ? appointmentObj.start : '');
+            ea.new_end = prefillSlot ? prefillSlot.end : (appointmentObj ? appointmentObj.end : '');
+
+            // Set technician intelligently based on available context
+            let techId = appointmentObj ? appointmentObj.technician_id : this.scheduleManagement.selectedTechnicianId;
+            if (!techId && ctx && ctx.technician_id) {
+                techId = ctx.technician_id; // Puxa do contexto do ticket se houver técnico associado lá e não na aba lateral global
+            }
+            ea.new_technician_id = techId;
+
+            this.modals.rescheduleAppointment = true;
+        },
+
+        closeRescheduleModal() {
+            this.modals.rescheduleAppointment = false;
+            this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
+        },
+
+        openBlockModal(dateStr, slot) {
+            this.scheduleManagement.editingBlock = this.getDefaultScheduleEditingBlock();
+            const eb = this.scheduleManagement.editingBlock;
+
+            eb.block_id = slot?.block_id || null;
+            eb.date = dateStr || new Date().toLocaleDateString('en-CA');
+            if (slot) {
+                eb.start = this.extractTime(slot.start_time || slot.start);
+                eb.end = this.extractTime(slot.end_time || slot.end);
+                eb.notes = slot.block_notes || '';
+            } else {
+                eb.start = '09:00';
+                eb.end = '18:00';
+            }
+
+            this.modals.scheduleBlock = true;
+        },
+
+        closeBlockModal() {
+            this.modals.scheduleBlock = false;
+            this.scheduleManagement.editingBlock = this.getDefaultScheduleEditingBlock();
+        },
+
+        // --- Tech Schedule Configuration ---
+
+        openTechConfigModal() {
+            this.scheduleManagement.techConfig.technician_id = this.scheduleManagement.selectedTechnicianId || '';
+            if (this.scheduleManagement.techConfig.technician_id) {
+                this.loadTechConfig();
+            }
+            this.modals.techScheduleSettings = true;
+        },
+
+        addExtraBreak() {
+            if (!this.scheduleManagement.techConfig.extraBreaks) {
+                this.scheduleManagement.techConfig.extraBreaks = [];
+            }
+
+            // Generate today's date in YYYY-MM-DD format
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const formattedToday = `${yyyy}-${mm}-${dd}`;
+
+            this.scheduleManagement.techConfig.extraBreaks.push({
+                active: true,
+                name: 'Novo Intervalo',
+                start: '15:00',
+                end: '15:30',
+                recurrence_type: 'none',
+                specific_date: formattedToday,
+                recurrence_days: []
+            });
+        },
+
+        removeExtraBreak(index) {
+            this.scheduleManagement.techConfig.extraBreaks.splice(index, 1);
+        },
+
+        closeTechConfigModal() {
+            this.modals.techScheduleSettings = false;
+        },
+
+        async loadTechConfig() {
+            const techId = this.scheduleManagement.techConfig.technician_id;
+            if (!techId) return;
+
+            this.loading = true;
+            try {
+                // Fetch from `technician_schedule_settings`.
+                // Use maybeSingle() to avoid 406 Not Acceptable error when the technician has no custom setting yet
+                const { data, error } = await supabaseClient
+                    .from('technician_schedule_settings')
+                    .select('*')
+                    .eq('technician_id', techId)
+                    .maybeSingle();
+
+                if (error && error.code !== 'PGRST116') {
+                    console.error("Error fetching tech config:", error);
+                }
+
+                if (data && data.settings) {
+                    const s = data.settings;
+                    this.scheduleManagement.techConfig = {
+                        technician_id: techId,
+                        workDays: s.workDays || this.scheduleManagement.techConfig.workDays,
+                        hasBreak: s.hasBreak !== undefined ? s.hasBreak : true,
+                        breakStart: s.breakStart || '12:00',
+                        breakEnd: s.breakEnd || '13:00',
+                        extraBreaks: s.extraBreaks || [],
+                        slotDuration: s.slotDuration || 30,
+                        maxConcurrent: s.maxConcurrent || 1
+                    };
+                }
+            } catch (e) {
+                console.warn("Could not load tech config (maybe none exists yet):", e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async saveTechConfig() {
+            const techId = this.scheduleManagement.techConfig.technician_id;
+            if (!techId) return this.notify("Técnico inválido.", "error");
+
+            this.loading = true;
+            try {
+                const payload = {
+                    workDays: this.scheduleManagement.techConfig.workDays,
+                    hasBreak: this.scheduleManagement.techConfig.hasBreak,
+                    breakStart: this.scheduleManagement.techConfig.breakStart,
+                    breakEnd: this.scheduleManagement.techConfig.breakEnd,
+                    extraBreaks: this.scheduleManagement.techConfig.extraBreaks || [],
+                    slotDuration: this.scheduleManagement.techConfig.slotDuration,
+                    maxConcurrent: this.scheduleManagement.techConfig.maxConcurrent
+                };
+
+                // Upsert logic for technician_schedule_settings
+                const { error } = await supabaseClient
+                    .from('technician_schedule_settings')
+                    .upsert({
+                        technician_id: techId,
+                        workspace_id: this.user.workspace_id,
+                        settings: payload
+                    }, { onConflict: 'technician_id' });
+
+                if (error) throw error;
+
+                this.notify("Configuração de agenda salva com sucesso!");
+                this.closeTechConfigModal();
+                if (this.scheduleManagement.selectedTechnicianId === techId) {
+                    this.loadScheduleManagement(); // Refresh the grid to show new availability
+                }
+            } catch (e) {
+                console.error("Error saving tech config:", e);
+                this.notify("Erro ao salvar a configuração.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        // --- Management Mutations ---
+
+        async submitReschedule() {
+            const ea = this.scheduleManagement.editingAppointment;
+
+            // Explicit guard against submitting a creation without selecting a ticket
+            if (!ea.ticket_id && (!ea.original || !ea.original.id)) {
+                return this.notify("Selecione um chamado pendente para agendar.", "error");
+            }
+
+            if (!ea.new_date || !ea.new_start || !ea.new_technician_id) {
+                return this.notify("Selecione data, técnico e um horário livre disponível.", "error");
+            }
+
+            // --- REPAIR DEADLINE CHECK ---
+            if (ea.type === 'repair' && !this.bypassRepairCheck) {
+                // Try to find the ticket deadline
+                let ticketDeadline = null;
+                const ticketId = ea.ticket_id || (ea.original ? ea.original.ticket_id : null);
+
+                if (ticketId) {
+                    // Search in main tickets list
+                    let ticket = this.tickets.find(t => t.id === ticketId);
+                    // Search in schedule management unscheduled items if not found
+                    if (!ticket && this.scheduleManagement.unscheduledItems) {
+                        ticket = this.scheduleManagement.unscheduledItems.find(t => t.id === ticketId);
+                    }
+                    if (!ticket && this.scheduleManagement.conflictItems) {
+                        ticket = this.scheduleManagement.conflictItems.find(t => t.id === ticketId);
+                    }
+                    if (!ticket && this.scheduleManagement.lateWithoutScheduleItems) {
+                        ticket = this.scheduleManagement.lateWithoutScheduleItems.find(t => t.id === ticketId);
+                    }
+                    if (!ticket && this.scheduleManagement.withoutTechnicianItems) {
+                        ticket = this.scheduleManagement.withoutTechnicianItems.find(t => t.id === ticketId);
+                    }
+                    // Search in selectedTicket (e.g., if viewing the ticket directly)
+                    if (!ticket && this.selectedTicket && this.selectedTicket.id === ticketId) {
+                        ticket = this.selectedTicket;
+                    }
+
+                    if (ticket && ticket.deadline) {
+                        ticketDeadline = new Date(ticket.deadline);
+                    }
+                }
+
+                if (ticketDeadline) {
+                    // Determine end time
+                    let localEndStr;
+                    if (ea.new_end) {
+                        localEndStr = `${ea.new_date}T${ea.new_end}`;
+                    } else {
+                        const startDate = new Date(`${ea.new_date}T${ea.new_start}`);
+                        startDate.setHours(startDate.getHours() + 1);
+                        const pad = (n) => n < 10 ? '0' + n : n;
+                        localEndStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}T${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
+                    }
+
+                    const appendDate = new Date(localEndStr);
+
+                    if (appendDate > ticketDeadline) {
+                        this.modals.confirmScheduleRepair = true;
+                        return; // Stop execution, wait for user confirmation
+                    }
+                }
+            }
+            // --- END REPAIR DEADLINE CHECK ---
+
+            this.loading = true;
+            try {
+                // If it already has an ID, we're rescheduling.
+                // If not, it's a new appointment from the unscheduled list.
+                const startStr = this.toUTC(`${ea.new_date}T${ea.new_start}`);
+
+                // Em modo remarcação com busca de slots reais, ea.new_end já deve estar populado.
+                // Se não estiver, fazemos fallback de 1 hora.
+                let endStr;
+                if (ea.new_end) {
+                    endStr = this.toUTC(`${ea.new_date}T${ea.new_end}`);
+                } else {
+                    const startDate = new Date(`${ea.new_date}T${ea.new_start}`);
+                    startDate.setHours(startDate.getHours() + 1);
+                    const pad = (n) => n < 10 ? '0' + n : n;
+                    const localEndStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}T${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
+                    endStr = this.toUTC(localEndStr);
+                }
+
+                if (ea.original && ea.original.id) {
+                    await this.supabaseFetch('rpc/reschedule_ticket_appointment', 'POST', {
+                        p_appointment_id: ea.original.id,
+                        p_technician_id: ea.new_technician_id,
+                        p_scheduled_start: startStr,
+                        p_scheduled_end: endStr,
+                        p_notes: 'Remarcado via Gestão'
+                    });
+                    this.notify("Agendamento remarcado com sucesso!");
+                } else {
+                    await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                        p_ticket_id: ea.ticket_id,
+                        p_technician_id: ea.new_technician_id,
+                        p_appointment_type: ea.type,
+                        p_scheduled_start: startStr,
+                        p_scheduled_end: endStr,
+                        p_notes: 'Agendado via Gestão'
+                    });
+                    this.notify("Agendamento criado com sucesso!");
+                }
+
+                this.closeRescheduleModal();
+                this.loadScheduleManagement();
+
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro ao gerenciar agendamento.", "error");
+            } finally {
+                this.loading = false;
+                this.bypassRepairCheck = false;
+            }
+        },
+
+        async cancelAppointment() {
+            const ea = this.scheduleManagement.editingAppointment;
+            if (!ea || !ea.original || !ea.original.id) return;
+
+            if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
+
+            this.loading = true;
+            try {
+                await this.supabaseFetch('rpc/cancel_ticket_appointment', 'POST', {
+                    p_appointment_id: ea.original.id,
+                    p_reason: 'Cancelado pelo Gestor'
+                });
+                this.notify("Agendamento cancelado.");
+                this.closeRescheduleModal();
+                this.loadScheduleManagement();
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro ao cancelar.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async submitBlock() {
+            const eb = this.scheduleManagement.editingBlock;
+            if (!eb.date) return this.notify("Informe a data do bloqueio.", "error");
+
+            this.loading = true;
+            try {
+                let startStr, endStr;
+                let blockType = eb.full_day ? 'full_day' : 'time_range';
+
+                if (eb.full_day) {
+                    startStr = this.toUTC(`${eb.date}T00:00:00`);
+                    endStr = this.toUTC(`${eb.date}T23:59:59`);
+                } else {
+                    if (!eb.start || !eb.end) {
+                        this.loading = false;
+                        return this.notify("Informe o horário de início e fim do bloqueio.", "error");
+                    }
+                    startStr = this.toUTC(`${eb.date}T${eb.start}`);
+                    endStr = this.toUTC(`${eb.date}T${eb.end}`);
+                }
+
+                let recurrenceEndDateStr = null;
+                if (eb.is_recurring && eb.recurrence_end_date) {
+                    recurrenceEndDateStr = this.toUTC(`${eb.recurrence_end_date}T23:59:59`);
+                }
+
+                await this.supabaseFetch('rpc/create_schedule_block', 'POST', {
+                    p_technician_id: this.scheduleManagement.selectedTechnicianId,
+                    p_block_type: blockType,
+                    p_start_at: startStr,
+                    p_end_at: endStr,
+                    p_is_recurring: eb.is_recurring,
+                    p_recurrence_type: eb.is_recurring ? eb.recurrence_type : null,
+                    p_recurrence_days: null,
+                    p_reason: eb.notes || 'Bloqueio Administrativo',
+                    p_recurrence_end_date: recurrenceEndDateStr
+                });
+
+                this.notify("Bloqueio salvo com sucesso!");
+                this.closeBlockModal();
+                this.loadScheduleManagement();
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro ao salvar bloqueio.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async removeBlock() {
+            const eb = this.scheduleManagement.editingBlock;
+            if (!eb.block_id) {
+                this.notify("ID do bloqueio não encontrado.", "error");
+                return;
+            }
+
+            if (!confirm("Remover este bloqueio?")) return;
+
+            this.loading = true;
+            try {
+                await this.supabaseFetch('rpc/delete_schedule_block', 'POST', {
+                    p_block_id: eb.block_id
+                });
+                this.notify("Bloqueio removido.");
+                this.closeBlockModal();
+                this.loadScheduleManagement();
+            } catch (e) {
+                console.error(e);
+                this.notify("Erro ao remover bloqueio.", "error");
+            } finally {
+                this.loading = false;
+            }
+        },
+
+
+        formatScheduleDateFull(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr + 'T12:00:00');
+            return d.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        },
+
+
+        formatAppointmentSummary(appt) {
+            if (!appt) return '';
+            const dayStr = this.formatScheduleDate(appt.date);
+            const startStr = this.formatTimeOnly(appt.start);
+            const endStr = this.formatTimeOnly(appt.end);
+            return `${dayStr}, ${startStr} - ${endStr}`;
+        },
+
         isFieldRequired(key) {
             return window.AIDAConfigHelpers.isFieldRequired(this.trackerConfig, key);
         },
@@ -1838,6 +2873,9 @@ function app() {
                 } else {
                     // In legacy mode, technician_id can be NULL (Todos)
                 }
+
+                // Future-proof: if analysis_schedule becomes true in config, we could check here too,
+                // but legacy mode doesn't check dynamic configs.
                 return { valid: true };
             }
 
@@ -1863,6 +2901,10 @@ function app() {
                             if (!ticketData.outsourced_company_id) isValid = false;
                         } else {
                             if (!val) isValid = false; // Must have specific technician (Not NULL)
+                        }
+                    } else if (field.type === 'schedule') {
+                        if (field.key === 'analysis_schedule') {
+                            if (!this.selectedAnalysisAppointment) isValid = false;
                         }
                     }
 
@@ -1890,6 +2932,7 @@ function app() {
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
 
             this.fetchInternalNotes(ticket.id);
+            this.fetchTicketAppointments(ticket.id);
             this.newNoteText = '';
             this.noteIsChecklist = false;
             this.noteChecklistItems = [];
@@ -2051,6 +3094,18 @@ function app() {
 
         // --- INTERNAL NOTES SYSTEM ---
 
+        async fetchTicketAppointments(ticketId) {
+            try {
+                this.selectedTicketAppointments = [];
+                const response = await this.supabaseFetch('rpc/get_ticket_appointments', 'POST', { p_ticket_id: ticketId });
+                if (response && Array.isArray(response)) {
+                    this.selectedTicketAppointments = response;
+                }
+            } catch (error) {
+                console.error("Error fetching ticket appointments:", error);
+            }
+        },
+
         async fetchInternalNotes(ticketId) {
             return await window.AIDANotesService.fetchInternalNotes(ticketId, {
                 state: this,
@@ -2105,19 +3160,7 @@ function app() {
             this.showMentionList = false;
         },
 
-        formatNoteContent(text) {
-            if (!text) return '';
-            let safe = text
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-
-            safe = safe.replace(/@(\w+(\s\w+)?)/g, '<span class="text-brand-500 font-bold">@$1</span>');
-
-            return safe.replace(/\n/g, '<br>');
-        },
+        // formatNoteContent was removed to eliminate x-html and innerHTML usage completely.
 
         async sendNote(ticketId = null, isGeneral = false) {
             return await window.AIDANotesService.sendNote(ticketId, isGeneral, {
@@ -2213,12 +3256,16 @@ function app() {
         async refreshPostMutation(forceListRefetch = false) {
             // Se foi especificado um refetch forçado (ex: createTicket) OU
             // se estivermos em uma view operacional que depende de consistência forte na UI após ações
-            // (kanban, tech_orders, tester_bench, admin_dashboard), disparamos o fetch.
-            const operationalViews = ['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'];
+            // (kanban, tech_orders, tester_bench, admin_dashboard, home/dashboard), disparamos o fetch.
+            const operationalViews = ['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard', 'home', 'dashboard'];
             const needsFetch = forceListRefetch || operationalViews.includes(this.view);
 
             if (needsFetch) {
-                 await this.fetchTickets();
+                 if (this.view === 'dashboard' || this.view === 'home') {
+                     await this.fetchHomeOperationalQueue();
+                 } else {
+                     await this.fetchTickets();
+                 }
             }
 
             // Atualiza métricas ou alertas complementares dependendo da view
@@ -2277,7 +3324,19 @@ function app() {
         // == SUBFASE 1 — FLUXO ADMINISTRATIVO BASE ==
 
         async createTicket() {
-            return await window.AIDATicketActions.createTicket(this._getActionDeps());
+            if (!this.bypassAnalysisCheck && this.ticketForm.analysis_deadline && this.selectedAnalysisAppointment) {
+                const deadlineDate = new Date(this.ticketForm.analysis_deadline);
+                const appendDate = new Date(`${this.selectedAnalysisAppointment.date}T${this.selectedAnalysisAppointment.end}`);
+
+                if (appendDate > deadlineDate) {
+                    this.modals.confirmCreateTicket = true;
+                    return;
+                }
+            }
+
+            const result = await window.AIDATicketActions.createTicket(this._getActionDeps());
+            this.bypassAnalysisCheck = false;
+            return result;
         },
 
         async finishAnalysis(ticketOrId) {
@@ -2521,6 +3580,9 @@ function app() {
 
             if (!this.showAllCalendarTickets) {
                 const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
+                if (this.getTestFlowMode() === 'technician') {
+                    techStatuses.push('Teste Final');
+                }
                 source = source.filter(t => techStatuses.includes(t.status));
             }
             return source;
@@ -2606,7 +3668,7 @@ function app() {
                 search: '',
                 highlightedIndex: -1,
                 init() {
-                    this.search = this.ticketForm.model || '';
+        this.search = this.ticketForm.model || '';
                     this.$watch('ticketForm.model', (val) => {
                         if (!this.open) this.search = val || '';
                     });
@@ -2698,13 +3760,135 @@ function app() {
             };
         },
 
+        ticketCombobox() {
+            return {
+                open: false,
+                search: '',
+                highlightedIndex: -1,
+                init() {
+        this.$watch('search', () => {
+                        this.highlightedIndex = -1;
+                    });
+                },
+                getFilteredTickets() {
+                    const eaType = this.scheduleManagement.editingAppointment?.type;
+
+                    // Combine and deduplicate tickets from unscheduled, withoutTechnician, and lateWithoutSchedule lists
+                    const combined = [
+                        ...this.scheduleManagement.unscheduledItems,
+                        ...this.scheduleManagement.withoutTechnicianItems,
+                        ...this.scheduleManagement.lateWithoutScheduleItems
+                    ];
+
+                    const uniqueMap = new Map();
+                    combined.forEach(t => uniqueMap.set(t.id, t));
+                    let tickets = Array.from(uniqueMap.values());
+
+                    // Filter based on appointment type strictly
+                    if (eaType === 'analysis') {
+                        tickets = tickets.filter(t => t.status === 'Analise Tecnica');
+                    } else if (eaType === 'repair') {
+                        // Most non-analysis pending statuses can be booked as repair, but normally "Andamento Reparo"
+                        // is the classic state. Let's allow anything that isn't explicitly analysis or finished.
+                        tickets = tickets.filter(t => t.status !== 'Analise Tecnica' && t.status !== 'Finalizado' && t.status !== 'Retirada Cliente');
+                    }
+
+                    // Search filter
+                    if (this.search.trim()) {
+                        const q = this.search.toLowerCase().trim();
+                        tickets = tickets.filter(t =>
+                            (t.client_name && t.client_name.toLowerCase().includes(q)) ||
+                            (t.os_number && t.os_number.toLowerCase().includes(q)) ||
+                            (t.device_model && t.device_model.toLowerCase().includes(q))
+                        );
+                    }
+
+                    return tickets;
+                },
+                toggleArrow() {
+                    if (this.open) {
+                        this.closeDropdown();
+                    } else {
+                        this.open = true;
+                        this.search = '';
+                        this.highlightedIndex = -1;
+                        this.$nextTick(() => this.$refs.ticketSearch?.focus());
+                    }
+                },
+                onInput() {
+                    this.open = true;
+                },
+                onFocus() {
+                    this.open = true;
+                    this.highlightedIndex = -1;
+                },
+                selectOption(ticket) {
+                    // When a ticket is selected from the combobox, populate the editingAppointment
+                    this.scheduleManagement.editingAppointment.ticket_id = ticket.id;
+                    this.scheduleManagement.editingAppointment.ticketContext = ticket;
+
+                    // Attempt to pre-fill notes or extra context if needed here
+                    this.search = '';
+                    this.open = false;
+                    this.highlightedIndex = -1;
+                },
+                closeDropdown() {
+                    if (this.open) {
+                        this.open = false;
+                        this.highlightedIndex = -1;
+                    }
+                },
+                onKeydown(e) {
+                    if (!this.open) {
+                        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                            e.preventDefault();
+                            this.open = true;
+                        }
+                        return;
+                    }
+                    const options = this.getFilteredTickets();
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (options.length > 0) {
+                            this.highlightedIndex = (this.highlightedIndex + 1) % options.length;
+                            this.scrollToHighlighted();
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (options.length > 0) {
+                            this.highlightedIndex = this.highlightedIndex <= 0 ? options.length - 1 : this.highlightedIndex - 1;
+                            this.scrollToHighlighted();
+                        }
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (this.highlightedIndex >= 0 && this.highlightedIndex < options.length) {
+                            this.selectOption(options[this.highlightedIndex]);
+                        }
+                    } else if (e.key === 'Escape') {
+                        this.closeDropdown();
+                    }
+                },
+                scrollToHighlighted() {
+                    this.$nextTick(() => {
+                        const list = this.$refs.listbox;
+                        if (!list) return;
+                        const items = list.querySelectorAll('li.combobox-option');
+                        const item = items[this.highlightedIndex];
+                        if (item) {
+                            item.scrollIntoView({ block: 'nearest' });
+                        }
+                    });
+                }
+            };
+        },
+
         defectCombobox() {
             return {
                 open: false,
                 search: '',
                 highlightedIndex: -1,
                 init() {
-                    this.$watch('search', () => {
+        this.$watch('search', () => {
                         this.highlightedIndex = -1;
                     });
                 },
@@ -2810,42 +3994,8 @@ function app() {
         },
 
         // --- UTILS ---
-        safeLogHTML(input) {
-            if (!input) return '';
-            // Convert \n to <br> before parsing to preserve line breaks
-            const inputWithBreaks = input.replace(/\n/g, '<br>');
-
-            const doc = new DOMParser().parseFromString(inputWithBreaks, 'text/html');
-            const allowedTags = ['B', 'STRONG', 'BR'];
-
-            const walk = (root) => {
-                const children = Array.from(root.childNodes);
-                for (const child of children) {
-                    if (child.nodeType === Node.ELEMENT_NODE) {
-                        const tagName = child.tagName.toUpperCase();
-                        if (allowedTags.includes(tagName)) {
-                            // Allowed: strip attributes, recurse
-                            while (child.attributes.length > 0) {
-                                child.removeAttribute(child.attributes[0].name);
-                            }
-                            walk(child);
-                        } else {
-                            // Disallowed: Unwrap (replace element with its children)
-                            const fragment = document.createDocumentFragment();
-                            while (child.firstChild) {
-                                fragment.appendChild(child.firstChild);
-                            }
-                            // Process the moved children (now in fragment)
-                            walk(fragment);
-                            child.parentNode.replaceChild(fragment, child);
-                        }
-                    }
-                }
-            };
-
-            walk(doc.body);
-            return doc.body.innerHTML;
-        },
+        // Removed safeLogHTML entirely to eliminate innerHTML usage.
+        // We now rely on escapeHtml and direct parsing for text nodes.
 
         escapeHtml(text) {
             if (!text) return '';
@@ -2858,19 +4008,19 @@ function app() {
         },
 
         getLogContext(ticket) {
-            if (!ticket) return { client: '<b>Cliente</b>', device: '<b>Aparelho</b>' };
+            if (!ticket) return { client: 'Cliente', device: 'Aparelho' };
 
-            const safeClientName = this.escapeHtml(ticket.client_name);
-            const safeOsNumber = this.escapeHtml(ticket.os_number);
-            const safeDevice = this.escapeHtml(ticket.device_model);
+            const safeClientName = ticket.client_name || '';
+            const safeOsNumber = ticket.os_number || '';
+            const safeDevice = ticket.device_model || '';
 
-            let client = `<b>${safeClientName} da OS ${safeOsNumber}</b>`;
-            const device = `<b>${safeDevice}</b>`;
+            let client = `**${safeClientName}** da OS **${safeOsNumber}**`;
+            const device = `**${safeDevice}**`;
 
             // Add outsourced context if applicable as requested by user
             if (ticket.is_outsourced && ticket.outsourced_company_id) {
-                const company = this.escapeHtml(this.getOutsourcedCompany(ticket.outsourced_company_id));
-                client += ` (Terceirizado: <b>${company}</b>)`;
+                const company = this.getOutsourcedCompany(ticket.outsourced_company_id);
+                client += ` (Terceirizado: **${company}**)`;
             }
 
             return { client, device };
@@ -3086,16 +4236,16 @@ function app() {
                         this.homeOperationalItems = response.items;
                         // Build homeOps locally
                         this.homeOps = {
-                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao'),
-                            waitingBudgetResponse: [], // Approximate since we dont have budget_status often
-                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente'),
-                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Logistica' || t.status === 'Envio'),
-                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Entrega' || t.status === 'Pronto para Entrega'),
-                            pendingTech: this.homeOperationalItems.filter(t => ['Aberto', 'Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(t.status)),
-                            outsourcedToSend: this.homeOperationalItems.filter(t => t.status === 'Terceirizado' && !t.outsourced_at),
-                            pendingOutsourced: this.homeOperationalItems.filter(t => t.status === 'Terceirizado'),
-                            pendingPurchase: this.homeOperationalItems.filter(t => t.status === 'Compra Peca'),
-                            pendingReceipt: [],
+                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && (!t.budget_status || t.budget_status === 'Pendente' || t.budget_status === '') && !t.budget_sent_at),
+                            waitingBudgetResponse: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && (t.budget_status === 'Enviado' || t.budget_sent_at)),
+                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available),
+                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && t.delivery_method === 'carrier' && !t.tracking_code),
+                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && (t.delivery_method !== 'carrier' || (t.delivery_method === 'carrier' && t.tracking_code))),
+                            pendingTech: this.homeOperationalItems.filter(t => t.status === 'Aberto' && !t.is_outsourced),
+                            outsourcedToSend: this.homeOperationalItems.filter(t => t.is_outsourced && (t.status === 'Aberto' || t.status === 'Terceirizado') && !t.outsourced_at),
+                            pendingOutsourced: this.homeOperationalItems.filter(t => t.is_outsourced && t.status === 'Terceirizado' && t.outsourced_at),
+                            pendingPurchase: this.homeOperationalItems.filter(t => (t.status === 'Compra Peca' || (t.status === 'Aprovacao' && t.parts_needed)) && t.parts_status !== 'Comprado'),
+                            pendingReceipt: this.homeOperationalItems.filter(t => (t.status === 'Compra Peca' || (t.status === 'Aprovacao' && t.parts_needed)) && t.parts_status === 'Comprado'),
                             priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
                             expiringDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === false && ['today', 'tomorrow'].includes(t.urgency_bucket)),
                             expiredDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === true),
