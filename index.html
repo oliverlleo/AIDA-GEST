@@ -55,6 +55,16 @@
         </div>
     </div>
 
+    <!-- Global Error State -->
+    <div x-show="!loading && error" class="fixed inset-0 bg-white z-[98] flex items-center justify-center" x-cloak>
+        <div class="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full border-l-4 border-red-500">
+            <i class="fa-solid fa-circle-exclamation text-4xl text-red-500 mb-4"></i>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Ops! Algo deu errado.</h2>
+            <p class="text-gray-500 mb-6" x-text="error"></p>
+            <button @click="window.location.reload()" class="bg-black text-white px-6 py-2 rounded-lg font-bold">Tentar Novamente</button>
+        </div>
+    </div>
+
     <!-- Notifications -->
     <div class="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none">
         <template x-for="notif in notifications" :key="notif.id">
@@ -6491,6 +6501,7 @@
     </div>
 
     <!-- JS MODULES (Infraestrutura inicial) -->
+    <script src="js/supabase-config.js"></script>
     <script src="js/modules/config-helpers.js"></script>
     <script src="js/modules/ticket-context.js"></script>
     <script src="js/modules/workflow-rules.js"></script>

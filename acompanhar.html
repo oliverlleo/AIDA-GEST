@@ -30,6 +30,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="js/supabase-config.js"></script>
 </head>
 <body class="text-gray-900 font-sans min-h-screen flex items-center justify-center p-4 transition-colors duration-500"
       x-data="tracker()"
@@ -190,8 +191,8 @@
     </template>
 
     <script>
-        const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
+        const SUPABASE_URL = window.SUPABASE_CONFIG?.URL || '';
+        const SUPABASE_KEY = window.SUPABASE_CONFIG?.KEY || '';
 
         const ALL_POSSIBLE_STEPS = [
             'Aberto', 'Analise Tecnica', 'Aprovacao', 'Compra Peca',
@@ -288,6 +289,12 @@
 
                     if (!token) {
                         token = this.getStoredTrackerToken(id);
+                    }
+
+                    if (!SUPABASE_URL || !SUPABASE_KEY) {
+                        this.error = "Erro de Configuração: As credenciais do Supabase não foram encontradas. Certifique-se de configurar o arquivo js/supabase-config.js corretamente.";
+                        this.loading = false;
+                        return;
                     }
 
                     if (!id || !token) {

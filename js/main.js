@@ -1,20 +1,26 @@
 
 // Configuração do Supabase
-const SUPABASE_URL = 'https://cpydazjwlmssbzzsurxu.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWRhemp3bG1zc2J6enN1cnh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4Mjg5MTUsImV4cCI6MjA4MzQwNDkxNX0.NM7cuB6mks74ZzfvMYhluIjnqBXVgtolHbN4huKmE-Q';
+if (!window.SUPABASE_CONFIG) {
+    console.error("CRITICAL: SUPABASE_CONFIG not found. Check js/supabase-config.js");
+}
+
+const SUPABASE_URL = window.SUPABASE_CONFIG?.URL || '';
+const SUPABASE_KEY = window.SUPABASE_CONFIG?.KEY || '';
 
 // Safe initialization
 let supabaseClient;
-try {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: false
-        }
-    });
-} catch (e) {
-    console.error("Supabase fail:", e);
+if (SUPABASE_URL && SUPABASE_KEY) {
+    try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: false
+            }
+        });
+    } catch (e) {
+        console.error("Supabase fail:", e);
+    }
 }
 
 let isUnloading = false;
@@ -50,6 +56,7 @@ function app() {
     return {
         // State
         loading: false,
+        error: null,
         session: null,
         employeeSession: null,
         user: null,
@@ -752,7 +759,8 @@ function app() {
             this.loading = true;
 
             if (!supabaseClient) {
-                this.notify("Erro crítico: Supabase não carregou.", "error");
+                this.error = "Erro de Configuração: As credenciais do Supabase não foram encontradas. Certifique-se de configurar o arquivo js/supabase-config.js corretamente.";
+                this.notify("Erro crítico: Supabase não configurado.", "error");
                 this.loading = false;
                 return;
             }
