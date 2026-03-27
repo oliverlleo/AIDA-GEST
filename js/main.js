@@ -1662,7 +1662,8 @@ function app() {
         async fetchFornecedores() {
             return await window.AIDACatalogService.fetchFornecedores({
                 state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
             });
         },
 
@@ -1689,6 +1690,7 @@ function app() {
         async deleteFornecedor(id) {
             return await window.AIDACatalogService.deleteFornecedor(id, {
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
                 fetchFornecedores: () => this.fetchFornecedores()
             });
         },
@@ -1804,7 +1806,8 @@ function app() {
         async fetchTemplates() {
             return await window.AIDACatalogService.fetchTemplates({
                 state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
             });
         },
 
@@ -1812,21 +1815,24 @@ function app() {
         async fetchDeviceModels() {
             return await window.AIDACatalogService.fetchDeviceModels({
                 state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
             });
         },
 
         async fetchDefectOptions() {
             return await window.AIDACatalogService.fetchDefectOptions({
                 state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
             });
         },
 
         async fetchOutsourcedCompanies() {
             return await window.AIDACatalogService.fetchOutsourcedCompanies({
                 state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type)
             });
         },
 

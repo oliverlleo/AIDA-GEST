@@ -14,6 +14,7 @@ window.AIDACatalogService = {
             }
         } catch (e) {
             console.error("Fetch Templates Error:", e);
+            if (deps.notify) deps.notify("Erro ao carregar modelos de checklist: " + e.message, "error");
         }
     },
 
@@ -24,6 +25,7 @@ window.AIDACatalogService = {
             if (data) deps.state.deviceModels = data;
         } catch(e) {
             console.error("Fetch Models Error:", e);
+            if (deps.notify) deps.notify("Erro ao carregar modelos de aparelhos: " + e.message, "error");
         }
     },
 
@@ -34,6 +36,7 @@ window.AIDACatalogService = {
             if (data) deps.state.defectOptions = data;
         } catch(e) {
             console.error("Fetch Defect Options Error:", e);
+            if (deps.notify) deps.notify("Erro ao carregar opções de defeitos: " + e.message, "error");
         }
     },
 
@@ -44,6 +47,7 @@ window.AIDACatalogService = {
             if (data) deps.state.outsourcedCompanies = data;
         } catch(e) {
             console.error("Fetch Outsourced Companies Error:", e);
+            if (deps.notify) deps.notify("Erro ao carregar empresas terceirizadas: " + e.message, "error");
         }
     },
 
@@ -54,7 +58,7 @@ window.AIDACatalogService = {
             if (data) deps.state.fornecedores = data;
         } catch (error) {
             console.error('Erro ao buscar fornecedores:', error);
-            alert('Erro ao carregar fornecedores: ' + error.message);
+            if (deps.notify) deps.notify('Erro ao carregar fornecedores: ' + error.message, 'error');
         }
     },
 
@@ -84,21 +88,21 @@ window.AIDACatalogService = {
             await fetchFornecedores();
         } catch (error) {
             console.error('Erro ao salvar fornecedor:', error);
-            alert('Erro ao salvar fornecedor: ' + error.message);
+            if (notify) notify('Erro ao salvar fornecedor: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
     },
 
     async deleteFornecedor(id, deps) {
-        const { supabaseFetch, fetchFornecedores } = deps;
+        const { supabaseFetch, notify, fetchFornecedores } = deps;
         if (!confirm('Tem certeza que deseja excluir este fornecedor?')) return;
         try {
             await supabaseFetch(`fornecedores?id=eq.${id}`, 'DELETE');
             await fetchFornecedores();
         } catch (error) {
             console.error('Erro ao excluir fornecedor:', error);
-            alert('Erro ao excluir fornecedor: ' + error.message);
+            if (notify) notify('Erro ao excluir fornecedor: ' + error.message, 'error');
         }
     },
 
