@@ -742,6 +742,12 @@ function app() {
             if (this.initInFlight) return;
             this.initInFlight = true;
 
+            // Pre-calculate status index map for O(1) lookups
+            this.STATUS_INDEX_MAP = this.STATUS_COLUMNS.reduce((acc, status, idx) => {
+                acc[status] = idx;
+                return acc;
+            }, {});
+
             console.log("App initializing...");
             this.loading = true;
 
@@ -1414,7 +1420,7 @@ function app() {
                 this.trackerConfig.visible_stages.push(stage);
                 // Sort according to standard order
                 this.trackerConfig.visible_stages.sort((a, b) => {
-                    return this.STATUS_COLUMNS.indexOf(a) - this.STATUS_COLUMNS.indexOf(b);
+                    return (this.STATUS_INDEX_MAP[a] ?? -1) - (this.STATUS_INDEX_MAP[b] ?? -1);
                 });
             }
         },
@@ -4072,21 +4078,23 @@ function app() {
         // --- PREVIEW LOGIC (Mirrors acompanhar.html) ---
         getPreviewDisplayedStatus() {
             const currentStatus = this.previewStatus;
-            const visibleSteps = this.trackerConfig.visible_stages.length > 0
+            const visibleSteps = (this.trackerConfig.visible_stages && this.trackerConfig.visible_stages.length > 0)
                 ? this.trackerConfig.visible_stages
                 : this.STATUS_COLUMNS;
 
+            const visibleSet = new Set(visibleSteps);
+
             // If status is visible, show it
-            if (visibleSteps.includes(currentStatus)) {
+            if (visibleSet.has(currentStatus)) {
                 return currentStatus;
             }
 
             // If hidden, find previous visible
-            const actualIdx = this.STATUS_COLUMNS.indexOf(currentStatus);
+            const actualIdx = this.STATUS_INDEX_MAP[currentStatus] ?? -1;
             if (actualIdx === -1) return currentStatus;
 
             for (let i = actualIdx - 1; i >= 0; i--) {
-                if (visibleSteps.includes(this.STATUS_COLUMNS[i])) {
+                if (visibleSet.has(this.STATUS_COLUMNS[i])) {
                     return this.STATUS_COLUMNS[i];
                 }
             }
@@ -4097,7 +4105,7 @@ function app() {
 
         getPreviewProgressPercent() {
             const displayed = this.getPreviewDisplayedStatus();
-            const visibleSteps = this.trackerConfig.visible_stages.length > 0
+            const visibleSteps = (this.trackerConfig.visible_stages && this.trackerConfig.visible_stages.length > 0)
                 ? this.trackerConfig.visible_stages
                 : this.STATUS_COLUMNS;
 
