@@ -402,17 +402,17 @@
 
                                                         <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
-                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                             </div>
                                                         </template>
                                                         <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
-                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                             </div>
                                                         </template>
 
                                                     <div class="mt-2 flex gap-2">
-                                                        <button type="button" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
+                                                        <button type="button" x-show="(ticket.status === 'Analise Tecnica' && !ticket.analysis_scheduled && !ticket.analysis_scheduled_at) || ((ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo') && !ticket.repair_scheduled && !ticket.repair_scheduled_at)" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
                                                             <i class="fa-regular fa-calendar-plus"></i> Agendar
                                                         </button>
                                                     </div>
@@ -459,17 +459,17 @@
 
                                                         <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
-                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                             </div>
                                                         </template>
                                                         <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
-                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                             </div>
                                                         </template>
 
                                                     <div class="mt-2 flex gap-2">
-                                                        <button type="button" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
+                                                        <button type="button" x-show="(ticket.status === 'Analise Tecnica' && !ticket.analysis_scheduled && !ticket.analysis_scheduled_at) || ((ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo') && !ticket.repair_scheduled && !ticket.repair_scheduled_at)" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
                                                             <i class="fa-regular fa-calendar-plus"></i> Agendar (Exige Técnico)
                                                         </button>
                                                     </div>
@@ -516,12 +516,12 @@
 
                                                         <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
-                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                             </div>
                                                         </template>
                                                         <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
-                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                             </div>
                                                         </template>
 
@@ -573,17 +573,17 @@
 
                                                         <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
-                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                             </div>
                                                         </template>
                                                         <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
-                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                             </div>
                                                         </template>
 
                                                     <div class="mt-2 flex gap-2">
-                                                        <button type="button" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-red-500 text-white hover:bg-red-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
+                                                        <button type="button" x-show="(ticket.status === 'Analise Tecnica' && !ticket.analysis_scheduled && !ticket.analysis_scheduled_at) || ((ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo') && !ticket.repair_scheduled && !ticket.repair_scheduled_at)" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-red-500 text-white hover:bg-red-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
                                                             <i class="fa-regular fa-calendar-plus"></i> Agendar Prioridade
                                                         </button>
                                                     </div>
@@ -3208,7 +3208,7 @@
                                                         <span class="font-bold text-brand-600 uppercase">Agendamento Análise:</span>
                                                         <div class="flex items-center text-brand-600 font-medium">
                                                             <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
-                                                            <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -3217,7 +3217,7 @@
                                                         <span class="font-bold text-brand-600 uppercase">Agendamento Reparo:</span>
                                                         <div class="flex items-center text-brand-600 font-medium">
                                                             <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
-                                                            <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -3558,7 +3558,7 @@
                                                         <span class="font-bold text-brand-600 uppercase">Agendamento Análise:</span>
                                                         <div class="flex items-center text-brand-600 font-medium">
                                                             <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
-                                                            <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -3567,7 +3567,7 @@
                                                         <span class="font-bold text-brand-600 uppercase">Agendamento Reparo:</span>
                                                         <div class="flex items-center text-brand-600 font-medium">
                                                             <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
-                                                            <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -5353,11 +5353,11 @@
                                     <button @click="startTicketAnalysis(selectedTicket)" class="bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-yellow-700 text-sm shadow flex items-center justify-center w-full mb-3">
                                         <i class="fa-solid fa-play mr-2"></i> Iniciar Análise
                                     </button>
-                                    <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                    <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled && !selectedTicket.analysis_scheduled_at" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors">
                                         <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
                                     </button>
                                 </div>
-                                <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled && !canExecuteAction(selectedTicket, 'startTicketAnalysis')" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors mt-2">
+                                <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled && !selectedTicket.analysis_scheduled_at && !canExecuteAction(selectedTicket, 'startTicketAnalysis')" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors mt-2">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
                                 </button>
 
@@ -5457,7 +5457,7 @@
                                     </button>
                                 </div>
 
-                                <button type="button" @click="openSchedulePanel('repair')" x-show="selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="selectedTicket.parts_status === 'Comprado' && (!selectedTicket.repair_scheduled && !selectedTicket.repair_scheduled_at)" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
@@ -5484,7 +5484,7 @@
                                     <div class="text-xl font-mono font-bold text-gray-800" x-text="getDuration(selectedTicket.repair_start_at)"></div>
                                 </div>
 
-                                <button type="button" @click="openSchedulePanel('repair')" x-show="!selectedTicket.repair_scheduled" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors mb-2">
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="!selectedTicket.repair_scheduled && !selectedTicket.repair_scheduled_at" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors mb-2">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
@@ -5635,13 +5635,13 @@
                                             <template x-if="selectedTicket.analysis_scheduled_at && selectedTicket.status === 'Analise Tecnica'">
                                                 <p class="text-sm flex justify-between border-t border-gray-100 pt-1 mt-1">
                                                     <span class="font-bold text-brand-600">Agendamento Análise:</span>
-                                                    <span class="text-brand-600 font-bold" x-text="new Date(selectedTicket.analysis_scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })"></span>
+                                                    <span class="text-brand-600 font-bold" x-text="formatDateLocal(selectedTicket.analysis_scheduled_at)"></span>
                                                 </p>
                                             </template>
                                             <template x-if="selectedTicket.repair_scheduled_at && (selectedTicket.status === 'Aprovacao' || selectedTicket.status === 'Compra Peca' || selectedTicket.status === 'Andamento Reparo')">
                                                 <p class="text-sm flex justify-between border-t border-gray-100 pt-1 mt-1">
                                                     <span class="font-bold text-brand-600">Agendamento Reparo:</span>
-                                                    <span class="text-brand-600 font-bold" x-text="new Date(selectedTicket.repair_scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })"></span>
+                                                    <span class="text-brand-600 font-bold" x-text="formatDateLocal(selectedTicket.repair_scheduled_at)"></span>
                                                 </p>
                                             </template>
                                         </div>
