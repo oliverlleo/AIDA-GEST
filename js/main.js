@@ -2122,6 +2122,10 @@ function app() {
 
                     this.notify("Agendamento criado com sucesso!");
                     this.fetchTicketAppointments(this.selectedTicket.id); // Atualiza aba de Agendamentos histórico
+
+                    // We sync from the server to guarantee we don't incorrectly overwrite
+                    // the technician if priority rules dictate otherwise (e.g. analysis created when repair already exists).
+                    this.fetchTickets();
                 } catch (e) {
                     console.error("Erro ao salvar agendamento:", e);
                     this.notify("Falha ao salvar agendamento.", "error");
@@ -2743,6 +2747,10 @@ function app() {
 
                 this.closeRescheduleModal();
                 this.loadScheduleManagement();
+
+                // We sync from the server to guarantee we don't incorrectly overwrite
+                // the technician if priority rules dictate otherwise (e.g. analysis rescheduled when repair already exists).
+                this.fetchTickets();
 
             } catch (e) {
                 console.error(e);
