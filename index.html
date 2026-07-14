@@ -400,6 +400,17 @@
                                                         </div>
                                                     </div>
 
+                                                        <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
+                                                            <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
+                                                            <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            </div>
+                                                        </template>
+
                                                     <div class="mt-2 flex gap-2">
                                                         <button type="button" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
                                                             <i class="fa-regular fa-calendar-plus"></i> Agendar
@@ -445,6 +456,17 @@
                                                             <span x-text="ticket.deadline ? formatDateLocal(ticket.deadline) : '--'"></span>
                                                         </div>
                                                     </div>
+
+                                                        <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
+                                                            <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
+                                                            <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            </div>
+                                                        </template>
 
                                                     <div class="mt-2 flex gap-2">
                                                         <button type="button" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-brand-500 text-white hover:bg-brand-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
@@ -492,6 +514,17 @@
                                                         </div>
                                                     </div>
 
+                                                        <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
+                                                            <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
+                                                            <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            </div>
+                                                        </template>
+
                                                     <div class="mt-2 flex gap-2">
                                                         <button type="button" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-yellow-500 text-white hover:bg-yellow-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
                                                             <i class="fa-solid fa-arrows-left-right"></i> Remanejar
@@ -537,6 +570,17 @@
                                                             <span x-text="ticket.deadline ? formatDateLocal(ticket.deadline) : '--'"></span>
                                                         </div>
                                                     </div>
+
+                                                        <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
+                                                            <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
+                                                            <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
+                                                                <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                            </div>
+                                                        </template>
 
                                                     <div class="mt-2 flex gap-2">
                                                         <button type="button" @click.stop="openScheduleModalFromSidebar(ticket)" class="text-[10px] bg-red-500 text-white hover:bg-red-600 px-2 py-1.5 rounded font-bold transition-colors flex-1 text-center flex items-center justify-center gap-1.5 shadow-sm">
@@ -3142,7 +3186,7 @@
                                                 <!-- Analysis Deadline -->
                                                 <template x-if="ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
-                                                        <span class="font-bold text-gray-500 uppercase">Análise:</span>
+                                                        <span class="font-bold text-gray-500 uppercase">Prazo de Análise:</span>
                                                         <div class="flex items-center font-medium"
                                                              :class="new Date(ticket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-500'">
                                                             <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
@@ -3152,12 +3196,31 @@
                                                 </template>
                                                 <!-- Delivery Deadline -->
                                                 <div class="flex items-center justify-between text-[10px]">
-                                                    <span class="font-bold text-gray-500 uppercase">Entrega:</span>
+                                                    <span class="font-bold text-gray-500 uppercase">Prazo de Entrega:</span>
                                                     <div class="flex items-center font-medium" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-500'">
                                                         <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
                                                         <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' }) : 'S/ Prazo'"></span>
                                                     </div>
                                                 </div>
+
+                                                <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
+                                                    <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-50">
+                                                        <span class="font-bold text-brand-600 uppercase">Agendamento Análise:</span>
+                                                        <div class="flex items-center text-brand-600 font-medium">
+                                                            <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
+                                                            <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
+                                                    <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-50">
+                                                        <span class="font-bold text-brand-600 uppercase">Agendamento Reparo:</span>
+                                                        <div class="flex items-center text-brand-600 font-medium">
+                                                            <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
+                                                            <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
                                                 <!-- Outsourced Return Deadline -->
                                                 <template x-if="ticket.outsourced_deadline && ticket.status === 'Terceirizado'">
                                                     <div class="flex items-center justify-between text-[10px]">
@@ -3473,7 +3536,7 @@
                                                 <!-- Analysis Deadline -->
                                                 <template x-if="ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
-                                                        <span class="font-bold text-gray-500 uppercase">Análise:</span>
+                                                        <span class="font-bold text-gray-500 uppercase">Prazo de Análise:</span>
                                                         <div class="flex items-center font-medium"
                                                              :class="new Date(ticket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-500'">
                                                             <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
@@ -3483,12 +3546,31 @@
                                                 </template>
                                                 <!-- Delivery Deadline -->
                                                 <div class="flex items-center justify-between text-[10px]">
-                                                    <span class="font-bold text-gray-500 uppercase">Entrega:</span>
+                                                    <span class="font-bold text-gray-500 uppercase">Prazo de Entrega:</span>
                                                     <div class="flex items-center font-medium" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-500'">
                                                         <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
                                                         <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' }) : 'S/ Prazo'"></span>
                                                     </div>
                                                 </div>
+
+                                                <template x-if="ticket.analysis_scheduled_at && ticket.status === 'Analise Tecnica'">
+                                                    <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-50">
+                                                        <span class="font-bold text-brand-600 uppercase">Agendamento Análise:</span>
+                                                        <div class="flex items-center text-brand-600 font-medium">
+                                                            <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
+                                                            <span x-text="new Date(ticket.analysis_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template x-if="ticket.repair_scheduled_at && (ticket.status === 'Aprovacao' || ticket.status === 'Compra Peca' || ticket.status === 'Andamento Reparo')">
+                                                    <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-50">
+                                                        <span class="font-bold text-brand-600 uppercase">Agendamento Reparo:</span>
+                                                        <div class="flex items-center text-brand-600 font-medium">
+                                                            <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
+                                                            <span x-text="new Date(ticket.repair_scheduled_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
                                             </div>
 
                                             <div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
@@ -3557,7 +3639,7 @@
                                                 <!-- Analysis Deadline -->
                                                 <template x-if="ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
-                                                        <span class="font-bold text-gray-500 uppercase">Análise:</span>
+                                                        <span class="font-bold text-gray-500 uppercase">Prazo de Análise:</span>
                                                         <div class="flex items-center text-gray-500 font-medium">
                                                             <i class="fa-solid fa-stopwatch mr-1 text-[9px]"></i>
                                                             <span x-text="new Date(ticket.analysis_deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })"></span>
@@ -3566,7 +3648,7 @@
                                                 </template>
                                                 <!-- Delivery Deadline -->
                                                 <div class="flex items-center justify-between text-[10px]">
-                                                    <span class="font-bold text-gray-500 uppercase">Entrega:</span>
+                                                    <span class="font-bold text-gray-500 uppercase">Prazo de Entrega:</span>
                                                     <div class="flex items-center font-medium" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600' : 'text-gray-500'">
                                                         <i class="fa-regular fa-calendar-check mr-1 text-[9px]"></i>
                                                         <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' }) : 'S/ Prazo'"></span>
@@ -5540,15 +5622,28 @@
                                         <!-- Display Mode -->
                                         <div x-show="!editingDeadlines" class="space-y-1">
                                             <p class="text-sm flex justify-between">
-                                                <span class="font-bold text-gray-600">Análise:</span>
+                                                <span class="font-bold text-gray-600">Prazo de Análise:</span>
                                                 <span x-text="selectedTicket.analysis_deadline ? new Date(selectedTicket.analysis_deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'"
                                                       :class="new Date(selectedTicket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-800'"></span>
                                             </p>
                                             <p class="text-sm flex justify-between">
-                                                <span class="font-bold text-gray-600">Entrega:</span>
+                                                <span class="font-bold text-gray-600">Prazo de Entrega:</span>
                                                 <span x-text="selectedTicket.deadline ? new Date(selectedTicket.deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'"
                                                       :class="new Date(selectedTicket.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-800'"></span>
                                             </p>
+
+                                            <template x-if="selectedTicket.analysis_scheduled_at && selectedTicket.status === 'Analise Tecnica'">
+                                                <p class="text-sm flex justify-between border-t border-gray-100 pt-1 mt-1">
+                                                    <span class="font-bold text-brand-600">Agendamento Análise:</span>
+                                                    <span class="text-brand-600 font-bold" x-text="new Date(selectedTicket.analysis_scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })"></span>
+                                                </p>
+                                            </template>
+                                            <template x-if="selectedTicket.repair_scheduled_at && (selectedTicket.status === 'Aprovacao' || selectedTicket.status === 'Compra Peca' || selectedTicket.status === 'Andamento Reparo')">
+                                                <p class="text-sm flex justify-between border-t border-gray-100 pt-1 mt-1">
+                                                    <span class="font-bold text-brand-600">Agendamento Reparo:</span>
+                                                    <span class="text-brand-600 font-bold" x-text="new Date(selectedTicket.repair_scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })"></span>
+                                                </p>
+                                            </template>
                                         </div>
 
                                         <!-- Edit Mode -->
