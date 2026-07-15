@@ -357,6 +357,7 @@ function app() {
         // UI State for Actions
         selectedTicketAppointments: [],
         analysisForm: { needsParts: false, partsList: '' },
+        pauseRepairForPartsForm: { ticketId: '', parts: '' },
         outcomeMode: '',
         showTestFailureForm: false,
         testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '', action: '' }, // action: 'repair' or 'return'
@@ -481,7 +482,7 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
         bypassAnalysisCheck: false,
         bypassRepairCheck: false,
 
@@ -3526,6 +3527,23 @@ function app() {
             return await window.AIDATicketActions.startRepair(ticketOrId, this._getActionDeps());
         },
 
+        canPauseRepairForParts(ticket) {
+            if (!ticket || ticket.status !== 'Andamento Reparo' || !ticket.repair_start_at) return false;
+            if (this.hasRole('admin') || this.hasRole('atendente')) return true;
+            return this.hasRole('tecnico') && ticket.technician_id === this.user?.id;
+        },
+
+        openPauseRepairForParts(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket || !this.canPauseRepairForParts(ticket)) return;
+            this.pauseRepairForPartsForm = { ticketId: ticket.id, parts: '' };
+            this.modals.pauseRepairForParts = true;
+        },
+
+        async submitPauseRepairForParts() {
+            return await window.AIDATicketActions.pauseRepairForParts(this.pauseRepairForPartsForm.ticketId, this._getActionDeps());
+        },
+
         async finishRepair(success) {
             return await window.AIDATicketActions.finishRepair(success, this._getActionDeps());
         },
@@ -4658,6 +4676,20 @@ function app() {
             const m = Math.floor((diff % 3600000) / 60000);
             const s = Math.floor((diff % 60000) / 1000);
 
+            return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        },
+
+        getRepairDuration(ticket) {
+            if (!ticket) return '00:00:00';
+            let seconds = Number(ticket.repair_elapsed_seconds || 0);
+            if (ticket.repair_start_at) {
+                const elapsed = Math.floor((this.currentTime.getTime() - new Date(ticket.repair_start_at).getTime()) / 1000);
+                seconds += Math.max(0, elapsed);
+            }
+
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = seconds % 60;
             return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         },
 
