@@ -1759,6 +1759,29 @@ function app() {
             return [...(tickets || [])].sort((a, b) => this.compareBenchTickets(a, b));
         },
 
+        getVisibleBenchTickets(status, applySearch = false) {
+            let visibleTickets = this.techTickets.filter(ticket => ticket.status === status);
+
+            if (this.showTodayOnly) {
+                const scheduleField = status === 'Analise Tecnica'
+                    ? 'analysis_scheduled_at'
+                    : (status === 'Andamento Reparo' ? 'repair_scheduled_at' : null);
+
+                if (scheduleField) {
+                    visibleTickets = visibleTickets.filter(ticket => {
+                        const scheduledAt = ticket[scheduleField];
+                        return scheduledAt && this.isSameDay(scheduledAt, new Date());
+                    });
+                }
+            }
+
+            if (applySearch) {
+                visibleTickets = visibleTickets.filter(ticket => this.matchesSearch(ticket));
+            }
+
+            return visibleTickets;
+        },
+
         async fetchTickets(loadMore = false) {
             if (!this.user?.workspace_id) return;
 
