@@ -399,7 +399,7 @@ function app() {
         // Calendar State
         calendarView: 'week',
         currentCalendarDate: new Date(),
-        showAllCalendarTickets: false,
+        showTodayOnly: false,
         benchCalendarMode: 'deadline', // 'deadline' or 'appointment' (shared by weekly and expanded views)
 
         // Kanban State
@@ -3649,13 +3649,6 @@ function app() {
                 source = source.filter(t => t.technician_id === effectiveFilter);
             }
 
-            if (!this.showAllCalendarTickets) {
-                const techStatuses = ['Analise Tecnica', 'Andamento Reparo'];
-                if (this.getTestFlowMode() === 'technician') {
-                    techStatuses.push('Teste Final');
-                }
-                source = source.filter(t => techStatuses.includes(t.status));
-            }
             return source;
         },
 
@@ -3668,6 +3661,7 @@ function app() {
             const events = [];
             const addEvent = (ticket, eventType, eventDate) => {
                 if (!eventDate || this.getValidTimestamp(eventDate) === null) return;
+                if (this.showTodayOnly && !this.isSameDay(eventDate, new Date())) return;
                 events.push({
                     key: `${ticket.id}:${eventType}:${eventDate}`,
                     ticket,
