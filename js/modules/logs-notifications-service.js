@@ -34,7 +34,7 @@ window.AIDALogsNotificationsService = {
         const { state, supabaseFetch } = deps;
         if (!state.user?.workspace_id) return;
         try {
-            const logs = await supabaseFetch(`ticket_logs?select=*,tickets(os_number,client_name,device_model)&order=created_at.desc&limit=10`);
+            const logs = await supabaseFetch(`ticket_logs?select=*,tickets(os_number,client_name,device_model)&order=created_at.desc&limit=30`);
             state.dashboardLogs = logs || [];
         } catch (e) {
             console.error("Fetch global logs failed:", e);
