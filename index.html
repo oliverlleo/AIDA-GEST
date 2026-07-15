@@ -1983,7 +1983,7 @@
                                             <div class="flex-grow min-w-0">
                                                 <p class="text-xs text-gray-800 leading-snug whitespace-pre-wrap" x-html="formatLogDetails(log.details || log.action)"></p>
                                                 <div class="flex items-center gap-2 mt-1">
-                                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide" x-text="log.user_name"></span>
+                                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide" x-text="getLogActorName(log)"></span>
                                                     <span class="text-[10px] text-gray-300">•</span>
                                                     <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
                                                 </div>
@@ -6239,7 +6239,7 @@
                                     <div class="flex items-center gap-3 mt-2">
                                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                                             <i class="fa-solid fa-user text-gray-300"></i>
-                                            <span x-text="log.user_name"></span>
+                                            <span x-text="getLogActorName(log)"></span>
                                         </span>
                                         <span class="text-gray-300 text-xs">•</span>
                                         <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(log.created_at).toLocaleString()"></span>
@@ -6262,12 +6262,12 @@
                                 <div class="p-5 hover:bg-gray-50 transition-colors flex gap-4">
                                     <div class="flex-shrink-0 pt-1">
                                         <div class="h-8 w-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-bold font-mono">
-                                            <span x-text="(log.user_name || 'S').charAt(0).toUpperCase()"></span>
+                                            <span x-text="getLogActorName(log).charAt(0).toUpperCase()"></span>
                                         </div>
                                     </div>
                                     <div class="flex-grow">
                                         <div class="flex justify-between items-start mb-1">
-                                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wide" x-text="log.user_name || 'Sistema'"></span>
+                                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wide" x-text="getLogActorName(log)"></span>
                                             <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(log.created_at).toLocaleString()"></span>
                                         </div>
                                         <p class="text-sm text-gray-900 font-medium whitespace-pre-wrap" x-html="formatLogDetails(log.details || log.action)"></p>
