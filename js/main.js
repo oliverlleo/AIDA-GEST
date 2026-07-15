@@ -1990,16 +1990,51 @@ function app() {
             this.modals.ticket = true;
         },
 
-        focusTicketField(field) {
-            this.ticketFormErrors = { ...(this.ticketFormErrors || {}), [field]: true };
+        focusTicketFields(fields) {
+            const fieldKeys = [...new Set((fields || []).filter(Boolean))];
+            if (!fieldKeys.length) return;
+
+            this.ticketFormErrors = fieldKeys.reduce((errors, field) => ({ ...errors, [field]: true }), {});
 
             setTimeout(() => {
-                const fieldElement = document.getElementById('ticket-' + field + '-field');
-                const inputElement = document.getElementById('ticket-' + field + '-select');
+                fieldKeys.forEach(field => this.applyTicketFieldError(field, true));
 
-                if (fieldElement) fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                if (inputElement) inputElement.focus({ preventScroll: true });
+                const firstField = document.querySelector('[data-ticket-field="' + fieldKeys[0] + '"]');
+                if (!firstField) return;
+
+                firstField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const visibleControl = Array.from(firstField.querySelectorAll('input, select, textarea, button'))
+                    .find(control => control.offsetParent !== null && !control.disabled);
+                if (visibleControl) visibleControl.focus({ preventScroll: true });
             }, 50);
+        },
+
+        focusTicketField(field) {
+            this.focusTicketFields([field]);
+        },
+
+        clearTicketFieldError(field) {
+            if (!field || !this.ticketFormErrors?.[field]) return;
+            this.ticketFormErrors = { ...this.ticketFormErrors, [field]: false };
+            this.applyTicketFieldError(field, false);
+        },
+
+        applyTicketFieldError(field, active) {
+            const fieldElement = document.querySelector('[data-ticket-field="' + field + '"]');
+            if (!fieldElement) return;
+
+            fieldElement.classList.toggle('bg-red-50', active);
+            fieldElement.classList.toggle('rounded-lg', active);
+            fieldElement.classList.toggle('border', active);
+            fieldElement.classList.toggle('border-red-300', active);
+            fieldElement.classList.toggle('p-1.5', active);
+
+            Array.from(fieldElement.querySelectorAll('input, select, textarea, button')).forEach(control => {
+                if (control.type === 'hidden' || control.closest('[data-ignore-ticket-validation]')) return;
+                control.classList.toggle('border-red-500', active);
+                control.classList.toggle('ring-2', active);
+                control.classList.toggle('ring-red-100', active);
+            });
         },
 
         handleBudgetApprovalEntryChange() {
@@ -3008,22 +3043,22 @@ function app() {
             const skipsAnalysis = Boolean(this.ticketForm.budget_approved);
 
             if (!this.isRequiredFieldsEnabled()) {
-                // Legacy Validation (Hardcoded + Deadlines)
-                if (!ticketData.client_name || (!isOsAuto && !ticketData.os_number) || !ticketData.device_model || !ticketData.defect_reported) {
-                    return { valid: false, missing: ['Campos Padrão (*)'] };
-                }
-                if (!skipsAnalysis && !ticketData.analysis_deadline) return { valid: false, missing: ['Prazo de Análise'] };
-                if (!ticketData.deadline) return { valid: false, missing: ['Prazo de Entrega'] };
+                const missing = [];
+                const missingFields = [];
+                const addMissing = (field, label) => {
+                    missingFields.push(field);
+                    missing.push(label);
+                };
 
-                if (ticketData.is_outsourced) {
-                    if (!ticketData.outsourced_company_id) return { valid: false, missing: ['Empresa Parceira'] };
-                } else {
-                    // In legacy mode, technician_id can be NULL (Todos)
-                }
+                if (!ticketData.client_name) addMissing('client_name', 'Cliente');
+                if (!isOsAuto && !ticketData.os_number) addMissing('os_number', 'Nº OS');
+                if (!ticketData.device_model) addMissing('device_model', 'Modelo');
+                if (!ticketData.defect_reported) addMissing('defect_reported', 'Defeito Relatado');
+                if (!skipsAnalysis && !ticketData.analysis_deadline) addMissing('analysis_deadline', 'Prazo de Análise');
+                if (!ticketData.deadline) addMissing('deadline', 'Prazo de Entrega');
+                if (ticketData.is_outsourced && !ticketData.outsourced_company_id) addMissing('responsible', 'Empresa Parceira');
 
-                // Future-proof: if analysis_schedule becomes true in config, we could check here too,
-                // but legacy mode doesn't check dynamic configs.
-                return { valid: true };
+                return { valid: missing.length === 0, missing, missingFields };
             }
 
             const missing = [];
@@ -3064,7 +3099,11 @@ function app() {
 
             return {
                 valid: missing.length === 0,
-                missing: missing
+                missing,
+                missingFields: missing.map(label => {
+                    const field = this.TICKET_REQUIRED_FIELDS.find(item => item.label === label);
+                    return field ? field.key : null;
+                }).filter(Boolean)
             };
         },
 
@@ -3456,6 +3495,7 @@ function app() {
                 validateTicketRequirements: (data) => this.validateTicketRequirements(data),
                 isFieldRequired: (key) => this.isFieldRequired(key),
                 focusTicketField: (field) => this.focusTicketField(field),
+                focusTicketFields: (fields) => this.focusTicketFields(fields),
                 setLoading: (val) => { this.loading = val; },
                 closeModal: (name) => { this.modals[name] = false; },
                 openLogisticsModal: (t) => this.openLogisticsModal(t),
