@@ -3541,10 +3541,10 @@
                         <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
                              <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                                 <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Em Análise Técnica</h3>
-                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Analise Tecnica').length"></span>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getVisibleBenchTickets('Analise Tecnica').length"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
-                                <template x-for="ticket in techTickets.filter(t => t.status === 'Analise Tecnica' && matchesSearch(t))" :key="ticket.id">
+                                <template x-for="ticket in getVisibleBenchTickets('Analise Tecnica', true)" :key="ticket.id">
                                     <!-- Card Component (Reused logic) -->
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket)"
@@ -3636,8 +3636,8 @@
                                         </div>
                                      </div>
                                 </template>
-                                <div x-show="techTickets.filter(t => t.status === 'Analise Tecnica').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
-                                    Nenhum item em análise.
+                                <div x-show="getVisibleBenchTickets('Analise Tecnica').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
+                                    <span x-text="showTodayOnly ? 'Nenhuma análise agendada para hoje.' : 'Nenhum item em análise.'"></span>
                                 </div>
                             </div>
                         </div>
@@ -3646,10 +3646,10 @@
                         <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
                              <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                                 <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Em Andamento Reparo</h3>
-                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Andamento Reparo').length"></span>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getVisibleBenchTickets('Andamento Reparo').length"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
-                                <template x-for="ticket in techTickets.filter(t => t.status === 'Andamento Reparo' && matchesSearch(t))" :key="ticket.id">
+                                <template x-for="ticket in getVisibleBenchTickets('Andamento Reparo', true)" :key="ticket.id">
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket)"
                                           :class="[
@@ -3733,8 +3733,8 @@
                                         </div>
                                      </div>
                                 </template>
-                                <div x-show="techTickets.filter(t => t.status === 'Andamento Reparo').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
-                                    Nenhum reparo em andamento.
+                                <div x-show="getVisibleBenchTickets('Andamento Reparo').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
+                                    <span x-text="showTodayOnly ? 'Nenhum reparo agendado para hoje.' : 'Nenhum reparo em andamento.'"></span>
                                 </div>
                             </div>
                         </div>
