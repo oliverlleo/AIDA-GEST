@@ -3443,21 +3443,54 @@
 
                     <!-- Weekly Calendar Bar -->
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <div class="flex items-center space-x-3">
-                                <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Agenda Semanal</h3>
-                                <label class="flex items-center cursor-pointer">
-                                    <div class="relative">
-                                        <input type="checkbox" class="sr-only" x-model="showAllCalendarTickets">
-                                        <div class="w-10 h-5 bg-gray-200 rounded-full shadow-inner"></div>
-                                        <div class="dot absolute w-5 h-5 bg-white rounded-full shadow -left-1 -top-0 transition transform" :class="showAllCalendarTickets ? 'translate-x-full bg-brand-500' : ''"></div>
-                                    </div>
-                                    <div class="ml-3 text-xs font-bold text-gray-500">Ver Previsão Completa</div>
-                                </label>
+                        <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between mb-4">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <div>
+                                    <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Agenda Semanal</h3>
+                                    <p class="text-[10px] text-gray-400 mt-0.5"
+                                       x-text="benchCalendarMode === 'appointment' ? 'Análises e reparos por horário agendado' : 'Chamados por prazo de entrega'"></p>
+                                </div>
+
+                                <div class="inline-flex items-center rounded-lg bg-gray-100 p-1 border border-gray-200" role="group" aria-label="Exibir agenda semanal por">
+                                    <button type="button" @click="benchCalendarMode = 'deadline'"
+                                            :aria-pressed="benchCalendarMode === 'deadline'"
+                                            :class="benchCalendarMode === 'deadline' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                                            class="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all">
+                                        <i class="fa-solid fa-flag-checkered mr-1"></i> Prazo
+                                    </button>
+                                    <button type="button" @click="benchCalendarMode = 'appointment'"
+                                            :aria-pressed="benchCalendarMode === 'appointment'"
+                                            :class="benchCalendarMode === 'appointment' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                                            class="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all">
+                                        <i class="fa-regular fa-calendar-check mr-1"></i> Agendamento
+                                    </button>
+                                </div>
+
+                                <button type="button"
+                                        @click="showTodayOnly = !showTodayOnly"
+                                        :aria-pressed="showTodayOnly"
+                                        :class="showTodayOnly ? 'border-brand-300 bg-brand-50 text-brand-700 shadow-sm ring-1 ring-brand-100' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'"
+                                        class="inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-all"
+                                        title="Exibir somente os serviços com prazo ou agendamento para hoje">
+                                    <span :class="showTodayOnly ? 'bg-brand-500 text-white' : 'bg-gray-200 text-gray-500'"
+                                          class="flex h-5 w-5 items-center justify-center rounded-full transition-colors">
+                                        <i class="fa-solid" :class="showTodayOnly ? 'fa-check' : 'fa-calendar-day'"></i>
+                                    </span>
+                                    <span>Só hoje</span>
+                                    <span x-text="showTodayOnly ? 'Ativo' : 'Desligado'"
+                                          :class="showTodayOnly ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-400'"
+                                          class="rounded px-1.5 py-0.5 text-[8px] font-extrabold transition-colors"></span>
+                                </button>
                             </div>
-                            <button @click="modals.calendar = true" class="text-brand-500 hover:text-brand-600 text-xs font-bold uppercase flex items-center">
-                                Expandir Mês <i class="fa-solid fa-expand ml-1"></i>
+                            <button @click="modals.calendar = true" class="self-start xl:self-auto text-brand-500 hover:text-brand-600 text-xs font-bold uppercase flex items-center">
+                                Expandir Calendário <i class="fa-solid fa-expand ml-1"></i>
                             </button>
+                        </div>
+
+                        <div x-show="benchCalendarMode === 'appointment'" class="flex items-center gap-4 mb-3 px-1 text-[10px] font-semibold text-gray-500">
+                            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-400"></span> Análise</span>
+                            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Reparo</span>
+                            <span class="text-gray-400"><i class="fa-solid fa-arrow-down-short-wide mr-1"></i>Ordenado por horário</span>
                         </div>
 
                         <!-- Days Grid -->
@@ -3470,14 +3503,28 @@
                                          <span class="block text-sm font-bold text-gray-800" x-text="day.getDate()"></span>
                                      </div>
                                      <!-- Events -->
-                                     <div class="space-y-1">
-                                         <template x-for="t in getCalendarTickets().filter(x => isSameDay(x.deadline, day))" :key="t.id">
-                                             <div class="bg-white border border-gray-200 rounded px-1 py-0.5 text-[9px] shadow-sm truncate cursor-help group relative" :title="t.defect_reported">
-                                                 <span class="font-bold" x-text="'OS ' + t.os_number"></span>
-                                                 <span class="text-gray-500" x-text="t.device_model"></span>
+                                     <div class="space-y-1 max-h-32 overflow-y-auto scrollbar-hide">
+                                         <template x-for="event in getBenchCalendarEventsForDay(day)" :key="event.key">
+                                             <div @click="openCalendarEvent(event)"
+                                                  class="border rounded-md px-1.5 py-1 text-[9px] shadow-sm cursor-pointer group relative transition-colors"
+                                                  :class="getCalendarEventClasses(event)"
+                                                  :title="getCalendarEventTypeLabel(event) + ' • ' + event.ticket.defect_reported">
+                                                 <div class="flex items-center justify-between gap-1">
+                                                     <span class="font-extrabold whitespace-nowrap">
+                                                         <i class="fa-solid mr-0.5" :class="getCalendarEventIcon(event)"></i>
+                                                         <span x-text="formatCalendarEventTime(event.eventDate)"></span>
+                                                     </span>
+                                                     <span class="uppercase font-bold text-[8px] truncate" x-text="getCalendarEventTypeLabel(event)"></span>
+                                                 </div>
+                                                 <div class="truncate mt-0.5">
+                                                     <span class="font-bold" x-text="'OS ' + event.ticket.os_number"></span>
+                                                     <span class="opacity-75" x-text="event.ticket.device_model"></span>
+                                                 </div>
                                                  <!-- Tooltip -->
                                                  <div class="hidden group-hover:block absolute z-50 bottom-full left-0 w-48 bg-black text-white p-2 rounded text-xs mb-1 shadow-lg">
-                                                     <p x-text="t.defect_reported"></p>
+                                                     <p class="font-bold border-b border-gray-700 pb-1 mb-1" x-text="getCalendarEventTypeLabel(event) + ' às ' + formatCalendarEventTime(event.eventDate)"></p>
+                                                     <p class="font-semibold" x-text="event.ticket.client_name"></p>
+                                                     <p x-text="event.ticket.defect_reported"></p>
                                                  </div>
                                              </div>
                                          </template>
@@ -3494,10 +3541,10 @@
                         <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
                              <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                                 <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Em Análise Técnica</h3>
-                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Analise Tecnica').length"></span>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getVisibleBenchTickets('Analise Tecnica').length"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
-                                <template x-for="ticket in techTickets.filter(t => t.status === 'Analise Tecnica' && matchesSearch(t))" :key="ticket.id">
+                                <template x-for="ticket in getVisibleBenchTickets('Analise Tecnica', true)" :key="ticket.id">
                                     <!-- Card Component (Reused logic) -->
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket)"
@@ -3589,8 +3636,8 @@
                                         </div>
                                      </div>
                                 </template>
-                                <div x-show="techTickets.filter(t => t.status === 'Analise Tecnica').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
-                                    Nenhum item em análise.
+                                <div x-show="getVisibleBenchTickets('Analise Tecnica').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
+                                    <span x-text="showTodayOnly ? 'Nenhuma análise agendada para hoje.' : 'Nenhum item em análise.'"></span>
                                 </div>
                             </div>
                         </div>
@@ -3599,10 +3646,10 @@
                         <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
                              <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                                 <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Em Andamento Reparo</h3>
-                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Andamento Reparo').length"></span>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getVisibleBenchTickets('Andamento Reparo').length"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
-                                <template x-for="ticket in techTickets.filter(t => t.status === 'Andamento Reparo' && matchesSearch(t))" :key="ticket.id">
+                                <template x-for="ticket in getVisibleBenchTickets('Andamento Reparo', true)" :key="ticket.id">
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket)"
                                           :class="[
@@ -3686,8 +3733,8 @@
                                         </div>
                                      </div>
                                 </template>
-                                <div x-show="techTickets.filter(t => t.status === 'Andamento Reparo').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
-                                    Nenhum reparo em andamento.
+                                <div x-show="getVisibleBenchTickets('Andamento Reparo').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
+                                    <span x-text="showTodayOnly ? 'Nenhum reparo agendado para hoje.' : 'Nenhum reparo em andamento.'"></span>
                                 </div>
                             </div>
                         </div>
@@ -5910,10 +5957,11 @@
                                          <span class="text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider"
                                                :class="{
                                                    'bg-gray-100 text-gray-600': app.status === 'scheduled',
+                                                   'bg-blue-100 text-blue-700': app.status === 'in_progress',
                                                    'bg-green-100 text-green-700': app.status === 'completed',
                                                    'bg-red-100 text-red-700': app.status === 'cancelled'
                                                }"
-                                               x-text="app.status === 'scheduled' ? 'Agendado' : (app.status === 'completed' ? 'Realizado' : 'Cancelado')">
+                                               x-text="app.status === 'scheduled' ? 'Agendado' : (app.status === 'in_progress' ? 'Em andamento' : (app.status === 'completed' ? 'Realizado' : 'Cancelado'))">
                                          </span>
                                      </div>
 
@@ -6251,8 +6299,42 @@
             <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full">
                 <!-- Header -->
                 <div class="bg-black px-6 py-4 flex justify-between items-center">
-                    <div class="flex items-center space-x-4">
-                        <h3 class="text-lg font-bold text-white">Calendário de Prazos</h3>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <h3 class="text-lg font-bold text-white"
+                            x-text="view === 'tech_orders' && benchCalendarMode === 'appointment' ? 'Calendário de Agendamentos' : 'Calendário de Prazos'"></h3>
+
+                        <template x-if="view === 'tech_orders'">
+                            <div class="inline-flex items-center rounded-lg bg-gray-800 p-1 border border-gray-700" role="group" aria-label="Exibir calendário por">
+                                <button type="button" @click="benchCalendarMode = 'deadline'"
+                                        :aria-pressed="benchCalendarMode === 'deadline'"
+                                        :class="benchCalendarMode === 'deadline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-300 hover:text-white'"
+                                        class="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all">
+                                    <i class="fa-solid fa-flag-checkered mr-1"></i> Prazo
+                                </button>
+                                <button type="button" @click="benchCalendarMode = 'appointment'"
+                                        :aria-pressed="benchCalendarMode === 'appointment'"
+                                        :class="benchCalendarMode === 'appointment' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-300 hover:text-white'"
+                                        class="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all">
+                                    <i class="fa-regular fa-calendar-check mr-1"></i> Agendamento
+                                </button>
+                            </div>
+                        </template>
+
+                        <template x-if="view === 'tech_orders'">
+                            <button type="button"
+                                    @click="showTodayOnly = !showTodayOnly"
+                                    :aria-pressed="showTodayOnly"
+                                    :class="showTodayOnly ? 'border-brand-400 bg-brand-500 text-white shadow-sm' : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600 hover:text-white'"
+                                    class="inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-all"
+                                    title="Exibir somente os serviços com prazo ou agendamento para hoje">
+                                <i class="fa-solid" :class="showTodayOnly ? 'fa-check-circle' : 'fa-calendar-day'"></i>
+                                <span>Só hoje</span>
+                                <span x-text="showTodayOnly ? 'Ativo' : 'Desligado'"
+                                      :class="showTodayOnly ? 'bg-white/20 text-white' : 'bg-gray-700 text-gray-400'"
+                                      class="rounded px-1.5 py-0.5 text-[8px] font-extrabold transition-colors"></span>
+                            </button>
+                        </template>
+
                         <div class="flex items-center space-x-2 bg-gray-800 rounded-lg p-1">
                             <button @click="changeMonth(-1)" class="text-white hover:text-brand-500 w-8 h-8 rounded flex items-center justify-center"><i class="fa-solid fa-chevron-left"></i></button>
                             <span class="text-white font-bold w-32 text-center" x-text="currentCalendarDate.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'})"></span>
@@ -6264,6 +6346,12 @@
 
                 <!-- Body -->
                 <div class="p-6 bg-gray-50">
+                    <div x-show="view === 'tech_orders' && benchCalendarMode === 'appointment'" class="flex items-center gap-4 mb-4 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] font-semibold text-gray-600">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-400"></span> Análise</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Reparo</span>
+                        <span class="ml-auto text-gray-400"><i class="fa-solid fa-arrow-down-short-wide mr-1"></i>Cards ordenados pelo horário agendado</span>
+                    </div>
+
                     <!-- Weekday Headers -->
                     <div class="grid grid-cols-7 gap-px mb-2">
                         <template x-for="day in ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']" :key="day">
@@ -6284,14 +6372,27 @@
                                              x-text="day.getDate()"></div>
 
                                         <div class="space-y-1 overflow-y-auto max-h-[100px] scrollbar-hide">
-                                            <template x-for="t in (view === 'kanban' ? getKanbanCalendarTickets() : getCalendarTickets()).filter(x => isSameDay(x.deadline, day))" :key="t.id">
-                                                 <div @click="modals.calendar = false; scrollToTicket(t.id)" class="bg-gray-50 border border-gray-100 rounded px-1.5 py-1 text-[10px] shadow-sm cursor-pointer hover:bg-black hover:text-white transition-colors group relative truncate" :title="t.defect_reported">
-                                                     <span class="font-bold" x-text="'OS ' + t.os_number"></span>
-                                                     <span x-text="t.device_model"></span>
+                                            <template x-for="event in getCalendarModalEventsForDay(day)" :key="event.key">
+                                                 <div @click="openCalendarEvent(event)"
+                                                      class="border rounded px-1.5 py-1 text-[10px] shadow-sm cursor-pointer transition-colors group relative"
+                                                      :class="getCalendarEventClasses(event)"
+                                                      :title="getCalendarEventTypeLabel(event) + ' • ' + event.ticket.defect_reported">
+                                                     <div class="flex items-center justify-between gap-1">
+                                                         <span class="font-extrabold whitespace-nowrap">
+                                                             <i class="fa-solid mr-0.5" :class="getCalendarEventIcon(event)"></i>
+                                                             <span x-text="formatCalendarEventTime(event.eventDate)"></span>
+                                                         </span>
+                                                         <span class="uppercase font-bold text-[8px] truncate" x-text="getCalendarEventTypeLabel(event)"></span>
+                                                     </div>
+                                                     <div class="truncate mt-0.5">
+                                                         <span class="font-bold" x-text="'OS ' + event.ticket.os_number"></span>
+                                                         <span x-text="event.ticket.device_model"></span>
+                                                     </div>
                                                      <!-- Tooltip -->
                                                       <div class="hidden group-hover:block absolute z-50 bottom-full left-0 w-48 bg-black text-white p-2 rounded text-xs mb-1 shadow-lg pointer-events-none">
-                                                         <p class="font-bold border-b border-gray-700 pb-1 mb-1" x-text="t.client_name"></p>
-                                                         <p x-text="t.defect_reported"></p>
+                                                         <p class="font-bold border-b border-gray-700 pb-1 mb-1" x-text="getCalendarEventTypeLabel(event) + ' às ' + formatCalendarEventTime(event.eventDate)"></p>
+                                                         <p class="font-semibold" x-text="event.ticket.client_name"></p>
+                                                         <p x-text="event.ticket.defect_reported"></p>
                                                      </div>
                                                  </div>
                                             </template>
