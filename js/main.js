@@ -347,6 +347,7 @@ function app() {
             is_outsourced: false, outsourced_company_id: '', // New fields
             checklist: [], checklist_final: [], photos: [], notes: ''
         },
+        ticketFormErrors: {},
         newChecklistItem: '',
         selectedTemplateId: '',
         newTemplateName: '',
@@ -1985,7 +1986,20 @@ function app() {
                 is_outsourced: false, outsourced_company_id: '',
                 checklist: [], checklist_final: [], photos: [], notes: ''
             };
+            this.ticketFormErrors = {};
             this.modals.ticket = true;
+        },
+
+        focusTicketField(field) {
+            this.ticketFormErrors = { ...(this.ticketFormErrors || {}), [field]: true };
+
+            setTimeout(() => {
+                const fieldElement = document.getElementById('ticket-' + field + '-field');
+                const inputElement = document.getElementById('ticket-' + field + '-select');
+
+                if (fieldElement) fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (inputElement) inputElement.focus({ preventScroll: true });
+            }, 50);
         },
 
         handleBudgetApprovalEntryChange() {
@@ -3440,6 +3454,8 @@ function app() {
                 sendTrackingWhatsApp: () => this.sendTrackingWhatsApp(),
                 sendCarrierWhatsApp: (t, c, tr) => this.sendCarrierWhatsApp(t, c, tr),
                 validateTicketRequirements: (data) => this.validateTicketRequirements(data),
+                isFieldRequired: (key) => this.isFieldRequired(key),
+                focusTicketField: (field) => this.focusTicketField(field),
                 setLoading: (val) => { this.loading = val; },
                 closeModal: (name) => { this.modals[name] = false; },
                 openLogisticsModal: (t) => this.openLogisticsModal(t),
