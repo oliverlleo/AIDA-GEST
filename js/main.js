@@ -2236,6 +2236,7 @@ function app() {
                                                 slot.appointments.push({
                                                     id: app.id,
                                                     ticket_id: app.ticket_id,
+                                                    technician_id: this.scheduleManagement.gridTechnicianId,
                                                     type: app.appointment_type,
                                                     start: app.scheduled_start,
                                                     end: app.scheduled_end,
@@ -2641,6 +2642,7 @@ function app() {
 
         async submitReschedule() {
             const ea = this.scheduleManagement.editingAppointment;
+            const ticketIdToRefresh = ea.ticket_id || (ea.original ? ea.original.ticket_id : null);
 
             // Explicit guard against submitting a creation without selecting a ticket
             if (!ea.ticket_id && (!ea.original || !ea.original.id)) {
@@ -2746,11 +2748,21 @@ function app() {
                 }
 
                 this.closeRescheduleModal();
-                this.loadScheduleManagement();
+                await this.loadScheduleManagement();
 
-                // We sync from the server to guarantee we don't incorrectly overwrite
-                // the technician if priority rules dictate otherwise (e.g. analysis rescheduled when repair already exists).
-                this.fetchTickets();
+                // Recarrega a OS somente depois que agenda e gatilho terminaram.
+                // Isso mantém cards, Minha Bancada e modal na mesma versão do servidor.
+                await this.fetchTickets();
+
+                if (ticketIdToRefresh) {
+                    const refreshedTicket = this.tickets.find(t => t.id === ticketIdToRefresh);
+                    if (refreshedTicket && this.selectedTicket?.id === ticketIdToRefresh) {
+                        this.selectedTicket = refreshedTicket;
+                    }
+                    if (this.modals.viewTicket) {
+                        await this.fetchTicketAppointments(ticketIdToRefresh);
+                    }
+                }
 
             } catch (e) {
                 console.error(e);
