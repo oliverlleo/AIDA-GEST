@@ -1452,7 +1452,13 @@
                                     <template x-for="t in homeOps.pendingBudgets" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
-                                                <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
 
                                                 <!-- Dynamic sub-stage visual -->
@@ -1507,7 +1513,13 @@
                                     <template x-for="t in homeOps.waitingBudgetResponse" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
-                                                <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                                 <!-- Deadlines -->
                                                 <div class="flex gap-2 mt-1">
@@ -1547,7 +1559,13 @@
                                     <template x-for="t in homeOps.pendingPickups" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
-                                                <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                                 <!-- Deadlines -->
                                                 <div class="flex gap-2 mt-1">
@@ -1582,7 +1600,13 @@
                                     <template x-for="t in homeOps.pendingTracking" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
-                                                <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                                 <div class="text-[10px] text-orange-600 font-bold" x-text="'Via: ' + (t.carrier_name || 'Transportadora')"></div>
                                             </div>
@@ -1607,7 +1631,13 @@
                                     <template x-for="t in homeOps.pendingDelivery" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
-                                                <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                                 <div class="flex gap-2 mt-1">
                                                     <span x-show="t.delivery_method === 'pickup'" class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold">Retirada Balcão</span>
@@ -1643,14 +1673,20 @@
                                     <template x-for="t in homeOps.pendingTech" :key="t.id">
                                         <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                             <div>
-                                                <div class="flex items-center gap-2">
-                                                    <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                <div class="flex min-w-0 items-center justify-between gap-2">
+                                                    <div class="flex min-w-0 items-center gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
                                                     <!-- Warning if Analysis Deadline is overdue -->
                                                     <template x-if="t.analysis_deadline && new Date(t.analysis_deadline) < new Date()">
                                                         <span class="text-[10px] bg-red-100 text-red-600 px-1.5 rounded border border-red-200 font-bold flex items-center" title="Prazo de envio excedido">
                                                             <i class="fa-solid fa-clock mr-1"></i> Atrasado
                                                         </span>
                                                     </template>
+                                                    </div>
+                                                    <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
                                                 </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                                 <!-- Deadlines -->
@@ -1694,7 +1730,13 @@
                                             <template x-for="t in homeOps.outsourcedToSend" :key="t.id">
                                                 <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                                     <div>
-                                                        <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                        <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
                                                         <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                                         <div class="text-[10px] text-gray-400 mt-1">
                                                             <span class="font-bold" x-text="getOutsourcedCompany(t.outsourced_company_id)"></span>
@@ -1721,7 +1763,13 @@
                                             <template x-for="t in homeOps.pendingOutsourced" :key="t.id">
                                                 <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                                     <div>
-                                                        <div class="font-bold text-gray-800 text-sm" x-text="t.client_name"></div>
+                                                        <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
                                                         <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                                         <div class="text-[10px] text-gray-400 flex items-center gap-2 mt-1">
                                                             <span x-text="getOutsourcedCompany(t.outsourced_company_id)"></span>
@@ -1764,8 +1812,15 @@
                                         <template x-for="t in homeOps.pendingPurchase" :key="t.id">
                                             <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                                 <div>
-                                                    <div class="font-bold text-gray-800 text-sm" x-text="t.device_model"></div>
-                                                    <div class="text-xs text-gray-500 truncate w-32" x-text="t.parts_needed || 'Peças não listadas'"></div>
+                                                    <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
+                                                    <div class="text-xs text-gray-500 truncate" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                    <div class="text-xs text-gray-500 truncate w-32 mt-0.5" x-text="t.parts_needed || 'Peças não listadas'"></div>
                                                     <!-- Deadlines -->
                                                     <div class="flex gap-2 mt-1">
                                                         <template x-if="t.deadline">
@@ -1794,8 +1849,15 @@
                                         <template x-for="t in homeOps.pendingReceipt" :key="t.id">
                                             <div class="p-3 hover:bg-gray-50 flex justify-between items-center group">
                                                 <div>
-                                                    <div class="font-bold text-gray-800 text-sm" x-text="t.device_model"></div>
-                                                    <div class="text-xs text-gray-500 truncate w-32" x-text="t.parts_needed || 'Peças'"></div>
+                                                    <div class="flex min-w-0 items-center justify-between gap-2">
+                                                        <div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div>
+                                                        <span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa">
+                                                            <i class="fa-regular fa-clock text-[9px]"></i>
+                                                            <span x-text="getOverviewQueueAge(t)"></span>
+                                                        </span>
+                                                    </div>
+                                                    <div class="text-xs text-gray-500 truncate" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                    <div class="text-xs text-gray-500 truncate w-32 mt-0.5" x-text="t.parts_needed || 'Peças'"></div>
                                                     <!-- Deadlines -->
                                                     <div class="flex gap-2 mt-1">
                                                         <template x-if="t.deadline">
@@ -1835,9 +1897,15 @@
                                             <div class="space-y-1">
                                                 <template x-for="t in homeOps.priorityTickets.slice(0, 5)" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-red-50 border-l-2 border-red-500 p-2 cursor-pointer hover:bg-red-100 transition-colors rounded-r group relative">
-                                                        <div class="flex justify-between items-center text-xs mb-0.5">
-                                                             <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
-                                                             <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                        <div class="flex justify-between items-center gap-2 text-xs mb-0.5">
+                                                             <span class="font-bold text-gray-800 truncate" x-text="t.client_name"></span>
+                                                             <div class="flex shrink-0 items-center gap-1.5">
+                                                                 <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                                 <span class="inline-flex items-center gap-1 rounded-full border border-current border-opacity-20 bg-white bg-opacity-60 px-1.5 py-0.5 text-[9px] font-semibold text-red-600" title="Tempo nesta etapa">
+                                                                     <i class="fa-regular fa-clock text-[8px]"></i>
+                                                                     <span x-text="getOverviewQueueAge(t)"></span>
+                                                                 </span>
+                                                             </div>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
                                                         <!-- Deadlines -->
@@ -1871,9 +1939,15 @@
                                             <div class="space-y-1">
                                                 <template x-for="t in homeOps.expiringDeliveries.slice(0, 5)" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-amber-50 border-l-2 border-amber-500 p-2 cursor-pointer hover:bg-amber-100 transition-colors rounded-r group relative">
-                                                        <div class="flex justify-between items-center text-xs mb-0.5">
-                                                             <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
-                                                             <span class="font-mono text-amber-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                        <div class="flex justify-between items-center gap-2 text-xs mb-0.5">
+                                                             <span class="font-bold text-gray-800 truncate" x-text="t.client_name"></span>
+                                                             <div class="flex shrink-0 items-center gap-1.5">
+                                                                 <span class="font-mono text-amber-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                                 <span class="inline-flex items-center gap-1 rounded-full border border-current border-opacity-20 bg-white bg-opacity-60 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600" title="Tempo nesta etapa">
+                                                                     <i class="fa-regular fa-clock text-[8px]"></i>
+                                                                     <span x-text="getOverviewQueueAge(t)"></span>
+                                                                 </span>
+                                                             </div>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
                                                         <div class="flex justify-between items-center">
@@ -1896,9 +1970,15 @@
                                             <div class="space-y-1">
                                                 <template x-for="t in homeOps.expiredDeliveries.slice(0, 5)" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-red-50 border-l-2 border-red-500 p-2 cursor-pointer hover:bg-red-100 transition-colors rounded-r group relative">
-                                                        <div class="flex justify-between items-center text-xs mb-0.5">
-                                                             <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
-                                                             <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                        <div class="flex justify-between items-center gap-2 text-xs mb-0.5">
+                                                             <span class="font-bold text-gray-800 truncate" x-text="t.client_name"></span>
+                                                             <div class="flex shrink-0 items-center gap-1.5">
+                                                                 <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                                 <span class="inline-flex items-center gap-1 rounded-full border border-current border-opacity-20 bg-white bg-opacity-60 px-1.5 py-0.5 text-[9px] font-semibold text-red-600" title="Tempo nesta etapa">
+                                                                     <i class="fa-regular fa-clock text-[8px]"></i>
+                                                                     <span x-text="getOverviewQueueAge(t)"></span>
+                                                                 </span>
+                                                             </div>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
                                                         <div class="flex justify-between items-center">
@@ -1921,9 +2001,15 @@
                                             <div class="space-y-1">
                                                 <template x-for="t in homeOps.expiringAnalysis" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-amber-50 border-l-2 border-amber-500 p-2 cursor-pointer hover:bg-amber-100 transition-colors rounded-r group relative">
-                                                        <div class="flex justify-between items-center text-xs mb-0.5">
-                                                             <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
-                                                             <span class="font-mono text-amber-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                        <div class="flex justify-between items-center gap-2 text-xs mb-0.5">
+                                                             <span class="font-bold text-gray-800 truncate" x-text="t.client_name"></span>
+                                                             <div class="flex shrink-0 items-center gap-1.5">
+                                                                 <span class="font-mono text-amber-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                                 <span class="inline-flex items-center gap-1 rounded-full border border-current border-opacity-20 bg-white bg-opacity-60 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600" title="Tempo nesta etapa">
+                                                                     <i class="fa-regular fa-clock text-[8px]"></i>
+                                                                     <span x-text="getOverviewQueueAge(t)"></span>
+                                                                 </span>
+                                                             </div>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
                                                         <div class="flex justify-between items-center">
@@ -1946,9 +2032,15 @@
                                             <div class="space-y-1">
                                                 <template x-for="t in homeOps.expiredAnalysis" :key="t.id">
                                                     <div @click="viewTicketDetails(t)" class="bg-red-50 border-l-2 border-red-500 p-2 cursor-pointer hover:bg-red-100 transition-colors rounded-r group relative">
-                                                        <div class="flex justify-between items-center text-xs mb-0.5">
-                                                             <span class="font-bold text-gray-800 truncate w-2/3" x-text="t.client_name"></span>
-                                                             <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                        <div class="flex justify-between items-center gap-2 text-xs mb-0.5">
+                                                             <span class="font-bold text-gray-800 truncate" x-text="t.client_name"></span>
+                                                             <div class="flex shrink-0 items-center gap-1.5">
+                                                                 <span class="font-mono text-red-600 font-bold" x-text="'OS ' + t.os_number"></span>
+                                                                 <span class="inline-flex items-center gap-1 rounded-full border border-current border-opacity-20 bg-white bg-opacity-60 px-1.5 py-0.5 text-[9px] font-semibold text-red-600" title="Tempo nesta etapa">
+                                                                     <i class="fa-regular fa-clock text-[8px]"></i>
+                                                                     <span x-text="getOverviewQueueAge(t)"></span>
+                                                                 </span>
+                                                             </div>
                                                         </div>
                                                         <div class="text-[10px] text-gray-500 truncate mb-1" x-text="t.device_model"></div>
                                                         <div class="flex justify-between items-center">
