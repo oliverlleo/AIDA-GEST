@@ -5910,10 +5910,11 @@
                                          <span class="text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider"
                                                :class="{
                                                    'bg-gray-100 text-gray-600': app.status === 'scheduled',
+                                                   'bg-blue-100 text-blue-700': app.status === 'in_progress',
                                                    'bg-green-100 text-green-700': app.status === 'completed',
                                                    'bg-red-100 text-red-700': app.status === 'cancelled'
                                                }"
-                                               x-text="app.status === 'scheduled' ? 'Agendado' : (app.status === 'completed' ? 'Realizado' : 'Cancelado')">
+                                               x-text="app.status === 'scheduled' ? 'Agendado' : (app.status === 'in_progress' ? 'Em andamento' : (app.status === 'completed' ? 'Realizado' : 'Cancelado'))">
                                          </span>
                                      </div>
 
