@@ -184,6 +184,7 @@ window.AIDATicketActions = {
     async denyRepair(ticketOrId, deps) {
          const ticket = deps.resolveTicket(ticketOrId);
          if (!ticket) return;
+
          const ctx = deps.getLogContext(ticket);
          await deps.updateStatus(ticket, 'Retirada Cliente', { budget_status: 'Negado', repair_successful: false }, { action: 'Negou Orçamento', details: `${ctx.client} reprovou o orçamento do ${ctx.device}.` });
     },
@@ -191,6 +192,23 @@ window.AIDATicketActions = {
     async confirmReceived(ticketOrId, deps) {
          const ticket = deps.resolveTicket(ticketOrId);
          if (!ticket) return;
+
+         // Quando a compra foi aberta no meio do reparo, o banco retoma um novo ciclo do cronômetro.
+         if (ticket.repair_paused_at) {
+             deps.setLoading(true);
+             try {
+                 await deps.supabaseFetch('rpc/resume_repair_after_parts', 'POST', { p_ticket_id: ticket.id });
+                 deps.notify("Peças recebidas. Reparo retomado e cronômetro reiniciado.");
+                 await deps.fetchTickets(true);
+                 await deps.fetchGlobalLogs();
+             } catch (e) {
+                 deps.notify("Erro ao retomar reparo: " + e.message, "error");
+             } finally {
+                 deps.setLoading(false);
+             }
+             return;
+         }
+
          const ctx = deps.getLogContext(ticket);
          const rawPart = ticket.parts_needed || 'peça';
          const part = `"${rawPart}"`;
@@ -373,39 +391,59 @@ window.AIDATicketActions = {
     async startRepair(ticketOrId, deps) {
         const ticket = deps.resolveTicket(ticketOrId);
         if (!ticket) return;
-        const ctx = deps.getLogContext(ticket);
-        const actionLog = {
-            action: 'Iniciou Execução',
-            details: `Reparo iniciado do ${ctx.device} de ${ctx.client}.`
-        };
-        const now = new Date().toISOString();
-        await deps.mutateTicket(ticket, 'startRepair', { repair_start_at: now }, actionLog, { showNotify: false, fetchTickets: true });
-        await deps.supabaseFetch('rpc/start_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'repair' });
+        deps.setLoading(true);
+        try {
+            await deps.supabaseFetch('rpc/start_repair_timer', 'POST', { p_ticket_id: ticket.id });
+            deps.notify("Reparo iniciado.");
+            await deps.fetchTickets(true);
+            await deps.fetchGlobalLogs();
+        } catch (e) {
+            deps.notify("Erro ao iniciar reparo: " + e.message, "error");
+        } finally {
+            deps.setLoading(false);
+        }
+    },
+
+    async pauseRepairForParts(ticketOrId, deps) {
+        const ticket = deps.resolveTicket(ticketOrId);
+        const parts = String(deps.state.pauseRepairForPartsForm.parts || '').trim();
+        if (!ticket || !parts) return deps.notify("Informe a peça ou componente necessário.", "error");
+
+        deps.setLoading(true);
+        try {
+            await deps.supabaseFetch('rpc/pause_repair_for_parts', 'POST', {
+                p_ticket_id: ticket.id,
+                p_parts_needed: parts
+            });
+            deps.closeModal('pauseRepairForParts');
+            deps.notify("Reparo pausado e enviado para compra de peças.");
+            await deps.fetchTickets(true);
+            await deps.fetchGlobalLogs();
+        } catch (e) {
+            deps.notify("Erro ao pausar reparo: " + e.message, "error");
+        } finally {
+            deps.setLoading(false);
+        }
     },
 
     async finishRepair(success, deps) {
         const ticket = deps.resolveTicket();
         if (!ticket) return;
-        const nextStatus = success ? 'Teste Final' : 'Retirada Cliente';
-        const updates = {
-            repair_successful: success,
-            repair_end_at: new Date().toISOString()
-        };
-
-        // Calculate Duration
-        const ctx = deps.getLogContext(ticket);
-
-        const detailMsg = success
-            ? `O reparo do ${ctx.device} de ${ctx.client} foi finalizado com sucesso.`
-            : `O ${ctx.device} de ${ctx.client} não teve reparo.`;
-
-        deps.closeModal('outcome');
-        await deps.updateStatus(ticket, nextStatus, updates, {
-            action: 'Finalizou Reparo',
-            details: detailMsg
-        });
-
-        await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'repair' });
+        deps.setLoading(true);
+        try {
+            await deps.supabaseFetch('rpc/complete_repair_with_timer', 'POST', {
+                p_ticket_id: ticket.id,
+                p_success: success
+            });
+            deps.closeModal('outcome');
+            deps.notify(success ? "Reparo finalizado com sucesso!" : "Reparo finalizado.");
+            await deps.fetchTickets(true);
+            await deps.fetchGlobalLogs();
+        } catch (e) {
+            deps.notify("Erro ao finalizar reparo: " + e.message, "error");
+        } finally {
+            deps.setLoading(false);
+        }
     },
 
     async startTest(ticketOrId, deps) {
