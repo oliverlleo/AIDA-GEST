@@ -400,6 +400,7 @@ function app() {
         calendarView: 'week',
         currentCalendarDate: new Date(),
         showAllCalendarTickets: false,
+        benchCalendarMode: 'deadline', // 'deadline' or 'appointment' (shared by weekly and expanded views)
 
         // Kanban State
         kanbanScrollWidth: 0,
@@ -1707,6 +1708,57 @@ function app() {
             });
         },
 
+        getBenchAppointmentDate(ticket) {
+            if (!ticket) return null;
+            if (ticket.status === 'Analise Tecnica') return ticket.analysis_scheduled_at || null;
+            if (ticket.status === 'Andamento Reparo') return ticket.repair_scheduled_at || null;
+            return ticket.repair_scheduled_at || ticket.analysis_scheduled_at || null;
+        },
+
+        getBenchDeadlineDate(ticket) {
+            if (!ticket) return null;
+            if (ticket.status === 'Analise Tecnica') {
+                return ticket.analysis_deadline || ticket.deadline || null;
+            }
+            return ticket.deadline || ticket.analysis_deadline || null;
+        },
+
+        getValidTimestamp(value) {
+            if (!value) return null;
+            const timestamp = new Date(value).getTime();
+            return Number.isFinite(timestamp) ? timestamp : null;
+        },
+
+        compareBenchTickets(a, b) {
+            const requestedA = Boolean(a?.priority_requested);
+            const requestedB = Boolean(b?.priority_requested);
+            if (requestedA !== requestedB) return requestedA ? -1 : 1;
+
+            // Use the next available date when a ticket has no appointment or deadline.
+            const appointmentA = this.getValidTimestamp(this.getBenchAppointmentDate(a));
+            const appointmentB = this.getValidTimestamp(this.getBenchAppointmentDate(b));
+            const deadlineA = this.getValidTimestamp(this.getBenchDeadlineDate(a));
+            const deadlineB = this.getValidTimestamp(this.getBenchDeadlineDate(b));
+            const createdA = this.getValidTimestamp(a?.created_at) ?? Number.MAX_SAFE_INTEGER;
+            const createdB = this.getValidTimestamp(b?.created_at) ?? Number.MAX_SAFE_INTEGER;
+            const effectiveA = appointmentA ?? deadlineA ?? createdA;
+            const effectiveB = appointmentB ?? deadlineB ?? createdB;
+
+            if (effectiveA !== effectiveB) return effectiveA - effectiveB;
+
+            // Deterministic tie-breakers preserve the requested hierarchy.
+            const deadlineTieA = deadlineA ?? createdA;
+            const deadlineTieB = deadlineB ?? createdB;
+            if (deadlineTieA !== deadlineTieB) return deadlineTieA - deadlineTieB;
+            if (createdA !== createdB) return createdA - createdB;
+
+            return String(a?.os_number || '').localeCompare(String(b?.os_number || ''), undefined, { numeric: true });
+        },
+
+        sortBenchTickets(tickets) {
+            return [...(tickets || [])].sort((a, b) => this.compareBenchTickets(a, b));
+        },
+
         async fetchTickets(loadMore = false) {
             if (!this.user?.workspace_id) return;
 
@@ -1774,15 +1826,7 @@ function app() {
 
                     // POPULATE TECH TICKETS (Client Side Filter for safety/convenience)
                     if (this.view === 'tech_orders') {
-                        this.techTickets = this.tickets.sort((a, b) => {
-                            if (a.priority_requested && !b.priority_requested) return -1;
-                            if (!a.priority_requested && b.priority_requested) return 1;
-                            const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
-                            const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
-                            if (dA !== dB) return dA - dB;
-                            const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
-                            return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
-                        });
+                        this.techTickets = this.sortBenchTickets(this.tickets);
                     } else {
                         let relevantTickets = this.tickets;
                         const isTechOnly = !this.hasRole('admin') && this.hasRole('tecnico');
@@ -1790,21 +1834,14 @@ function app() {
                             relevantTickets = relevantTickets.filter(t => t.technician_id == this.user.id || t.technician_id == null);
                         }
 
-                        this.techTickets = relevantTickets.filter(t => {
+                        relevantTickets = relevantTickets.filter(t => {
                             const allowedStatuses = ['Analise Tecnica', 'Andamento Reparo'];
                             if (this.getTestFlowMode() === 'technician') {
                                 allowedStatuses.push('Teste Final');
                             }
                             return allowedStatuses.includes(t.status);
-                        }).sort((a, b) => {
-                            if (a.priority_requested && !b.priority_requested) return -1;
-                            if (!a.priority_requested && b.priority_requested) return 1;
-                            const dA = a.deadline ? new Date(a.deadline).getTime() : 9999999999999;
-                            const dB = b.deadline ? new Date(b.deadline).getTime() : 9999999999999;
-                            if (dA !== dB) return dA - dB;
-                            const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
-                            return (pOrder[a.priority] || 2) - (pOrder[b.priority] || 2);
                         });
+                        this.techTickets = this.sortBenchTickets(relevantTickets);
                     }
                 }
             } catch (err) {
@@ -3600,8 +3637,8 @@ function app() {
         // ==========================================
 
         // --- CALENDAR HELPERS ---
-        getCalendarTickets() {
-            let source = this.tickets.filter(t => t.status !== 'Finalizado' && t.deadline);
+        getBenchCalendarSourceTickets() {
+            let source = this.tickets.filter(t => t.status !== 'Finalizado');
 
             let effectiveFilter = this.adminDashboardFilters.technician;
             if (!this.hasRole('admin') && this.hasRole('tecnico')) {
@@ -3620,6 +3657,100 @@ function app() {
                 source = source.filter(t => techStatuses.includes(t.status));
             }
             return source;
+        },
+
+        getCalendarTickets() {
+            return this.getBenchCalendarSourceTickets().filter(t => t.deadline);
+        },
+
+        getBenchCalendarEvents() {
+            const source = this.getBenchCalendarSourceTickets();
+            const events = [];
+            const addEvent = (ticket, eventType, eventDate) => {
+                if (!eventDate || this.getValidTimestamp(eventDate) === null) return;
+                events.push({
+                    key: `${ticket.id}:${eventType}:${eventDate}`,
+                    ticket,
+                    eventType,
+                    eventDate
+                });
+            };
+
+            source.forEach(ticket => {
+                if (this.benchCalendarMode === 'appointment') {
+                    addEvent(ticket, 'analysis', ticket.analysis_scheduled_at);
+                    addEvent(ticket, 'repair', ticket.repair_scheduled_at);
+                } else {
+                    addEvent(ticket, 'deadline', ticket.deadline);
+                }
+            });
+
+            const typeOrder = { analysis: 0, repair: 1, deadline: 2 };
+            return events.sort((a, b) => {
+                const timeDiff = this.getValidTimestamp(a.eventDate) - this.getValidTimestamp(b.eventDate);
+                if (timeDiff !== 0) return timeDiff;
+                const typeDiff = typeOrder[a.eventType] - typeOrder[b.eventType];
+                if (typeDiff !== 0) return typeDiff;
+                return String(a.ticket.os_number || '').localeCompare(String(b.ticket.os_number || ''), undefined, { numeric: true });
+            });
+        },
+
+        getBenchCalendarEventsForDay(day) {
+            return this.getBenchCalendarEvents().filter(event => this.isSameDay(event.eventDate, day));
+        },
+
+        getCalendarModalEventsForDay(day) {
+            if (this.view === 'kanban') {
+                return this.getKanbanCalendarTickets()
+                    .map(ticket => ({
+                        key: `${ticket.id}:deadline:${ticket.deadline}`,
+                        ticket,
+                        eventType: 'deadline',
+                        eventDate: ticket.deadline
+                    }))
+                    .filter(event => this.isSameDay(event.eventDate, day))
+                    .sort((a, b) => this.getValidTimestamp(a.eventDate) - this.getValidTimestamp(b.eventDate));
+            }
+            return this.getBenchCalendarEventsForDay(day);
+        },
+
+        getCalendarEventClasses(event) {
+            if (event?.eventType === 'analysis') {
+                return 'bg-orange-50 border-orange-200 text-orange-800 hover:bg-orange-100';
+            }
+            if (event?.eventType === 'repair') {
+                return 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100';
+            }
+            return 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100';
+        },
+
+        getCalendarEventTypeLabel(event) {
+            if (event?.eventType === 'analysis') return 'Análise';
+            if (event?.eventType === 'repair') return 'Reparo';
+            return 'Prazo';
+        },
+
+        getCalendarEventIcon(event) {
+            if (event?.eventType === 'analysis') return 'fa-magnifying-glass';
+            if (event?.eventType === 'repair') return 'fa-screwdriver-wrench';
+            return 'fa-flag-checkered';
+        },
+
+        formatCalendarEventTime(value) {
+            const date = new Date(value);
+            if (!Number.isFinite(date.getTime())) return '--:--';
+            return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        },
+
+        openCalendarEvent(event) {
+            const ticket = event?.ticket || event;
+            if (!ticket?.id) return;
+            this.modals.calendar = false;
+            if (this.view === 'tech_orders') {
+                this.viewTicketDetails(ticket);
+                return;
+            }
+            this.scrollToTicket(ticket.id);
         },
 
         getKanbanCalendarTickets() {
