@@ -4647,6 +4647,20 @@ function app() {
             return `${days}d ${hours % 24}h`;
         },
 
+        getOverviewQueueAge(ticket) {
+            const enteredAt = ticket?.overview_queue_entered_at || ticket?.updated_at || ticket?.created_at || ticket?.entry_date;
+            const enteredAtMs = new Date(enteredAt).getTime();
+            if (!Number.isFinite(enteredAtMs)) return 'agora';
+
+            const now = this.currentTime instanceof Date ? this.currentTime.getTime() : Date.now();
+            const elapsedSeconds = Math.max(0, Math.floor((now - enteredAtMs) / 1000));
+
+            if (elapsedSeconds < 60) return 'agora';
+            if (elapsedSeconds < 3600) return 'há ' + Math.floor(elapsedSeconds / 60) + ' min';
+            if (elapsedSeconds < 86400) return 'há ' + Math.floor(elapsedSeconds / 3600) + 'h';
+            return 'há ' + Math.floor(elapsedSeconds / 86400) + 'd';
+        },
+
         getDuration(startTime) {
             if (!startTime) return '00:00:00';
             const start = new Date(startTime).getTime();
