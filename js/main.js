@@ -1443,6 +1443,13 @@ function app() {
             });
         },
 
+        getLogActorName(log) {
+            const actorName = String(log?.user_name || '').trim();
+            if (!actorName) return 'Sistema';
+            if (actorName === 'Owner' || actorName === 'Admin') return 'Administrador';
+            return actorName;
+        },
+
         async fetchTicketLogs(ticketId) {
             return await window.AIDALogsNotificationsService.fetchTicketLogs(ticketId, {
                 hasRole: (r) => this.hasRole(r),
@@ -2813,6 +2820,7 @@ function app() {
                 // Recarrega a OS somente depois que agenda e gatilho terminaram.
                 // Isso mantém cards, Minha Bancada e modal na mesma versão do servidor.
                 await this.fetchTickets();
+                await this.fetchGlobalLogs();
 
                 if (ticketIdToRefresh) {
                     const refreshedTicket = this.tickets.find(t => t.id === ticketIdToRefresh);
@@ -2821,6 +2829,9 @@ function app() {
                     }
                     if (this.modals.viewTicket) {
                         await this.fetchTicketAppointments(ticketIdToRefresh);
+                    }
+                    if (this.modals.logs) {
+                        this.ticketLogs = await this.fetchTicketLogs(ticketIdToRefresh);
                     }
                 }
 
@@ -2837,6 +2848,8 @@ function app() {
             const ea = this.scheduleManagement.editingAppointment;
             if (!ea || !ea.original || !ea.original.id) return;
 
+            const ticketIdToRefresh = ea.ticket_id || ea.original.ticket_id;
+
             if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
 
             this.loading = true;
@@ -2848,6 +2861,11 @@ function app() {
                 this.notify("Agendamento cancelado.");
                 this.closeRescheduleModal();
                 this.loadScheduleManagement();
+                await this.fetchTickets();
+                await this.fetchGlobalLogs();
+                if (ticketIdToRefresh && this.modals.logs) {
+                    this.ticketLogs = await this.fetchTicketLogs(ticketIdToRefresh);
+                }
             } catch (e) {
                 console.error(e);
                 this.notify("Erro ao cancelar.", "error");
