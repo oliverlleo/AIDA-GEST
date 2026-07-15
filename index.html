@@ -1983,7 +1983,7 @@
                                             <div class="flex-grow min-w-0">
                                                 <p class="text-xs text-gray-800 leading-snug whitespace-pre-wrap" x-html="formatLogDetails(log.details || log.action)"></p>
                                                 <div class="flex items-center gap-2 mt-1">
-                                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide" x-text="log.user_name"></span>
+                                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wide" x-text="getLogActorName(log)"></span>
                                                     <span class="text-[10px] text-gray-300">•</span>
                                                     <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
                                                 </div>
@@ -4924,7 +4924,7 @@
                             <label class="block text-xs font-bold text-gray-500 mb-1">Nº Série / IMEI <span x-show="isFieldRequired('serial_number')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.serial" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div>
+                        <div x-show="!ticketForm.budget_approved">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Análise <span x-show="isFieldRequired('analysis_deadline')" class="text-red-500">*</span></label>
                             <input type="datetime-local" x-model="ticketForm.analysis_deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
@@ -4935,6 +4935,48 @@
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho <span x-show="isFieldRequired('device_condition')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
+                        </div>
+
+                        <!-- Optional shortcut for services with approved budget at intake -->
+                        <div class="col-span-2" x-show="!ticketForm.is_outsourced">
+                            <div class="rounded-xl border transition-colors"
+                                 :class="ticketForm.budget_approved ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200 bg-gray-50'">
+                                <label class="flex items-center gap-3 px-4 py-3 cursor-pointer">
+                                    <input type="checkbox" x-model="ticketForm.budget_approved" @change="handleBudgetApprovalEntryChange()"
+                                           class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
+                                    <span class="flex h-8 w-8 items-center justify-center rounded-lg"
+                                          :class="ticketForm.budget_approved ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-400 border border-gray-200'">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </span>
+                                    <span class="flex-1">
+                                        <span class="block text-sm font-bold text-gray-800">Orçamento já aprovado</span>
+                                        <span class="block text-xs text-gray-500">Use apenas quando o cliente já autorizou o serviço. O chamado não passa pela análise.</span>
+                                    </span>
+                                    <span x-show="!ticketForm.budget_approved" class="text-[10px] font-bold uppercase tracking-wide text-gray-400">Fluxo normal</span>
+                                </label>
+
+                                <div x-show="ticketForm.budget_approved" x-transition class="border-t border-emerald-100 px-4 py-4">
+                                    <p class="mb-3 text-xs font-bold uppercase tracking-wide text-emerald-800">Enviar inicialmente para</p>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <button type="button" @click="ticketForm.approved_route = 'repair'; handleApprovedRouteChange()"
+                                                :class="ticketForm.approved_route === 'repair' ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200' : 'border-gray-200 bg-white hover:border-brand-200'"
+                                                class="rounded-lg border p-3 text-left transition-colors">
+                                            <span class="flex items-center gap-2 text-sm font-bold text-gray-800"><i class="fa-solid fa-screwdriver-wrench text-brand-600"></i> Reparo</span>
+                                            <span class="mt-1 block text-xs text-gray-500">Envia para o técnico iniciar ou agendar o reparo.</span>
+                                        </button>
+                                        <button type="button" @click="ticketForm.approved_route = 'purchase'; handleApprovedRouteChange()"
+                                                :class="ticketForm.approved_route === 'purchase' ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-200' : 'border-gray-200 bg-white hover:border-purple-200'"
+                                                class="rounded-lg border p-3 text-left transition-colors">
+                                            <span class="flex items-center gap-2 text-sm font-bold text-gray-800"><i class="fa-solid fa-box-open text-purple-600"></i> Compra de peças</span>
+                                            <span class="mt-1 block text-xs text-gray-500">Aguarda a compra antes de liberar o reparo.</span>
+                                        </button>
+                                    </div>
+                                    <div x-show="ticketForm.approved_route === 'purchase'" class="mt-3">
+                                        <label class="mb-1 block text-xs font-bold text-gray-600">Peças necessárias <span class="text-red-500">*</span></label>
+                                        <textarea x-model="ticketForm.parts_needed" rows="2" class="w-full rounded-lg border border-purple-200 bg-white p-2.5 text-sm focus:border-purple-500 focus:ring-purple-500" placeholder="Ex.: Tela OLED e adesivo de vedação"></textarea>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Technician / Outsourced Combo -->
@@ -4948,7 +4990,7 @@
                                 <!-- Small Inline Toggle -->
                                 <label x-show="isOutsourcedEnabled()" class="inline-flex items-center cursor-pointer">
                                     <span class="mr-2 text-[10px] font-bold text-gray-400 uppercase" :class="ticketForm.is_outsourced ? 'text-purple-600' : ''">Terceirizado?</span>
-                                    <input type="checkbox" x-model="ticketForm.is_outsourced" class="sr-only peer">
+                                    <input type="checkbox" x-model="ticketForm.is_outsourced" @change="if (ticketForm.is_outsourced) { ticketForm.budget_approved = false; handleBudgetApprovalEntryChange(); }" class="sr-only peer">
                                     <div class="relative w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
                                 </label>
                             </div>
@@ -5003,22 +5045,23 @@
                         </div>
 
                         <!-- Scheduling UI -->
-                        <div class="col-span-2" x-show="!ticketForm.is_outsourced">
-                            <label class="block text-xs font-bold text-gray-500 mb-2">Agendamento</label>
+                        <div class="col-span-2" x-show="!ticketForm.is_outsourced && (!ticketForm.budget_approved || ticketForm.approved_route === 'repair')">
+                            <label class="block text-xs font-bold text-gray-500 mb-2" x-text="ticketForm.budget_approved ? 'Agendamento de Reparo' : 'Agendamento de Análise'"></label>
 
-                            <!-- Analysis Schedule -->
+                            <!-- Schedule follows the selected entry route -->
                             <div class="mb-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                                <button type="button" @click="openSchedulePanel('analysis')"
+                                <button type="button" @click="openSchedulePanel(ticketForm.budget_approved ? 'repair' : 'analysis')"
                                         class="text-xs px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors flex items-center justify-center gap-2">
-                                    <i class="fa-regular fa-calendar text-brand-500"></i> Agendar Análise
-                                    <span x-show="isFieldRequired('analysis_schedule')" class="text-red-500 font-bold">*</span>
+                                    <i class="fa-regular fa-calendar text-brand-500"></i>
+                                    <span x-text="ticketForm.budget_approved ? 'Agendar Reparo' : 'Agendar Análise'"></span>
+                                    <span x-show="!ticketForm.budget_approved && isFieldRequired('analysis_schedule')" class="text-red-500 font-bold">*</span>
                                 </button>
 
-                                <template x-if="selectedAnalysisAppointment">
+                                <template x-if="ticketForm.budget_approved ? selectedRepairAppointment : selectedAnalysisAppointment">
                                     <div class="flex items-center gap-2 text-xs bg-brand-50 text-brand-700 px-3 py-1.5 rounded border border-brand-200">
                                         <i class="fa-solid fa-clock"></i>
-                                        <span x-text="formatAppointmentSummary(selectedAnalysisAppointment)"></span>
-                                        <button type="button" @click="removeAppointment('analysis')" class="ml-2 text-brand-500 hover:text-red-500" title="Remover">
+                                        <span x-text="formatAppointmentSummary(ticketForm.budget_approved ? selectedRepairAppointment : selectedAnalysisAppointment)"></span>
+                                        <button type="button" @click="removeAppointment(ticketForm.budget_approved ? 'repair' : 'analysis')" class="ml-2 text-brand-500 hover:text-red-500" title="Remover">
                                             <i class="fa-solid fa-times"></i>
                                         </button>
                                     </div>
@@ -6239,7 +6282,7 @@
                                     <div class="flex items-center gap-3 mt-2">
                                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                                             <i class="fa-solid fa-user text-gray-300"></i>
-                                            <span x-text="log.user_name"></span>
+                                            <span x-text="getLogActorName(log)"></span>
                                         </span>
                                         <span class="text-gray-300 text-xs">•</span>
                                         <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(log.created_at).toLocaleString()"></span>
@@ -6262,12 +6305,12 @@
                                 <div class="p-5 hover:bg-gray-50 transition-colors flex gap-4">
                                     <div class="flex-shrink-0 pt-1">
                                         <div class="h-8 w-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-bold font-mono">
-                                            <span x-text="(log.user_name || 'S').charAt(0).toUpperCase()"></span>
+                                            <span x-text="getLogActorName(log).charAt(0).toUpperCase()"></span>
                                         </div>
                                     </div>
                                     <div class="flex-grow">
                                         <div class="flex justify-between items-start mb-1">
-                                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wide" x-text="log.user_name || 'Sistema'"></span>
+                                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wide" x-text="getLogActorName(log)"></span>
                                             <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(log.created_at).toLocaleString()"></span>
                                         </div>
                                         <p class="text-sm text-gray-900 font-medium whitespace-pre-wrap" x-html="formatLogDetails(log.details || log.action)"></p>

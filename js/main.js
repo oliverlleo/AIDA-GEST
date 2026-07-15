@@ -343,6 +343,7 @@ function app() {
             defects: [], priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '',
+            budget_approved: false, approved_route: 'repair', parts_needed: '',
             is_outsourced: false, outsourced_company_id: '', // New fields
             checklist: [], checklist_final: [], photos: [], notes: ''
         },
@@ -1443,6 +1444,13 @@ function app() {
             });
         },
 
+        getLogActorName(log) {
+            const actorName = String(log?.user_name || '').trim();
+            if (!actorName) return 'Sistema';
+            if (actorName === 'Owner' || actorName === 'Admin') return 'Administrador';
+            return actorName;
+        },
+
         async fetchTicketLogs(ticketId) {
             return await window.AIDALogsNotificationsService.fetchTicketLogs(ticketId, {
                 hasRole: (r) => this.hasRole(r),
@@ -1972,10 +1980,28 @@ function app() {
                 defects: [], priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
                 technician_id: '',
+                budget_approved: false, approved_route: 'repair', parts_needed: '',
                 is_outsourced: false, outsourced_company_id: '',
                 checklist: [], checklist_final: [], photos: [], notes: ''
             };
             this.modals.ticket = true;
+        },
+
+        handleBudgetApprovalEntryChange() {
+            // A entrada aprovada não percorre a análise; evita criar uma agenda incompatível.
+            if (this.ticketForm.budget_approved) {
+                this.ticketForm.analysis_deadline = '';
+                this.selectedAnalysisAppointment = null;
+            } else {
+                this.ticketForm.parts_needed = '';
+                this.selectedRepairAppointment = null;
+            }
+        },
+
+        handleApprovedRouteChange() {
+            if (this.ticketForm.approved_route !== 'repair') {
+                this.selectedRepairAppointment = null;
+            }
         },
 
         addChecklistItem() {
@@ -2813,6 +2839,7 @@ function app() {
                 // Recarrega a OS somente depois que agenda e gatilho terminaram.
                 // Isso mantém cards, Minha Bancada e modal na mesma versão do servidor.
                 await this.fetchTickets();
+                await this.fetchGlobalLogs();
 
                 if (ticketIdToRefresh) {
                     const refreshedTicket = this.tickets.find(t => t.id === ticketIdToRefresh);
@@ -2821,6 +2848,9 @@ function app() {
                     }
                     if (this.modals.viewTicket) {
                         await this.fetchTicketAppointments(ticketIdToRefresh);
+                    }
+                    if (this.modals.logs) {
+                        this.ticketLogs = await this.fetchTicketLogs(ticketIdToRefresh);
                     }
                 }
 
@@ -2837,6 +2867,8 @@ function app() {
             const ea = this.scheduleManagement.editingAppointment;
             if (!ea || !ea.original || !ea.original.id) return;
 
+            const ticketIdToRefresh = ea.ticket_id || ea.original.ticket_id;
+
             if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
 
             this.loading = true;
@@ -2848,6 +2880,11 @@ function app() {
                 this.notify("Agendamento cancelado.");
                 this.closeRescheduleModal();
                 this.loadScheduleManagement();
+                await this.fetchTickets();
+                await this.fetchGlobalLogs();
+                if (ticketIdToRefresh && this.modals.logs) {
+                    this.ticketLogs = await this.fetchTicketLogs(ticketIdToRefresh);
+                }
             } catch (e) {
                 console.error(e);
                 this.notify("Erro ao cancelar.", "error");
@@ -2953,13 +2990,14 @@ function app() {
         validateTicketRequirements(ticketData) {
             // If OS Generation is enabled, skip OS validation (server will fill it)
             const isOsAuto = this.isAutoOSGenerationEnabled();
+            const skipsAnalysis = Boolean(this.ticketForm.budget_approved);
 
             if (!this.isRequiredFieldsEnabled()) {
                 // Legacy Validation (Hardcoded + Deadlines)
                 if (!ticketData.client_name || (!isOsAuto && !ticketData.os_number) || !ticketData.device_model || !ticketData.defect_reported) {
                     return { valid: false, missing: ['Campos Padrão (*)'] };
                 }
-                if (!ticketData.analysis_deadline) return { valid: false, missing: ['Prazo de Análise'] };
+                if (!skipsAnalysis && !ticketData.analysis_deadline) return { valid: false, missing: ['Prazo de Análise'] };
                 if (!ticketData.deadline) return { valid: false, missing: ['Prazo de Entrega'] };
 
                 if (ticketData.is_outsourced) {
@@ -2977,6 +3015,9 @@ function app() {
             const reqConfig = this.trackerConfig.required_ticket_fields || {};
 
             this.TICKET_REQUIRED_FIELDS.forEach(field => {
+                // Orçamento já aprovado começa depois da análise e não exige prazo/agenda dela.
+                if (skipsAnalysis && ['analysis_deadline', 'analysis_schedule'].includes(field.key)) return;
+
                 // Skip OS Number check if Auto-Gen is on
                 if (field.key === 'os_number' && isOsAuto) return;
 
