@@ -7,6 +7,22 @@ window.AIDATicketActions = {
     // ==========================================
 
     async createTicket(deps) {
+        const startsWithApprovedBudget = Boolean(deps.state.ticketForm.budget_approved);
+        const approvedRoute = deps.state.ticketForm.approved_route;
+        const partsNeeded = String(deps.state.ticketForm.parts_needed || '').trim();
+
+        if (startsWithApprovedBudget && !['repair', 'purchase'].includes(approvedRoute)) {
+            return deps.notify("Escolha se o chamado deve seguir para reparo ou compra de peças.", "error");
+        }
+
+        if (startsWithApprovedBudget && deps.state.ticketForm.is_outsourced) {
+            return deps.notify("O atalho de orçamento aprovado é exclusivo para o fluxo interno de reparo.", "error");
+        }
+
+        if (startsWithApprovedBudget && approvedRoute === 'purchase' && !partsNeeded) {
+            return deps.notify("Informe as peças necessárias antes de enviar o chamado para compra.", "error");
+        }
+
         // Basic Integrity Checks
         if (deps.state.deviceModels && deps.state.deviceModels.length > 0 && !deps.state.deviceModels.find(m => m.name === deps.state.ticketForm.model)) {
             return deps.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
@@ -27,6 +43,9 @@ window.AIDATicketActions = {
             if (techId === 'all') techId = null;
 
             const isOsAuto = deps.isAutoOSGenerationEnabled();
+            const initialStatus = startsWithApprovedBudget
+                ? (approvedRoute === 'purchase' ? 'Compra Peca' : 'Andamento Reparo')
+                : 'Aberto';
 
             const ticketData = {
                 id: deps.state.ticketForm.id,
@@ -39,15 +58,18 @@ window.AIDATicketActions = {
                 priority: deps.state.ticketForm.priority,
                 contact_info: deps.state.ticketForm.contact,
                 deadline: deps.toUTC(deps.state.ticketForm.deadline) || null,
-                analysis_deadline: deps.toUTC(deps.state.ticketForm.analysis_deadline) || null,
+                analysis_deadline: startsWithApprovedBudget ? null : (deps.toUTC(deps.state.ticketForm.analysis_deadline) || null),
                 device_condition: deps.state.ticketForm.device_condition,
+                parts_needed: startsWithApprovedBudget && approvedRoute === 'purchase' ? partsNeeded : null,
+                parts_status: startsWithApprovedBudget && approvedRoute === 'purchase' ? 'Pendente' : 'N/A',
+                budget_status: startsWithApprovedBudget ? 'Aprovado' : 'Pendente',
                 technician_id: deps.state.ticketForm.is_outsourced ? null : techId,
                 is_outsourced: deps.state.ticketForm.is_outsourced,
                 outsourced_company_id: (deps.state.ticketForm.is_outsourced && deps.state.ticketForm.outsourced_company_id && deps.state.ticketForm.outsourced_company_id !== '') ? deps.state.ticketForm.outsourced_company_id : null,
                 checklist_data: deps.state.ticketForm.checklist,
                 checklist_final_data: deps.state.ticketForm.checklist_final,
                 photos_urls: deps.state.ticketForm.photos,
-                status: 'Aberto',
+                status: initialStatus,
                 created_by_name: deps.state.user.name
             };
 
@@ -68,10 +90,21 @@ window.AIDATicketActions = {
             }
 
             const ctx = deps.getLogContext(createdTicket);
-            await deps.logTicketAction(createdTicket.id, 'Novo Chamado', `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`);
+            const initialLog = startsWithApprovedBudget
+                ? {
+                    action: 'Novo Chamado - Orçamento Aprovado',
+                    details: approvedRoute === 'purchase'
+                        ? `Chamado criado com orçamento já aprovado para ${ctx.device} de ${ctx.client} e enviado para **Compra de Peças**: **${partsNeeded}**.`
+                        : `Chamado criado com orçamento já aprovado para ${ctx.device} de ${ctx.client} e enviado direto para **Reparo**.`
+                }
+                : {
+                    action: 'Novo Chamado',
+                    details: `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`
+                };
+            await deps.logTicketAction(createdTicket.id, initialLog.action, initialLog.details);
 
             // Check and process appointments if present in state
-            if (deps.state.selectedAnalysisAppointment) {
+            if (!startsWithApprovedBudget && deps.state.selectedAnalysisAppointment) {
                 try {
                     const appt = deps.state.selectedAnalysisAppointment;
                     await deps.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
@@ -87,7 +120,7 @@ window.AIDATicketActions = {
                     deps.notify("Chamado criado, mas falha ao salvar a agenda de análise.", "error");
                 }
             }
-            if (deps.state.selectedRepairAppointment) {
+            if (startsWithApprovedBudget && approvedRoute === 'repair' && deps.state.selectedRepairAppointment) {
                 try {
                     const appt = deps.state.selectedRepairAppointment;
                     await deps.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
