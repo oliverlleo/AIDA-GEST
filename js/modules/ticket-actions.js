@@ -10,6 +10,13 @@ window.AIDATicketActions = {
         const startsWithApprovedBudget = Boolean(deps.state.ticketForm.budget_approved);
         const approvedRoute = deps.state.ticketForm.approved_route;
         const partsNeeded = String(deps.state.ticketForm.parts_needed || '').trim();
+        const technicianIsRequired = !deps.state.ticketForm.is_outsourced && deps.isFieldRequired('responsible');
+        const selectedTechnician = deps.state.ticketForm.technician_id;
+
+        if (technicianIsRequired && (!selectedTechnician || selectedTechnician === 'all')) {
+            deps.focusTicketField('technician');
+            return deps.notify('Selecione o técnico responsável antes de criar o chamado.', 'error');
+        }
 
         if (startsWithApprovedBudget && !['repair', 'purchase'].includes(approvedRoute)) {
             return deps.notify("Escolha se o chamado deve seguir para reparo ou compra de peças.", "error");
@@ -20,6 +27,7 @@ window.AIDATicketActions = {
         }
 
         if (startsWithApprovedBudget && approvedRoute === 'purchase' && !partsNeeded) {
+            deps.focusTicketField('parts_needed');
             return deps.notify("Informe as peças necessárias antes de enviar o chamado para compra.", "error");
         }
 
@@ -40,7 +48,7 @@ window.AIDATicketActions = {
 
         try {
             let techId = deps.state.ticketForm.technician_id;
-            if (techId === 'all') techId = null;
+            if (techId === 'all' || !techId) techId = null;
 
             const isOsAuto = deps.isAutoOSGenerationEnabled();
             const initialStatus = startsWithApprovedBudget
@@ -77,7 +85,8 @@ window.AIDATicketActions = {
             const validation = deps.validateTicketRequirements(ticketData);
             if (!validation.valid) {
                 deps.setLoading(false);
-                return deps.notify("Preencha os campos obrigatórios: " + validation.missing.join(', '), "error");
+                deps.focusTicketFields(validation.missingFields || []);
+                return deps.notify("Preencha os campos obrigatórios destacados.", "error");
             }
 
             const createdData = await deps.supabaseFetch('tickets', 'POST', ticketData);

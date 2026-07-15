@@ -4925,19 +4925,21 @@
                 </div>
 
                 <!-- Body -->
-                <div class="p-6 max-h-[70vh] overflow-y-auto">
+                <div class="p-6 max-h-[70vh] overflow-y-auto"
+                     @input="clearTicketFieldError(($event.target.closest('[data-ticket-field]') || {}).dataset?.ticketField)"
+                     @change="clearTicketFieldError(($event.target.closest('[data-ticket-field]') || {}).dataset?.ticketField)">
                     <!-- Section 1: Basic Info -->
                     <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4 border-b pb-2">Informações do Cliente e Aparelho</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div>
+                        <div data-ticket-field="client_name">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Cliente <span x-show="isFieldRequired('client_name')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.client_name" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div>
+                        <div data-ticket-field="contact_info">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Contato <span x-show="isFieldRequired('contact_info')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.contact" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div>
+                        <div data-ticket-field="os_number">
                             <label class="block text-xs font-bold text-gray-500 mb-1">
                                 Nº OS <span x-show="!isAutoOSGenerationEnabled() && isFieldRequired('os_number')" class="text-red-500">*</span>
                             </label>
@@ -4951,14 +4953,14 @@
                                 </div>
                             </div>
                         </div>
-                        <div>
+                        <div data-ticket-field="priority">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prioridade <span x-show="isFieldRequired('priority')" class="text-red-500">*</span></label>
                             <select x-model="ticketForm.priority" class="w-full border rounded-lg p-2.5 bg-gray-50">
                                 <template x-for="p in PRIORITIES" :key="p"><option :value="p" x-text="p"></option></template>
                             </select>
                         </div>
                         <!-- Device Model Custom Select -->
-                        <div class="col-span-1" x-data="deviceModelCombobox()">
+                        <div class="col-span-1" data-ticket-field="device_model" x-data="deviceModelCombobox()">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Modelo <span x-show="isFieldRequired('device_model')" class="text-red-500">*</span></label>
                             <div class="relative">
                                 <!-- Search Input acting as combobox -->
@@ -5016,19 +5018,19 @@
                                 </div>
                             </div>
                         </div>
-                         <div>
+                         <div data-ticket-field="serial_number">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Nº Série / IMEI <span x-show="isFieldRequired('serial_number')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.serial" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div x-show="!ticketForm.budget_approved">
+                        <div x-show="!ticketForm.budget_approved" data-ticket-field="analysis_deadline">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Análise <span x-show="isFieldRequired('analysis_deadline')" class="text-red-500">*</span></label>
                             <input type="datetime-local" x-model="ticketForm.analysis_deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div>
+                        <div data-ticket-field="deadline">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Entrega <span x-show="isFieldRequired('deadline')" class="text-red-500">*</span></label>
                             <input type="datetime-local" x-model="ticketForm.deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div>
+                        <div data-ticket-field="device_condition">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho <span x-show="isFieldRequired('device_condition')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
                         </div>
@@ -5067,7 +5069,7 @@
                                             <span class="mt-1 block text-xs text-gray-500">Aguarda a compra antes de liberar o reparo.</span>
                                         </button>
                                     </div>
-                                    <div x-show="ticketForm.approved_route === 'purchase'" class="mt-3">
+                                    <div x-show="ticketForm.approved_route === 'purchase'" class="mt-3" data-ticket-field="parts_needed">
                                         <label class="mb-1 block text-xs font-bold text-gray-600">Peças necessárias <span class="text-red-500">*</span></label>
                                         <textarea x-model="ticketForm.parts_needed" rows="2" class="w-full rounded-lg border border-purple-200 bg-white p-2.5 text-sm focus:border-purple-500 focus:ring-purple-500" placeholder="Ex.: Tela OLED e adesivo de vedação"></textarea>
                                     </div>
@@ -5076,7 +5078,7 @@
                         </div>
 
                         <!-- Technician / Outsourced Combo -->
-                        <div>
+                        <div id="ticket-technician-field" class="scroll-mt-6" data-ticket-field="responsible">
                             <div class="flex justify-between items-end mb-1">
                                 <label class="block text-xs font-bold text-gray-500">
                                     <span x-text="ticketForm.is_outsourced ? 'Empresa Parceira' : 'Técnico Responsável'"></span>
@@ -5092,13 +5094,22 @@
                             </div>
 
                             <!-- Tech Select -->
-                            <select x-show="!ticketForm.is_outsourced" x-model="ticketForm.technician_id" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
+                            <select id="ticket-technician-select"
+                                    x-show="!ticketForm.is_outsourced"
+                                    x-model="ticketForm.technician_id"
+                                    @change="ticketFormErrors.technician = false"
+                                    :class="ticketFormErrors.technician ? 'border-red-500 bg-red-50 ring-2 ring-red-100 focus:ring-red-400 focus:border-red-500' : 'border-gray-200 bg-gray-50'"
+                                    class="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
                                 <option value="">-- Selecione um Técnico --</option>
                                 <option value="all" x-show="!isFieldRequired('responsible')">TODOS (Disponível para equipe)</option>
                                 <template x-for="tech in getTechnicians()" :key="tech.id">
                                     <option :value="tech.id" x-text="tech.name"></option>
                                 </template>
                             </select>
+                            <p x-show="!ticketForm.is_outsourced && ticketFormErrors.technician" class="mt-1.5 flex items-center gap-1 text-xs font-semibold text-red-600">
+                                <i class="fa-solid fa-circle-exclamation"></i>
+                                Selecione o técnico responsável.
+                            </p>
 
                             <!-- Outsourced Select -->
                             <div x-show="ticketForm.is_outsourced" class="flex space-x-2">
@@ -5141,7 +5152,7 @@
                         </div>
 
                         <!-- Scheduling UI -->
-                        <div class="col-span-2" x-show="!ticketForm.is_outsourced && (!ticketForm.budget_approved || ticketForm.approved_route === 'repair')">
+                        <div class="col-span-2" data-ticket-field="analysis_schedule" x-show="!ticketForm.is_outsourced && (!ticketForm.budget_approved || ticketForm.approved_route === 'repair')">
                             <label class="block text-xs font-bold text-gray-500 mb-2" x-text="ticketForm.budget_approved ? 'Agendamento de Reparo' : 'Agendamento de Análise'"></label>
 
                             <!-- Schedule follows the selected entry route -->
@@ -5167,7 +5178,7 @@
                         </div>
 
                         <!-- Defect Options Tag Input -->
-                        <div class="col-span-2" x-data="defectCombobox()">
+                        <div class="col-span-2" data-ticket-field="defect_reported" x-data="defectCombobox()">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado <span x-show="isFieldRequired('defect_reported')" class="text-red-500">*</span></label>
 
                             <!-- Selected Tags -->
@@ -5241,7 +5252,7 @@
                     </div>
 
                     <!-- Section 2: Checklist -->
-                    <div class="mb-6">
+                    <div class="mb-6" data-ticket-field="checklist_entry">
                         <div class="flex justify-between items-end border-b pb-2 mb-4">
                             <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide">
                                 Checklist de Entrada <span x-show="isFieldRequired('checklist_entry')" class="text-red-500">*</span>
@@ -5287,7 +5298,7 @@
                     </div>
 
                     <!-- Section 3: Final Checklist -->
-                    <div class="mb-6">
+                    <div class="mb-6" data-ticket-field="checklist_exit">
                         <div class="flex justify-between items-end border-b pb-2 mb-4">
                             <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide">
                                 Checklist de Saída <span x-show="isFieldRequired('checklist_exit')" class="text-red-500">*</span>
@@ -5333,7 +5344,7 @@
                     </div>
 
                     <!-- Section 4: Photos -->
-                     <div>
+                     <div data-ticket-field="photos">
                         <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide mb-2 border-b pb-2">
                             Fotos <span x-show="isFieldRequired('photos')" class="text-red-500">*</span>
                         </h4>
