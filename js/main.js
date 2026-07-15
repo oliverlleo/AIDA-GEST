@@ -2748,6 +2748,27 @@ function app() {
                 this.closeRescheduleModal();
                 this.loadScheduleManagement();
 
+                // Ao salvar/remarcar, também atualizamos o card selecionado localmente e recarregamos os tickets via API.
+                // Isso garante que o status "Agendado" persista visualmente (x-if="ticket.analysis_scheduled_at")
+                if (ea.ticket_id || (ea.original && ea.original.ticket_id)) {
+                    let tid = ea.ticket_id || ea.original.ticket_id;
+                    let localTicket = this.tickets.find(t => t.id === tid);
+                    if (localTicket) {
+                        if (ea.type === 'analysis') {
+                            localTicket.analysis_scheduled_at = startStr;
+                        } else if (ea.type === 'repair') {
+                            localTicket.repair_scheduled_at = startStr;
+                        }
+                    }
+                    if (this.selectedTicket && this.selectedTicket.id === tid) {
+                         if (ea.type === 'analysis') {
+                            this.selectedTicket.analysis_scheduled_at = startStr;
+                        } else if (ea.type === 'repair') {
+                            this.selectedTicket.repair_scheduled_at = startStr;
+                        }
+                    }
+                }
+
                 // We sync from the server to guarantee we don't incorrectly overwrite
                 // the technician if priority rules dictate otherwise (e.g. analysis rescheduled when repair already exists).
                 this.fetchTickets();
@@ -3254,6 +3275,11 @@ function app() {
                 updateSelectedTicket: (id, updates) => {
                     if (this.selectedTicket && this.selectedTicket.id === id) {
                         this.selectedTicket = { ...this.selectedTicket, ...updates };
+                    }
+                    // Também atualiza o ticket local na lista principal do kanban para evitar visual desatualizado
+                    let localTicket = this.tickets.find(t => t.id === id);
+                    if (localTicket) {
+                        Object.assign(localTicket, updates);
                     }
                 },
                 logTicketAction: (id, act, det) => this.logTicketAction(id, act, det),

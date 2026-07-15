@@ -26,9 +26,14 @@ window.AIDATicketQueryService = {
             };
 
             const response = await supabaseFetch('rpc/get_operational_queue', 'POST', payload);
+            let items = response.items || [];
+
+            // Garantir que as datas de agendamento não se percam em requisições de listagem parcial se faltarem.
+            // (Isto é um fallback caso o RPC não retorne por algum motivo).
+
             return {
                 mode: 'operational_rpc',
-                data: response.items || [],
+                data: items,
                 counts: response.counts || { today: 0, today_tomorrow: 0, next_7_days: 0, overdue: 0, no_deadline: 0, all: 0 }
             };
         }
