@@ -217,8 +217,8 @@ BEGIN
     THEN v_missing := array_append(v_missing, 'Checklist de Saída'); END IF;
 
     IF public.aida_ticket_field_mode(v_config, 'photos', false) = 'required'
-       AND (NEW.photos_urls IS NULL OR jsonb_typeof(NEW.photos_urls) <> 'array' OR NEW.photos_urls = '[]'::jsonb)
-       AND (v_insert OR NOT (OLD.photos_urls IS NULL OR jsonb_typeof(OLD.photos_urls) <> 'array' OR OLD.photos_urls = '[]'::jsonb))
+       AND COALESCE(cardinality(NEW.photos_urls), 0) = 0
+       AND (v_insert OR COALESCE(cardinality(OLD.photos_urls), 0) > 0)
     THEN v_missing := array_append(v_missing, 'Fotos'); END IF;
 
     IF array_length(v_missing, 1) > 0 THEN
