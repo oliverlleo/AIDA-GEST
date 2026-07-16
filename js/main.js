@@ -592,22 +592,22 @@ function app() {
 
         // REQUIRED FIELDS DEFINITION
         TICKET_REQUIRED_FIELDS: [
-            { key: 'client_name', label: 'Cliente', col: 'client_name', type: 'text' },
-            { key: 'contact_info', label: 'Contato', col: 'contact_info', type: 'text' },
-            { key: 'os_number', label: 'Nº OS (Manual)', col: 'os_number', type: 'text' },
-            { key: 'serial_number', label: 'Nº Série / IMEI', col: 'serial_number', type: 'text' },
-            { key: 'priority', label: 'Prioridade', col: 'priority', type: 'text' },
-            { key: 'device_model', label: 'Modelo', col: 'device_model', type: 'text' },
-            { key: 'analysis_deadline', label: 'Prazo de Análise', col: 'analysis_deadline', type: 'date' },
-            { key: 'deadline', label: 'Prazo de Entrega', col: 'deadline', type: 'date' },
-            { key: 'device_condition', label: 'Situação do Aparelho', col: 'device_condition', type: 'text' },
-            { key: 'responsible', label: 'Técnico Responsável', col: 'technician_id', type: 'id_check' },
-            { key: 'defect_reported', label: 'Defeito Relatado', col: 'defect_reported', type: 'text' },
-            { key: 'checklist_entry', label: 'Checklist de Entrada', col: 'checklist_data', type: 'array' },
-            { key: 'checklist_exit', label: 'Checklist de Saída', col: 'checklist_final_data', type: 'array' },
-            { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' },
-            { key: 'analysis_schedule', label: 'Agendamento de Análise', col: 'analysis_schedule', type: 'schedule' },
-            { key: 'repair_schedule', label: 'Agendamento de Reparo', col: 'repair_schedule', type: 'schedule' }
+            { key: 'client_name', label: 'Cliente', icon: 'fa-user', col: 'client_name', type: 'text' },
+            { key: 'contact_info', label: 'Contato', icon: 'fa-phone', col: 'contact_info', type: 'text' },
+            { key: 'os_number', label: 'Nº OS (Manual)', icon: 'fa-hashtag', col: 'os_number', type: 'text' },
+            { key: 'serial_number', label: 'Nº Série / IMEI', icon: 'fa-barcode', col: 'serial_number', type: 'text' },
+            { key: 'priority', label: 'Prioridade', icon: 'fa-flag', col: 'priority', type: 'text' },
+            { key: 'device_model', label: 'Modelo', icon: 'fa-mobile-screen-button', col: 'device_model', type: 'text' },
+            { key: 'analysis_deadline', label: 'Prazo de Análise', icon: 'fa-hourglass-half', col: 'analysis_deadline', type: 'date' },
+            { key: 'deadline', label: 'Prazo de Entrega', icon: 'fa-calendar-check', col: 'deadline', type: 'date' },
+            { key: 'device_condition', label: 'Situação do Aparelho', icon: 'fa-mobile-screen', col: 'device_condition', type: 'text' },
+            { key: 'responsible', label: 'Técnico Responsável', icon: 'fa-user-gear', col: 'technician_id', type: 'id_check' },
+            { key: 'defect_reported', label: 'Defeito Relatado', icon: 'fa-triangle-exclamation', col: 'defect_reported', type: 'text' },
+            { key: 'checklist_entry', label: 'Checklist de Entrada', icon: 'fa-clipboard-check', col: 'checklist_data', type: 'array' },
+            { key: 'checklist_exit', label: 'Checklist de Saída', icon: 'fa-clipboard-list', col: 'checklist_final_data', type: 'array' },
+            { key: 'photos', label: 'Fotos', icon: 'fa-camera', col: 'photos_urls', type: 'array' },
+            { key: 'analysis_schedule', label: 'Agendamento de Análise', icon: 'fa-calendar-day', col: 'analysis_schedule', type: 'schedule' },
+            { key: 'repair_schedule', label: 'Agendamento de Reparo', icon: 'fa-calendar-plus', col: 'repair_schedule', type: 'schedule' }
         ],
 
         // ==========================================
