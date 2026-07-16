@@ -1713,9 +1713,12 @@
                             <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-eye mr-2 text-brand-500"></i> Grupos da Visão Geral</h3>
                             <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <div class="flex items-center justify-between gap-4">
-                                    <div>
-                                        <span class="text-sm font-bold text-gray-800 block">Ativar personalização da Visão Geral</span>
-                                        <span class="text-xs text-gray-500 block">Permite ocultar lembretes e filas da página inicial. Desligado, exibe todos os grupos padrão.</span>
+                                    <div class="flex items-center gap-3 min-w-0">
+                                        <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-eye"></i></span>
+                                        <span class="min-w-0">
+                                            <span class="text-sm font-bold text-gray-800 block">Ativar personalização da Visão Geral</span>
+                                            <span class="text-xs text-gray-500 leading-snug block">Permite ocultar lembretes e filas da página inicial. Desligado, exibe todos os grupos padrão.</span>
+                                        </span>
                                     </div>
                                     <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                         <input type="checkbox" :checked="isCustomizationEnabled('overview')" @change="setCustomizationEnabled('overview', $event.target.checked)" class="sr-only peer">
@@ -1724,18 +1727,21 @@
                                 </div>
                                 <div x-show="isCustomizationEnabled('overview')" x-transition x-cloak class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 <template x-for="item in [
-                                    {key:'awaiting_start', label:'Aguardando início'},
-                                    {key:'awaiting_budget', label:'Aguardando orçamento'},
-                                    {key:'parts_purchase', label:'Compra de peças'},
-                                    {key:'parts_receipt', label:'Aguardando recebimento'},
-                                    {key:'tests', label:'Testes'},
-                                    {key:'pickup', label:'Retirada'},
-                                    {key:'overdue', label:'Prazos vencidos'},
-                                    {key:'unscheduled', label:'Sem agendamento'},
-                                    {key:'priority', label:'Prioridade solicitada'}
+                                    {key:'awaiting_start', icon:'fa-clock', label:'Aguardando início'},
+                                    {key:'awaiting_budget', icon:'fa-file-invoice-dollar', label:'Aguardando orçamento'},
+                                    {key:'parts_purchase', icon:'fa-cart-shopping', label:'Compra de peças'},
+                                    {key:'parts_receipt', icon:'fa-box', label:'Aguardando recebimento'},
+                                    {key:'tests', icon:'fa-flask', label:'Testes'},
+                                    {key:'pickup', icon:'fa-box-open', label:'Retirada'},
+                                    {key:'overdue', icon:'fa-triangle-exclamation', label:'Prazos vencidos'},
+                                    {key:'unscheduled', icon:'fa-calendar-xmark', label:'Sem agendamento'},
+                                    {key:'priority', icon:'fa-arrow-up', label:'Prioridade solicitada'}
                                 ]" :key="item.key">
-                                    <label class="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between cursor-pointer">
-                                        <span class="text-xs font-bold text-gray-700" x-text="item.label"></span>
+                                    <label class="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3 cursor-pointer hover:border-brand-200 transition">
+                                        <span class="flex items-center gap-3 min-w-0">
+                                            <span class="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid" :class="item.icon"></i></span>
+                                            <span class="text-xs font-bold text-gray-700 leading-snug" x-text="item.label"></span>
+                                        </span>
                                         <input type="checkbox" x-model="trackerConfig.overview_sections[item.key]" class="w-5 h-5 rounded text-brand-500">
                                     </label>
                                 </template>
