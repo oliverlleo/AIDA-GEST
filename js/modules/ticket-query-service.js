@@ -17,7 +17,7 @@ window.AIDATicketQueryService = {
 
             const payload = {
                 p_window: f.window,
-                p_basis: f.basis,
+                p_basis: state.getEffectiveOperationalBasis(f.basis),
                 p_status: f.status !== 'all' ? f.status : null,
                 p_technician_id: f.technician !== 'all' ? f.technician : null,
                 p_search: search ? search : null,
@@ -124,3 +124,4 @@ window.AIDATicketQueryService = {
         return data;
     }
 };
+

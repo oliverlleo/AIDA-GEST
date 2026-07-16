@@ -190,21 +190,21 @@
                     <template x-if="hasRole('admin')">
                         <div class="mb-6 md:px-4">
                             <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 hidden md:block">Gestão</p>
-                            <a href="#" @click.prevent="view = 'admin_dashboard'"
+                            <a href="#" x-show="isModuleEnabled('manager_dashboard')" @click.prevent="view = 'admin_dashboard'"
                                :class="view === 'admin_dashboard' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
                                 <i class="fa-solid fa-chart-line w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'admin_dashboard' ? 'text-brand-500' : 'text-gray-400'"></i>
                                 <span class="ml-3 font-medium text-sm hidden md:block">Dashboard Gestor</span>
                             </a>
                             <!-- NEW: Schedule Management Link -->
-                            <a href="#" @click.prevent="view = 'schedule_management'" x-show="hasRole('admin')"
+                            <a href="#" @click.prevent="view = 'schedule_management'" x-show="hasRole('admin') && isModuleEnabled('agenda')"
                                :class="view === 'schedule_management' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
                                 <i class="fa-regular fa-calendar-days w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'schedule_management' ? 'text-brand-500' : 'text-gray-400'"></i>
                                 <span class="ml-3 font-medium text-sm hidden md:block">Gerenciamento de Agenda</span>
                             </a>
                             <!-- NEW: Tracker Settings Link -->
-                            <a href="#" @click.prevent="view = 'tracker_settings'"
+                            <a href="#" x-show="isModuleEnabled('public_tracker')" @click.prevent="view = 'tracker_settings'"
                                :class="view === 'tracker_settings' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
                                 <i class="fa-solid fa-mobile-screen w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'tracker_settings' ? 'text-brand-500' : 'text-gray-400'"></i>
@@ -239,7 +239,7 @@
 
                 <!-- VIEW: DASHBOARD (Welcome) -->
                 <!-- VIEW: SCHEDULE MANAGEMENT (Agenda Técnica) -->
-                <div x-show="view === 'schedule_management' && hasRole('admin')" class="h-full flex flex-col" style="display: none;" x-cloak>
+                <div x-show="view === 'schedule_management' && hasRole('admin') && isModuleEnabled('agenda')" class="h-full flex flex-col" style="display: none;" x-cloak>
                     <header class="bg-white px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center shadow-sm z-10 flex-shrink-0 gap-4">
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 tracking-tight flex items-center gap-2">
@@ -365,7 +365,7 @@
                                 <div class="overflow-y-auto flex-grow">
 
                                     <!-- Não Agendados Block -->
-                                    <div class="border-b border-gray-200">
+                                    <div x-show="isOverviewSectionEnabled('unscheduled')" class="border-b border-gray-200">
                                         <div class="bg-red-50 border-b border-red-100 px-3 py-2 flex items-center justify-between sticky top-0 z-10">
                                             <h3 class="font-bold text-red-700 text-xs uppercase tracking-wide flex items-center"><i class="fa-regular fa-clock mr-1.5"></i>Não Agendados</h3>
                                             <span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm" x-text="scheduleManagement.unscheduledTotal"></span>
@@ -400,12 +400,12 @@
                                                         </div>
                                                     </div>
 
-                                                        <template x-if="ticket.analysis_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('analysis') && ticket.analysis_scheduled_at">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
                                                                 <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                             </div>
                                                         </template>
-                                                        <template x-if="ticket.repair_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('repair') && ticket.repair_scheduled_at">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
                                                                 <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                             </div>
@@ -457,12 +457,12 @@
                                                         </div>
                                                     </div>
 
-                                                        <template x-if="ticket.analysis_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('analysis') && ticket.analysis_scheduled_at">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
                                                                 <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                             </div>
                                                         </template>
-                                                        <template x-if="ticket.repair_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('repair') && ticket.repair_scheduled_at">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
                                                                 <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                             </div>
@@ -514,12 +514,12 @@
                                                         </div>
                                                     </div>
 
-                                                        <template x-if="ticket.analysis_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('analysis') && ticket.analysis_scheduled_at">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
                                                                 <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                             </div>
                                                         </template>
-                                                        <template x-if="ticket.repair_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('repair') && ticket.repair_scheduled_at">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
                                                                 <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                             </div>
@@ -571,12 +571,12 @@
                                                         </div>
                                                     </div>
 
-                                                        <template x-if="ticket.analysis_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('analysis') && ticket.analysis_scheduled_at">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
                                                                 <i class="fa-regular fa-calendar-check"></i> Agendado (Análise): <span x-text="formatDateLocal(ticket.analysis_scheduled_at)"></span>
                                                             </div>
                                                         </template>
-                                                        <template x-if="ticket.repair_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('repair') && ticket.repair_scheduled_at">
                                                             <div class="text-[9px] bg-brand-50 text-brand-700 p-1 rounded font-medium text-center border border-brand-100 mt-1 w-full">
                                                                 <i class="fa-regular fa-calendar-check"></i> Agendado (Reparo): <span x-text="formatDateLocal(ticket.repair_scheduled_at)"></span>
                                                             </div>
@@ -821,7 +821,7 @@
                 </div>
 
                  <!-- VIEW: TRACKER SETTINGS (NEW) -->
-                <div x-show="view === 'tracker_settings' && hasRole('admin')" class="p-8 h-full flex flex-col overflow-hidden" x-transition.opacity x-cloak>
+                <div x-show="view === 'tracker_settings' && hasRole('admin') && isModuleEnabled('public_tracker')" class="p-8 h-full flex flex-col overflow-hidden" x-transition.opacity x-cloak>
                     <header class="mb-6 flex justify-between items-center">
                         <div>
                             <h1 class="text-3xl font-bold text-gray-800">Personalizar Acompanhamento</h1>
@@ -1109,7 +1109,7 @@
                                 Checklists
                                 <span :class="catalogManagement.activeTab === 'checklists' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'" class="px-2 py-0.5 rounded-full text-[11px]" x-text="checklistTemplates.length"></span>
                             </button>
-                            <button @click="catalogManagement.activeTab = 'suppliers'; catalogManagement.search = ''"
+                            <button x-show="isModuleEnabled('suppliers')" @click="catalogManagement.activeTab = 'suppliers'; catalogManagement.search = ''"
                                 :class="catalogManagement.activeTab === 'suppliers' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'"
                                 class="px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center gap-2">
                                 <i class="fa-solid fa-truck-field"></i>
@@ -1342,7 +1342,7 @@
                             </div>
                         </section>
 
-                        <section x-show="catalogManagement.activeTab === 'suppliers'" x-transition.opacity>
+                        <section x-show="catalogManagement.activeTab === 'suppliers' && isModuleEnabled('suppliers')" x-transition.opacity>
                             <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
                                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
                                     <div>
@@ -1501,9 +1501,19 @@
                         <div>
                             <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-vial mr-2 text-brand-500"></i> Fluxo de Testes</h3>
                             <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between gap-4 mb-4 rounded-xl border border-gray-200 bg-white p-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Utilizar teste final</span>
+                                        <span class="text-xs text-gray-500 block">Quando desligado, reparos concluídos seguem direto para retirada ou entrega.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                        <input type="checkbox" x-model="trackerConfig.workflow.final_test" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
                                 <p class="text-xs text-gray-500 mb-4">Defina como a etapa de "Teste Final" será gerenciada na sua operação.</p>
 
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div x-show="isFinalTestEnabled()" x-transition class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <!-- Option 1: Kanban (Default) -->
                                     <div @click="trackerConfig.test_flow = 'kanban'"
                                          class="cursor-pointer border-2 rounded-xl p-4 flex flex-col items-center text-center transition-all hover:border-brand-300"
@@ -1543,29 +1553,148 @@
                             </div>
                         </div>
 
-                        <!-- Required Fields -->
-                        <div>
-                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-clipboard-check mr-2 text-brand-500"></i> Obrigatoriedade de Campos</h3>
-                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                <div class="flex items-center justify-between mb-4">
-                                    <div>
-                                        <span class="text-sm font-bold text-gray-800 block">Ativar Validação Estrita</span>
-                                        <span class="text-xs text-gray-500 block">Define quais campos são obrigatórios para abrir um chamado.</span>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" x-model="trackerConfig.enable_required_ticket_fields" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                        <!-- Operational Workflow -->
+                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-route"></i></span>
+                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Etapas e controles operacionais</b><small class="text-xs text-gray-500 block">Ative etapas, cronômetros, prioridade e o modo de entrega.</small></span>
+                                </span>
+                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
+                            </button>
+                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 space-y-3">
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer hover:border-brand-200 transition">
+                                        <span><b class="text-sm text-gray-800 block">Controle de compra de peças</b><small class="text-xs text-gray-500">Fornecedores, etapa de compra e pausa do reparo.</small></span>
+                                        <input type="checkbox" x-model="trackerConfig.workflow.parts_control" class="w-5 h-5 rounded text-brand-500">
+                                    </label>
+                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer">
+                                        <span><b class="text-sm text-gray-800 block">Solicitação de prioridade</b><small class="text-xs text-gray-500">Permite que uma OS seja elevada ao topo das filas.</small></span>
+                                        <input type="checkbox" x-model="trackerConfig.workflow.priority_requests" class="w-5 h-5 rounded text-brand-500">
+                                    </label>
+                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer">
+                                        <span><b class="text-sm text-gray-800 block">Cronômetro de análise</b><small class="text-xs text-gray-500">Mantém início e fim no histórico, mas só calcula duração quando ativo.</small></span>
+                                        <input type="checkbox" x-model="trackerConfig.workflow.analysis_timer" class="w-5 h-5 rounded text-brand-500">
+                                    </label>
+                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer">
+                                        <span><b class="text-sm text-gray-800 block">Cronômetro de reparo</b><small class="text-xs text-gray-500">Controla duração acumulada, pausas e retomadas.</small></span>
+                                        <input type="checkbox" x-model="trackerConfig.workflow.repair_timer" class="w-5 h-5 rounded text-brand-500">
                                     </label>
                                 </div>
 
-                                <div x-show="isRequiredFieldsEnabled()" x-transition class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-gray-200">
-                                    <template x-for="field in TICKET_REQUIRED_FIELDS" :key="field.key">
-                                        <label class="flex items-center space-x-2 p-2 border rounded bg-white hover:bg-gray-100 transition-colors cursor-pointer select-none">
-                                            <input type="checkbox" x-model="trackerConfig.required_ticket_fields[field.key]" class="rounded text-brand-600 focus:ring-brand-500 border-gray-300">
-                                            <span class="text-xs font-bold text-gray-700" x-text="field.label"></span>
+                                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                                    <span class="text-sm font-bold text-gray-800 block mb-3">Retirada e entrega</span>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <label class="border-2 rounded-xl p-3 cursor-pointer transition" :class="getDeliveryMode() === 'complete' ? 'border-brand-500 bg-brand-50' : 'border-gray-200'">
+                                            <input type="radio" value="complete" x-model="trackerConfig.workflow.delivery_mode" class="sr-only">
+                                            <b class="text-sm block">Completo</b><small class="text-xs text-gray-500">Disponibilizar e depois confirmar a entrega.</small>
                                         </label>
+                                        <label class="border-2 rounded-xl p-3 cursor-pointer transition" :class="getDeliveryMode() === 'simple' ? 'border-brand-500 bg-brand-50' : 'border-gray-200'">
+                                            <input type="radio" value="simple" x-model="trackerConfig.workflow.delivery_mode" class="sr-only">
+                                            <b class="text-sm block">Simplificado</b><small class="text-xs text-gray-500">Uma única ação finaliza como entregue.</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modules -->
+                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-table-cells-large"></i></span>
+                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Módulos disponíveis</b><small class="text-xs text-gray-500 block">Escolha quais áreas do sistema ficam disponíveis para a equipe.</small></span>
+                                </span>
+                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
+                            </button>
+                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <template x-for="module in [
+                                    {key:'agenda', icon:'fa-calendar-days', label:'Agenda', description:'Agenda semanal e Gerenciamento de Agenda'},
+                                    {key:'suppliers', icon:'fa-store', label:'Fornecedores de peças', description:'Lojas e empresas onde a assistência compra peças e componentes'},
+                                    {key:'manager_dashboard', icon:'fa-chart-line', label:'Dashboard Gestor', description:'Indicadores e análises gerenciais'},
+                                    {key:'public_tracker', icon:'fa-mobile-screen-button', label:'Acompanhamento Público', description:'Link externo para o cliente acompanhar a OS'}
+                                ]" :key="module.key">
+                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 transition"
+                                           :class="module.key === 'suppliers' && !isPartsControlEnabled() ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-brand-200'">
+                                        <span class="flex items-center gap-3 min-w-0">
+                                            <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
+                                                <i class="fa-solid" :class="module.icon"></i>
+                                            </span>
+                                            <span class="min-w-0">
+                                                <b class="text-sm text-gray-800 block" x-text="module.label"></b>
+                                                <small class="text-xs text-gray-500 leading-snug block" x-text="module.description"></small>
+                                                <small x-show="module.key === 'suppliers' && !isPartsControlEnabled()" class="text-[10px] text-amber-700 font-semibold block mt-1">Ative “Controle de compra de peças” para utilizar.</small>
+                                            </span>
+                                        </span>
+                                        <input type="checkbox" x-model="trackerConfig.modules[module.key]"
+                                               :disabled="module.key === 'suppliers' && !isPartsControlEnabled()"
+                                               class="w-5 h-5 rounded text-brand-500 disabled:cursor-not-allowed">
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Field Modes -->
+                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-clipboard-check"></i></span>
+                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Campos do cadastro de OS</b><small class="text-xs text-gray-500 block">Defina quais campos ficam ocultos, opcionais ou obrigatórios.</small></span>
+                                </span>
+                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
+                            </button>
+                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200">
+                                <div class="mb-4">
+                                    <span class="text-sm font-bold text-gray-800 block">Defina o que aparece e o que é obrigatório</span>
+                                    <span class="text-xs text-gray-500 block">Campos de identificação essenciais ficam bloqueados como obrigatórios.</span>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 pt-3 border-t border-gray-200">
+                                    <template x-for="field in TICKET_REQUIRED_FIELDS" :key="field.key">
+                                        <div class="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                                            <div class="min-w-0">
+                                                <span class="text-xs font-bold text-gray-700 block truncate" x-text="field.label"></span>
+                                                <span x-show="window.AIDAFeatureConfig.CORE_REQUIRED_FIELDS.includes(field.key)" class="text-[10px] text-gray-400"><i class="fa-solid fa-lock mr-1"></i>Essencial</span>
+                                            </div>
+                                            <select :value="getFieldMode(field.key)" @change="setFieldMode(field.key, $event.target.value)"
+                                                    :disabled="window.AIDAFeatureConfig.CORE_REQUIRED_FIELDS.includes(field.key)"
+                                                    class="text-xs border rounded-lg px-2 py-2 bg-gray-50 disabled:opacity-60 focus:ring-brand-500">
+                                                <option value="disabled">Desativado</option>
+                                                <option value="optional">Opcional</option>
+                                                <option value="required">Obrigatório</option>
+                                            </select>
+                                        </div>
                                     </template>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Overview Sections -->
+                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-eye"></i></span>
+                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Grupos da Visão Geral</b><small class="text-xs text-gray-500 block">Escolha quais lembretes e filas aparecem na página inicial.</small></span>
+                                </span>
+                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
+                            </button>
+                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                <template x-for="item in [
+                                    {key:'awaiting_start', label:'Aguardando início'},
+                                    {key:'awaiting_budget', label:'Aguardando orçamento'},
+                                    {key:'parts_purchase', label:'Compra de peças'},
+                                    {key:'parts_receipt', label:'Aguardando recebimento'},
+                                    {key:'tests', label:'Testes'},
+                                    {key:'pickup', label:'Retirada'},
+                                    {key:'overdue', label:'Prazos vencidos'},
+                                    {key:'unscheduled', label:'Sem agendamento'},
+                                    {key:'priority', label:'Prioridade solicitada'}
+                                ]" :key="item.key">
+                                    <label class="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between cursor-pointer">
+                                        <span class="text-xs font-bold text-gray-700" x-text="item.label"></span>
+                                        <input type="checkbox" x-model="trackerConfig.overview_sections[item.key]" class="w-5 h-5 rounded text-brand-500">
+                                    </label>
+                                </template>
                             </div>
                         </div>
 
@@ -1714,7 +1843,7 @@
                         <div class="lg:col-span-2">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Budgets to Send -->
-                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div x-show="isOverviewSectionEnabled('awaiting_budget')" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-yellow-50 px-4 py-3 border-b border-yellow-100 flex justify-between items-center">
                                     <h4 class="font-bold text-yellow-800 text-sm">Aguardando Envio de Orçamento</h4>
                                     <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingBudgets')">0</span>
@@ -1781,7 +1910,7 @@
                             </div>
 
                             <!-- Waiting Budget Response (NEW) -->
-                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div x-show="isOverviewSectionEnabled('awaiting_budget')" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
                                     <h4 class="font-bold text-indigo-800 text-sm">Aguardando Aprovação</h4>
                                     <span class="bg-indigo-200 text-indigo-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('waitingBudgetResponse')">0</span>
@@ -1833,7 +1962,7 @@
                             </div>
 
                             <!-- Pickups to Notify / Logistics Pending -->
-                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div x-show="isOverviewSectionEnabled('pickup')" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-blue-50 px-4 py-3 border-b border-blue-100 flex justify-between items-center">
                                     <h4 class="font-bold text-blue-800 text-sm" x-text="isLogisticsEnabled() ? 'Logística e expedição (pendente)' : 'Solicitar Retirada (Aparelhos Pronto)'"></h4>
                                     <span class="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingPickups')">0</span>
@@ -1880,7 +2009,7 @@
                             </div>
 
                             <!-- NEW: Pending Tracking (Gerar Rastreio) -->
-                            <div x-show="isLogisticsEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div x-show="isOverviewSectionEnabled('pickup') && isLogisticsEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-orange-50 px-4 py-3 border-b border-orange-100 flex justify-between items-center">
                                     <h4 class="font-bold text-orange-800 text-sm">Gerar Rastreio</h4>
                                     <span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingTracking')">0</span>
@@ -1917,7 +2046,7 @@
                             </div>
 
                             <!-- NEW: Pending Delivery (Entregue) -->
-                            <div x-show="isLogisticsEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div x-show="isOverviewSectionEnabled('pickup') && isLogisticsEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-green-50 px-4 py-3 border-b border-green-100 flex justify-between items-center">
                                     <h4 class="font-bold text-green-800 text-sm">Liberado</h4>
                                     <span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingDelivery')">0</span>
@@ -1965,7 +2094,7 @@
                                 <i class="fa-solid fa-user-gear text-brand-500 mr-2"></i> Pendências com Técnico
                             </h3>
 
-                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div x-show="isOverviewSectionEnabled('awaiting_start')" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                                     <h4 class="font-bold text-gray-700 text-sm">Aguardando Início (Enviar p/ Análise)</h4>
                                     <span class="bg-gray-300 text-gray-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingTech')">0</span>
@@ -2116,13 +2245,13 @@
                                 </div>
                             </div>
 
-                            <h3 class="text-lg font-bold text-gray-800 flex items-center pt-2">
+                            <h3 x-show="isPartsControlEnabled() && (isOverviewSectionEnabled('parts_purchase') || isOverviewSectionEnabled('parts_receipt'))" class="text-lg font-bold text-gray-800 flex items-center pt-2">
                                 <i class="fa-solid fa-truck-fast text-brand-500 mr-2"></i> Pendências com Fornecedor
                             </h3>
 
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div x-show="isPartsControlEnabled() && (isOverviewSectionEnabled('parts_purchase') || isOverviewSectionEnabled('parts_receipt'))" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <!-- Waiting for Purchase -->
-                                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div x-show="isOverviewSectionEnabled('parts_purchase')" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                     <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex justify-between items-center">
                                         <h4 class="font-bold text-purple-800 text-sm">Aguardando Compra</h4>
                                         <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingPurchase')">0</span>
@@ -2165,7 +2294,7 @@
                                 </div>
 
                                 <!-- Waiting for Receipt -->
-                                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div x-show="isOverviewSectionEnabled('parts_receipt')" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                     <div class="bg-teal-50 px-4 py-3 border-b border-teal-100 flex justify-between items-center">
                                         <h4 class="font-bold text-teal-800 text-sm">Aguardando Recebimento</h4>
                                         <span class="bg-teal-200 text-teal-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingReceipt')">0</span>
@@ -2219,7 +2348,7 @@
                                 </div>
                                 <div class="p-3 space-y-3 max-h-96 overflow-y-auto">
                                     <!-- Priority List -->
-                                    <template x-if="homeOps.priorityTickets.length">
+                                    <template x-if="isOverviewSectionEnabled('priority') && isPriorityRequestEnabled() && homeOps.priorityTickets.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200" @click="applyQuickFilter('priority')">
                                                 <span>PRIORIDADE (<span x-text="getHomeOpsTotal('priorityTickets')"></span>)</span>
@@ -2265,7 +2394,7 @@
                                     </template>
 
                                     <!-- Entrega Expirando -->
-                                    <template x-if="homeOps.expiringDeliveries.length">
+                                    <template x-if="isOverviewSectionEnabled('overdue') && isFieldVisible('deadline') && homeOps.expiringDeliveries.length">
                                         <div class="mb-2">
                                             <div class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-amber-200">
                                                 <span>ENTREGA EXPIRANDO (<span x-text="getHomeOpsTotal('expiringDeliveries')"></span>)</span>
@@ -2303,7 +2432,7 @@
                                     </template>
 
                                     <!-- Entrega Expirada -->
-                                    <template x-if="homeOps.expiredDeliveries.length">
+                                    <template x-if="isOverviewSectionEnabled('overdue') && isFieldVisible('deadline') && homeOps.expiredDeliveries.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200">
                                                 <span>ENTREGA EXPIRADA (<span x-text="getHomeOpsTotal('expiredDeliveries')"></span>)</span>
@@ -2341,7 +2470,7 @@
                                     </template>
 
                                     <!-- Analysis Expiring -->
-                                    <template x-if="homeOps.expiringAnalysis.length">
+                                    <template x-if="isOverviewSectionEnabled('overdue') && isFieldVisible('analysis_deadline') && homeOps.expiringAnalysis.length">
                                         <div class="mb-2">
                                             <div class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-amber-200">
                                                 <span>ANÁLISE EXPIRANDO (<span x-text="getHomeOpsTotal('expiringAnalysis')"></span>)</span>
@@ -2379,7 +2508,7 @@
                                     </template>
 
                                     <!-- Analysis Expired -->
-                                    <template x-if="homeOps.expiredAnalysis.length">
+                                    <template x-if="isOverviewSectionEnabled('overdue') && isFieldVisible('analysis_deadline') && homeOps.expiredAnalysis.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200">
                                                 <span>ANÁLISE EXPIRADA (<span x-text="getHomeOpsTotal('expiredAnalysis')"></span>)</span>
@@ -2467,7 +2596,7 @@
 </div>
 </div>
 <!-- VIEW: ADMIN DASHBOARD -->
-                <div x-show="view === 'admin_dashboard' && hasRole('admin')" class="p-8 overflow-y-auto h-full" x-transition.opacity x-cloak>
+                <div x-show="view === 'admin_dashboard' && hasRole('admin') && isModuleEnabled('manager_dashboard')" class="p-8 overflow-y-auto h-full" x-transition.opacity x-cloak>
                     <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
                         <div>
                             <h1 class="text-3xl font-bold text-gray-900">Dashboard do Gestor</h1>
@@ -3639,7 +3768,7 @@
                                                     <!-- Deadlines Section -->
                                                     <div class="space-y-0.5 mb-2">
                                                 <!-- Analysis Deadline -->
-                                                <template x-if="ticket.analysis_deadline">
+<template x-if="isFieldVisible('analysis_deadline') && ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
                                                         <span class="font-bold text-gray-500 uppercase">Prazo de Análise:</span>
                                                         <div class="flex items-center font-medium"
@@ -3658,7 +3787,7 @@
                                                     </div>
                                                 </div>
 
-                                                <template x-if="ticket.analysis_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('analysis') && ticket.analysis_scheduled_at">
                                                     <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-50">
                                                         <span class="font-bold text-brand-600 uppercase">Agendamento Análise:</span>
                                                         <div class="flex items-center text-brand-600 font-medium">
@@ -3667,7 +3796,7 @@
                                                         </div>
                                                     </div>
                                                 </template>
-                                                <template x-if="ticket.repair_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('repair') && ticket.repair_scheduled_at">
                                                     <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-50">
                                                         <span class="font-bold text-brand-600 uppercase">Agendamento Reparo:</span>
                                                         <div class="flex items-center text-brand-600 font-medium">
@@ -3737,7 +3866,7 @@
                                                     </template>
 
                                                     <!-- Pedir Prioridade (General Action for Tech Stages) -->
-                                                    <template x-if="['Analise Tecnica', 'Andamento Reparo'].includes(ticket.status) && !ticket.priority_requested">
+                                                    <template x-if="isPriorityRequestEnabled() && ['Analise Tecnica', 'Andamento Reparo'].includes(ticket.status) && !ticket.priority_requested">
                                                         <button @click="requestPriority(ticket)" class="w-full bg-white border border-orange-200 text-orange-600 text-xs font-bold py-2 rounded hover:bg-orange-50 mb-2">
                                                             <i class="fa-solid fa-bell mr-1"></i> Pedir Prioridade
                                                         </button>
@@ -3814,7 +3943,7 @@
                                                         <div>
                                                             <template x-if="!ticket.pickup_available">
                                                                 <button @click="markAvailable(ticket)" class="w-full bg-blue-50 text-blue-600 text-xs font-bold py-2 rounded hover:bg-blue-100">
-                                                                    Disponibilizar
+                                                                    <span x-text="getDeliveryMode() === 'simple' ? 'Finalizar como entregue' : 'Disponibilizar'"></span>
                                                                 </button>
                                                             </template>
 
@@ -3897,7 +4026,7 @@
                 </div>
 
                     <!-- Weekly Calendar Bar -->
-                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+                    <div x-show="isModuleEnabled('agenda')" class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
                         <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between mb-4">
                             <div class="flex flex-wrap items-center gap-3">
                                 <div>
@@ -3907,13 +4036,13 @@
                                 </div>
 
                                 <div class="inline-flex items-center rounded-lg bg-gray-100 p-1 border border-gray-200" role="group" aria-label="Exibir agenda semanal por">
-                                    <button type="button" @click="benchCalendarMode = 'deadline'"
+                                    <button x-show="isFieldVisible('deadline')" type="button" @click="benchCalendarMode = 'deadline'"
                                             :aria-pressed="benchCalendarMode === 'deadline'"
                                             :class="benchCalendarMode === 'deadline' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
                                             class="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all">
                                         <i class="fa-solid fa-flag-checkered mr-1"></i> Prazo
                                     </button>
-                                    <button type="button" @click="benchCalendarMode = 'appointment'"
+                                    <button x-show="isAppointmentTypeEnabled('analysis') || isAppointmentTypeEnabled('repair')" type="button" @click="benchCalendarMode = 'appointment'"
                                             :aria-pressed="benchCalendarMode === 'appointment'"
                                             :class="benchCalendarMode === 'appointment' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'"
                                             class="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all">
@@ -4004,7 +4133,7 @@
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket)"
                                           :class="[
-                                              ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
+                                              isPriorityRequestEnabled() && ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
                                           ]">
 
@@ -4020,7 +4149,7 @@
                                         </div>
 
                                         <!-- Priority Requested Badge -->
-                                        <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
+                                        <div x-show="isPriorityRequestEnabled() && ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
                                             <i class="fa-solid fa-bell fa-shake mr-1"></i> PRIORIDADE SOLICITADA
                                         </div>
 
@@ -4036,7 +4165,7 @@
                                             <!-- Deadlines Section -->
                                             <div class="space-y-0.5 mb-2">
                                                 <!-- Analysis Deadline -->
-                                                <template x-if="ticket.analysis_deadline">
+<template x-if="isFieldVisible('analysis_deadline') && ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
                                                         <span class="font-bold text-gray-500 uppercase">Prazo de Análise:</span>
                                                         <div class="flex items-center font-medium"
@@ -4055,7 +4184,7 @@
                                                     </div>
                                                 </div>
 
-                                                <template x-if="ticket.analysis_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('analysis') && ticket.analysis_scheduled_at">
                                                     <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-50">
                                                         <span class="font-bold text-brand-600 uppercase">Agendamento Análise:</span>
                                                         <div class="flex items-center text-brand-600 font-medium">
@@ -4064,7 +4193,7 @@
                                                         </div>
                                                     </div>
                                                 </template>
-                                                <template x-if="ticket.repair_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('repair') && ticket.repair_scheduled_at">
                                                     <div class="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-50">
                                                         <span class="font-bold text-brand-600 uppercase">Agendamento Reparo:</span>
                                                         <div class="flex items-center text-brand-600 font-medium">
@@ -4108,7 +4237,7 @@
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket)"
                                           :class="[
-                                              ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
+                                              isPriorityRequestEnabled() && ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
                                           ]">
 
@@ -4124,7 +4253,7 @@
                                         </div>
 
                                         <!-- Priority Requested Badge -->
-                                        <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
+                                        <div x-show="isPriorityRequestEnabled() && ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
                                             <i class="fa-solid fa-bell fa-shake mr-1"></i> PRIORIDADE SOLICITADA
                                         </div>
 
@@ -4139,7 +4268,7 @@
                                             <!-- Deadlines Section -->
                                             <div class="space-y-0.5 mb-2">
                                                 <!-- Analysis Deadline -->
-                                                <template x-if="ticket.analysis_deadline">
+<template x-if="isFieldVisible('analysis_deadline') && ticket.analysis_deadline">
                                                     <div class="flex items-center justify-between text-[10px]">
                                                         <span class="font-bold text-gray-500 uppercase">Prazo de Análise:</span>
                                                         <div class="flex items-center text-gray-500 font-medium">
@@ -4174,7 +4303,7 @@
                                                 </div>
 
                                                 <!-- Timer below buttons -->
-                                                <template x-if="ticket.repair_start_at">
+                                                <template x-if="isTimerEnabled('repair') && ticket.repair_start_at">
                                                     <div class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold text-center border border-blue-100">
                                                         <i class="fa-solid fa-stopwatch mr-1"></i>
                                                         <span x-text="getRepairDuration(ticket)"></span>
@@ -4185,7 +4314,7 @@
                                                     <i class="fa-solid fa-pause mr-1"></i> Pausar p/ comprar peça
                                                 </button>
 
-                                                <button type="button" @click.stop="openSchedulePanel('repair')" x-show="!ticket.repair_scheduled" class="w-full px-2 py-1.5 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-[10px] font-bold flex items-center justify-center transition-colors">
+                                                <button type="button" @click.stop="openSchedulePanel('repair')" x-show="isAppointmentTypeEnabled('repair') && !ticket.repair_scheduled" class="w-full px-2 py-1.5 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-[10px] font-bold flex items-center justify-center transition-colors">
                                                     <i class="fa-regular fa-calendar-plus mr-1"></i> Agendar Reparo
                                                 </button>
                                             </div>
@@ -4209,12 +4338,12 @@
                                      <div class="bg-white rounded-xl shadow border-t-4 p-4 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                           @click="viewTicketDetails(ticket)"
                                           :class="[
-                                              ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
+                                              isPriorityRequestEnabled() && ticket.priority_requested ? 'border-orange-500 ring-2 ring-orange-400' : (ticket.priority === 'Urgente' ? 'border-red-500' : (ticket.priority === 'Alta' ? 'border-orange-500' : 'border-blue-500')),
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
                                           ]">
 
                                         <!-- Priority Requested Badge -->
-                                        <div x-show="ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
+                                        <div x-show="isPriorityRequestEnabled() && ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
                                             <i class="fa-solid fa-bell fa-shake mr-1"></i> PRIORIDADE SOLICITADA
                                         </div>
 
@@ -4764,7 +4893,7 @@
                                     <div class="flex flex-wrap items-center gap-2">
                                         <span class="font-bold text-gray-900 truncate" x-text="ticket.client_name"></span>
                                         <span class="text-[10px] font-mono font-bold text-brand-700 bg-brand-50 border border-brand-100 rounded-full px-2 py-0.5" x-text="'OS ' + ticket.os_number"></span>
-                                        <span x-show="ticket.priority_requested" class="text-[10px] font-bold text-red-700 bg-red-50 border border-red-100 rounded-full px-2 py-0.5">
+                                        <span x-show="isPriorityRequestEnabled() && ticket.priority_requested" class="text-[10px] font-bold text-red-700 bg-red-50 border border-red-100 rounded-full px-2 py-0.5">
                                             <i class="fa-solid fa-bell mr-1"></i>Prioridade
                                         </span>
                                     </div>
@@ -5382,7 +5511,7 @@
                             <label class="block text-xs font-bold text-gray-500 mb-1">Cliente <span x-show="isFieldRequired('client_name')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.client_name" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div data-ticket-field="contact_info">
+                        <div x-show="isFieldVisible('contact_info')" data-ticket-field="contact_info">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Contato <span x-show="isFieldRequired('contact_info')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.contact" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
@@ -5400,7 +5529,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div data-ticket-field="priority">
+                        <div x-show="isFieldVisible('priority')" data-ticket-field="priority">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prioridade <span x-show="isFieldRequired('priority')" class="text-red-500">*</span></label>
                             <select x-model="ticketForm.priority" class="w-full border rounded-lg p-2.5 bg-gray-50">
                                 <template x-for="p in PRIORITIES" :key="p"><option :value="p" x-text="p"></option></template>
@@ -5465,19 +5594,19 @@
                                 </div>
                             </div>
                         </div>
-                         <div data-ticket-field="serial_number">
+                         <div x-show="isFieldVisible('serial_number')" data-ticket-field="serial_number">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Nº Série / IMEI <span x-show="isFieldRequired('serial_number')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.serial" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div x-show="!ticketForm.budget_approved" data-ticket-field="analysis_deadline">
+                        <div x-show="!ticketForm.budget_approved && isFieldVisible('analysis_deadline')" data-ticket-field="analysis_deadline">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Análise <span x-show="isFieldRequired('analysis_deadline')" class="text-red-500">*</span></label>
                             <input type="datetime-local" x-model="ticketForm.analysis_deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div data-ticket-field="deadline">
+                        <div x-show="isFieldVisible('deadline')" data-ticket-field="deadline">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Prazo de Entrega <span x-show="isFieldRequired('deadline')" class="text-red-500">*</span></label>
                             <input type="datetime-local" x-model="ticketForm.deadline" class="w-full border rounded-lg p-2.5 bg-gray-50">
                         </div>
-                        <div data-ticket-field="device_condition">
+                        <div x-show="isFieldVisible('device_condition')" data-ticket-field="device_condition">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Situação do Aparelho <span x-show="isFieldRequired('device_condition')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.device_condition" class="w-full border rounded-lg p-2.5 bg-gray-50" placeholder="Ex: Riscos na tela...">
                         </div>
@@ -5509,7 +5638,7 @@
                                             <span class="flex items-center gap-2 text-sm font-bold text-gray-800"><i class="fa-solid fa-screwdriver-wrench text-brand-600"></i> Reparo</span>
                                             <span class="mt-1 block text-xs text-gray-500">Envia para o técnico iniciar ou agendar o reparo.</span>
                                         </button>
-                                        <button type="button" @click="ticketForm.approved_route = 'purchase'; handleApprovedRouteChange()"
+                                        <button x-show="isPartsControlEnabled()" type="button" @click="ticketForm.approved_route = 'purchase'; handleApprovedRouteChange()"
                                                 :class="ticketForm.approved_route === 'purchase' ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-200' : 'border-gray-200 bg-white hover:border-purple-200'"
                                                 class="rounded-lg border p-3 text-left transition-colors">
                                             <span class="flex items-center gap-2 text-sm font-bold text-gray-800"><i class="fa-solid fa-box-open text-purple-600"></i> Compra de peças</span>
@@ -5525,7 +5654,7 @@
                         </div>
 
                         <!-- Technician / Outsourced Combo -->
-                        <div id="ticket-technician-field" class="scroll-mt-6" data-ticket-field="responsible">
+                        <div x-show="isFieldVisible('responsible') || isOutsourcedEnabled()" id="ticket-technician-field" class="scroll-mt-6" data-ticket-field="responsible">
                             <div class="flex justify-between items-end mb-1">
                                 <label class="block text-xs font-bold text-gray-500">
                                     <span x-text="ticketForm.is_outsourced ? 'Empresa Parceira' : 'Técnico Responsável'"></span>
@@ -5542,7 +5671,7 @@
 
                             <!-- Tech Select -->
                             <select id="ticket-technician-select"
-                                    x-show="!ticketForm.is_outsourced"
+                                    x-show="!ticketForm.is_outsourced && isFieldVisible('responsible')"
                                     x-model="ticketForm.technician_id"
                                     @change="ticketFormErrors.technician = false"
                                     :class="ticketFormErrors.technician ? 'border-red-500 bg-red-50 ring-2 ring-red-100 focus:ring-red-400 focus:border-red-500' : 'border-gray-200 bg-gray-50'"
@@ -5599,7 +5728,10 @@
                         </div>
 
                         <!-- Scheduling UI -->
-                        <div class="col-span-2" data-ticket-field="analysis_schedule" x-show="!ticketForm.is_outsourced && (!ticketForm.budget_approved || ticketForm.approved_route === 'repair')">
+                        <div class="col-span-2" :data-ticket-field="ticketForm.budget_approved ? 'repair_schedule' : 'analysis_schedule'"
+                             x-show="!ticketForm.is_outsourced
+                                && (!ticketForm.budget_approved || ticketForm.approved_route === 'repair')
+                                && isFieldVisible(ticketForm.budget_approved ? 'repair_schedule' : 'analysis_schedule')">
                             <label class="block text-xs font-bold text-gray-500 mb-2" x-text="ticketForm.budget_approved ? 'Agendamento de Reparo' : 'Agendamento de Análise'"></label>
 
                             <!-- Schedule follows the selected entry route -->
@@ -5608,7 +5740,7 @@
                                         class="text-xs px-3 py-1.5 rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors flex items-center justify-center gap-2">
                                     <i class="fa-regular fa-calendar text-brand-500"></i>
                                     <span x-text="ticketForm.budget_approved ? 'Agendar Reparo' : 'Agendar Análise'"></span>
-                                    <span x-show="!ticketForm.budget_approved && isFieldRequired('analysis_schedule')" class="text-red-500 font-bold">*</span>
+                                    <span x-show="isFieldRequired(ticketForm.budget_approved ? 'repair_schedule' : 'analysis_schedule')" class="text-red-500 font-bold">*</span>
                                 </button>
 
                                 <template x-if="ticketForm.budget_approved ? selectedRepairAppointment : selectedAnalysisAppointment">
@@ -5625,7 +5757,7 @@
                         </div>
 
                         <!-- Defect Options Tag Input -->
-                        <div class="col-span-2" data-ticket-field="defect_reported" x-data="defectCombobox()">
+                        <div x-show="isFieldVisible('defect_reported')" class="col-span-2" data-ticket-field="defect_reported" x-data="defectCombobox()">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Defeito Relatado <span x-show="isFieldRequired('defect_reported')" class="text-red-500">*</span></label>
 
                             <!-- Selected Tags -->
@@ -5699,7 +5831,7 @@
                     </div>
 
                     <!-- Section 2: Checklist -->
-                    <div class="mb-6" data-ticket-field="checklist_entry">
+                    <div x-show="isFieldVisible('checklist_entry')" class="mb-6" data-ticket-field="checklist_entry">
                         <div class="flex justify-between items-end border-b pb-2 mb-4">
                             <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide">
                                 Checklist de Entrada <span x-show="isFieldRequired('checklist_entry')" class="text-red-500">*</span>
@@ -5745,7 +5877,7 @@
                     </div>
 
                     <!-- Section 3: Final Checklist -->
-                    <div class="mb-6" data-ticket-field="checklist_exit">
+                    <div x-show="isFieldVisible('checklist_exit')" class="mb-6" data-ticket-field="checklist_exit">
                         <div class="flex justify-between items-end border-b pb-2 mb-4">
                             <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide">
                                 Checklist de Saída <span x-show="isFieldRequired('checklist_exit')" class="text-red-500">*</span>
@@ -5791,7 +5923,7 @@
                     </div>
 
                     <!-- Section 4: Photos -->
-                     <div data-ticket-field="photos">
+                     <div x-show="isFieldVisible('photos')" data-ticket-field="photos">
                         <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide mb-2 border-b pb-2">
                             Fotos <span x-show="isFieldRequired('photos')" class="text-red-500">*</span>
                         </h4>
@@ -5940,7 +6072,7 @@
                         <div class="flex flex-col items-end space-y-2">
                             <div class="flex items-center space-x-2">
                                 <!-- Share Button (New) -->
-                                <button @click="openShareModal()" class="text-xs bg-brand-500 text-white px-2 py-1 rounded hover:bg-brand-600 font-bold transition-colors">
+                                <button x-show="isModuleEnabled('public_tracker')" @click="openShareModal()" class="text-xs bg-brand-500 text-white px-2 py-1 rounded hover:bg-brand-600 font-bold transition-colors">
                                     <i class="fa-solid fa-share-nodes mr-1"></i> Compartilhar
                                 </button>
                                 <!-- Logs Button (Admin Only) -->
@@ -5997,11 +6129,11 @@
                                     <button @click="startTicketAnalysis(selectedTicket)" class="bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-yellow-700 text-sm shadow flex items-center justify-center w-full mb-3">
                                         <i class="fa-solid fa-play mr-2"></i> Iniciar Análise
                                     </button>
-                                    <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled_at" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                    <button type="button" @click="openSchedulePanel('analysis')" x-show="isAppointmentTypeEnabled('analysis') && !selectedTicket.analysis_scheduled_at" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors">
                                         <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
                                     </button>
                                 </div>
-                                <button type="button" @click="openSchedulePanel('analysis')" x-show="!selectedTicket.analysis_scheduled_at && !canExecuteAction(selectedTicket, 'startTicketAnalysis')" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors mt-2">
+                                <button type="button" @click="openSchedulePanel('analysis')" x-show="isAppointmentTypeEnabled('analysis') && !selectedTicket.analysis_scheduled_at && !canExecuteAction(selectedTicket, 'startTicketAnalysis')" class="w-full px-4 py-2 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 rounded text-sm font-bold flex items-center justify-center transition-colors mt-2">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Análise
                                 </button>
 
@@ -6014,12 +6146,12 @@
                                         </div>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="flex items-center space-x-2">
+                                        <label x-show="isPartsControlEnabled()" class="flex items-center space-x-2">
                                             <input type="checkbox" x-model="analysisForm.needsParts" class="form-checkbox text-blue-600 h-5 w-5">
                                             <span class="text-sm font-bold text-gray-700">Precisa comprar peças?</span>
                                         </label>
                                     </div>
-                                    <div x-show="analysisForm.needsParts" class="mb-3">
+                                    <div x-show="isPartsControlEnabled() && analysisForm.needsParts" class="mb-3">
                                         <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
                                         <input type="text" x-model="analysisForm.partsList" class="w-full border rounded p-2 text-sm" placeholder="Ex: Tela, Bateria...">
                                     </div>
@@ -6101,7 +6233,7 @@
                                     </button>
                                 </div>
 
-                                <button type="button" @click="openSchedulePanel('repair')" x-show="selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled_at" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="isAppointmentTypeEnabled('repair') && selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled_at" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
@@ -6123,7 +6255,7 @@
                                         <i class="fa-solid fa-flag-checkered mr-2"></i> Finalizar Reparo
                                     </button>
                                 </div>
-                                <div x-show="selectedTicket.repair_start_at" class="text-center bg-gray-100 rounded p-1 mb-2">
+                                <div x-show="isTimerEnabled('repair') && selectedTicket.repair_start_at" class="text-center bg-gray-100 rounded p-1 mb-2">
                                     <span class="text-xs text-gray-500 font-bold uppercase">Tempo Decorrido</span>
                                     <div class="text-xl font-mono font-bold text-gray-800" x-text="getRepairDuration(selectedTicket)"></div>
                                 </div>
@@ -6132,7 +6264,7 @@
                                     <i class="fa-solid fa-pause mr-2"></i> Pausar para comprar peça
                                 </button>
 
-                                <button type="button" @click="openSchedulePanel('repair')" x-show="!selectedTicket.repair_scheduled_at" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors mb-2">
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="isAppointmentTypeEnabled('repair') && !selectedTicket.repair_scheduled_at" class="w-full px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors mb-2">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
@@ -6162,14 +6294,14 @@
                                         :disabled="!canExecuteAction(selectedTicket, 'markAvailable')"
                                         class="px-4 py-2 rounded font-bold text-sm transition-colors"
                                         :class="!canExecuteAction(selectedTicket, 'markAvailable') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'">
-                                    <i class="fa-solid fa-bell mr-2"></i>
-                                    <span x-text="selectedTicket.pickup_available ? 'Disponível (Ok)' : 'Disponibilizar'"></span>
+                                    <i class="fa-solid mr-2" :class="getDeliveryMode() === 'simple' ? 'fa-check-double' : 'fa-bell'"></i>
+                                    <span x-text="getDeliveryMode() === 'simple' ? 'Finalizar como entregue' : (selectedTicket.pickup_available ? 'Disponível (Ok)' : 'Disponibilizar')"></span>
                                 </button>
 
-                                <div class="h-8 w-px bg-gray-300 mx-2"></div>
+                                <div x-show="getDeliveryMode() === 'complete'" class="h-8 w-px bg-gray-300 mx-2"></div>
 
                                 <!-- Final Action Column -->
-                                <div class="flex flex-col w-48 space-y-1">
+                                <div x-show="getDeliveryMode() === 'complete'" class="flex flex-col w-48 space-y-1">
                                     <!-- Badge (Only if available) -->
                                     <template x-if="selectedTicket.pickup_available">
                                         <div class="w-full text-[10px] font-bold py-0.5 rounded text-center truncate uppercase"
@@ -6269,24 +6401,24 @@
 
                                         <!-- Display Mode -->
                                         <div x-show="!editingDeadlines" class="space-y-1">
-                                            <p class="text-sm flex justify-between">
+                                            <p x-show="isFieldVisible('analysis_deadline')" class="text-sm flex justify-between">
                                                 <span class="font-bold text-gray-600">Prazo de Análise:</span>
                                                 <span x-text="selectedTicket.analysis_deadline ? new Date(selectedTicket.analysis_deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'"
                                                       :class="new Date(selectedTicket.analysis_deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-800'"></span>
                                             </p>
-                                            <p class="text-sm flex justify-between">
+                                            <p x-show="isFieldVisible('deadline')" class="text-sm flex justify-between">
                                                 <span class="font-bold text-gray-600">Prazo de Entrega:</span>
                                                 <span x-text="selectedTicket.deadline ? new Date(selectedTicket.deadline).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'"
                                                       :class="new Date(selectedTicket.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-800'"></span>
                                             </p>
 
-                                            <template x-if="selectedTicket.analysis_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('analysis') && selectedTicket.analysis_scheduled_at">
                                                 <p class="text-sm flex justify-between border-t border-gray-100 pt-1 mt-1">
                                                     <span class="font-bold text-brand-600">Agendamento Análise:</span>
                                                     <span class="text-brand-600 font-bold" x-text="formatDateLocal(selectedTicket.analysis_scheduled_at)"></span>
                                                 </p>
                                             </template>
-                                            <template x-if="selectedTicket.repair_scheduled_at">
+<template x-if="isAppointmentTypeEnabled('repair') && selectedTicket.repair_scheduled_at">
                                                 <p class="text-sm flex justify-between border-t border-gray-100 pt-1 mt-1">
                                                     <span class="font-bold text-brand-600">Agendamento Reparo:</span>
                                                     <span class="text-brand-600 font-bold" x-text="formatDateLocal(selectedTicket.repair_scheduled_at)"></span>
@@ -6296,11 +6428,11 @@
 
                                         <!-- Edit Mode -->
                                         <div x-show="editingDeadlines" class="space-y-2 mt-2">
-                                            <div>
+                                            <div x-show="isFieldVisible('analysis_deadline')">
                                                 <label class="block text-[10px] font-bold text-gray-500">Análise</label>
                                                 <input type="datetime-local" x-model="editDeadlineForm.analysis_deadline" class="w-full border rounded p-1 text-xs">
                                             </div>
-                                            <div>
+                                            <div x-show="isFieldVisible('deadline')">
                                                 <label class="block text-[10px] font-bold text-gray-500">Entrega</label>
                                                 <input type="datetime-local" x-model="editDeadlineForm.deadline" class="w-full border rounded p-1 text-xs">
                                             </div>
@@ -6814,7 +6946,7 @@
     </div>
 
     <!-- 6. SHARE MODAL (New) -->
-    <div x-show="showShareModal" class="fixed inset-0 z-[110] flex items-center justify-center" x-cloak>
+    <div x-show="showShareModal && isModuleEnabled('public_tracker')" class="fixed inset-0 z-[110] flex items-center justify-center" x-cloak>
         <div class="fixed inset-0 bg-black bg-opacity-75" @click="showShareModal = false"></div>
         <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm z-10 relative text-center">
             <div class="mb-4">
@@ -6826,7 +6958,7 @@
             </div>
 
             <div class="bg-gray-100 p-3 rounded-lg mb-4 flex items-center justify-between">
-                <span class="text-xs text-gray-600 truncate mr-2" x-text="selectedTicket ? getTrackingLink(selectedTicket.id) : ''"></span>
+                <span class="text-xs text-gray-600 truncate mr-2" x-text="selectedTicket ? getTrackingLink(selectedTicket) : ''"></span>
                 <button @click="copyTrackingLink()" class="text-brand-600 hover:text-brand-800 font-bold text-xs uppercase">Copiar</button>
             </div>
 
@@ -6939,15 +7071,15 @@
                         <h3 class="text-lg font-bold text-white"
                             x-text="view === 'tech_orders' && benchCalendarMode === 'appointment' ? 'Calendário de Agendamentos' : 'Calendário de Prazos'"></h3>
 
-                        <template x-if="view === 'tech_orders'">
+                        <template x-if="view === 'tech_orders' && isModuleEnabled('agenda')">
                             <div class="inline-flex items-center rounded-lg bg-gray-800 p-1 border border-gray-700" role="group" aria-label="Exibir calendário por">
-                                <button type="button" @click="benchCalendarMode = 'deadline'"
+                                <button x-show="isFieldVisible('deadline')" type="button" @click="benchCalendarMode = 'deadline'"
                                         :aria-pressed="benchCalendarMode === 'deadline'"
                                         :class="benchCalendarMode === 'deadline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-300 hover:text-white'"
                                         class="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all">
                                     <i class="fa-solid fa-flag-checkered mr-1"></i> Prazo
                                 </button>
-                                <button type="button" @click="benchCalendarMode = 'appointment'"
+                                <button x-show="isAppointmentTypeEnabled('analysis') || isAppointmentTypeEnabled('repair')" type="button" @click="benchCalendarMode = 'appointment'"
                                         :aria-pressed="benchCalendarMode === 'appointment'"
                                         :class="benchCalendarMode === 'appointment' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-300 hover:text-white'"
                                         class="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all">
@@ -7252,12 +7384,12 @@
             <h3 class="text-lg font-bold mb-4 text-blue-800">Conclusão da Análise</h3>
 
             <div class="mb-4">
-                <label class="flex items-center space-x-2 mb-2 cursor-pointer">
+                <label x-show="isPartsControlEnabled()" class="flex items-center space-x-2 mb-2 cursor-pointer">
                     <input type="checkbox" x-model="analysisForm.needsParts" class="form-checkbox text-blue-600 h-5 w-5 rounded">
                     <span class="text-sm font-bold text-gray-700">Deseja comprar peças?</span>
                 </label>
 
-                <div x-show="analysisForm.needsParts" x-transition>
+                <div x-show="isPartsControlEnabled() && analysisForm.needsParts" x-transition>
                     <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
                     <input type="text" x-model="analysisForm.partsList" class="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: Tela, Bateria...">
                 </div>
@@ -7334,6 +7466,7 @@
 
     <!-- JS MODULES (Infraestrutura inicial) -->
     <script src="js/supabase-config.js"></script>
+    <script src="js/modules/feature-config.js"></script>
     <script src="js/modules/config-helpers.js"></script>
     <script src="js/modules/ticket-context.js"></script>
     <script src="js/modules/workflow-rules.js"></script>
@@ -7370,10 +7503,10 @@
         </div>
 
         <div class="py-1 flex flex-col">
-            <button @click="initiateSlotAction('analysis')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-600 font-medium flex items-center transition-colors">
+            <button x-show="isAppointmentTypeEnabled('analysis')" @click="initiateSlotAction('analysis')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-600 font-medium flex items-center transition-colors">
                 <i class="fa-solid fa-microscope w-5 text-center mr-2 text-brand-500"></i> Agendar análise neste horário
             </button>
-            <button @click="initiateSlotAction('repair')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-600 font-medium flex items-center transition-colors border-b border-gray-100">
+            <button x-show="isAppointmentTypeEnabled('repair')" @click="initiateSlotAction('repair')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-600 font-medium flex items-center transition-colors border-b border-gray-100">
                 <i class="fa-solid fa-screwdriver-wrench w-5 text-center mr-2 text-brand-500"></i> Agendar reparo neste horário
             </button>
             <button @click="initiateSlotAction('block')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-red-50 hover:text-red-600 font-medium flex items-center transition-colors">

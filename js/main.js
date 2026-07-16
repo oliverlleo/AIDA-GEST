@@ -174,6 +174,49 @@ function app() {
                 photos: false,
                 serial_number: false
             },
+            ticket_field_modes: {
+                client_name: 'required',
+                contact_info: 'optional',
+                os_number: 'required',
+                serial_number: 'optional',
+                priority: 'optional',
+                device_model: 'required',
+                analysis_deadline: 'required',
+                deadline: 'required',
+                device_condition: 'optional',
+                responsible: 'required',
+                defect_reported: 'required',
+                checklist_entry: 'optional',
+                checklist_exit: 'optional',
+                photos: 'optional',
+                analysis_schedule: 'optional',
+                repair_schedule: 'optional'
+            },
+            workflow: {
+                parts_control: true,
+                final_test: true,
+                analysis_timer: true,
+                repair_timer: true,
+                delivery_mode: 'complete',
+                priority_requests: true
+            },
+            modules: {
+                agenda: true,
+                suppliers: true,
+                manager_dashboard: true,
+                public_tracker: true
+            },
+            overview_sections: {
+                awaiting_start: true,
+                awaiting_budget: true,
+                parts_purchase: true,
+                parts_receipt: true,
+                tests: true,
+                pickup: true,
+                overdue: true,
+                unscheduled: true,
+                priority: true
+            },
             // OS Number Generation
             os_generation: {
                 enabled: false,
@@ -557,7 +600,8 @@ function app() {
             { key: 'checklist_entry', label: 'Checklist de Entrada', col: 'checklist_data', type: 'array' },
             { key: 'checklist_exit', label: 'Checklist de Saída', col: 'checklist_final_data', type: 'array' },
             { key: 'photos', label: 'Fotos', col: 'photos_urls', type: 'array' },
-            { key: 'analysis_schedule', label: 'Agendamento de Análise', col: 'analysis_schedule', type: 'schedule' }
+            { key: 'analysis_schedule', label: 'Agendamento de Análise', col: 'analysis_schedule', type: 'schedule' },
+            { key: 'repair_schedule', label: 'Agendamento de Reparo', col: 'repair_schedule', type: 'schedule' }
         ],
 
         // ==========================================
@@ -611,6 +655,59 @@ function app() {
         },
         isRequiredFieldsEnabled() {
             return window.AIDAConfigHelpers.isRequiredFieldsEnabled(this.trackerConfig);
+        },
+        normalizeFeatureConfig() {
+            this.trackerConfig = window.AIDAFeatureConfig.normalize(this.trackerConfig);
+            if (!this.isModuleEnabled('agenda')) {
+                this.modals.calendar = false;
+                this.schedulePanelOpen = false;
+            } else if (!this.isFieldVisible('deadline') && (this.isAppointmentTypeEnabled('analysis') || this.isAppointmentTypeEnabled('repair'))) {
+                this.benchCalendarMode = 'appointment';
+            } else if (this.benchCalendarMode === 'appointment' && !this.isAppointmentTypeEnabled('analysis') && !this.isAppointmentTypeEnabled('repair')) {
+                this.benchCalendarMode = 'deadline';
+            }
+            return this.trackerConfig;
+        },
+        getFieldMode(key) {
+            return window.AIDAFeatureConfig.getFieldMode(this.trackerConfig, key);
+        },
+        setFieldMode(key, mode) {
+            this.trackerConfig = window.AIDAFeatureConfig.setFieldMode(this.trackerConfig, key, mode);
+        },
+        isFieldVisible(key) {
+            return window.AIDAConfigHelpers.isFieldVisible(this.trackerConfig, key);
+        },
+        isPartsControlEnabled() {
+            return window.AIDAConfigHelpers.isPartsControlEnabled(this.trackerConfig);
+        },
+        isFinalTestEnabled() {
+            return window.AIDAConfigHelpers.isFinalTestEnabled(this.trackerConfig);
+        },
+        isTimerEnabled(type) {
+            return window.AIDAConfigHelpers.isTimerEnabled(this.trackerConfig, type);
+        },
+        getDeliveryMode() {
+            return window.AIDAConfigHelpers.getDeliveryMode(this.trackerConfig);
+        },
+        isPriorityRequestEnabled() {
+            return window.AIDAConfigHelpers.isPriorityRequestEnabled(this.trackerConfig);
+        },
+        isModuleEnabled(key) {
+            return window.AIDAConfigHelpers.isModuleEnabled(this.trackerConfig, key);
+        },
+        isOverviewSectionEnabled(key) {
+            return window.AIDAConfigHelpers.isOverviewSectionEnabled(this.trackerConfig, key);
+        },
+        isAppointmentTypeEnabled(type) {
+            return window.AIDAConfigHelpers.isAppointmentTypeEnabled(this.trackerConfig, type);
+        },
+        getEffectiveOperationalBasis(basis = 'auto') {
+            const analysisEnabled = this.isFieldVisible('analysis_deadline');
+            const deliveryEnabled = this.isFieldVisible('deadline');
+            if (basis === 'analysis' && !analysisEnabled) return deliveryEnabled ? 'delivery' : 'entry';
+            if (basis === 'delivery' && !deliveryEnabled) return analysisEnabled ? 'analysis' : 'entry';
+            if (basis === 'auto' && !analysisEnabled && !deliveryEnabled) return 'entry';
+            return basis;
         },
 
         // ==========================================
@@ -689,7 +786,7 @@ function app() {
                     this.fetchDeviceModels(),
                     this.fetchDefectOptions(),
                     this.fetchOutsourcedCompanies(),
-                    this.fetchFornecedores()
+                    this.isModuleEnabled('suppliers') ? this.fetchFornecedores() : Promise.resolve()
                 ]);
 
                 // Initial global logs load
@@ -711,6 +808,15 @@ function app() {
         // --- 3. CARREGAMENTO DEPENDENTE DA VIEW ---
         async loadDataForCurrentView(force = false) {
             let currentView = this.view;
+
+            const disabledView =
+                (currentView === 'schedule_management' && !this.isModuleEnabled('agenda'))
+                || (currentView === 'admin_dashboard' && !this.isModuleEnabled('manager_dashboard'))
+                || (currentView === 'tracker_settings' && !this.isModuleEnabled('public_tracker'));
+            if (disabledView) {
+                currentView = 'dashboard';
+                this.view = 'dashboard';
+            }
 
             // Blindagem mínima contra view de dashboard indevida no primeiro acesso de técnicos/testers
             if (currentView === 'dashboard' && this.user) {
@@ -845,7 +951,7 @@ function app() {
 
                             // Restore Tracker Config
                             if (this.employeeSession.tracker_config) {
-                                this.trackerConfig = {
+                                this.trackerConfig = window.AIDAFeatureConfig.normalize({
                                     ...this.trackerConfig,
                                     ...this.employeeSession.tracker_config,
                                     colors: {
@@ -857,8 +963,9 @@ function app() {
                                         ...this.trackerConfig.required_ticket_fields,
                                         ...(this.employeeSession.tracker_config.required_ticket_fields || {})
                                     }
-                                };
+                                });
                             }
+                            this.normalizeFeatureConfig();
 
                             // CHECK MUST CHANGE PASSWORD
                             if (this.employeeSession.must_change_password) {
@@ -1747,17 +1854,23 @@ function app() {
 
         getBenchAppointmentDate(ticket) {
             if (!ticket) return null;
-            if (ticket.status === 'Analise Tecnica') return ticket.analysis_scheduled_at || null;
-            if (ticket.status === 'Andamento Reparo') return ticket.repair_scheduled_at || null;
-            return ticket.repair_scheduled_at || ticket.analysis_scheduled_at || null;
+            if (ticket.status === 'Analise Tecnica') return this.isAppointmentTypeEnabled('analysis') ? (ticket.analysis_scheduled_at || null) : null;
+            if (ticket.status === 'Andamento Reparo') return this.isAppointmentTypeEnabled('repair') ? (ticket.repair_scheduled_at || null) : null;
+            return (this.isAppointmentTypeEnabled('repair') ? ticket.repair_scheduled_at : null)
+                || (this.isAppointmentTypeEnabled('analysis') ? ticket.analysis_scheduled_at : null)
+                || null;
         },
 
         getBenchDeadlineDate(ticket) {
             if (!ticket) return null;
             if (ticket.status === 'Analise Tecnica') {
-                return ticket.analysis_deadline || ticket.deadline || null;
+                return (this.isFieldVisible('analysis_deadline') ? ticket.analysis_deadline : null)
+                    || (this.isFieldVisible('deadline') ? ticket.deadline : null)
+                    || null;
             }
-            return ticket.deadline || ticket.analysis_deadline || null;
+            return (this.isFieldVisible('deadline') ? ticket.deadline : null)
+                || (this.isFieldVisible('analysis_deadline') ? ticket.analysis_deadline : null)
+                || null;
         },
 
         getValidTimestamp(value) {
@@ -1767,8 +1880,8 @@ function app() {
         },
 
         compareBenchTickets(a, b) {
-            const requestedA = Boolean(a?.priority_requested);
-            const requestedB = Boolean(b?.priority_requested);
+            const requestedA = this.isPriorityRequestEnabled() && Boolean(a?.priority_requested);
+            const requestedB = this.isPriorityRequestEnabled() && Boolean(b?.priority_requested);
             if (requestedA !== requestedB) return requestedA ? -1 : 1;
 
             // Use the next available date when a ticket has no appointment or deadline.
@@ -2316,6 +2429,9 @@ function app() {
         // SCHEDULING METHODS
         // ==========================================
         openSchedulePanel(mode) {
+            if (!this.isAppointmentTypeEnabled(mode)) {
+                return this.notify(`O agendamento de ${mode === 'repair' ? 'reparo' : 'análise'} está desativado no Gerenciamento.`, 'error');
+            }
             // No Kanban mode (viewTicket modal is open), the technician is derived from selectedTicket.
             // In creation mode, it's ticketForm.technician_id.
             const targetTechId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
@@ -2973,6 +3089,10 @@ function app() {
             const ea = this.scheduleManagement.editingAppointment;
             const ticketIdToRefresh = ea.ticket_id || (ea.original ? ea.original.ticket_id : null);
 
+            if (!this.isAppointmentTypeEnabled(ea.type)) {
+                return this.notify(`O agendamento de ${ea.type === 'repair' ? 'reparo' : 'análise'} está desativado.`, 'error');
+            }
+
             // Explicit guard against submitting a creation without selecting a ticket
             if (!ea.ticket_id && (!ea.original || !ea.original.id)) {
                 return this.notify("Selecione um chamado pendente para agendar.", "error");
@@ -3235,27 +3355,7 @@ function app() {
             const isOsAuto = this.isAutoOSGenerationEnabled();
             const skipsAnalysis = Boolean(this.ticketForm.budget_approved);
 
-            if (!this.isRequiredFieldsEnabled()) {
-                const missing = [];
-                const missingFields = [];
-                const addMissing = (field, label) => {
-                    missingFields.push(field);
-                    missing.push(label);
-                };
-
-                if (!ticketData.client_name) addMissing('client_name', 'Cliente');
-                if (!isOsAuto && !ticketData.os_number) addMissing('os_number', 'Nº OS');
-                if (!ticketData.device_model) addMissing('device_model', 'Modelo');
-                if (!ticketData.defect_reported) addMissing('defect_reported', 'Defeito Relatado');
-                if (!skipsAnalysis && !ticketData.analysis_deadline) addMissing('analysis_deadline', 'Prazo de Análise');
-                if (!ticketData.deadline) addMissing('deadline', 'Prazo de Entrega');
-                if (ticketData.is_outsourced && !ticketData.outsourced_company_id) addMissing('responsible', 'Empresa Parceira');
-
-                return { valid: missing.length === 0, missing, missingFields };
-            }
-
             const missing = [];
-            const reqConfig = this.trackerConfig.required_ticket_fields || {};
 
             this.TICKET_REQUIRED_FIELDS.forEach(field => {
                 // Orçamento já aprovado começa depois da análise e não exige prazo/agenda dela.
@@ -3264,7 +3364,7 @@ function app() {
                 // Skip OS Number check if Auto-Gen is on
                 if (field.key === 'os_number' && isOsAuto) return;
 
-                if (reqConfig[field.key]) {
+                if (this.isFieldRequired(field.key)) {
                     let isValid = true;
                     const val = ticketData[field.col];
 
@@ -3283,6 +3383,8 @@ function app() {
                     } else if (field.type === 'schedule') {
                         if (field.key === 'analysis_schedule') {
                             if (!this.selectedAnalysisAppointment) isValid = false;
+                        } else if (field.key === 'repair_schedule') {
+                            if (!this.selectedRepairAppointment) isValid = false;
                         }
                     }
 
@@ -3418,6 +3520,10 @@ function app() {
         },
 
         openShareModal() {
+            if (!this.isModuleEnabled('public_tracker')) {
+                this.notify('O acompanhamento público está desativado.', 'error');
+                return;
+            }
             const ticket = this.resolveTicket();
             if (ticket) {
                 // Ensure public_token is available
@@ -3433,6 +3539,7 @@ function app() {
         },
 
         copyTrackingLink() {
+             if (!this.isModuleEnabled('public_tracker')) return;
              const ticket = this.resolveTicket();
              if (!ticket) return;
              const link = this.getTrackingLink(ticket);
@@ -3443,6 +3550,7 @@ function app() {
 
         sendTrackingWhatsApp() {
             if (this.isWhatsAppDisabled()) return;
+            if (!this.isModuleEnabled('public_tracker')) return this.notify('O acompanhamento público está desativado.', 'error');
             const ticket = this.resolveTicket();
             if (!ticket || !ticket.contact_info) return this.notify("Sem contato cadastrado", "error");
 
@@ -3466,7 +3574,9 @@ function app() {
                 msg += ` Código de rastreio: ${trackingCode}.`;
             }
 
-            msg += ` Acompanhe o status aqui: ${link}`;
+            if (this.isModuleEnabled('public_tracker')) {
+                msg += ` Acompanhe o status aqui: ${link}`;
+            }
 
             let number = ticket.contact_info.replace(/\D/g, '');
             if (number.length <= 11) number = '55' + number;
@@ -3680,6 +3790,13 @@ function app() {
                 isAutoOSGenerationEnabled: () => this.isAutoOSGenerationEnabled(),
                 isWhatsAppDisabled: () => this.isWhatsAppDisabled(),
                 isLogisticsEnabled: () => this.isLogisticsEnabled(),
+                isPartsControlEnabled: () => this.isPartsControlEnabled(),
+                isFinalTestEnabled: () => this.isFinalTestEnabled(),
+                isTimerEnabled: (type) => this.isTimerEnabled(type),
+                getDeliveryMode: () => this.getDeliveryMode(),
+                isPriorityRequestEnabled: () => this.isPriorityRequestEnabled(),
+                isAppointmentTypeEnabled: (type) => this.isAppointmentTypeEnabled(type),
+                isModuleEnabled: (key) => this.isModuleEnabled(key),
                 getOutsourcedCompany: (id) => this.getOutsourcedCompany(id),
                 getOutsourcedPhone: (id) => this.getOutsourcedPhone(id),
                 getTrackingLink: (t) => this.getTrackingLink(t),
@@ -3687,6 +3804,7 @@ function app() {
                 sendCarrierWhatsApp: (t, c, tr) => this.sendCarrierWhatsApp(t, c, tr),
                 validateTicketRequirements: (data) => this.validateTicketRequirements(data),
                 isFieldRequired: (key) => this.isFieldRequired(key),
+                isFieldVisible: (key) => this.isFieldVisible(key),
                 focusTicketField: (field) => this.focusTicketField(field),
                 focusTicketFields: (fields) => this.focusTicketFields(fields),
                 setLoading: (val) => { this.loading = val; },
@@ -3777,7 +3895,7 @@ function app() {
         },
 
         canPauseRepairForParts(ticket) {
-            if (!ticket || ticket.status !== 'Andamento Reparo' || !ticket.repair_start_at) return false;
+            if (!this.isPartsControlEnabled() || !ticket || ticket.status !== 'Andamento Reparo' || !ticket.repair_start_at) return false;
             if (this.hasRole('admin') || this.hasRole('atendente')) return true;
             return this.hasRole('tecnico') && ticket.technician_id === this.user?.id;
         },
@@ -3984,6 +4102,7 @@ function app() {
         },
 
         getCalendarTickets() {
+            if (!this.isFieldVisible('deadline')) return [];
             return this.getBenchCalendarSourceTickets().filter(t => t.deadline);
         },
 
@@ -4002,11 +4121,11 @@ function app() {
             };
 
             source.forEach(ticket => {
-                if (this.benchCalendarMode === 'appointment') {
-                    addEvent(ticket, 'analysis', ticket.analysis_scheduled_at);
-                    addEvent(ticket, 'repair', ticket.repair_scheduled_at);
+                if (this.benchCalendarMode === 'appointment' && this.isModuleEnabled('agenda')) {
+                    if (this.isAppointmentTypeEnabled('analysis')) addEvent(ticket, 'analysis', ticket.analysis_scheduled_at);
+                    if (this.isAppointmentTypeEnabled('repair')) addEvent(ticket, 'repair', ticket.repair_scheduled_at);
                 } else {
-                    addEvent(ticket, 'deadline', ticket.deadline);
+                    if (this.isFieldVisible('deadline')) addEvent(ticket, 'deadline', ticket.deadline);
                 }
             });
 
@@ -4780,7 +4899,7 @@ function app() {
                 const response = await this.supabaseFetch('rpc/get_overview_queue_page', 'POST', {
                     p_queue_key: modal.key,
                     p_window: f.window,
-                    p_basis: f.basis,
+                    p_basis: this.getEffectiveOperationalBasis(f.basis),
                     p_status: f.status !== 'all' ? f.status : null,
                     p_technician_id: f.technician !== 'all' ? f.technician : null,
                     p_search: search || null,
@@ -4822,7 +4941,7 @@ function app() {
                 const search = String(f.search || '').trim();
                 const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', {
                     p_window: f.window,
-                    p_basis: f.basis,
+                    p_basis: this.getEffectiveOperationalBasis(f.basis),
                     p_status: f.status !== 'all' ? f.status : null,
                     p_technician_id: f.technician !== 'all' ? f.technician : null,
                     p_search: search || null,
@@ -4920,6 +5039,7 @@ function app() {
 
             list.sort((a, b) => {
                 if (sortMode === 'priority') {
+                    if (!this.isFieldVisible('priority')) return new Date(a.created_at) - new Date(b.created_at);
                     const pOrder = { 'Urgente': 0, 'Alta': 1, 'Normal': 2, 'Baixa': 3 };
                     return pOrder[a.priority] - pOrder[b.priority];
                 }
@@ -4930,31 +5050,21 @@ function app() {
                     return a.device_model.localeCompare(b.device_model);
                 }
 
-                // Default Sort
-                if (status === 'Aberto' || status === 'Analise Tecnica') {
-                    // Primary: Analysis Deadline
-                    if (a.analysis_deadline && !b.analysis_deadline) return -1;
-                    if (!a.analysis_deadline && b.analysis_deadline) return 1;
-                    if (a.analysis_deadline && b.analysis_deadline) {
-                        const diff = new Date(a.analysis_deadline) - new Date(b.analysis_deadline);
-                        if (diff !== 0) return diff;
-                    }
-                    // Secondary: Delivery Deadline
-                    if (a.deadline && !b.deadline) return -1;
-                    if (!a.deadline && b.deadline) return 1;
-                    if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+                // Default: prioridade solicitada -> agendamento aplicável -> prazo aplicável -> criação.
+                const requestedA = this.isPriorityRequestEnabled() && Boolean(a.priority_requested);
+                const requestedB = this.isPriorityRequestEnabled() && Boolean(b.priority_requested);
+                if (requestedA !== requestedB) return requestedA ? -1 : 1;
 
-                    return 0;
-                } else {
-                    // Others: Deadline -> Created
-                    if (a.deadline && !b.deadline) return -1;
-                    if (!a.deadline && b.deadline) return 1;
-                    if (a.deadline && b.deadline) {
-                        const diff = new Date(a.deadline) - new Date(b.deadline);
-                        if (diff !== 0) return diff;
-                    }
-                    return new Date(a.created_at) - new Date(b.created_at);
-                }
+                const appointmentA = this.getValidTimestamp(this.getBenchAppointmentDate(a));
+                const appointmentB = this.getValidTimestamp(this.getBenchAppointmentDate(b));
+                const deadlineA = this.getValidTimestamp(this.getBenchDeadlineDate(a));
+                const deadlineB = this.getValidTimestamp(this.getBenchDeadlineDate(b));
+                const createdA = this.getValidTimestamp(a.created_at) ?? Number.MAX_SAFE_INTEGER;
+                const createdB = this.getValidTimestamp(b.created_at) ?? Number.MAX_SAFE_INTEGER;
+                const effectiveA = appointmentA ?? deadlineA ?? createdA;
+                const effectiveB = appointmentB ?? deadlineB ?? createdB;
+                if (effectiveA !== effectiveB) return effectiveA - effectiveB;
+                return createdA - createdB;
             });
 
             return list;
@@ -4986,9 +5096,10 @@ function app() {
                 if (!isStale || !isOpen) return false;
             }
             if (this.activeQuickFilter === 'priority') {
-                if (!ticket.priority_requested) return false;
+                if (!this.isPriorityRequestEnabled() || !ticket.priority_requested) return false;
             }
             if (this.activeQuickFilter === 'delayed') {
+                if (!this.isFieldVisible('deadline')) return false;
                 const now = new Date();
                 const isDelayed = ticket.deadline && new Date(ticket.deadline) < now && !['Retirada Cliente', 'Finalizado'].includes(ticket.status);
                 if (!isDelayed) return false;
