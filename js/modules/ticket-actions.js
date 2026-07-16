@@ -22,6 +22,10 @@ window.AIDATicketActions = {
             return deps.notify("Escolha se o chamado deve seguir para reparo ou compra de peças.", "error");
         }
 
+        if (startsWithApprovedBudget && approvedRoute === 'purchase' && !deps.isPartsControlEnabled()) {
+            return deps.notify("O controle de compra de peças está desativado. Envie o chamado direto para reparo.", "error");
+        }
+
         if (startsWithApprovedBudget && deps.state.ticketForm.is_outsourced) {
             return deps.notify("O atalho de orçamento aprovado é exclusivo para o fluxo interno de reparo.", "error");
         }
@@ -61,22 +65,22 @@ window.AIDATicketActions = {
                 client_name: deps.state.ticketForm.client_name,
                 os_number: isOsAuto ? null : deps.state.ticketForm.os_number, // Send null if auto
                 device_model: deps.state.ticketForm.model,
-                serial_number: deps.state.ticketForm.serial,
-                defect_reported: deps.state.ticketForm.defects.length ? deps.state.ticketForm.defects.join(', ') : null,
-                priority: deps.state.ticketForm.priority,
-                contact_info: deps.state.ticketForm.contact,
-                deadline: deps.toUTC(deps.state.ticketForm.deadline) || null,
-                analysis_deadline: startsWithApprovedBudget ? null : (deps.toUTC(deps.state.ticketForm.analysis_deadline) || null),
-                device_condition: deps.state.ticketForm.device_condition,
+                serial_number: deps.isFieldVisible('serial_number') ? deps.state.ticketForm.serial : null,
+                defect_reported: deps.isFieldVisible('defect_reported') && deps.state.ticketForm.defects.length ? deps.state.ticketForm.defects.join(', ') : null,
+                priority: deps.isFieldVisible('priority') ? deps.state.ticketForm.priority : 'Normal',
+                contact_info: deps.isFieldVisible('contact_info') ? deps.state.ticketForm.contact : null,
+                deadline: deps.isFieldVisible('deadline') ? (deps.toUTC(deps.state.ticketForm.deadline) || null) : null,
+                analysis_deadline: (!startsWithApprovedBudget && deps.isFieldVisible('analysis_deadline')) ? (deps.toUTC(deps.state.ticketForm.analysis_deadline) || null) : null,
+                device_condition: deps.isFieldVisible('device_condition') ? deps.state.ticketForm.device_condition : null,
                 parts_needed: startsWithApprovedBudget && approvedRoute === 'purchase' ? partsNeeded : null,
                 parts_status: startsWithApprovedBudget && approvedRoute === 'purchase' ? 'Pendente' : 'N/A',
                 budget_status: startsWithApprovedBudget ? 'Aprovado' : 'Pendente',
-                technician_id: deps.state.ticketForm.is_outsourced ? null : techId,
+                technician_id: (deps.state.ticketForm.is_outsourced || !deps.isFieldVisible('responsible')) ? null : techId,
                 is_outsourced: deps.state.ticketForm.is_outsourced,
                 outsourced_company_id: (deps.state.ticketForm.is_outsourced && deps.state.ticketForm.outsourced_company_id && deps.state.ticketForm.outsourced_company_id !== '') ? deps.state.ticketForm.outsourced_company_id : null,
-                checklist_data: deps.state.ticketForm.checklist,
-                checklist_final_data: deps.state.ticketForm.checklist_final,
-                photos_urls: deps.state.ticketForm.photos,
+                checklist_data: deps.isFieldVisible('checklist_entry') ? deps.state.ticketForm.checklist : [],
+                checklist_final_data: deps.isFieldVisible('checklist_exit') ? deps.state.ticketForm.checklist_final : [],
+                photos_urls: deps.isFieldVisible('photos') ? deps.state.ticketForm.photos : [],
                 status: initialStatus,
                 created_by_name: deps.state.user.name
             };
@@ -113,7 +117,7 @@ window.AIDATicketActions = {
             await deps.logTicketAction(createdTicket.id, initialLog.action, initialLog.details);
 
             // Check and process appointments if present in state
-            if (!startsWithApprovedBudget && deps.state.selectedAnalysisAppointment) {
+            if (!startsWithApprovedBudget && deps.isAppointmentTypeEnabled('analysis') && deps.state.selectedAnalysisAppointment) {
                 try {
                     const appt = deps.state.selectedAnalysisAppointment;
                     await deps.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
@@ -129,7 +133,7 @@ window.AIDATicketActions = {
                     deps.notify("Chamado criado, mas falha ao salvar a agenda de análise.", "error");
                 }
             }
-            if (startsWithApprovedBudget && approvedRoute === 'repair' && deps.state.selectedRepairAppointment) {
+            if (startsWithApprovedBudget && approvedRoute === 'repair' && deps.isAppointmentTypeEnabled('repair') && deps.state.selectedRepairAppointment) {
                 try {
                     const appt = deps.state.selectedRepairAppointment;
                     await deps.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
@@ -160,7 +164,7 @@ window.AIDATicketActions = {
         const ticket = deps.resolveTicket(ticketOrId);
         if (!ticket) return;
 
-        if (deps.state.analysisForm.needsParts && !deps.state.analysisForm.partsList) {
+        if (deps.isPartsControlEnabled() && deps.state.analysisForm.needsParts && !deps.state.analysisForm.partsList) {
             return deps.notify("Liste as peças necessárias.", "error");
         }
         const ctx = deps.getLogContext(ticket);
@@ -170,7 +174,8 @@ window.AIDATicketActions = {
             : ticket.tech_notes;
 
         await deps.updateStatus(ticket, 'Aprovacao', {
-            parts_needed: deps.state.analysisForm.partsList,
+            parts_needed: deps.isPartsControlEnabled() ? deps.state.analysisForm.partsList : null,
+            parts_status: deps.isPartsControlEnabled() && deps.state.analysisForm.partsList ? 'Pendente' : 'N/A',
             tech_notes: techNotes
         }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
 
@@ -180,12 +185,12 @@ window.AIDATicketActions = {
     async approveRepair(ticketOrId, deps) {
         const ticket = deps.resolveTicket(ticketOrId);
         if (!ticket) return;
-        const nextStatus = ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
+        const nextStatus = deps.isPartsControlEnabled() && ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
         const ctx = deps.getLogContext(ticket);
         await deps.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: `${ctx.client} aprovou o orçamento do ${ctx.device}.` });
 
         // Se aprovou sem compra de peças, já inicia fluxo para agendar reparo
-        if (!ticket.parts_needed && !ticket.repair_scheduled) {
+        if (deps.isAppointmentTypeEnabled('repair') && (!deps.isPartsControlEnabled() || !ticket.parts_needed) && !ticket.repair_scheduled) {
             deps.state.openSchedulePanel('repair');
         }
     },
@@ -227,7 +232,7 @@ window.AIDATicketActions = {
          }, { action: 'Recebeu Peças', details: `Peça **${part}** recebida para o **${ctx.device}** de **${ctx.client}**. Reparo liberado.` });
 
          // Se não há agendamento de reparo ativo, sugere criar
-         if (!ticket.repair_scheduled) {
+         if (deps.isAppointmentTypeEnabled('repair') && !ticket.repair_scheduled) {
              deps.state.openSchedulePanel('repair');
          }
     },
@@ -254,7 +259,8 @@ window.AIDATicketActions = {
         const ticket = deps.resolveTicket();
         if (!ticket) return;
 
-        if (deps.state.editDeadlineForm.deadline && deps.state.editDeadlineForm.analysis_deadline) {
+        if (deps.isFieldVisible('deadline') && deps.isFieldVisible('analysis_deadline')
+            && deps.state.editDeadlineForm.deadline && deps.state.editDeadlineForm.analysis_deadline) {
             const deadline = new Date(deps.state.editDeadlineForm.deadline);
             const analysis = new Date(deps.state.editDeadlineForm.analysis_deadline);
             if (analysis > deadline) {
@@ -270,10 +276,10 @@ window.AIDATicketActions = {
 
         const ctx = deps.getLogContext(ticket);
         let actionDetails = [];
-        if (oldDeadline !== newDeadline) {
+        if (deps.isFieldVisible('deadline') && oldDeadline !== newDeadline) {
             actionDetails.push(`de ${oldDeadline} para ${newDeadline} (Prazo)`);
         }
-        if (oldAnalysis !== newAnalysis) {
+        if (deps.isFieldVisible('analysis_deadline') && oldAnalysis !== newAnalysis) {
             actionDetails.push(`de ${oldAnalysis} para ${newAnalysis} (Análise)`);
         }
 
@@ -282,10 +288,13 @@ window.AIDATicketActions = {
             details: `${deps.state.user.name} alterou prazos do ${ctx.device} de ${ctx.client}: ${actionDetails.join(', ')}`
         } : null;
 
-        const updates = {
-            deadline: deps.toUTC(deps.state.editDeadlineForm.deadline) || null,
-            analysis_deadline: deps.toUTC(deps.state.editDeadlineForm.analysis_deadline) || null
-        };
+        const updates = {};
+        if (deps.isFieldVisible('deadline')) {
+            updates.deadline = deps.toUTC(deps.state.editDeadlineForm.deadline) || null;
+        }
+        if (deps.isFieldVisible('analysis_deadline')) {
+            updates.analysis_deadline = deps.toUTC(deps.state.editDeadlineForm.analysis_deadline) || null;
+        }
 
         const success = await deps.mutateTicket(ticket, 'saveDeadlines', updates, actionLog, { showNotify: true, notifyMessage: 'Prazos atualizados!', fetchTickets: true });
 
@@ -416,6 +425,7 @@ window.AIDATicketActions = {
     async pauseRepairForParts(ticketOrId, deps) {
         const ticket = deps.resolveTicket(ticketOrId);
         const parts = String(deps.state.pauseRepairForPartsForm.parts || '').trim();
+        if (!deps.isPartsControlEnabled()) return deps.notify("O controle de compra de peças está desativado.", "error");
         if (!ticket || !parts) return deps.notify("Informe a peça ou componente necessário.", "error");
 
         deps.setLoading(true);
@@ -538,7 +548,7 @@ window.AIDATicketActions = {
 
             deps.notify("Retornado para reparo com urgência!");
             // Aciona fluxo visual de Agendamento do Novo Reparo (Cenario de Retrabalho)
-            if (!ticket.repair_scheduled) {
+            if (deps.isAppointmentTypeEnabled('repair') && !ticket.repair_scheduled) {
                 deps.state.openSchedulePanel('repair');
             }
         }
@@ -547,6 +557,7 @@ window.AIDATicketActions = {
     async requestPriority(ticketOrId, deps) {
         const ticket = deps.resolveTicket(ticketOrId);
         if (!ticket) return;
+        if (!deps.isPriorityRequestEnabled()) return deps.notify("A solicitação de prioridade está desativada.", "error");
         const ctx = deps.getLogContext(ticket);
         const actionLog = {
             action: 'Solicitou Prioridade',
@@ -616,11 +627,13 @@ window.AIDATicketActions = {
 
         const companyName = deps.getOutsourcedCompany(ticket.outsourced_company_id);
 
-        await deps.updateStatus(ticket, 'Teste Final', {
+        await deps.updateStatus(ticket, deps.isFinalTestEnabled() ? 'Teste Final' : 'Retirada Cliente', {
             test_start_at: null // Reset test status to ensure "Start Test" appears
         }, {
             action: 'Recebeu de Terceiro',
-            details: `O aparelho ${cleanContext.device} de ${cleanContext.client} foi recebido da parceira ${companyName} e enviado para testes.`
+            details: deps.isFinalTestEnabled()
+                ? `O aparelho ${cleanContext.device} de ${cleanContext.client} foi recebido da parceira ${companyName} e enviado para testes.`
+                : `O aparelho ${cleanContext.device} de ${cleanContext.client} foi recebido da parceira ${companyName} e liberado para retirada.`
         });
     },
 
@@ -777,6 +790,10 @@ window.AIDATicketActions = {
          const ticket = deps.resolveTicket(ticketOrId);
          if (!ticket) return;
 
+         if (deps.getDeliveryMode() === 'simple') {
+             return this.markDelivered(ticket, deps);
+         }
+
          if (deps.isLogisticsEnabled()) {
              deps.openLogisticsModal(ticket);
              return;
@@ -816,8 +833,10 @@ window.AIDATicketActions = {
         const success = await deps.mutateTicket(ticket, 'sendBudget', updates, actionLog, { showNotify: false, fetchTickets: true });
 
         if (success) {
-            const link = deps.getTrackingLink(ticket);
-            const msg = `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`;
+            const link = deps.isModuleEnabled('public_tracker') ? deps.getTrackingLink(ticket) : null;
+            const msg = link
+                ? `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`
+                : `Olá ${ticket.client_name}, seu orçamento está pronto.`;
 
             let number = ticket.contact_info.replace(/\D/g, '');
             if (number.length <= 11) number = '55' + number;
@@ -831,3 +850,4 @@ window.AIDATicketActions = {
         }
     }
 };
+

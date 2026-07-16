@@ -316,7 +316,7 @@
                     }
 
                     try {
-                        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_client_ticket_details_public`, {
+                        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_client_ticket_details_public_configurable`, {
                             method: 'POST',
                             headers: {
                                 'apikey': SUPABASE_KEY,
@@ -414,3 +414,4 @@
     </script>
 </body>
 </html>
+

@@ -29,7 +29,7 @@ window.AIDAWorkflowRules = {
                 if (status !== 'Analise Tecnica' || ticket.analysis_started_at) return false;
                 return isAdmin || isTech;
             case 'sendToOutsourced':
-                if (!isOutsourced || status !== 'Aberto') return false;
+                if (!window.AIDAConfigHelpers.isOutsourcedEnabled(trackerConfig) || !isOutsourced || status !== 'Aberto') return false;
                 return isAdmin || isAttendant || isTech;
             case 'finishAnalysis':
                 if (status !== 'Analise Tecnica' || !ticket.analysis_started_at) return false;
@@ -74,7 +74,7 @@ window.AIDAWorkflowRules = {
                 if (status !== 'Terceirizado') return false;
                 return isAdmin || isAttendant || isTech;
             case 'requestPriority':
-                return !ticket.priority_requested;
+                return window.AIDAConfigHelpers.isPriorityRequestEnabled(trackerConfig) && !ticket.priority_requested;
             case 'deleteTicket':
             case 'restoreItem':
                 return isAdmin;
@@ -92,3 +92,4 @@ window.AIDAWorkflowRules = {
         }
     }
 };
+

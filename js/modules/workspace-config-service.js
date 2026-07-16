@@ -20,7 +20,8 @@ window.AIDAWorkspaceConfigService = {
         if (!deps.state.user?.workspace_id || !deps.state.hasRole('admin')) return;
         deps.setLoading(true);
         try {
-            const res = await deps.supabaseFetch('rpc/update_workspace_tracker_config', 'POST', { p_config: deps.state.trackerConfig });
+            deps.state.normalizeFeatureConfig();
+            await deps.supabaseFetch('rpc/update_workspace_tracker_config', 'POST', { p_config: deps.state.trackerConfig });
 
             // Check if update actually happened
             // Since it's an RPC, it throws if not found/unauthorized, so success implies it worked
@@ -33,6 +34,14 @@ window.AIDAWorkspaceConfigService = {
 
             // Refresh data to apply new flow rules (e.g. Tech Bench tickets)
             await deps.fetchTickets();
+
+            if (deps.state.view === 'schedule_management' && !deps.state.isModuleEnabled('agenda')) {
+                deps.state.view = 'dashboard';
+            } else if (deps.state.view === 'admin_dashboard' && !deps.state.isModuleEnabled('manager_dashboard')) {
+                deps.state.view = 'dashboard';
+            } else if (deps.state.view === 'tracker_settings' && !deps.state.isModuleEnabled('public_tracker')) {
+                deps.state.view = 'management_settings';
+            }
         } catch (e) {
             deps.notify("Erro ao salvar: " + e.message, "error");
         } finally {
@@ -40,3 +49,4 @@ window.AIDAWorkspaceConfigService = {
         }
     }
 };
+

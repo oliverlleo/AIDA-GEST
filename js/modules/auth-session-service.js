@@ -84,7 +84,7 @@ window.AIDAAuthSessionService = {
         if (emp.whatsapp_number) state.whatsappNumber = emp.whatsapp_number;
 
         if (emp.tracker_config) {
-            state.trackerConfig = {
+            state.trackerConfig = window.AIDAFeatureConfig.normalize({
                 ...state.trackerConfig,
                 ...emp.tracker_config,
                 colors: {
@@ -95,8 +95,9 @@ window.AIDAAuthSessionService = {
                     ...state.trackerConfig.required_ticket_fields,
                     ...(emp.tracker_config.required_ticket_fields || {})
                 }
-            };
+            });
         }
+        if (typeof state.normalizeFeatureConfig === 'function') state.normalizeFeatureConfig();
 
         // Ajusta a view corretamente antes de qualquer return/early exit
         const roles = state.user.roles || [];
@@ -232,7 +233,7 @@ window.AIDAAuthSessionService = {
                 state.whatsappNumber = profile.workspaces?.whatsapp_number || '';
 
                 if (profile.workspaces?.tracker_config) {
-                    state.trackerConfig = {
+                    state.trackerConfig = window.AIDAFeatureConfig.normalize({
                         ...state.trackerConfig,
                         ...profile.workspaces.tracker_config,
                         colors: {
@@ -243,8 +244,9 @@ window.AIDAAuthSessionService = {
                             ...state.trackerConfig.required_ticket_fields,
                             ...(profile.workspaces.tracker_config.required_ticket_fields || {})
                         }
-                    };
+                    });
                 }
+                if (typeof state.normalizeFeatureConfig === 'function') state.normalizeFeatureConfig();
 
                 await bootstrapAuthenticatedApp({ reason: 'load_admin' });
 
@@ -255,3 +257,4 @@ window.AIDAAuthSessionService = {
         }
     }
 };
+
