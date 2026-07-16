@@ -98,6 +98,18 @@ function app() {
             no_deadline: 0,
             all: 0
         },
+        homeStatusCounts: { open: 0, analysis: 0, approval: 0, pickup: 0 },
+        homeOpsTotals: {
+            pendingBudgets: 0, waitingBudgetResponse: 0, pendingPickups: 0,
+            pendingTracking: 0, pendingDelivery: 0, pendingTech: 0,
+            outsourcedToSend: 0, pendingOutsourced: 0, pendingPurchase: 0,
+            pendingReceipt: 0, priorityTickets: 0, expiringDeliveries: 0,
+            expiredDeliveries: 0, expiringAnalysis: 0, expiredAnalysis: 0
+        },
+        overviewQueueModal: {
+            open: false, key: '', title: '', total: 0, items: [],
+            loading: false, hasMore: false, nextCursor: null
+        },
         homeOperationalItems: [],
         homeOperationalLoading: false,
 
@@ -978,9 +990,8 @@ function app() {
 
             this.dashboardMetricsPromise = (async () => {
                 try {
-                    // Update OPS (RPC)
-                    await this.fetchOperationalAlerts();
-
+                    // The Overview has its own compact queue summary.
+                    // Operational alert lists are loaded only by the Kanban view.
                     // Delegate to the dashboard service
                     const data = await window.AIDADashboardService.requestDashboardMetrics(params, {
                         supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
@@ -4491,6 +4502,7 @@ function app() {
         },
 
         applyHomeOperationalWindow(windowType) {
+            this.closeOverviewQueueModal();
             this.homeOperationalFilters.window = windowType;
             if (this.homeOperationalFilters.basis === 'all') this.homeOperationalFilters.basis = 'auto';
             this.fetchHomeOperationalQueue();
@@ -4512,49 +4524,138 @@ function app() {
             this.fetchTickets();
         },
 
+        getHomeOpsTotal(key) {
+            return Number(this.homeOpsTotals?.[key] || 0);
+        },
+
+        getHomeOpsRemaining(key) {
+            const shown = Array.isArray(this.homeOps?.[key]) ? this.homeOps[key].length : 0;
+            return Math.max(0, this.getHomeOpsTotal(key) - shown);
+        },
+
+        getOverviewQueueTitle(key) {
+            const titles = {
+                pendingBudgets: 'Aguardando Envio de Orçamento',
+                waitingBudgetResponse: 'Aguardando Aprovação',
+                pendingPickups: 'Logística e expedição pendente',
+                pendingTracking: 'Gerar Rastreio',
+                pendingDelivery: 'Liberado',
+                pendingTech: 'Aguardando Início',
+                outsourcedToSend: 'Pendente Envio ao Terceirizado',
+                pendingOutsourced: 'Aguardando Retorno do Terceirizado',
+                pendingPurchase: 'Aguardando Compra',
+                pendingReceipt: 'Aguardando Recebimento',
+                priorityTickets: 'Prioridade',
+                expiringDeliveries: 'Entrega Expirando',
+                expiredDeliveries: 'Entrega Expirada',
+                expiringAnalysis: 'Análise Expirando',
+                expiredAnalysis: 'Análise Expirada'
+            };
+            return titles[key] || 'Chamados';
+        },
+
+        syncHomeOverviewQueues(queues = {}) {
+            Object.keys(this.homeOpsTotals).forEach(key => {
+                const queue = queues?.[key] || {};
+                this.homeOps[key] = Array.isArray(queue.items) ? queue.items : [];
+                this.homeOpsTotals[key] = Number(queue.total || 0);
+            });
+            this.homeOperationalItems = [];
+        },
+
+        async openOverviewQueueModal(key) {
+            this.overviewQueueModal = {
+                open: true,
+                key,
+                title: this.getOverviewQueueTitle(key),
+                total: this.getHomeOpsTotal(key),
+                items: Array.isArray(this.homeOps?.[key]) ? [...this.homeOps[key]] : [],
+                loading: false,
+                hasMore: true,
+                nextCursor: null
+            };
+            await this.loadOverviewQueuePage(true);
+        },
+
+        closeOverviewQueueModal() {
+            this.overviewQueueModal.open = false;
+        },
+
+        async loadOverviewQueuePage(reset = false) {
+            const modal = this.overviewQueueModal;
+            if (!modal.open || modal.loading) return;
+            if (!reset && !modal.hasMore) return;
+
+            modal.loading = true;
+            if (reset) {
+                modal.items = [];
+                modal.nextCursor = null;
+            }
+
+            try {
+                const f = this.homeOperationalFilters;
+                const search = String(f.search || '').trim();
+                const response = await this.supabaseFetch('rpc/get_overview_queue_page', 'POST', {
+                    p_queue_key: modal.key,
+                    p_window: f.window,
+                    p_basis: f.basis,
+                    p_status: f.status !== 'all' ? f.status : null,
+                    p_technician_id: f.technician !== 'all' ? f.technician : null,
+                    p_search: search || null,
+                    p_limit: 20,
+                    p_cursor: reset ? null : modal.nextCursor
+                });
+
+                if (!response) return;
+                const incoming = Array.isArray(response.items) ? response.items : [];
+
+                if (reset) {
+                    modal.items = incoming;
+                } else {
+                    const existingIds = new Set(modal.items.map(ticket => ticket.id));
+                    modal.items.push(...incoming.filter(ticket => !existingIds.has(ticket.id)));
+                }
+
+                modal.total = Number(response.total || 0);
+                modal.hasMore = Boolean(response.has_more);
+                modal.nextCursor = response.next_cursor || null;
+            } catch (error) {
+                console.error('Failed to load Overview queue page', error);
+                this.notify('Erro ao carregar mais chamados.', 'error');
+            } finally {
+                modal.loading = false;
+            }
+        },
+
+        openTicketFromOverviewQueue(ticket) {
+            this.closeOverviewQueueModal();
+            this.viewTicketDetails(ticket);
+        },
+
         async fetchHomeOperationalQueue() {
             if (!this.user?.workspace_id) return;
             try {
                 this.homeOperationalLoading = true;
                 const f = this.homeOperationalFilters;
                 const search = String(f.search || '').trim();
-
-                const payload = {
+                const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', {
                     p_window: f.window,
                     p_basis: f.basis,
                     p_status: f.status !== 'all' ? f.status : null,
                     p_technician_id: f.technician !== 'all' ? f.technician : null,
-                    p_search: search ? search : null,
-                    p_limit: 200, // Just a small sample limit for home display if needed
+                    p_search: search || null,
+                    p_limit: 0,
                     p_offset: 0
-                };
-                const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', payload);
+                });
+
                 if (response) {
                     if (response.counts) this.homeOperationalCounts = response.counts;
-                    if (response.items) {
-                        this.homeOperationalItems = response.items;
-                        // Build homeOps locally
-                        this.homeOps = {
-                            pendingBudgets: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && (!t.budget_status || t.budget_status === 'Pendente' || t.budget_status === '') && !t.budget_sent_at),
-                            waitingBudgetResponse: this.homeOperationalItems.filter(t => t.status === 'Aprovacao' && (t.budget_status === 'Enviado' || t.budget_sent_at)),
-                            pendingPickups: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && !t.pickup_available),
-                            pendingTracking: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && t.delivery_method === 'carrier' && !t.tracking_code),
-                            pendingDelivery: this.homeOperationalItems.filter(t => t.status === 'Retirada Cliente' && t.pickup_available && (t.delivery_method !== 'carrier' || (t.delivery_method === 'carrier' && t.tracking_code))),
-                            pendingTech: this.homeOperationalItems.filter(t => t.status === 'Aberto' && !t.is_outsourced),
-                            outsourcedToSend: this.homeOperationalItems.filter(t => t.is_outsourced && (t.status === 'Aberto' || t.status === 'Terceirizado') && !t.outsourced_at),
-                            pendingOutsourced: this.homeOperationalItems.filter(t => t.is_outsourced && t.status === 'Terceirizado' && t.outsourced_at),
-                            pendingPurchase: this.homeOperationalItems.filter(t => (t.status === 'Compra Peca' || (t.status === 'Aprovacao' && t.parts_needed)) && t.parts_status !== 'Comprado'),
-                            pendingReceipt: this.homeOperationalItems.filter(t => (t.status === 'Compra Peca' || (t.status === 'Aprovacao' && t.parts_needed)) && t.parts_status === 'Comprado'),
-                            priorityTickets: this.homeOperationalItems.filter(t => t.priority_requested === 'Urgente' || t.priority_requested === 'Alta'),
-                            expiringDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === false && ['today', 'tomorrow'].includes(t.urgency_bucket)),
-                            expiredDeliveries: this.homeOperationalItems.filter(t => t.effective_due_type === 'delivery' && t.is_overdue === true),
-                            expiringAnalysis: this.homeOperationalItems.filter(t => t.effective_due_type === 'analysis' && t.is_overdue === false && ['today', 'tomorrow'].includes(t.urgency_bucket)),
-                            expiredAnalysis: this.homeOperationalItems.filter(t => t.effective_due_type === 'analysis' && t.is_overdue === true),
-                        };
-                    }
+                    if (response.status_counts) this.homeStatusCounts = response.status_counts;
+                    this.syncHomeOverviewQueues(response.queues || {});
                 }
-            } catch (e) {
-                console.error("Failed to load home operational queue", e);
+            } catch (error) {
+                console.error('Failed to load home operational queue', error);
+                this.notify('Erro ao carregar a Visão Geral.', 'error');
             } finally {
                 this.homeOperationalLoading = false;
             }
