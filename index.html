@@ -1554,15 +1554,20 @@
                         </div>
 
                         <!-- Operational Workflow -->
-                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
-                                <span class="flex items-center gap-3 min-w-0">
-                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-route"></i></span>
-                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Etapas e controles operacionais</b><small class="text-xs text-gray-500 block">Ative etapas, cronômetros, prioridade e o modo de entrega.</small></span>
-                                </span>
-                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
-                            </button>
-                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 space-y-3">
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-route mr-2 text-brand-500"></i> Etapas e controles operacionais</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between gap-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Ativar personalização do fluxo operacional</span>
+                                        <span class="text-xs text-gray-500 block">Permite alterar compra de peças, prioridade, cronômetros e entrega. Desligado, utiliza o fluxo padrão.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                        <input type="checkbox" :checked="isCustomizationEnabled('workflow')" @change="setCustomizationEnabled('workflow', $event.target.checked)" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
+                                <div x-show="isCustomizationEnabled('workflow')" x-transition x-cloak class="mt-4 pt-4 border-t border-gray-200 space-y-3">
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                     <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer hover:border-brand-200 transition">
                                         <span><b class="text-sm text-gray-800 block">Controle de compra de peças</b><small class="text-xs text-gray-500">Fornecedores, etapa de compra e pausa do reparo.</small></span>
@@ -1595,19 +1600,25 @@
                                         </label>
                                     </div>
                                 </div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Modules -->
-                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
-                                <span class="flex items-center gap-3 min-w-0">
-                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-table-cells-large"></i></span>
-                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Módulos disponíveis</b><small class="text-xs text-gray-500 block">Escolha quais áreas do sistema ficam disponíveis para a equipe.</small></span>
-                                </span>
-                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
-                            </button>
-                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-table-cells-large mr-2 text-brand-500"></i> Módulos disponíveis</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between gap-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Ativar personalização dos módulos</span>
+                                        <span class="text-xs text-gray-500 block">Permite ocultar áreas do sistema para a equipe. Desligado, mantém todos os módulos padrão.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                        <input type="checkbox" :checked="isCustomizationEnabled('modules')" @change="setCustomizationEnabled('modules', $event.target.checked)" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
+                                <div x-show="isCustomizationEnabled('modules')" x-transition x-cloak class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <template x-for="module in [
                                     {key:'agenda', icon:'fa-calendar-days', label:'Agenda', description:'Agenda semanal e Gerenciamento de Agenda'},
                                     {key:'suppliers', icon:'fa-store', label:'Fornecedores de peças', description:'Lojas e empresas onde a assistência compra peças e componentes'},
@@ -1631,19 +1642,25 @@
                                                class="w-5 h-5 rounded text-brand-500 disabled:cursor-not-allowed">
                                     </label>
                                 </template>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Field Modes -->
-                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
-                                <span class="flex items-center gap-3 min-w-0">
-                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-clipboard-check"></i></span>
-                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Campos do cadastro de OS</b><small class="text-xs text-gray-500 block">Defina quais campos ficam ocultos, opcionais ou obrigatórios.</small></span>
-                                </span>
-                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
-                            </button>
-                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200">
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-clipboard-check mr-2 text-brand-500"></i> Campos do cadastro de OS</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between gap-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Ativar personalização dos campos</span>
+                                        <span class="text-xs text-gray-500 block">Permite ocultar campos ou defini-los como opcionais e obrigatórios. Desligado, utiliza o cadastro padrão.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                        <input type="checkbox" :checked="isCustomizationEnabled('ticket_fields')" @change="setCustomizationEnabled('ticket_fields', $event.target.checked)" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
+                                <div x-show="isCustomizationEnabled('ticket_fields')" x-transition x-cloak class="mt-4 pt-4 border-t border-gray-200">
                                 <div class="mb-4">
                                     <span class="text-sm font-bold text-gray-800 block">Defina o que aparece e o que é obrigatório</span>
                                     <span class="text-xs text-gray-500 block">Campos de identificação essenciais ficam bloqueados como obrigatórios.</span>
@@ -1666,19 +1683,25 @@
                                         </div>
                                     </template>
                                 </div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Overview Sections -->
-                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
-                                <span class="flex items-center gap-3 min-w-0">
-                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-eye"></i></span>
-                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Grupos da Visão Geral</b><small class="text-xs text-gray-500 block">Escolha quais lembretes e filas aparecem na página inicial.</small></span>
-                                </span>
-                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
-                            </button>
-                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-eye mr-2 text-brand-500"></i> Grupos da Visão Geral</h3>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div class="flex items-center justify-between gap-4">
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Ativar personalização da Visão Geral</span>
+                                        <span class="text-xs text-gray-500 block">Permite ocultar lembretes e filas da página inicial. Desligado, exibe todos os grupos padrão.</span>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                        <input type="checkbox" :checked="isCustomizationEnabled('overview')" @change="setCustomizationEnabled('overview', $event.target.checked)" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                                    </label>
+                                </div>
+                                <div x-show="isCustomizationEnabled('overview')" x-transition x-cloak class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 <template x-for="item in [
                                     {key:'awaiting_start', label:'Aguardando início'},
                                     {key:'awaiting_budget', label:'Aguardando orçamento'},
@@ -1695,6 +1718,7 @@
                                         <input type="checkbox" x-model="trackerConfig.overview_sections[item.key]" class="w-5 h-5 rounded text-brand-500">
                                     </label>
                                 </template>
+                                </div>
                             </div>
                         </div>
 
