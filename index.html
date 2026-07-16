@@ -1554,12 +1554,17 @@
                         </div>
 
                         <!-- Operational Workflow -->
-                        <div>
-                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-route mr-2 text-brand-500"></i> Etapas e controles operacionais</h3>
-                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
+                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-route"></i></span>
+                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Etapas e controles operacionais</b><small class="text-xs text-gray-500 block">Ative etapas, cronômetros, prioridade e o modo de entrega.</small></span>
+                                </span>
+                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
+                            </button>
+                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 space-y-3">
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 transition"
-                                           :class="module.key === 'suppliers' && !isPartsControlEnabled() ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-brand-200'">
+                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer hover:border-brand-200 transition">
                                         <span><b class="text-sm text-gray-800 block">Controle de compra de peças</b><small class="text-xs text-gray-500">Fornecedores, etapa de compra e pausa do reparo.</small></span>
                                         <input type="checkbox" x-model="trackerConfig.workflow.parts_control" class="w-5 h-5 rounded text-brand-500">
                                     </label>
@@ -1594,16 +1599,23 @@
                         </div>
 
                         <!-- Modules -->
-                        <div>
-                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-table-cells-large mr-2 text-brand-500"></i> Módulos disponíveis</h3>
-                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-table-cells-large"></i></span>
+                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Módulos disponíveis</b><small class="text-xs text-gray-500 block">Escolha quais áreas do sistema ficam disponíveis para a equipe.</small></span>
+                                </span>
+                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
+                            </button>
+                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <template x-for="module in [
                                     {key:'agenda', icon:'fa-calendar-days', label:'Agenda', description:'Agenda semanal e Gerenciamento de Agenda'},
                                     {key:'suppliers', icon:'fa-store', label:'Fornecedores de peças', description:'Lojas e empresas onde a assistência compra peças e componentes'},
                                     {key:'manager_dashboard', icon:'fa-chart-line', label:'Dashboard Gestor', description:'Indicadores e análises gerenciais'},
                                     {key:'public_tracker', icon:'fa-mobile-screen-button', label:'Acompanhamento Público', description:'Link externo para o cliente acompanhar a OS'}
                                 ]" :key="module.key">
-                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer">
+                                    <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 transition"
+                                           :class="module.key === 'suppliers' && !isPartsControlEnabled() ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-brand-200'">
                                         <span class="flex items-center gap-3 min-w-0">
                                             <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
                                                 <i class="fa-solid" :class="module.icon"></i>
@@ -1623,9 +1635,15 @@
                         </div>
 
                         <!-- Field Modes -->
-                        <div>
-                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-clipboard-check mr-2 text-brand-500"></i> Campos do cadastro de OS</h3>
-                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-clipboard-check"></i></span>
+                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Campos do cadastro de OS</b><small class="text-xs text-gray-500 block">Defina quais campos ficam ocultos, opcionais ou obrigatórios.</small></span>
+                                </span>
+                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
+                            </button>
+                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200">
                                 <div class="mb-4">
                                     <span class="text-sm font-bold text-gray-800 block">Defina o que aparece e o que é obrigatório</span>
                                     <span class="text-xs text-gray-500 block">Campos de identificação essenciais ficam bloqueados como obrigatórios.</span>
@@ -1652,9 +1670,15 @@
                         </div>
 
                         <!-- Overview Sections -->
-                        <div>
-                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-eye mr-2 text-brand-500"></i> Grupos da Visão Geral</h3>
-                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div x-data="{ expanded: false }" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <button type="button" @click="expanded = !expanded" class="w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
+                                <span class="flex items-center gap-3 min-w-0">
+                                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-eye"></i></span>
+                                    <span class="min-w-0"><b class="text-sm text-gray-800 block">Grupos da Visão Geral</b><small class="text-xs text-gray-500 block">Escolha quais lembretes e filas aparecem na página inicial.</small></span>
+                                </span>
+                                <span class="flex items-center gap-2 flex-shrink-0"><span class="text-xs font-bold text-brand-600" x-text="expanded ? 'Ocultar' : 'Configurar'"></span><i class="fa-solid fa-chevron-down text-gray-400 transition-transform" :class="expanded ? 'rotate-180' : ''"></i></span>
+                            </button>
+                            <div x-show="expanded" x-transition x-cloak class="bg-gray-50 p-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 <template x-for="item in [
                                     {key:'awaiting_start', label:'Aguardando início'},
                                     {key:'awaiting_budget', label:'Aguardando orçamento'},
