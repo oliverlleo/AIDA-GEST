@@ -1423,19 +1423,19 @@
                         <!-- Stats Cards -->
                         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                             <div class="text-gray-500 text-sm font-medium mb-1">Chamados Abertos</div>
-                            <div class="text-4xl font-bold text-gray-900" x-text="tickets.filter(t => t.status !== 'Finalizado').length">0</div>
+                            <div class="text-4xl font-bold text-gray-900" x-text="homeStatusCounts.open">0</div>
                         </div>
                         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                             <div class="text-gray-500 text-sm font-medium mb-1">Em Análise</div>
-                            <div class="text-4xl font-bold text-brand-500" x-text="tickets.filter(t => t.status === 'Analise Tecnica').length">0</div>
+                            <div class="text-4xl font-bold text-brand-500" x-text="homeStatusCounts.analysis">0</div>
                         </div>
                          <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                             <div class="text-gray-500 text-sm font-medium mb-1">Aguardando Aprovação</div>
-                            <div class="text-4xl font-bold text-blue-600" x-text="tickets.filter(t => t.status === 'Aprovacao').length">0</div>
+                            <div class="text-4xl font-bold text-blue-600" x-text="homeStatusCounts.approval">0</div>
                         </div>
                         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                             <div class="text-gray-500 text-sm font-medium mb-1">Prontos p/ Retirada</div>
-                            <div class="text-4xl font-bold text-green-600" x-text="tickets.filter(t => t.status === 'Retirada Cliente').length">0</div>
+                            <div class="text-4xl font-bold text-green-600" x-text="homeStatusCounts.pickup">0</div>
                         </div>
                     </div>
 
@@ -1446,7 +1446,7 @@
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-yellow-50 px-4 py-3 border-b border-yellow-100 flex justify-between items-center">
                                     <h4 class="font-bold text-yellow-800 text-sm">Aguardando Envio de Orçamento</h4>
-                                    <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingBudgets.length">0</span>
+                                    <span class="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingBudgets')">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                     <template x-for="t in homeOps.pendingBudgets" :key="t.id">
@@ -1499,6 +1499,12 @@
                                             </div>
                                         </div>
                                     </template>
+                                    <div x-show="getHomeOpsTotal('pendingBudgets') > homeOps.pendingBudgets.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingBudgets.length + ' de ' + getHomeOpsTotal('pendingBudgets')"></span>
+                                        <button @click="openOverviewQueueModal('pendingBudgets')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('pendingBudgets')"></span>
+                                        </button>
+                                    </div>
                                     <div x-show="!homeOps.pendingBudgets.length" class="p-4 text-center text-gray-400 text-sm italic">Tudo em dia!</div>
                                 </div>
                             </div>
@@ -1507,7 +1513,7 @@
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
                                     <h4 class="font-bold text-indigo-800 text-sm">Aguardando Aprovação</h4>
-                                    <span class="bg-indigo-200 text-indigo-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.waitingBudgetResponse.length">0</span>
+                                    <span class="bg-indigo-200 text-indigo-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('waitingBudgetResponse')">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                     <template x-for="t in homeOps.waitingBudgetResponse" :key="t.id">
@@ -1545,6 +1551,12 @@
                                             </div>
                                         </div>
                                     </template>
+                                    <div x-show="getHomeOpsTotal('waitingBudgetResponse') > homeOps.waitingBudgetResponse.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.waitingBudgetResponse.length + ' de ' + getHomeOpsTotal('waitingBudgetResponse')"></span>
+                                        <button @click="openOverviewQueueModal('waitingBudgetResponse')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('waitingBudgetResponse')"></span>
+                                        </button>
+                                    </div>
                                     <div x-show="!homeOps.waitingBudgetResponse.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum orçamento pendente de resposta.</div>
                                 </div>
                             </div>
@@ -1553,7 +1565,7 @@
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-blue-50 px-4 py-3 border-b border-blue-100 flex justify-between items-center">
                                     <h4 class="font-bold text-blue-800 text-sm" x-text="isLogisticsEnabled() ? 'Logística e expedição (pendente)' : 'Solicitar Retirada (Aparelhos Pronto)'"></h4>
-                                    <span class="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingPickups.length">0</span>
+                                    <span class="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingPickups')">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                     <template x-for="t in homeOps.pendingPickups" :key="t.id">
@@ -1586,6 +1598,12 @@
                                             </div>
                                         </div>
                                     </template>
+                                    <div x-show="getHomeOpsTotal('pendingPickups') > homeOps.pendingPickups.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingPickups.length + ' de ' + getHomeOpsTotal('pendingPickups')"></span>
+                                        <button @click="openOverviewQueueModal('pendingPickups')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('pendingPickups')"></span>
+                                        </button>
+                                    </div>
                                     <div x-show="!homeOps.pendingPickups.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
@@ -1594,7 +1612,7 @@
                             <div x-show="isLogisticsEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-orange-50 px-4 py-3 border-b border-orange-100 flex justify-between items-center">
                                     <h4 class="font-bold text-orange-800 text-sm">Gerar Rastreio</h4>
-                                    <span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingTracking.length">0</span>
+                                    <span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingTracking')">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                     <template x-for="t in homeOps.pendingTracking" :key="t.id">
@@ -1617,6 +1635,12 @@
                                             </div>
                                         </div>
                                     </template>
+                                    <div x-show="getHomeOpsTotal('pendingTracking') > homeOps.pendingTracking.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingTracking.length + ' de ' + getHomeOpsTotal('pendingTracking')"></span>
+                                        <button @click="openOverviewQueueModal('pendingTracking')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('pendingTracking')"></span>
+                                        </button>
+                                    </div>
                                     <div x-show="!homeOps.pendingTracking.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
@@ -1625,7 +1649,7 @@
                             <div x-show="isLogisticsEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-green-50 px-4 py-3 border-b border-green-100 flex justify-between items-center">
                                     <h4 class="font-bold text-green-800 text-sm">Liberado</h4>
-                                    <span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingDelivery.length">0</span>
+                                    <span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingDelivery')">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                     <template x-for="t in homeOps.pendingDelivery" :key="t.id">
@@ -1654,6 +1678,12 @@
                                             </div>
                                         </div>
                                     </template>
+                                    <div x-show="getHomeOpsTotal('pendingDelivery') > homeOps.pendingDelivery.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingDelivery.length + ' de ' + getHomeOpsTotal('pendingDelivery')"></span>
+                                        <button @click="openOverviewQueueModal('pendingDelivery')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('pendingDelivery')"></span>
+                                        </button>
+                                    </div>
                                     <div x-show="!homeOps.pendingDelivery.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente.</div>
                                 </div>
                             </div>
@@ -1667,7 +1697,7 @@
                             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div class="bg-gray-100 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                                     <h4 class="font-bold text-gray-700 text-sm">Aguardando Início (Enviar p/ Análise)</h4>
-                                    <span class="bg-gray-300 text-gray-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingTech.length">0</span>
+                                    <span class="bg-gray-300 text-gray-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingTech')">0</span>
                                 </div>
                                 <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                     <template x-for="t in homeOps.pendingTech" :key="t.id">
@@ -1710,6 +1740,12 @@
                                             </button>
                                         </div>
                                     </template>
+                                    <div x-show="getHomeOpsTotal('pendingTech') > homeOps.pendingTech.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingTech.length + ' de ' + getHomeOpsTotal('pendingTech')"></span>
+                                        <button @click="openOverviewQueueModal('pendingTech')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('pendingTech')"></span>
+                                        </button>
+                                    </div>
                                     <div x-show="!homeOps.pendingTech.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum chamado aguardando início.</div>
                                 </div>
                             </div>
@@ -1724,7 +1760,7 @@
                                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                         <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex justify-between items-center">
                                             <h4 class="font-bold text-purple-800 text-sm">Pendente Envio</h4>
-                                            <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.outsourcedToSend ? homeOps.outsourcedToSend.length : 0">0</span>
+                                            <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('outsourcedToSend')">0</span>
                                         </div>
                                         <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                             <template x-for="t in homeOps.outsourcedToSend" :key="t.id">
@@ -1749,7 +1785,13 @@
                                                     </button>
                                                 </div>
                                             </template>
-                                            <div x-show="!homeOps.outsourcedToSend || !homeOps.outsourcedToSend.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente de envio.</div>
+                                            <div x-show="getHomeOpsTotal('outsourcedToSend') > homeOps.outsourcedToSend.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.outsourcedToSend.length + ' de ' + getHomeOpsTotal('outsourcedToSend')"></span>
+                                        <button @click="openOverviewQueueModal('outsourcedToSend')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('outsourcedToSend')"></span>
+                                        </button>
+                                    </div>
+                                    <div x-show="!homeOps.outsourcedToSend || !homeOps.outsourcedToSend.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum pendente de envio.</div>
                                         </div>
                                     </div>
 
@@ -1757,7 +1799,7 @@
                                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                         <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex justify-between items-center">
                                             <h4 class="font-bold text-purple-800 text-sm">Aguardando Retorno</h4>
-                                            <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingOutsourced.length">0</span>
+                                            <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingOutsourced')">0</span>
                                         </div>
                                         <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                             <template x-for="t in homeOps.pendingOutsourced" :key="t.id">
@@ -1791,7 +1833,13 @@
                                                     </div>
                                                 </div>
                                             </template>
-                                            <div x-show="!homeOps.pendingOutsourced.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum aparelho terceirizado pendente.</div>
+                                            <div x-show="getHomeOpsTotal('pendingOutsourced') > homeOps.pendingOutsourced.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingOutsourced.length + ' de ' + getHomeOpsTotal('pendingOutsourced')"></span>
+                                        <button @click="openOverviewQueueModal('pendingOutsourced')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('pendingOutsourced')"></span>
+                                        </button>
+                                    </div>
+                                    <div x-show="!homeOps.pendingOutsourced.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum aparelho terceirizado pendente.</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1806,7 +1854,7 @@
                                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                     <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex justify-between items-center">
                                         <h4 class="font-bold text-purple-800 text-sm">Aguardando Compra</h4>
-                                        <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingPurchase.length">0</span>
+                                        <span class="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingPurchase')">0</span>
                                     </div>
                                     <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                         <template x-for="t in homeOps.pendingPurchase" :key="t.id">
@@ -1835,7 +1883,13 @@
                                                 </button>
                                             </div>
                                         </template>
-                                        <div x-show="!homeOps.pendingPurchase.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhuma compra pendente.</div>
+                                        <div x-show="getHomeOpsTotal('pendingPurchase') > homeOps.pendingPurchase.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingPurchase.length + ' de ' + getHomeOpsTotal('pendingPurchase')"></span>
+                                        <button @click="openOverviewQueueModal('pendingPurchase')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('pendingPurchase')"></span>
+                                        </button>
+                                    </div>
+                                    <div x-show="!homeOps.pendingPurchase.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhuma compra pendente.</div>
                                     </div>
                                 </div>
 
@@ -1843,7 +1897,7 @@
                                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                     <div class="bg-teal-50 px-4 py-3 border-b border-teal-100 flex justify-between items-center">
                                         <h4 class="font-bold text-teal-800 text-sm">Aguardando Recebimento</h4>
-                                        <span class="bg-teal-200 text-teal-800 text-xs px-2 py-1 rounded-full font-bold" x-text="homeOps.pendingReceipt.length">0</span>
+                                        <span class="bg-teal-200 text-teal-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingReceipt')">0</span>
                                     </div>
                                     <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                                         <template x-for="t in homeOps.pendingReceipt" :key="t.id">
@@ -1872,7 +1926,13 @@
                                                 </button>
                                             </div>
                                         </template>
-                                        <div x-show="!homeOps.pendingReceipt.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum recebimento pendente.</div>
+                                        <div x-show="getHomeOpsTotal('pendingReceipt') > homeOps.pendingReceipt.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3">
+                                        <span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingReceipt.length + ' de ' + getHomeOpsTotal('pendingReceipt')"></span>
+                                        <button @click="openOverviewQueueModal('pendingReceipt')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                            Ver mais <span x-text="getHomeOpsRemaining('pendingReceipt')"></span>
+                                        </button>
+                                    </div>
+                                    <div x-show="!homeOps.pendingReceipt.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum recebimento pendente.</div>
                                     </div>
                                 </div>
                             </div>
@@ -1891,7 +1951,7 @@
                                     <template x-if="homeOps.priorityTickets.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200" @click="applyQuickFilter('priority')">
-                                                <span>PRIORIDADE (<span x-text="homeOps.priorityTickets.length"></span>)</span>
+                                                <span>PRIORIDADE (<span x-text="getHomeOpsTotal('priorityTickets')"></span>)</span>
                                                 <i class="fa-solid fa-chevron-right text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
@@ -1922,18 +1982,22 @@
                                                         </div>
                                                     </div>
                                                 </template>
-                                                <div x-show="homeOps.priorityTickets.length > 5" class="text-center text-[10px] text-red-400 cursor-pointer hover:underline" @click="applyQuickFilter('priority')">
-                                                    Ver mais...
-                                                </div>
                                             </div>
-                                        </div>
+                                        
+                                            <div x-show="getHomeOpsTotal('priorityTickets') > homeOps.priorityTickets.length" class="pt-2 flex items-center justify-between gap-2">
+                                                <span class="text-[10px] text-gray-400" x-text="'Mostrando ' + homeOps.priorityTickets.length + ' de ' + getHomeOpsTotal('priorityTickets')"></span>
+                                                <button @click="openOverviewQueueModal('priorityTickets')" class="text-[10px] font-bold text-brand-600 hover:underline">
+                                                    Ver mais <span x-text="getHomeOpsRemaining('priorityTickets')"></span>
+                                                </button>
+                                            </div>
+</div>
                                     </template>
 
                                     <!-- Entrega Expirando -->
                                     <template x-if="homeOps.expiringDeliveries.length">
                                         <div class="mb-2">
                                             <div class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-amber-200">
-                                                <span>ENTREGA EXPIRANDO (<span x-text="homeOps.expiringDeliveries.length"></span>)</span>
+                                                <span>ENTREGA EXPIRANDO (<span x-text="getHomeOpsTotal('expiringDeliveries')"></span>)</span>
                                                 <i class="fa-solid fa-clock text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
@@ -1957,14 +2021,21 @@
                                                     </div>
                                                 </template>
                                             </div>
-                                        </div>
+                                        
+                                            <div x-show="getHomeOpsTotal('expiringDeliveries') > homeOps.expiringDeliveries.length" class="pt-2 flex items-center justify-between gap-2">
+                                                <span class="text-[10px] text-gray-400" x-text="'Mostrando ' + homeOps.expiringDeliveries.length + ' de ' + getHomeOpsTotal('expiringDeliveries')"></span>
+                                                <button @click="openOverviewQueueModal('expiringDeliveries')" class="text-[10px] font-bold text-brand-600 hover:underline">
+                                                    Ver mais <span x-text="getHomeOpsRemaining('expiringDeliveries')"></span>
+                                                </button>
+                                            </div>
+</div>
                                     </template>
 
                                     <!-- Entrega Expirada -->
                                     <template x-if="homeOps.expiredDeliveries.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200">
-                                                <span>ENTREGA EXPIRADA (<span x-text="homeOps.expiredDeliveries.length"></span>)</span>
+                                                <span>ENTREGA EXPIRADA (<span x-text="getHomeOpsTotal('expiredDeliveries')"></span>)</span>
                                                 <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
@@ -1988,14 +2059,21 @@
                                                     </div>
                                                 </template>
                                             </div>
-                                        </div>
+                                        
+                                            <div x-show="getHomeOpsTotal('expiredDeliveries') > homeOps.expiredDeliveries.length" class="pt-2 flex items-center justify-between gap-2">
+                                                <span class="text-[10px] text-gray-400" x-text="'Mostrando ' + homeOps.expiredDeliveries.length + ' de ' + getHomeOpsTotal('expiredDeliveries')"></span>
+                                                <button @click="openOverviewQueueModal('expiredDeliveries')" class="text-[10px] font-bold text-brand-600 hover:underline">
+                                                    Ver mais <span x-text="getHomeOpsRemaining('expiredDeliveries')"></span>
+                                                </button>
+                                            </div>
+</div>
                                     </template>
 
                                     <!-- Analysis Expiring -->
                                     <template x-if="homeOps.expiringAnalysis.length">
                                         <div class="mb-2">
                                             <div class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-amber-200">
-                                                <span>ANÁLISE EXPIRANDO (<span x-text="homeOps.expiringAnalysis.length"></span>)</span>
+                                                <span>ANÁLISE EXPIRANDO (<span x-text="getHomeOpsTotal('expiringAnalysis')"></span>)</span>
                                                 <i class="fa-solid fa-stopwatch text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
@@ -2019,14 +2097,21 @@
                                                     </div>
                                                 </template>
                                             </div>
-                                        </div>
+                                        
+                                            <div x-show="getHomeOpsTotal('expiringAnalysis') > homeOps.expiringAnalysis.length" class="pt-2 flex items-center justify-between gap-2">
+                                                <span class="text-[10px] text-gray-400" x-text="'Mostrando ' + homeOps.expiringAnalysis.length + ' de ' + getHomeOpsTotal('expiringAnalysis')"></span>
+                                                <button @click="openOverviewQueueModal('expiringAnalysis')" class="text-[10px] font-bold text-brand-600 hover:underline">
+                                                    Ver mais <span x-text="getHomeOpsRemaining('expiringAnalysis')"></span>
+                                                </button>
+                                            </div>
+</div>
                                     </template>
 
                                     <!-- Analysis Expired -->
                                     <template x-if="homeOps.expiredAnalysis.length">
                                         <div class="mb-2">
                                             <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-bold mb-2 flex justify-between items-center cursor-pointer hover:bg-red-200">
-                                                <span>ANÁLISE EXPIRADA (<span x-text="homeOps.expiredAnalysis.length"></span>)</span>
+                                                <span>ANÁLISE EXPIRADA (<span x-text="getHomeOpsTotal('expiredAnalysis')"></span>)</span>
                                                 <i class="fa-solid fa-stopwatch animate-pulse text-[10px]"></i>
                                             </div>
                                             <div class="space-y-1">
@@ -2050,7 +2135,14 @@
                                                     </div>
                                                 </template>
                                             </div>
-                                        </div>
+                                        
+                                            <div x-show="getHomeOpsTotal('expiredAnalysis') > homeOps.expiredAnalysis.length" class="pt-2 flex items-center justify-between gap-2">
+                                                <span class="text-[10px] text-gray-400" x-text="'Mostrando ' + homeOps.expiredAnalysis.length + ' de ' + getHomeOpsTotal('expiredAnalysis')"></span>
+                                                <button @click="openOverviewQueueModal('expiredAnalysis')" class="text-[10px] font-bold text-brand-600 hover:underline">
+                                                    Ver mais <span x-text="getHomeOpsRemaining('expiredAnalysis')"></span>
+                                                </button>
+                                            </div>
+</div>
                                     </template>
 
                                     <!-- Empty State -->
@@ -4365,6 +4457,90 @@
                     <button @click="updateEmployee()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-lg shadow-orange-500/30 transition-colors">Salvar Alterações</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- OVERVIEW QUEUE: exact total with server-side pagination -->
+    <div x-show="overviewQueueModal.open" x-cloak x-transition.opacity
+         @keydown.escape.window="closeOverviewQueueModal()"
+         @click.self="closeOverviewQueueModal()"
+         class="fixed inset-0 z-[85] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[88vh]" @click.stop>
+            <header class="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-4 bg-white">
+                <div class="min-w-0 flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="font-bold text-gray-900 truncate" x-text="overviewQueueModal.title"></h3>
+                        <p class="text-xs text-gray-500">
+                            <span x-text="overviewQueueModal.total"></span>
+                            <span x-text="overviewQueueModal.total === 1 ? ' chamado neste módulo' : ' chamados neste módulo'"></span>
+                        </p>
+                    </div>
+                </div>
+                <button @click="closeOverviewQueueModal()" class="w-9 h-9 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition flex-shrink-0" title="Fechar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </header>
+
+            <div class="flex-1 overflow-y-auto bg-gray-50/70 p-3 md:p-4">
+                <div class="space-y-2">
+                    <template x-for="ticket in overviewQueueModal.items" :key="ticket.id">
+                        <article class="bg-white border border-gray-200 rounded-xl p-3.5 hover:border-brand-200 hover:shadow-sm transition">
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-bold text-gray-900 truncate" x-text="ticket.client_name"></span>
+                                        <span class="text-[10px] font-mono font-bold text-brand-700 bg-brand-50 border border-brand-100 rounded-full px-2 py-0.5" x-text="'OS ' + ticket.os_number"></span>
+                                        <span x-show="ticket.priority_requested" class="text-[10px] font-bold text-red-700 bg-red-50 border border-red-100 rounded-full px-2 py-0.5">
+                                            <i class="fa-solid fa-bell mr-1"></i>Prioridade
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-1 truncate" x-text="ticket.device_model + ' · ' + getStatusLabel(ticket.status)"></p>
+                                    <div class="flex flex-wrap items-center gap-3 mt-2 text-[10px]">
+                                        <span class="inline-flex items-center gap-1 text-gray-500">
+                                            <i class="fa-regular fa-clock"></i>
+                                            <span x-text="getOverviewQueueAge(ticket)"></span>
+                                        </span>
+                                        <span x-show="ticket.effective_due_at" :class="ticket.is_overdue ? 'text-red-600 font-bold' : 'text-gray-500'" class="inline-flex items-center gap-1">
+                                            <i class="fa-regular fa-calendar-check"></i>
+                                            <span x-text="new Date(ticket.effective_due_at).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric'})"></span>
+                                        </span>
+                                        <span x-show="!ticket.effective_due_at" class="text-gray-400">Sem prazo</span>
+                                    </div>
+                                </div>
+                                <button @click="openTicketFromOverviewQueue(ticket)" class="px-3 py-2 rounded-lg bg-gray-900 text-white hover:bg-brand-500 text-xs font-bold transition whitespace-nowrap">
+                                    Abrir OS
+                                </button>
+                            </div>
+                        </article>
+                    </template>
+                </div>
+
+                <div x-show="overviewQueueModal.loading && overviewQueueModal.items.length === 0" class="py-14 text-center text-gray-400">
+                    <i class="fa-solid fa-circle-notch fa-spin text-2xl text-brand-500 mb-3"></i>
+                    <p class="text-sm">Carregando chamados...</p>
+                </div>
+                <div x-show="!overviewQueueModal.loading && overviewQueueModal.items.length === 0" class="py-14 text-center text-gray-400">
+                    <i class="fa-regular fa-folder-open text-3xl mb-3"></i>
+                    <p class="text-sm">Nenhum chamado neste módulo.</p>
+                </div>
+            </div>
+
+            <footer class="px-5 py-3.5 border-t border-gray-100 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <span class="text-xs text-gray-500" x-text="'Mostrando ' + overviewQueueModal.items.length + ' de ' + overviewQueueModal.total"></span>
+                <button x-show="overviewQueueModal.hasMore"
+                        @click="loadOverviewQueuePage()"
+                        :disabled="overviewQueueModal.loading"
+                        class="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-xs font-bold transition shadow-sm">
+                    <i :class="overviewQueueModal.loading ? 'fa-circle-notch fa-spin' : 'fa-plus'" class="fa-solid mr-2"></i>
+                    <span x-text="overviewQueueModal.loading ? 'Carregando...' : 'Carregar mais ' + Math.min(20, Math.max(0, overviewQueueModal.total - overviewQueueModal.items.length))"></span>
+                </button>
+                <span x-show="!overviewQueueModal.hasMore && overviewQueueModal.total > 0" class="text-xs font-semibold text-emerald-600">
+                    <i class="fa-solid fa-check mr-1"></i>Todos os chamados carregados
+                </span>
+            </footer>
         </div>
     </div>
 
