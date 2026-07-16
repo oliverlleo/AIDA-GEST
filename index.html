@@ -1713,12 +1713,9 @@
                             <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-eye mr-2 text-brand-500"></i> Grupos da Visão Geral</h3>
                             <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <div class="flex items-center justify-between gap-4">
-                                    <div class="flex items-center gap-3 min-w-0">
-                                        <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-eye"></i></span>
-                                        <span class="min-w-0">
-                                            <span class="text-sm font-bold text-gray-800 block">Ativar personalização da Visão Geral</span>
-                                            <span class="text-xs text-gray-500 leading-snug block">Permite ocultar lembretes e filas da página inicial. Desligado, exibe todos os grupos padrão.</span>
-                                        </span>
+                                    <div>
+                                        <span class="text-sm font-bold text-gray-800 block">Ativar personalização da Visão Geral</span>
+                                        <span class="text-xs text-gray-500 block">Permite ocultar lembretes e filas da página inicial. Desligado, exibe todos os grupos padrão.</span>
                                     </div>
                                     <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                                         <input type="checkbox" :checked="isCustomizationEnabled('overview')" @change="setCustomizationEnabled('overview', $event.target.checked)" class="sr-only peer">
