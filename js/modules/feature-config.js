@@ -43,6 +43,18 @@
         priority: true
     });
 
+    const DEFAULT_CUSTOMIZATION = Object.freeze({
+        workflow: false,
+        modules: false,
+        ticket_fields: false,
+        overview: false
+    });
+
+    const CUSTOMIZABLE_WORKFLOW_KEYS = [
+        'parts_control', 'analysis_timer', 'repair_timer',
+        'delivery_mode', 'priority_requests'
+    ];
+
     function legacyFieldModes(config) {
         const strict = !!config?.enable_required_ticket_fields;
         const required = config?.required_ticket_fields || {};
@@ -54,8 +66,14 @@
     }
 
     function normalize(config = {}) {
-        const legacyModes = legacyFieldModes(config);
-        const configuredModes = config.ticket_field_modes || {};
+        const customization = {
+            ...DEFAULT_CUSTOMIZATION,
+            ...(config.customization || {})
+        };
+        const legacyModes = legacyFieldModes(customization.ticket_fields ? config : {});
+        const configuredModes = customization.ticket_fields
+            ? (config.ticket_field_modes || {})
+            : {};
         const ticketFieldModes = {};
 
         FIELD_KEYS.forEach((key) => {
@@ -70,20 +88,27 @@
             ...DEFAULT_WORKFLOW,
             ...(config.workflow || {})
         };
+        if (!customization.workflow) {
+            CUSTOMIZABLE_WORKFLOW_KEYS.forEach((key) => {
+                workflow[key] = DEFAULT_WORKFLOW[key];
+            });
+        }
         workflow.delivery_mode = workflow.delivery_mode === 'simple' ? 'simple' : 'complete';
+
+        const modules = customization.modules
+            ? { ...DEFAULT_MODULES, ...(config.modules || {}) }
+            : { ...DEFAULT_MODULES };
+        const overviewSections = customization.overview
+            ? { ...DEFAULT_OVERVIEW, ...(config.overview_sections || {}) }
+            : { ...DEFAULT_OVERVIEW };
 
         return {
             ...config,
+            customization,
             ticket_field_modes: ticketFieldModes,
             workflow,
-            modules: {
-                ...DEFAULT_MODULES,
-                ...(config.modules || {})
-            },
-            overview_sections: {
-                ...DEFAULT_OVERVIEW,
-                ...(config.overview_sections || {})
-            }
+            modules,
+            overview_sections: overviewSections
         };
     }
 
@@ -105,6 +130,7 @@
         DEFAULT_WORKFLOW,
         DEFAULT_MODULES,
         DEFAULT_OVERVIEW,
+        DEFAULT_CUSTOMIZATION,
 
         normalize,
 
@@ -130,6 +156,17 @@
             return normalized;
         },
 
+        isCustomizationEnabled(config, key) {
+            return normalize(config).customization[key] === true;
+        },
+
+        setCustomizationEnabled(config, key, enabled) {
+            const normalized = normalize(config);
+            if (!Object.prototype.hasOwnProperty.call(DEFAULT_CUSTOMIZATION, key)) return normalized;
+            normalized.customization[key] = enabled === true;
+            return normalize(normalized);
+        },
+
         isWorkflowEnabled(config, key) {
             return normalize(config).workflow[key] !== false;
         },
@@ -153,4 +190,3 @@
         }
     };
 })();
-

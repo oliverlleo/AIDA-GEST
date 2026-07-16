@@ -217,6 +217,12 @@ function app() {
                 unscheduled: true,
                 priority: true
             },
+            customization: {
+                workflow: false,
+                modules: false,
+                ticket_fields: false,
+                overview: false
+            },
             // OS Number Generation
             os_generation: {
                 enabled: false,
@@ -673,6 +679,13 @@ function app() {
         },
         setFieldMode(key, mode) {
             this.trackerConfig = window.AIDAFeatureConfig.setFieldMode(this.trackerConfig, key, mode);
+        },
+        isCustomizationEnabled(key) {
+            return window.AIDAFeatureConfig.isCustomizationEnabled(this.trackerConfig, key);
+        },
+        setCustomizationEnabled(key, enabled) {
+            this.trackerConfig = window.AIDAFeatureConfig.setCustomizationEnabled(this.trackerConfig, key, enabled);
+            this.normalizeFeatureConfig();
         },
         isFieldVisible(key) {
             return window.AIDAConfigHelpers.isFieldVisible(this.trackerConfig, key);
