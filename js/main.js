@@ -185,6 +185,22 @@ function app() {
         checklistTemplates: [],
         checklistTemplatesEntry: [],
         checklistTemplatesFinal: [],
+        catalogManagement: {
+            activeTab: 'models',
+            search: '',
+            modelName: '',
+            editingModelId: null,
+            editingModelName: '',
+            defectName: '',
+            editingDefectId: null,
+            editingDefectName: '',
+            checklistEditorOpen: false,
+            checklistId: null,
+            checklistName: '',
+            checklistType: 'entry',
+            checklistItems: [],
+            checklistItemDraft: ''
+        },
         notifications: [],
 
         // Pagination State
@@ -1965,6 +1981,172 @@ function app() {
                 notify: (msg, type) => this.notify(msg, type),
                 fetchDefectOptions: () => this.fetchDefectOptions()
             });
+        },
+
+        catalogSearchTerm() {
+            return (this.catalogManagement.search || '').trim().toLowerCase();
+        },
+
+        filteredCatalogDeviceModels() {
+            const search = this.catalogSearchTerm();
+            return this.deviceModels.filter(model => !search || model.name.toLowerCase().includes(search));
+        },
+
+        filteredCatalogDefectOptions() {
+            const search = this.catalogSearchTerm();
+            return this.defectOptions.filter(option => !search || option.name.toLowerCase().includes(search));
+        },
+
+        catalogTemplateItems(template) {
+            return Array.isArray(template?.items) ? template.items : [];
+        },
+
+        filteredCatalogChecklistTemplates() {
+            const search = this.catalogSearchTerm();
+            return this.checklistTemplates.filter(template => {
+                const typeLabel = (template.type || 'entry') === 'final' ? 'saída' : 'entrada';
+                const searchable = [
+                    template.name,
+                    typeLabel,
+                    ...this.catalogTemplateItems(template)
+                ].join(' ').toLowerCase();
+                return !search || searchable.includes(search);
+            });
+        },
+
+        filteredCatalogFornecedores() {
+            const search = this.catalogSearchTerm();
+            return this.fornecedores.filter(fornecedor => {
+                const searchable = [
+                    fornecedor.razao_social,
+                    fornecedor.cnpj,
+                    fornecedor.fornece,
+                    fornecedor.whatsapp
+                ].filter(Boolean).join(' ').toLowerCase();
+                return !search || searchable.includes(search);
+            });
+        },
+
+        async createManagedDeviceModel() {
+            const created = await this.createDeviceModel(this.catalogManagement.modelName);
+            if (created) this.catalogManagement.modelName = '';
+        },
+
+        startManagedDeviceModelEdit(model) {
+            this.catalogManagement.editingModelId = model.id;
+            this.catalogManagement.editingModelName = model.name;
+            this.$nextTick(() => document.querySelector('[data-catalog-model-edit]')?.focus());
+        },
+
+        cancelManagedDeviceModelEdit() {
+            this.catalogManagement.editingModelId = null;
+            this.catalogManagement.editingModelName = '';
+        },
+
+        async saveManagedDeviceModel() {
+            const updated = await window.AIDACatalogService.updateDeviceModel(
+                this.catalogManagement.editingModelId,
+                this.catalogManagement.editingModelName,
+                {
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                    notify: (msg, type) => this.notify(msg, type),
+                    fetchDeviceModels: () => this.fetchDeviceModels()
+                }
+            );
+            if (updated) this.cancelManagedDeviceModelEdit();
+        },
+
+        async createManagedDefectOption() {
+            const created = await this.createDefectOption(this.catalogManagement.defectName);
+            if (created) this.catalogManagement.defectName = '';
+        },
+
+        startManagedDefectEdit(option) {
+            this.catalogManagement.editingDefectId = option.id;
+            this.catalogManagement.editingDefectName = option.name;
+            this.$nextTick(() => document.querySelector('[data-catalog-defect-edit]')?.focus());
+        },
+
+        cancelManagedDefectEdit() {
+            this.catalogManagement.editingDefectId = null;
+            this.catalogManagement.editingDefectName = '';
+        },
+
+        async saveManagedDefectOption() {
+            const updated = await window.AIDACatalogService.updateDefectOption(
+                this.catalogManagement.editingDefectId,
+                this.catalogManagement.editingDefectName,
+                {
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                    notify: (msg, type) => this.notify(msg, type),
+                    fetchDefectOptions: () => this.fetchDefectOptions()
+                }
+            );
+            if (updated) this.cancelManagedDefectEdit();
+        },
+
+        openManagedChecklistEditor(template = null) {
+            const isExisting = Boolean(template);
+            this.catalogManagement.checklistEditorOpen = true;
+            this.catalogManagement.checklistId = template?.id || null;
+            this.catalogManagement.checklistName = template?.name || '';
+            this.catalogManagement.checklistType = (template?.type || 'entry') === 'final' ? 'final' : 'entry';
+            this.catalogManagement.checklistItems = isExisting ? [...this.catalogTemplateItems(template)] : [];
+            this.catalogManagement.checklistItemDraft = '';
+            this.$nextTick(() => document.querySelector('[data-catalog-checklist-name]')?.focus());
+        },
+
+        cancelManagedChecklistEditor() {
+            this.catalogManagement.checklistEditorOpen = false;
+            this.catalogManagement.checklistId = null;
+            this.catalogManagement.checklistName = '';
+            this.catalogManagement.checklistType = 'entry';
+            this.catalogManagement.checklistItems = [];
+            this.catalogManagement.checklistItemDraft = '';
+        },
+
+        addManagedChecklistItem() {
+            const item = (this.catalogManagement.checklistItemDraft || '').trim();
+            if (!item) return;
+            if (this.catalogManagement.checklistItems.some(existing => existing.toLowerCase() === item.toLowerCase())) {
+                this.notify("Esse item já está no checklist.", "error");
+                return;
+            }
+            this.catalogManagement.checklistItems.push(item);
+            this.catalogManagement.checklistItemDraft = '';
+        },
+
+        removeManagedChecklistItem(index) {
+            this.catalogManagement.checklistItems.splice(index, 1);
+        },
+
+        async saveManagedChecklist() {
+            const saved = await window.AIDACatalogService.saveManagedChecklist({
+                id: this.catalogManagement.checklistId,
+                name: this.catalogManagement.checklistName,
+                type: this.catalogManagement.checklistType,
+                items: this.catalogManagement.checklistItems
+            }, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
+            if (saved) this.cancelManagedChecklistEditor();
+        },
+
+        async deleteManagedChecklist(template) {
+            const deleted = await window.AIDACatalogService.deleteManagedChecklist(template, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                fetchTemplates: () => this.fetchTemplates()
+            });
+            if (deleted && this.catalogManagement.checklistId === template.id) {
+                this.cancelManagedChecklistEditor();
+            }
         },
 
         openNewTicketModal() {
