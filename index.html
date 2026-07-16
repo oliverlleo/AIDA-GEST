@@ -1594,16 +1594,21 @@
 
                         <!-- Modules -->
                         <div>
-                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-grid-2 mr-2 text-brand-500"></i> Módulos disponíveis</h3>
+                            <h3 class="font-bold text-gray-800 mb-2 flex items-center"><i class="fa-solid fa-table-cells-large mr-2 text-brand-500"></i> Módulos disponíveis</h3>
                             <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <template x-for="module in [
-                                    {key:'agenda', label:'Agenda', description:'Agenda semanal e Gerenciamento de Agenda'},
-                                    {key:'suppliers', label:'Fornecedores', description:'Cadastro e uso de fornecedores'},
-                                    {key:'manager_dashboard', label:'Dashboard Gestor', description:'Indicadores e análises gerenciais'},
-                                    {key:'public_tracker', label:'Acompanhamento Público', description:'Link externo de acompanhamento da OS'}
+                                    {key:'agenda', icon:'fa-calendar-days', label:'Agenda', description:'Agenda semanal e Gerenciamento de Agenda'},
+                                    {key:'suppliers', icon:'fa-store', label:'Fornecedores de peças', description:'Lojas e empresas onde a assistência compra peças e componentes'},
+                                    {key:'manager_dashboard', icon:'fa-chart-line', label:'Dashboard Gestor', description:'Indicadores e análises gerenciais'},
+                                    {key:'public_tracker', icon:'fa-mobile-screen-button', label:'Acompanhamento Público', description:'Link externo para o cliente acompanhar a OS'}
                                 ]" :key="module.key">
                                     <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer">
-                                        <span><b class="text-sm text-gray-800 block" x-text="module.label"></b><small class="text-xs text-gray-500" x-text="module.description"></small></span>
+                                        <span class="flex items-center gap-3 min-w-0">
+                                            <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
+                                                <i class="fa-solid" :class="module.icon"></i>
+                                            </span>
+                                            <span class="min-w-0"><b class="text-sm text-gray-800 block" x-text="module.label"></b><small class="text-xs text-gray-500 leading-snug block" x-text="module.description"></small></span>
+                                        </span>
                                         <input type="checkbox" x-model="trackerConfig.modules[module.key]" class="w-5 h-5 rounded text-brand-500">
                                     </label>
                                 </template>
