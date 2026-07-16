@@ -6,7 +6,7 @@ window.AIDACatalogService = {
     async fetchTemplates(deps) {
         if (!deps.state.user?.workspace_id) return;
         try {
-            const data = await deps.supabaseFetch('checklist_templates?select=*');
+            const data = await deps.supabaseFetch(`checklist_templates?select=*&workspace_id=eq.${deps.state.user.workspace_id}&order=name.asc`);
             if (data) {
                 deps.state.checklistTemplates = data;
                 deps.state.checklistTemplatesEntry = data.filter(t => !t.type || t.type === 'entry');
@@ -186,7 +186,7 @@ window.AIDACatalogService = {
         const { state, supabaseFetch, notify, fetchDeviceModels } = deps;
         if (!confirm("Excluir este modelo da lista?")) return;
         try {
-            await supabaseFetch(`device_models?id=eq.${id}`, 'DELETE');
+            await supabaseFetch(`device_models?id=eq.${encodeURIComponent(id)}&workspace_id=eq.${encodeURIComponent(state.user.workspace_id)}`, 'DELETE');
             notify("Modelo excluído.");
             await fetchDeviceModels();
             if (state.ticketForm.model && !state.deviceModels.find(m => m.name === state.ticketForm.model)) {
@@ -201,13 +201,164 @@ window.AIDACatalogService = {
         const { state, supabaseFetch, notify, fetchDefectOptions } = deps;
         if (!confirm("Excluir este defeito da lista?")) return;
         try {
-            await supabaseFetch(`defect_options?id=eq.${id}`, 'DELETE');
+            await supabaseFetch(`defect_options?id=eq.${encodeURIComponent(id)}&workspace_id=eq.${encodeURIComponent(state.user.workspace_id)}`, 'DELETE');
             notify("Defeito excluído.");
             await fetchDefectOptions();
             const available = new Set(state.defectOptions.map(option => option.name));
             state.ticketForm.defects = (state.ticketForm.defects || []).filter(defect => available.has(defect));
         } catch(e) {
             notify("Erro ao excluir: " + e.message, "error");
+        }
+    },
+
+    async updateDeviceModel(id, name, deps) {
+        const { state, supabaseFetch, notify, fetchDeviceModels } = deps;
+        const trimmed = (name || '').trim();
+        if (!id || !trimmed || !state.user?.workspace_id) {
+            notify("Informe um nome válido para o modelo.", "error");
+            return false;
+        }
+
+        const duplicate = state.deviceModels.some(model =>
+            model.id !== id && model.name.trim().toLowerCase() === trimmed.toLowerCase()
+        );
+        if (duplicate) {
+            notify("Já existe outro modelo com esse nome.", "error");
+            return false;
+        }
+
+        try {
+            const workspaceId = encodeURIComponent(state.user.workspace_id);
+            await supabaseFetch(
+                `device_models?id=eq.${encodeURIComponent(id)}&workspace_id=eq.${workspaceId}`,
+                'PATCH',
+                { name: trimmed }
+            );
+            await fetchDeviceModels();
+            notify("Modelo atualizado!", "success");
+            return true;
+        } catch (error) {
+            notify("Erro ao atualizar modelo: " + error.message, "error");
+            return false;
+        }
+    },
+
+    async updateDefectOption(id, name, deps) {
+        const { state, supabaseFetch, notify, fetchDefectOptions } = deps;
+        const trimmed = (name || '').trim();
+        if (!id || !trimmed || !state.user?.workspace_id) {
+            notify("Informe uma descrição válida para o defeito.", "error");
+            return false;
+        }
+
+        const duplicate = state.defectOptions.some(option =>
+            option.id !== id && option.name.trim().toLowerCase() === trimmed.toLowerCase()
+        );
+        if (duplicate) {
+            notify("Já existe outro defeito com essa descrição.", "error");
+            return false;
+        }
+
+        try {
+            const workspaceId = encodeURIComponent(state.user.workspace_id);
+            await supabaseFetch(
+                `defect_options?id=eq.${encodeURIComponent(id)}&workspace_id=eq.${workspaceId}`,
+                'PATCH',
+                { name: trimmed }
+            );
+            await fetchDefectOptions();
+            notify("Defeito atualizado!", "success");
+            return true;
+        } catch (error) {
+            notify("Erro ao atualizar defeito: " + error.message, "error");
+            return false;
+        }
+    },
+
+    async saveManagedChecklist(checklist, deps) {
+        const { state, supabaseFetch, notify, fetchTemplates } = deps;
+        if (!state.user?.workspace_id) {
+            notify("Empresa do usuário não identificada.", "error");
+            return false;
+        }
+
+        const name = (checklist?.name || '').trim();
+        const type = checklist?.type === 'final' ? 'final' : 'entry';
+        const seenItems = new Set();
+        const items = (Array.isArray(checklist?.items) ? checklist.items : [])
+            .map(item => String(item || '').trim())
+            .filter(item => {
+                const normalized = item.toLowerCase();
+                if (!item || seenItems.has(normalized)) return false;
+                seenItems.add(normalized);
+                return true;
+            });
+
+        if (!name) {
+            notify("Informe o nome do checklist.", "error");
+            return false;
+        }
+        if (!items.length) {
+            notify("Adicione pelo menos um item ao checklist.", "error");
+            return false;
+        }
+
+        const duplicate = state.checklistTemplates.some(template =>
+            template.id !== checklist.id
+            && (template.type || 'entry') === type
+            && template.name.trim().toLowerCase() === name.toLowerCase()
+        );
+        if (duplicate) {
+            notify(`Já existe um checklist de ${type === 'final' ? 'saída' : 'entrada'} com esse nome.`, "error");
+            return false;
+        }
+
+        try {
+            const payload = { name, type, items };
+            if (checklist.id) {
+                const workspaceId = encodeURIComponent(state.user.workspace_id);
+                await supabaseFetch(
+                    `checklist_templates?id=eq.${encodeURIComponent(checklist.id)}&workspace_id=eq.${workspaceId}`,
+                    'PATCH',
+                    payload
+                );
+            } else {
+                await supabaseFetch('checklist_templates', 'POST', {
+                    workspace_id: state.user.workspace_id,
+                    ...payload
+                });
+            }
+
+            await fetchTemplates();
+            notify(checklist.id ? "Checklist atualizado!" : "Checklist cadastrado!", "success");
+            return true;
+        } catch (error) {
+            notify("Erro ao salvar checklist: " + error.message, "error");
+            return false;
+        }
+    },
+
+    async deleteManagedChecklist(template, deps) {
+        const { state, supabaseFetch, notify, fetchTemplates } = deps;
+        if (!template?.id || !state.user?.workspace_id) return false;
+        if (!confirm(`Excluir o checklist "${template.name}"? Os checklists já registrados nas OS não serão alterados.`)) {
+            return false;
+        }
+
+        try {
+            const workspaceId = encodeURIComponent(state.user.workspace_id);
+            await supabaseFetch(
+                `checklist_templates?id=eq.${encodeURIComponent(template.id)}&workspace_id=eq.${workspaceId}`,
+                'DELETE'
+            );
+            if (state.selectedTemplateId === template.id) state.selectedTemplateId = '';
+            if (state.selectedTemplateIdFinal === template.id) state.selectedTemplateIdFinal = '';
+            await fetchTemplates();
+            notify("Checklist excluído.", "success");
+            return true;
+        } catch (error) {
+            notify("Erro ao excluir checklist: " + error.message, "error");
+            return false;
         }
     },
 
