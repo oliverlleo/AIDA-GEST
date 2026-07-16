@@ -1067,63 +1067,334 @@
                 </div>
 
                 <!-- VIEW: CADASTROS -->
-                <div x-show="view === 'cadastros' && (hasRole('admin') || hasRole('atendente'))" class="p-8 h-full flex flex-col overflow-hidden" x-transition.opacity x-cloak>
-                    <header class="mb-6 flex justify-between items-center">
+                <div x-show="view === 'cadastros' && (hasRole('admin') || hasRole('atendente'))" class="p-4 md:p-8 h-full flex flex-col overflow-hidden bg-gray-50/60" x-transition.opacity x-cloak>
+                    <header class="mb-5 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                         <div>
-                            <h2 class="text-2xl font-bold text-gray-800">Cadastros</h2>
-                            <p class="text-sm text-gray-500">Gerencie fornecedores e outros registros.</p>
+                            <div class="flex items-center gap-3">
+                                <div class="w-11 h-11 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-100">
+                                    <i class="fa-solid fa-layer-group text-lg"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-2xl font-bold text-gray-800">Cadastros</h2>
+                                    <p class="text-sm text-gray-500">Gerencie as opções usadas no cadastro e no atendimento das OS.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-500 bg-white border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-shield-halved text-brand-500"></i>
+                            <span>Alterações válidas somente para esta empresa</span>
                         </div>
                     </header>
-                    <div class="flex-grow overflow-y-auto space-y-6 pb-20">
-                        <!-- Fornecedores Section -->
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                            <div class="flex justify-between items-center mb-6">
-                                <div>
-                                    <h3 class="text-lg font-bold text-gray-800">Fornecedores</h3>
-                                    <p class="text-sm text-gray-500">Cadastro de empresas e parceiros que fornecem peças ou serviços.</p>
-                                </div>
-                                <button @click="openFornecedorModal()" class="bg-brand-500 text-white px-4 py-2 rounded-lg hover:bg-brand-600 transition-colors shadow-sm font-medium flex items-center">
-                                    <i class="fa-solid fa-plus mr-2"></i> Novo Fornecedor
-                                </button>
-                            </div>
 
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-sm text-left text-gray-500">
-                                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                                        <tr>
-                                            <th scope="col" class="px-6 py-3">Razão Social / Nome</th>
-                                            <th scope="col" class="px-6 py-3">CNPJ</th>
-                                            <th scope="col" class="px-6 py-3">Fornece</th>
-                                            <th scope="col" class="px-6 py-3">WhatsApp</th>
-                                            <th scope="col" class="px-6 py-3 text-right">Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <template x-for="fornecedor in fornecedores" :key="fornecedor.id">
-                                            <tr class="bg-white border-b hover:bg-gray-50">
-                                                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap" x-text="fornecedor.razao_social"></td>
-                                                <td class="px-6 py-4" x-text="fornecedor.cnpj || '-'"></td>
-                                                <td class="px-6 py-4" x-text="fornecedor.fornece || '-'"></td>
-                                                <td class="px-6 py-4" x-text="fornecedor.whatsapp || '-'"></td>
-                                                <td class="px-6 py-4 text-right space-x-2">
-                                                    <button @click="openFornecedorModal(fornecedor)" class="text-brand-600 hover:text-brand-900" title="Editar">
-                                                        <i class="fa-solid fa-pen-to-square"></i>
-                                                    </button>
-                                                    <button @click="deleteFornecedor(fornecedor.id)" class="text-red-500 hover:text-red-700" title="Excluir">
-                                                        <i class="fa-solid fa-trash"></i>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        </template>
-                                        <tr x-show="fornecedores.length === 0">
-                                            <td colspan="5" class="px-6 py-8 text-center text-gray-500">
-                                                Nenhum fornecedor cadastrado.
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                    <div class="bg-white rounded-2xl border border-gray-200 p-1.5 shadow-sm mb-5 overflow-x-auto">
+                        <div class="flex min-w-max gap-1">
+                            <button @click="catalogManagement.activeTab = 'models'; catalogManagement.search = ''"
+                                :class="catalogManagement.activeTab === 'models' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'"
+                                class="px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-mobile-screen-button"></i>
+                                Modelos de aparelho
+                                <span :class="catalogManagement.activeTab === 'models' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'" class="px-2 py-0.5 rounded-full text-[11px]" x-text="deviceModels.length"></span>
+                            </button>
+                            <button @click="catalogManagement.activeTab = 'defects'; catalogManagement.search = ''"
+                                :class="catalogManagement.activeTab === 'defects' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'"
+                                class="px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-screwdriver-wrench"></i>
+                                Defeitos relatados
+                                <span :class="catalogManagement.activeTab === 'defects' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'" class="px-2 py-0.5 rounded-full text-[11px]" x-text="defectOptions.length"></span>
+                            </button>
+                            <button @click="catalogManagement.activeTab = 'checklists'; catalogManagement.search = ''"
+                                :class="catalogManagement.activeTab === 'checklists' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'"
+                                class="px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-list-check"></i>
+                                Checklists
+                                <span :class="catalogManagement.activeTab === 'checklists' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'" class="px-2 py-0.5 rounded-full text-[11px]" x-text="checklistTemplates.length"></span>
+                            </button>
+                            <button @click="catalogManagement.activeTab = 'suppliers'; catalogManagement.search = ''"
+                                :class="catalogManagement.activeTab === 'suppliers' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'"
+                                class="px-4 py-2.5 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-truck-field"></i>
+                                Fornecedores
+                                <span :class="catalogManagement.activeTab === 'suppliers' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'" class="px-2 py-0.5 rounded-full text-[11px]" x-text="fornecedores.length"></span>
+                            </button>
                         </div>
+                    </div>
+
+                    <div class="flex-grow overflow-y-auto pb-20">
+                        <section x-show="catalogManagement.activeTab === 'models'" x-transition.opacity class="space-y-4">
+                            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
+                                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+                                    <div>
+                                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                            <span class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-mobile-screen"></i></span>
+                                            Modelos de aparelho
+                                        </h3>
+                                        <p class="text-sm text-gray-500 mt-1">Estas opções aparecem no campo Modelo ao criar uma OS.</p>
+                                    </div>
+                                    <div class="relative w-full lg:w-72">
+                                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                        <input x-model.debounce.250ms="catalogManagement.search" type="search" placeholder="Buscar modelo..."
+                                            class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col sm:flex-row gap-2 mb-5">
+                                    <input x-model="catalogManagement.modelName" @keydown.enter.prevent="createManagedDeviceModel()" type="text" placeholder="Ex.: iPhone 15 Pro"
+                                        class="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                    <button @click="createManagedDeviceModel()" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-lg font-semibold text-sm transition shadow-sm whitespace-nowrap">
+                                        <i class="fa-solid fa-plus mr-2"></i>Adicionar modelo
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-2">
+                                    <template x-for="model in filteredCatalogDeviceModels()" :key="model.id">
+                                        <div class="border border-gray-200 rounded-xl px-4 py-3 hover:border-brand-200 hover:shadow-sm transition flex items-center gap-3 min-h-[62px]">
+                                            <div class="w-9 h-9 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                                            <div class="min-w-0 flex-1">
+                                                <template x-if="catalogManagement.editingModelId !== model.id">
+                                                    <p class="font-semibold text-gray-800 truncate" x-text="model.name"></p>
+                                                </template>
+                                                <template x-if="catalogManagement.editingModelId === model.id">
+                                                    <input data-catalog-model-edit x-model="catalogManagement.editingModelName" @keydown.enter.prevent="saveManagedDeviceModel()" @keydown.escape.prevent="cancelManagedDeviceModelEdit()"
+                                                        class="w-full px-3 py-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-100 outline-none">
+                                                </template>
+                                            </div>
+                                            <div x-show="catalogManagement.editingModelId !== model.id" class="flex items-center gap-1">
+                                                <button @click="startManagedDeviceModelEdit(model)" class="w-8 h-8 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition" title="Renomear modelo"><i class="fa-solid fa-pen"></i></button>
+                                                <button @click="deleteDeviceModel(model.id)" class="w-8 h-8 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition" title="Excluir modelo"><i class="fa-solid fa-trash"></i></button>
+                                            </div>
+                                            <div x-show="catalogManagement.editingModelId === model.id" class="flex items-center gap-1">
+                                                <button @click="saveManagedDeviceModel()" class="w-8 h-8 rounded-lg text-emerald-600 hover:bg-emerald-50 transition" title="Salvar"><i class="fa-solid fa-check"></i></button>
+                                                <button @click="cancelManagedDeviceModelEdit()" class="w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 transition" title="Cancelar"><i class="fa-solid fa-xmark"></i></button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div x-show="filteredCatalogDeviceModels().length === 0" class="py-12 text-center">
+                                    <i class="fa-solid fa-mobile-screen-button text-3xl text-gray-200 mb-3"></i>
+                                    <p class="text-sm font-medium text-gray-500" x-text="catalogManagement.search ? 'Nenhum modelo encontrado.' : 'Nenhum modelo cadastrado.'"></p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section x-show="catalogManagement.activeTab === 'defects'" x-transition.opacity class="space-y-4">
+                            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
+                                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+                                    <div>
+                                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                            <span class="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+                                            Defeitos relatados
+                                        </h3>
+                                        <p class="text-sm text-gray-500 mt-1">Padronize os defeitos que podem ser selecionados na abertura da OS.</p>
+                                    </div>
+                                    <div class="relative w-full lg:w-72">
+                                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                        <input x-model.debounce.250ms="catalogManagement.search" type="search" placeholder="Buscar defeito..."
+                                            class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col sm:flex-row gap-2 mb-5">
+                                    <input x-model="catalogManagement.defectName" @keydown.enter.prevent="createManagedDefectOption()" type="text" placeholder="Ex.: Não liga"
+                                        class="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                    <button @click="createManagedDefectOption()" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-lg font-semibold text-sm transition shadow-sm whitespace-nowrap">
+                                        <i class="fa-solid fa-plus mr-2"></i>Adicionar defeito
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-2">
+                                    <template x-for="option in filteredCatalogDefectOptions()" :key="option.id">
+                                        <div class="border border-gray-200 rounded-xl px-4 py-3 hover:border-brand-200 hover:shadow-sm transition flex items-center gap-3 min-h-[62px]">
+                                            <div class="w-9 h-9 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-toolbox"></i></div>
+                                            <div class="min-w-0 flex-1">
+                                                <template x-if="catalogManagement.editingDefectId !== option.id">
+                                                    <p class="font-semibold text-gray-800 truncate" x-text="option.name"></p>
+                                                </template>
+                                                <template x-if="catalogManagement.editingDefectId === option.id">
+                                                    <input data-catalog-defect-edit x-model="catalogManagement.editingDefectName" @keydown.enter.prevent="saveManagedDefectOption()" @keydown.escape.prevent="cancelManagedDefectEdit()"
+                                                        class="w-full px-3 py-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-100 outline-none">
+                                                </template>
+                                            </div>
+                                            <div x-show="catalogManagement.editingDefectId !== option.id" class="flex items-center gap-1">
+                                                <button @click="startManagedDefectEdit(option)" class="w-8 h-8 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition" title="Renomear defeito"><i class="fa-solid fa-pen"></i></button>
+                                                <button @click="deleteDefectOption(option.id)" class="w-8 h-8 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition" title="Excluir defeito"><i class="fa-solid fa-trash"></i></button>
+                                            </div>
+                                            <div x-show="catalogManagement.editingDefectId === option.id" class="flex items-center gap-1">
+                                                <button @click="saveManagedDefectOption()" class="w-8 h-8 rounded-lg text-emerald-600 hover:bg-emerald-50 transition" title="Salvar"><i class="fa-solid fa-check"></i></button>
+                                                <button @click="cancelManagedDefectEdit()" class="w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 transition" title="Cancelar"><i class="fa-solid fa-xmark"></i></button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div x-show="filteredCatalogDefectOptions().length === 0" class="py-12 text-center">
+                                    <i class="fa-solid fa-screwdriver-wrench text-3xl text-gray-200 mb-3"></i>
+                                    <p class="text-sm font-medium text-gray-500" x-text="catalogManagement.search ? 'Nenhum defeito encontrado.' : 'Nenhum defeito cadastrado.'"></p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section x-show="catalogManagement.activeTab === 'checklists'" x-transition.opacity class="space-y-4">
+                            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
+                                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+                                    <div>
+                                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                            <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-list-check"></i></span>
+                                            Modelos de checklist
+                                        </h3>
+                                        <p class="text-sm text-gray-500 mt-1">Entrada registra o recebimento; Saída orienta a conferência antes da entrega.</p>
+                                    </div>
+                                    <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                                        <div class="relative w-full lg:w-64">
+                                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                            <input x-model.debounce.250ms="catalogManagement.search" type="search" placeholder="Buscar checklist..."
+                                                class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                        </div>
+                                        <button @click="openManagedChecklistEditor()" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition shadow-sm whitespace-nowrap">
+                                            <i class="fa-solid fa-plus mr-2"></i>Novo checklist
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div x-show="catalogManagement.checklistEditorOpen" x-transition class="mb-5 rounded-2xl border border-brand-200 bg-brand-50/40 p-4 md:p-5">
+                                    <div class="flex items-center justify-between gap-3 mb-4">
+                                        <div>
+                                            <h4 class="font-bold text-gray-800" x-text="catalogManagement.checklistId ? 'Editar checklist' : 'Novo checklist'"></h4>
+                                            <p class="text-xs text-gray-500 mt-0.5">Os itens serão apresentados na mesma ordem abaixo.</p>
+                                        </div>
+                                        <button @click="cancelManagedChecklistEditor()" class="w-9 h-9 rounded-lg text-gray-500 hover:bg-white transition" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+                                    </div>
+                                    <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 mb-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Nome do modelo</label>
+                                            <input data-catalog-checklist-name x-model="catalogManagement.checklistName" type="text" placeholder="Ex.: Conferência de smartphone"
+                                                class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none bg-white">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Momento</label>
+                                            <div class="bg-white border border-gray-200 rounded-xl p-1 flex">
+                                                <button @click="catalogManagement.checklistType = 'entry'" :class="catalogManagement.checklistType === 'entry' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'" class="px-4 py-2 rounded-lg text-sm font-semibold transition">
+                                                    <i class="fa-solid fa-arrow-right-to-bracket mr-1.5"></i>Entrada
+                                                </button>
+                                                <button @click="catalogManagement.checklistType = 'final'" :class="catalogManagement.checklistType === 'final' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'" class="px-4 py-2 rounded-lg text-sm font-semibold transition">
+                                                    <i class="fa-solid fa-arrow-right-from-bracket mr-1.5"></i>Saída
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white rounded-xl border border-gray-200 p-3">
+                                        <label class="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Itens do checklist</label>
+                                        <div class="flex flex-col sm:flex-row gap-2">
+                                            <input x-model="catalogManagement.checklistItemDraft" @keydown.enter.prevent="addManagedChecklistItem()" type="text" placeholder="Digite um item e pressione Enter"
+                                                class="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                            <button @click="addManagedChecklistItem()" class="px-4 py-2.5 border border-brand-200 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg font-semibold text-sm transition whitespace-nowrap">
+                                                <i class="fa-solid fa-plus mr-1.5"></i>Adicionar item
+                                            </button>
+                                        </div>
+                                        <div class="mt-3 space-y-2" x-show="catalogManagement.checklistItems.length > 0">
+                                            <template x-for="(item, itemIndex) in catalogManagement.checklistItems" :key="itemIndex">
+                                                <div class="flex items-center gap-3 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5">
+                                                    <span class="w-6 h-6 rounded-md bg-white border border-gray-200 text-[11px] font-bold text-gray-500 flex items-center justify-center flex-shrink-0" x-text="itemIndex + 1"></span>
+                                                    <span class="text-sm text-gray-700 flex-1" x-text="item"></span>
+                                                    <button @click="removeManagedChecklistItem(itemIndex)" class="w-7 h-7 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition" title="Remover item"><i class="fa-solid fa-xmark"></i></button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <p x-show="catalogManagement.checklistItems.length === 0" class="text-sm text-gray-400 text-center py-5">Adicione pelo menos um item.</p>
+                                    </div>
+                                    <div class="mt-4 flex justify-end gap-2">
+                                        <button @click="cancelManagedChecklistEditor()" class="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-white font-semibold text-sm transition">Cancelar</button>
+                                        <button @click="saveManagedChecklist()" class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm shadow-sm transition">
+                                            <i class="fa-solid fa-floppy-disk mr-2"></i>Salvar checklist
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                                    <template x-for="template in filteredCatalogChecklistTemplates()" :key="template.id">
+                                        <article class="border border-gray-200 rounded-2xl p-4 hover:border-brand-200 hover:shadow-sm transition">
+                                            <div class="flex items-start gap-3">
+                                                <div :class="(template.type || 'entry') === 'final' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'" class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0">
+                                                    <i :class="(template.type || 'entry') === 'final' ? 'fa-arrow-right-from-bracket' : 'fa-arrow-right-to-bracket'" class="fa-solid"></i>
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <h4 class="font-bold text-gray-800 truncate" x-text="template.name"></h4>
+                                                        <span :class="(template.type || 'entry') === 'final' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'" class="px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide" x-text="(template.type || 'entry') === 'final' ? 'Saída' : 'Entrada'"></span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-400 mt-1" x-text="catalogTemplateItems(template).length + (catalogTemplateItems(template).length === 1 ? ' item' : ' itens')"></p>
+                                                </div>
+                                                <div class="flex items-center gap-1">
+                                                    <button @click="openManagedChecklistEditor(template)" class="w-8 h-8 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition" title="Editar checklist"><i class="fa-solid fa-pen"></i></button>
+                                                    <button @click="deleteManagedChecklist(template)" class="w-8 h-8 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition" title="Excluir checklist"><i class="fa-solid fa-trash"></i></button>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+                                                <template x-for="(item, itemIndex) in catalogTemplateItems(template).slice(0, 3)" :key="template.id + '-' + itemIndex">
+                                                    <div class="flex items-start gap-2 text-xs text-gray-600">
+                                                        <i class="fa-regular fa-square-check text-gray-300 mt-0.5"></i>
+                                                        <span class="line-clamp-1" x-text="item"></span>
+                                                    </div>
+                                                </template>
+                                                <p x-show="catalogTemplateItems(template).length > 3" class="text-xs text-brand-600 font-semibold pt-1" x-text="'+ ' + (catalogTemplateItems(template).length - 3) + ' itens'"></p>
+                                            </div>
+                                        </article>
+                                    </template>
+                                </div>
+                                <div x-show="filteredCatalogChecklistTemplates().length === 0" class="py-12 text-center">
+                                    <i class="fa-solid fa-list-check text-3xl text-gray-200 mb-3"></i>
+                                    <p class="text-sm font-medium text-gray-500" x-text="catalogManagement.search ? 'Nenhum checklist encontrado.' : 'Nenhum checklist cadastrado.'"></p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section x-show="catalogManagement.activeTab === 'suppliers'" x-transition.opacity>
+                            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6">
+                                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+                                    <div>
+                                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                            <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><i class="fa-solid fa-truck-field"></i></span>
+                                            Fornecedores
+                                        </h3>
+                                        <p class="text-sm text-gray-500 mt-1">Empresas e parceiros que fornecem peças ou serviços.</p>
+                                    </div>
+                                    <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                                        <div class="relative w-full lg:w-64">
+                                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                            <input x-model.debounce.250ms="catalogManagement.search" type="search" placeholder="Buscar fornecedor..."
+                                                class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                        </div>
+                                        <button @click="openFornecedorModal()" class="bg-brand-500 text-white px-4 py-2.5 rounded-xl hover:bg-brand-600 transition shadow-sm font-semibold text-sm whitespace-nowrap">
+                                            <i class="fa-solid fa-plus mr-2"></i>Novo fornecedor
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto border border-gray-100 rounded-xl">
+                                    <table class="w-full text-sm text-left text-gray-500">
+                                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                            <tr>
+                                                <th scope="col" class="px-6 py-3">Razão Social / Nome</th>
+                                                <th scope="col" class="px-6 py-3">CNPJ</th>
+                                                <th scope="col" class="px-6 py-3">Fornece</th>
+                                                <th scope="col" class="px-6 py-3">WhatsApp</th>
+                                                <th scope="col" class="px-6 py-3 text-right">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="fornecedor in filteredCatalogFornecedores()" :key="fornecedor.id">
+                                                <tr class="bg-white border-b last:border-b-0 hover:bg-gray-50">
+                                                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap" x-text="fornecedor.razao_social"></td>
+                                                    <td class="px-6 py-4" x-text="fornecedor.cnpj || '-'"></td>
+                                                    <td class="px-6 py-4" x-text="fornecedor.fornece || '-'"></td>
+                                                    <td class="px-6 py-4" x-text="fornecedor.whatsapp || '-'"></td>
+                                                    <td class="px-6 py-4 text-right space-x-2">
+                                                        <button @click="openFornecedorModal(fornecedor)" class="text-brand-600 hover:text-brand-900" title="Editar"><i class="fa-solid fa-pen-to-square"></i></button>
+                                                        <button @click="deleteFornecedor(fornecedor.id)" class="text-red-500 hover:text-red-700" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <tr x-show="filteredCatalogFornecedores().length === 0">
+                                                <td colspan="5" class="px-6 py-10 text-center text-gray-500" x-text="catalogManagement.search ? 'Nenhum fornecedor encontrado.' : 'Nenhum fornecedor cadastrado.'"></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </section>
                     </div>
                 </div>
 
