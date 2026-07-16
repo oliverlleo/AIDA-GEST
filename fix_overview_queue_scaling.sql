@@ -357,7 +357,7 @@ CREATE OR REPLACE FUNCTION public.get_overview_queue_page(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public, pg_catalog
 AS $function$
 DECLARE
