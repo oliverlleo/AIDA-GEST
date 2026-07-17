@@ -19,16 +19,51 @@ window.AIDAAuthSessionService = {
 
     async registerAdmin(deps) {
         const { state, supabaseClient, notify, setLoading } = deps;
+        const adminName = String(state.registerForm.adminName || '').trim();
+        if (adminName.length < 2) return notify('Informe seu nome para identificação no histórico.', 'error');
         setLoading(true);
         try {
             const { data: authData, error: authError } = await supabaseClient.auth.signUp({
                 email: state.registerForm.email,
                 password: state.registerForm.password,
+                options: {
+                    data: { full_name: adminName }
+                }
             });
             if (authError) return notify(authError.message, 'error');
             if (authData.user && !authData.session) return notify('Verifique seu e-mail.', 'success');
         } finally {
             setLoading(false);
+        }
+    },
+
+    async saveAdminDisplayName(deps) {
+        const { state, supabaseClient, supabaseFetch, notify } = deps;
+        const displayName = String(state.adminDisplayName || '').trim();
+        if (!state.session) return notify('Esta identificação é exclusiva da conta administradora.', 'error');
+        if (displayName.length < 2 || displayName.length > 80) {
+            return notify('Informe um nome entre 2 e 80 caracteres.', 'error');
+        }
+
+        state.savingAdminDisplayName = true;
+        try {
+            await supabaseFetch('rpc/set_current_user_display_name', 'POST', {
+                p_display_name: displayName
+            });
+            const { data: refreshed, error: refreshError } = await supabaseClient.auth.refreshSession();
+            if (!refreshError && refreshed?.session) state.session = refreshed.session;
+            state.user.name = displayName;
+            state.adminDisplayName = displayName;
+            await state.fetchGlobalLogs();
+            if (state.selectedTicket?.id) {
+                state.ticketLogs = await state.fetchTicketLogs(state.selectedTicket.id);
+            }
+            notify('Nome do histórico atualizado.', 'success');
+        } catch (err) {
+            console.error('Display name update failed:', err);
+            notify('Não foi possível atualizar o nome do histórico.', 'error');
+        } finally {
+            state.savingAdminDisplayName = false;
         }
     },
 
@@ -227,7 +262,9 @@ window.AIDAAuthSessionService = {
             }
 
             if (profile) {
-                state.user = { id: user.id, email: user.email, name: 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
+                const displayName = String(user.user_metadata?.full_name || user.user_metadata?.name || '').trim();
+                state.user = { id: user.id, email: user.email, name: displayName || 'Administrador', roles: ['admin'], workspace_id: profile.workspace_id };
+                state.adminDisplayName = displayName;
                 state.workspaceName = profile.workspaces?.name;
                 state.companyCode = profile.workspaces?.company_code;
                 state.whatsappNumber = profile.workspaces?.whatsapp_number || '';

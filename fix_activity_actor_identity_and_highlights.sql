@@ -39,8 +39,7 @@ BEGIN
         IF v_ws_id IS NOT NULL THEN
             SELECT COALESCE(
                 NULLIF(btrim(raw_user_meta_data ->> 'full_name'), ''),
-                NULLIF(btrim(raw_user_meta_data ->> 'name'), ''),
-                NULLIF(btrim(email), '')
+                NULLIF(btrim(raw_user_meta_data ->> 'name'), '')
             )
             INTO v_name
             FROM auth.users
@@ -61,8 +60,7 @@ BEGIN
         IF v_prof_ws IS NOT NULL THEN
             SELECT COALESCE(
                 NULLIF(btrim(raw_user_meta_data ->> 'full_name'), ''),
-                NULLIF(btrim(raw_user_meta_data ->> 'name'), ''),
-                NULLIF(btrim(email), '')
+                NULLIF(btrim(raw_user_meta_data ->> 'name'), '')
             )
             INTO v_name
             FROM auth.users

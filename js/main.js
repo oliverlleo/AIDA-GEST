@@ -406,7 +406,9 @@ function app() {
         // Forms
         loginForm: { company_code: '', username: '', password: '' },
         adminForm: { email: '', password: '' },
-        registerForm: { companyName: '', email: '', password: '' },
+        registerForm: { companyName: '', adminName: '', email: '', password: '' },
+        adminDisplayName: '',
+        savingAdminDisplayName: false,
         employeeForm: { name: '', username: '', password: '', roles: [] },
 
         // Password Forms
@@ -1447,6 +1449,10 @@ function app() {
             return await window.AIDAAuthSessionService.registerAdmin(this._getAuthDeps());
         },
 
+        async saveAdminDisplayName() {
+            return await window.AIDAAuthSessionService.saveAdminDisplayName(this._getAuthDeps());
+        },
+
         async completeCompanySetup() {
             return await window.AIDAAuthSessionService.completeCompanySetup(this._getAuthDeps());
         },
@@ -1597,6 +1603,7 @@ function app() {
         getLogActorName(log) {
             const actorName = String(log?.user_name || '').trim();
             if (!actorName) return 'Sistema';
+            if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(actorName)) return 'Administrador';
             if (actorName === 'Owner' || actorName === 'Admin') return 'Administrador';
             return actorName;
         },
