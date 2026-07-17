@@ -480,7 +480,7 @@ function app() {
         calendarView: 'week',
         currentCalendarDate: new Date(),
         showTodayOnly: false,
-        benchCalendarMode: 'deadline', // 'deadline' or 'appointment' (shared by weekly and expanded views)
+        benchCalendarMode: 'appointment', // 'appointment' is the default; 'deadline' remains selectable
 
         // Kanban State
         kanbanScrollWidth: 0,
@@ -667,6 +667,7 @@ function app() {
             if (!this.isModuleEnabled('agenda')) {
                 this.modals.calendar = false;
                 this.schedulePanelOpen = false;
+                if (this.isFieldVisible('deadline')) this.benchCalendarMode = 'deadline';
             } else if (!this.isFieldVisible('deadline') && (this.isAppointmentTypeEnabled('analysis') || this.isAppointmentTypeEnabled('repair'))) {
                 this.benchCalendarMode = 'appointment';
             } else if (this.benchCalendarMode === 'appointment' && !this.isAppointmentTypeEnabled('analysis') && !this.isAppointmentTypeEnabled('repair')) {
