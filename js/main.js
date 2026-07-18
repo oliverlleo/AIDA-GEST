@@ -743,12 +743,12 @@ function app() {
         },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
-        async supabaseFetch(endpoint, method = 'GET', body = null) {
+        async supabaseFetch(endpoint, method = 'GET', body = null, requestOptions = {}) {
             return await window.AIDAApiClient.supabaseFetch(endpoint, method, body, {
                 SUPABASE_URL,
                 SUPABASE_KEY,
                 state: this
-            });
+            }, requestOptions);
         },
 
         // --- STORAGE HELPER ---

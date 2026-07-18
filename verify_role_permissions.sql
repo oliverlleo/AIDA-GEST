@@ -31,7 +31,8 @@ BEGIN
       ('30000000-0000-4000-8000-000000000001', v_workspace, 'Teste Tecnico Etapa 2', '__aida_test_tech__', 'test-only', ARRAY['tecnico']),
       ('30000000-0000-4000-8000-000000000002', v_workspace, 'Teste Atendente Etapa 2', '__aida_test_attendant__', 'test-only', ARRAY['atendente']),
       ('30000000-0000-4000-8000-000000000003', v_workspace, 'Teste Admin Etapa 2', '__aida_test_admin__', 'test-only', ARRAY['admin']),
-      ('30000000-0000-4000-8000-000000000004', v_workspace, 'Teste Qualidade Etapa 2', '__aida_test_tester__', 'test-only', ARRAY['tester']);
+      ('30000000-0000-4000-8000-000000000004', v_workspace, 'Teste Qualidade Etapa 2', '__aida_test_tester__', 'test-only', ARRAY['tester']),
+      ('30000000-0000-4000-8000-000000000005', v_other_workspace, 'Teste Outra Empresa Etapa 2', '__aida_test_cross_workspace__', 'test-only', ARRAY['tecnico']);
 
     INSERT INTO public.employee_sessions (employee_id, expires_at, token)
     VALUES
@@ -238,6 +239,18 @@ DO $attendant$
 DECLARE
     v_rows integer;
 BEGIN
+    IF (SELECT count(id) FROM public.employees WHERE id IN (
+        '30000000-0000-4000-8000-000000000001',
+        '30000000-0000-4000-8000-000000000002',
+        '30000000-0000-4000-8000-000000000003',
+        '30000000-0000-4000-8000-000000000004'
+    )) <> 4 THEN
+        RAISE EXCEPTION 'Atendente nao visualizou o diretorio seguro da propria empresa.';
+    END IF;
+    IF EXISTS (SELECT id FROM public.employees WHERE id = '30000000-0000-4000-8000-000000000005') THEN
+        RAISE EXCEPTION 'Atendente visualizou funcionario de outra empresa.';
+    END IF;
+
     IF (SELECT count(*) FROM public.tickets WHERE id IN (
         '20000000-0000-4000-8000-000000000001',
         '20000000-0000-4000-8000-000000000002',

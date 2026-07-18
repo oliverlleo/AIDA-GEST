@@ -3,7 +3,7 @@
 // Parte da infraestrutura de módulos
 
 window.AIDAApiClient = {
-    async supabaseFetch(endpoint, method = 'GET', body = null, deps) {
+    async supabaseFetch(endpoint, method = 'GET', body = null, deps, requestOptions = {}) {
         const { SUPABASE_URL, SUPABASE_KEY, state } = deps;
 
         const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
@@ -17,7 +17,9 @@ window.AIDAApiClient = {
             'apikey': SUPABASE_KEY,
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'Prefer': method === 'GET' ? undefined : 'return=representation'
+            'Prefer': method === 'GET'
+                ? undefined
+                : (requestOptions.returnRepresentation === false ? 'return=minimal' : 'return=representation')
         };
 
         // Employee Token Header
@@ -46,7 +48,7 @@ window.AIDAApiClient = {
             throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
         }
 
-        if (response.status === 204) return null;
+        if (response.status === 204 || requestOptions.returnRepresentation === false) return null;
 
         return await response.json();
     }
