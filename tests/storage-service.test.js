@@ -13,6 +13,41 @@ const deps = {
     }
 };
 
+test('usa a imagem local enquanto a nova OS ainda nao existe', async (t) => {
+    const originalFetch = global.fetch;
+    const originalCreateObjectURL = global.URL.createObjectURL;
+    const originalRevokeObjectURL = global.URL.revokeObjectURL;
+    let fetchCalls = 0;
+    let revokedUrl = null;
+
+    t.after(() => {
+        global.AIDAStorageService.clearLocalPhotoPreviews();
+        global.fetch = originalFetch;
+        global.URL.createObjectURL = originalCreateObjectURL;
+        global.URL.revokeObjectURL = originalRevokeObjectURL;
+    });
+
+    global.URL.createObjectURL = () => 'blob:local-preview';
+    global.URL.revokeObjectURL = (url) => { revokedUrl = url; };
+    global.fetch = async () => {
+        fetchCalls += 1;
+        return { ok: true, status: 200 };
+    };
+
+    const path = await global.AIDAStorageService.uploadTicketPhoto(
+        { name: 'foto.png', type: 'image/png' },
+        'ticket-reservado',
+        deps
+    );
+    const previewUrl = await global.AIDAStorageService.getPhotoUrl(path, deps);
+
+    assert.equal(fetchCalls, 1);
+    assert.equal(previewUrl, 'blob:local-preview');
+
+    global.AIDAStorageService.forgetLocalPhotoPreview(path);
+    assert.equal(revokedUrl, 'blob:local-preview');
+});
+
 test('repete a assinatura quando o objeto ainda responde 404', async (t) => {
     let calls = 0;
     const originalFetch = global.fetch;

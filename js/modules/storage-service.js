@@ -3,6 +3,27 @@
 // Parte da infraestrutura de módulos
 
 window.AIDAStorageService = {
+    localPhotoPreviews: new Map(),
+
+    rememberLocalPhotoPreview(path, file) {
+        if (!path || !file || typeof URL?.createObjectURL !== 'function') return;
+        this.forgetLocalPhotoPreview(path);
+        this.localPhotoPreviews.set(path, URL.createObjectURL(file));
+    },
+
+    forgetLocalPhotoPreview(path) {
+        const previewUrl = this.localPhotoPreviews.get(path);
+        if (!previewUrl) return;
+        if (typeof URL?.revokeObjectURL === 'function') URL.revokeObjectURL(previewUrl);
+        this.localPhotoPreviews.delete(path);
+    },
+
+    clearLocalPhotoPreviews() {
+        for (const path of Array.from(this.localPhotoPreviews.keys())) {
+            this.forgetLocalPhotoPreview(path);
+        }
+    },
+
     getStorageHeaders(contentType, deps) {
         const { SUPABASE_KEY, state } = deps;
         const token = state.session?.access_token || SUPABASE_KEY;
@@ -81,6 +102,11 @@ window.AIDAStorageService = {
                 throw new Error(`Falha no upload (${res.status}): ${txt}`);
             }
 
+            // A nova OS ainda nao existe no banco neste momento. Guardar uma
+            // miniatura local evita assinar um objeto que a RLS so liberara
+            // depois da criacao, sem tornar o bucket publico.
+            this.rememberLocalPhotoPreview(path, file);
+
             // 3) Retornar APENAS o path (nunca URL pública)
             return path;
 
@@ -116,6 +142,11 @@ window.AIDAStorageService = {
 
         // Se ainda for http e não for storage, retorna (ex: imagem externa)
         if (path.startsWith('http')) return path;
+
+        // Enquanto o cadastro ainda nao criou a OS, use o proprio arquivo
+        // selecionado no navegador para a miniatura.
+        const localPreview = this.localPhotoPreviews.get(path);
+        if (localPreview) return localPreview;
 
         try {
             // Encode path components

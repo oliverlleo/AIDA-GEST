@@ -150,6 +150,7 @@ window.AIDATicketActions = {
                 }
             }
 
+            window.AIDAStorageService?.clearLocalPhotoPreviews();
             deps.notify("Chamado criado!");
             deps.closeModal('ticket');
             await deps.fetchTickets(true); // forceListRefetch flag to true
