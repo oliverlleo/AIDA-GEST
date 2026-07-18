@@ -1589,7 +1589,7 @@ function app() {
         async logTicketAction(ticketId, action, details = null) {
             return await window.AIDALogsNotificationsService.logTicketAction(ticketId, action, details, {
                 state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                supabaseFetch: (ep, method, payload, requestOptions) => this.supabaseFetch(ep, method, payload, requestOptions),
                 fetchGlobalLogs: () => this.fetchGlobalLogs()
             });
         },

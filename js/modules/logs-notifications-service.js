@@ -8,9 +8,8 @@ window.AIDALogsNotificationsService = {
         try {
             await supabaseFetch('ticket_logs', 'POST', {
                 ticket_id: ticketId,
-                action: action,
-                details: details,
-                user_name: state.user.name
+                action,
+                details
             }, { returnRepresentation: false });
             if (state.view === 'dashboard') fetchGlobalLogs();
         } catch (e) {
