@@ -93,6 +93,38 @@ DROP POLICY IF EXISTS aida_ticket_photos_auth_insert_by_role ON storage.objects;
 DROP POLICY IF EXISTS aida_ticket_photos_auth_update_by_role ON storage.objects;
 DROP POLICY IF EXISTS aida_ticket_photos_auth_delete_by_role ON storage.objects;
 
+DROP POLICY IF EXISTS fp_logos_anon_insert ON storage.objects;
+DROP POLICY IF EXISTS fp_logos_anon_update ON storage.objects;
+DROP POLICY IF EXISTS fp_logos_anon_delete ON storage.objects;
+DROP POLICY IF EXISTS fp_logos_auth_insert ON storage.objects;
+DROP POLICY IF EXISTS fp_logos_auth_update ON storage.objects;
+DROP POLICY IF EXISTS fp_logos_auth_delete ON storage.objects;
+
+CREATE POLICY fp_logos_anon_insert ON storage.objects
+FOR INSERT TO anon
+WITH CHECK (bucket_id = 'workspace_logos' AND public.can_manage_logo(name));
+
+CREATE POLICY fp_logos_anon_update ON storage.objects
+FOR UPDATE TO anon
+USING (bucket_id = 'workspace_logos' AND public.can_manage_logo(name))
+WITH CHECK (bucket_id = 'workspace_logos' AND public.can_manage_logo(name));
+
+CREATE POLICY fp_logos_anon_delete ON storage.objects
+FOR DELETE TO anon
+USING (bucket_id = 'workspace_logos' AND public.can_manage_logo(name));
+
+CREATE POLICY fp_logos_auth_insert ON storage.objects
+FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'workspace_logos' AND public.can_manage_logo(name));
+
+CREATE POLICY fp_logos_auth_update ON storage.objects
+FOR UPDATE TO authenticated
+USING (bucket_id = 'workspace_logos' AND public.can_manage_logo(name));
+
+CREATE POLICY fp_logos_auth_delete ON storage.objects
+FOR DELETE TO authenticated
+USING (bucket_id = 'workspace_logos' AND public.can_manage_logo(name));
+
 CREATE POLICY fp_ticket_photos_anon_select ON storage.objects
 FOR SELECT TO anon
 USING (
