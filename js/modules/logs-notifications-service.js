@@ -11,7 +11,7 @@ window.AIDALogsNotificationsService = {
                 action: action,
                 details: details,
                 user_name: state.user.name
-            });
+            }, { returnRepresentation: false });
             if (state.view === 'dashboard') fetchGlobalLogs();
         } catch (e) {
             console.error("Log failed:", e);

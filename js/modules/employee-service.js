@@ -9,12 +9,11 @@ window.AIDAEmployeeService = {
         const { state, supabaseFetch } = deps;
         if (!state.user?.workspace_id) return;
         try {
-            let data;
-            if (state.session) {
-                 data = await supabaseFetch(`employees?select=${this.SAFE_EMPLOYEE_FIELDS}&workspace_id=eq.${state.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
-            } else {
-                 data = await supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: state.user.workspace_id });
-            }
+            // A leitura direta usa somente as colunas liberadas pela etapa 1;
+            // o password_hash continua sem SELECT e a RLS limita a empresa.
+            // Assim atendentes tambem recebem a lista necessaria para atribuir
+            // o tecnico e criar agendamentos de analise ou reparo.
+            const data = await supabaseFetch(`employees?select=${this.SAFE_EMPLOYEE_FIELDS}&workspace_id=eq.${state.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
             if (data) state.employees = data;
         } catch (e) {
              console.error("Fetch Employees Error:", e);

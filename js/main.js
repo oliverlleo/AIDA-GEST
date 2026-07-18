@@ -743,12 +743,12 @@ function app() {
         },
 
         // --- HELPER: NATIVE FETCH (Stateless) ---
-        async supabaseFetch(endpoint, method = 'GET', body = null) {
+        async supabaseFetch(endpoint, method = 'GET', body = null, requestOptions = {}) {
             return await window.AIDAApiClient.supabaseFetch(endpoint, method, body, {
                 SUPABASE_URL,
                 SUPABASE_KEY,
                 state: this
-            });
+            }, requestOptions);
         },
 
         // --- STORAGE HELPER ---
@@ -3519,9 +3519,11 @@ function app() {
 
         removePhoto(index, targetList = 'new') {
              if (targetList === 'new') {
+                 window.AIDAStorageService.forgetLocalPhotoPreview(this.ticketForm.photos[index]);
                  this.ticketForm.photos.splice(index, 1);
              } else {
                  if (this.selectedTicket && this.selectedTicket.photos_urls) {
+                     window.AIDAStorageService.forgetLocalPhotoPreview(this.selectedTicket.photos_urls[index]);
                      this.selectedTicket.photos_urls.splice(index, 1);
                  }
              }
