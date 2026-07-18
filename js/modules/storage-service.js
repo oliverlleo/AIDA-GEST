@@ -123,15 +123,32 @@ window.AIDAStorageService = {
             const signEndpoint = `${SUPABASE_URL}/storage/v1/object/sign/ticket_photos/${encodedPath}`;
 
             const headers = this.getStorageHeaders('application/json', deps);
-            const res = await fetch(signEndpoint, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ expiresIn: 600 })
-            });
+            const retryDelays = [0, 200, 500, 1000];
+            let res;
 
-            if (!res.ok) {
-                const txt = await res.text().catch(() => '');
-                console.warn('[SIGN FAIL]', res.status, txt, { input, path });
+            // Logo depois do upload, o Storage pode responder 404 por alguns
+            // milissegundos enquanto o objeto termina de ficar disponivel para
+            // a assinatura. Repetir somente esse caso evita uma miniatura
+            // quebrada sem esconder erros reais de autenticacao ou permissao.
+            for (let attempt = 0; attempt < retryDelays.length; attempt++) {
+                if (retryDelays[attempt] > 0) {
+                    await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+                }
+
+                res = await fetch(signEndpoint, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ expiresIn: 600 })
+                });
+
+                if (res.ok || res.status !== 404 || attempt === retryDelays.length - 1) {
+                    break;
+                }
+            }
+
+            if (!res?.ok) {
+                const txt = await res?.text().catch(() => '') || '';
+                console.warn('[SIGN FAIL]', res?.status, txt, { input, path });
                 return '';
             }
 
