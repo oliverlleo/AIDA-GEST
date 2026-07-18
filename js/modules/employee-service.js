@@ -3,13 +3,15 @@
 // Parte da infraestrutura de módulos
 
 window.AIDAEmployeeService = {
+    SAFE_EMPLOYEE_FIELDS: 'id,workspace_id,name,username,roles,created_at,deleted_at,must_change_password',
+
     async fetchEmployees(deps) {
         const { state, supabaseFetch } = deps;
         if (!state.user?.workspace_id) return;
         try {
             let data;
             if (state.session) {
-                 data = await supabaseFetch(`employees?select=*&workspace_id=eq.${state.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
+                 data = await supabaseFetch(`employees?select=${this.SAFE_EMPLOYEE_FIELDS}&workspace_id=eq.${state.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
             } else {
                  data = await supabaseFetch('rpc/get_employees_for_workspace', 'POST', { p_workspace_id: state.user.workspace_id });
             }
