@@ -388,6 +388,9 @@ function app() {
         globalLogsInFlight: false,
         notificationsInFlight: false,
         opsInFlight: false,
+        employeeSessionValidationInFlight: false,
+        employeeSessionLastValidatedAt: 0,
+        employeeSessionMonitorId: null,
 
         // --- VIEW LOAD STATE ---
         viewsLoaded: {
@@ -913,12 +916,20 @@ function app() {
             console.log("App initializing...");
             this.loading = true;
 
+            const sessionNotice = sessionStorage.getItem('techassist_session_notice');
+            if (sessionNotice) {
+                sessionStorage.removeItem('techassist_session_notice');
+                this.notify(sessionNotice, 'error');
+            }
+
             if (!supabaseClient) {
                 this.error = "Erro de Configuração: As credenciais do Supabase não foram encontradas. Certifique-se de configurar o arquivo js/supabase-config.js corretamente.";
                 this.notify("Erro crítico: Supabase não configurado.", "error");
                 this.loading = false;
                 return;
             }
+
+            this.startEmployeeSessionMonitor();
 
             try {
                 const { data: { session } } = await supabaseClient.auth.getSession();
@@ -942,6 +953,7 @@ function app() {
                                     this.logout();
                                     return;
                                 }
+                                this.employeeSessionLastValidatedAt = Date.now();
 
                                 // FORCE UPDATE from Server Truth
                                 this.employeeSession.workspace_id = freshSession.workspace_id;
@@ -1465,6 +1477,57 @@ function app() {
         async loadAdminData() {
             return await window.AIDAAuthSessionService.loadAdminData(this._getAuthDeps());
         },
+
+        startEmployeeSessionMonitor() {
+            if (this.employeeSessionMonitorId) return;
+
+            const validateWhenActive = () => {
+                if (document.visibilityState === 'visible') {
+                    this.revalidateEmployeeSession();
+                }
+            };
+
+            this.employeeSessionMonitorId = setInterval(validateWhenActive, 5 * 60 * 1000);
+            document.addEventListener('visibilitychange', validateWhenActive);
+            window.addEventListener('focus', validateWhenActive);
+        },
+
+        async revalidateEmployeeSession() {
+            if (!this.employeeSession?.token || this.session || this.employeeSessionValidationInFlight) return true;
+
+            // Foco e visibilitychange podem ocorrer juntos; uma validação recente já basta.
+            if (Date.now() - this.employeeSessionLastValidatedAt < 60 * 1000) return true;
+
+            this.employeeSessionValidationInFlight = true;
+            try {
+                const freshSession = await window.AIDAAuthSessionService.validateSessionToken({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                    throwOnError: true
+                });
+
+                if (!freshSession) {
+                    sessionStorage.setItem('techassist_session_notice', 'Sua sessão expirou ou foi encerrada. Entre novamente.');
+                    await this.logout();
+                    return false;
+                }
+
+                this.employeeSession.workspace_id = freshSession.workspace_id;
+                this.employeeSession.employee_id = freshSession.employee_id;
+                this.employeeSession.roles = freshSession.roles || [];
+                this.user = this.employeeSession;
+                this.employeeSessionLastValidatedAt = Date.now();
+                localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
+                return true;
+            } catch (error) {
+                // Uma falha de conexão não é tratada como sessão inválida.
+                console.warn('Employee session revalidation unavailable:', error);
+                return true;
+            } finally {
+                this.employeeSessionValidationInFlight = false;
+            }
+        },
+
         async fetchEmployees() {
             return await window.AIDAEmployeeService.fetchEmployees({
                 state: this,
@@ -5226,7 +5289,14 @@ function app() {
                 name: emp.name,
                 username: emp.username,
                 password: '', // Password is never loaded
-                roles: emp.roles || []
+                roles: emp.roles || [],
+                failed_attempts: emp.failed_attempts || 0,
+                lock_until: emp.lock_until || null,
+                reset_required: Boolean(emp.reset_required),
+                manual_blocked: Boolean(emp.manual_blocked),
+                manual_block_reason: emp.manual_block_reason || '',
+                active_sessions: Number(emp.active_sessions || 0),
+                last_seen_at: emp.last_seen_at || null
             };
             this.modals.editEmployee = true;
         },
@@ -5242,7 +5312,8 @@ function app() {
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                 notify: (msg, type) => this.notify(msg, type),
                 setLoading: (val) => { this.loading = val; },
-                closeModal: (name) => { this.modals[name] = false; }
+                closeModal: (name) => { this.modals[name] = false; },
+                fetchEmployees: () => this.fetchEmployees()
             });
         },
 
@@ -5267,6 +5338,27 @@ function app() {
                 setLoading: (val) => { this.loading = val; },
                 fetchEmployees: () => this.fetchEmployees(),
                 closeModal: (name) => { this.modals[name] = false; }
+            });
+        },
+
+        async setEmployeeAccountBlocked(employee, blocked) {
+            return await window.AIDAEmployeeService.setEmployeeAccountBlocked(employee, blocked, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchEmployees: () => this.fetchEmployees(),
+                closeModal: (name) => { this.modals[name] = false; }
+            });
+        },
+
+        async revokeEmployeeSessions(employee) {
+            return await window.AIDAEmployeeService.revokeEmployeeSessions(employee, {
+                state: this,
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                notify: (msg, type) => this.notify(msg, type),
+                setLoading: (val) => { this.loading = val; },
+                fetchEmployees: () => this.fetchEmployees()
             });
         },
 
