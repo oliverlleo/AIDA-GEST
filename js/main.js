@@ -2442,13 +2442,13 @@ function app() {
         // ==========================================
         // SCHEDULING METHODS
         // ==========================================
-        openSchedulePanel(mode) {
+        openSchedulePanel(mode, technicianId = null) {
             if (!this.isAppointmentTypeEnabled(mode)) {
                 return this.notify(`O agendamento de ${mode === 'repair' ? 'reparo' : 'análise'} está desativado no Gerenciamento.`, 'error');
             }
-            // No Kanban mode (viewTicket modal is open), the technician is derived from selectedTicket.
-            // In creation mode, it's ticketForm.technician_id.
-            const targetTechId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
+            // Fluxos automáticos informam o técnico explicitamente. Nos atalhos manuais,
+            // ele vem da OS aberta ou do formulário de criação.
+            const targetTechId = technicianId || (this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id);
 
             if (!targetTechId || targetTechId === 'all') {
                 // Ao invés de travar com erro, vamos usar a variável global ou abortar graciosamente alertando pra trocar pelo modal inteiro
