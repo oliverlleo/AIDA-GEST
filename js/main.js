@@ -554,6 +554,9 @@ function app() {
         // Scheduling State
         schedulePanelOpen: false,
         schedulePanelMode: '', // 'analysis' or 'repair'
+        schedulePanelTicket: null,
+        schedulePanelTechnicianId: null,
+        schedulePanelAfterSave: null,
         scheduleAvailabilityLoading: false,
         scheduleAvailabilityData: null,
         selectedAnalysisAppointment: null,
@@ -666,7 +669,7 @@ function app() {
             this.trackerConfig = window.AIDAFeatureConfig.normalize(this.trackerConfig);
             if (!this.isModuleEnabled('agenda')) {
                 this.modals.calendar = false;
-                this.schedulePanelOpen = false;
+                this.closeSchedulePanel();
                 if (this.isFieldVisible('deadline')) this.benchCalendarMode = 'deadline';
             } else if (!this.isFieldVisible('deadline') && (this.isAppointmentTypeEnabled('analysis') || this.isAppointmentTypeEnabled('repair'))) {
                 this.benchCalendarMode = 'appointment';
@@ -2288,7 +2291,7 @@ function app() {
         },
 
         openNewTicketModal() {
-            this.schedulePanelOpen = false;
+            this.closeSchedulePanel();
             this.schedulePanelMode = '';
             this.scheduleAvailabilityLoading = false;
             this.scheduleAvailabilityData = null;
@@ -2442,22 +2445,30 @@ function app() {
         // ==========================================
         // SCHEDULING METHODS
         // ==========================================
-        openSchedulePanel(mode, technicianId = null) {
+        openSchedulePanel(mode, technicianId = null, ticket = null, afterSave = null) {
             if (!this.isAppointmentTypeEnabled(mode)) {
                 return this.notify(`O agendamento de ${mode === 'repair' ? 'reparo' : 'análise'} está desativado no Gerenciamento.`, 'error');
             }
-            // Fluxos automáticos informam o técnico explicitamente. Nos atalhos manuais,
-            // ele vem da OS aberta ou do formulário de criação.
-            const targetTechId = technicianId || (this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id);
+            const targetTicket = ticket || (this.modals.viewTicket ? this.selectedTicket : null);
+            const targetTechId = technicianId || targetTicket?.technician_id || this.ticketForm.technician_id;
 
             if (!targetTechId || targetTechId === 'all') {
-                // Ao invés de travar com erro, vamos usar a variável global ou abortar graciosamente alertando pra trocar pelo modal inteiro
                 return this.notify("O chamado precisa estar alocado a um técnico para agendar usando este atalho de calendário lateral. Tente alterar o técnico ou agendar via painel 'Gerenciamento de Agenda'.", "error");
             }
             this.schedulePanelMode = mode;
+            this.schedulePanelTicket = targetTicket;
+            this.schedulePanelTechnicianId = targetTechId;
+            this.schedulePanelAfterSave = afterSave;
             this.scheduleCurrentWeekStart = new Date(); // Start with current week
             this.schedulePanelOpen = true;
             this.fetchScheduleAvailability(targetTechId);
+        },
+
+        closeSchedulePanel() {
+            this.schedulePanelOpen = false;
+            this.schedulePanelTicket = null;
+            this.schedulePanelTechnicianId = null;
+            this.schedulePanelAfterSave = null;
         },
 
         getTechnicianName(techId) {
@@ -2467,7 +2478,7 @@ function app() {
         },
 
         async fetchScheduleAvailability(targetTechId = null) {
-            const techId = targetTechId || (this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id);
+            const techId = targetTechId || this.schedulePanelTechnicianId || this.schedulePanelTicket?.technician_id || this.ticketForm.technician_id;
             if (!techId || techId === 'all') return;
 
             this.scheduleAvailabilityLoading = true;
@@ -2549,7 +2560,9 @@ function app() {
         },
 
         async selectScheduleSlot(dateStr, slot) {
-            const techId = this.modals.viewTicket ? this.selectedTicket?.technician_id : this.ticketForm.technician_id;
+            const targetTicket = this.schedulePanelTicket || (this.modals.viewTicket ? this.selectedTicket : null);
+            const techId = this.schedulePanelTechnicianId || targetTicket?.technician_id || this.ticketForm.technician_id;
+            const afterSave = this.schedulePanelAfterSave;
 
             const appointmentData = {
                 date: dateStr,
@@ -2559,15 +2572,16 @@ function app() {
                 technician_id: techId
             };
 
-            if (this.modals.viewTicket && this.selectedTicket) {
-                // Em modo de edição de ticket, clicar no calendário lateral salva a RPC diretamente.
+            if (targetTicket) {
+                // Para uma OS existente, o contexto do painel define o chamado mesmo
+                // quando ele foi aberto diretamente por um card do Kanban.
                 this.loading = true;
                 try {
                     const startStr = this.toUTC(`${dateStr}T${appointmentData.start}`);
                     const endStr = this.toUTC(`${dateStr}T${appointmentData.end}`);
 
                     await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
-                        p_ticket_id: this.selectedTicket.id,
+                        p_ticket_id: targetTicket.id,
                         p_technician_id: techId,
                         p_appointment_type: this.schedulePanelMode,
                         p_scheduled_start: startStr,
@@ -2575,16 +2589,28 @@ function app() {
                         p_notes: 'Agendado pelo painel lateral'
                     });
 
-                    // Update state reativamente pro botão sumir na mesma hora
-                    if (this.schedulePanelMode === 'analysis') this.selectedTicket.analysis_scheduled = true;
-                    if (this.schedulePanelMode === 'repair') this.selectedTicket.repair_scheduled = true;
+                    targetTicket[`${this.schedulePanelMode}_scheduled`] = true;
+                    targetTicket[`${this.schedulePanelMode}_scheduled_at`] = startStr;
+                    if (this.selectedTicket?.id === targetTicket.id) {
+                        this.selectedTicket = { ...this.selectedTicket, ...targetTicket };
+                        this.fetchTicketAppointments(targetTicket.id);
+                    }
 
-                    this.notify("Agendamento criado com sucesso!");
-                    this.fetchTicketAppointments(this.selectedTicket.id); // Atualiza aba de Agendamentos histórico
-
-                    // We sync from the server to guarantee we don't incorrectly overwrite
-                    // the technician if priority rules dictate otherwise (e.g. analysis created when repair already exists).
-                    this.fetchTickets();
+                    if (afterSave === 'approveRepair') {
+                        const advanced = await window.AIDATicketActions.completeBudgetApproval(
+                            targetTicket,
+                            this._getActionDeps()
+                        );
+                        if (!advanced) {
+                            this.notify("O reparo foi agendado, mas não foi possível avançar a etapa. Tente aprovar novamente.", "error");
+                            this.closeSchedulePanel();
+                            return;
+                        }
+                        this.notify("Reparo agendado e chamado enviado para reparo.");
+                    } else {
+                        this.notify("Agendamento criado com sucesso!");
+                        this.fetchTickets();
+                    }
                 } catch (e) {
                     console.error("Erro ao salvar agendamento:", e);
                     this.notify("Falha ao salvar agendamento.", "error");
@@ -2600,7 +2626,7 @@ function app() {
                 }
             }
 
-            this.schedulePanelOpen = false;
+            this.closeSchedulePanel();
         },
 
         isSlotSelected(dateStr, slot) {

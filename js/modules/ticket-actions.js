@@ -186,14 +186,36 @@ window.AIDATicketActions = {
     async approveRepair(ticketOrId, deps) {
         const ticket = deps.resolveTicket(ticketOrId);
         if (!ticket) return;
-        const nextStatus = deps.isPartsControlEnabled() && ticket.parts_needed ? 'Compra Peca' : 'Andamento Reparo';
-        const ctx = deps.getLogContext(ticket);
-        await deps.updateStatus(ticket, nextStatus, { budget_status: 'Aprovado' }, { action: 'Aprovou Orçamento', details: `${ctx.client} aprovou o orçamento do ${ctx.device}.` });
 
-        // Se aprovou sem compra de peças, já inicia fluxo para agendar reparo
-        if (deps.isAppointmentTypeEnabled('repair') && (!deps.isPartsControlEnabled() || !ticket.parts_needed) && !ticket.repair_scheduled) {
-            deps.state.openSchedulePanel('repair', ticket.technician_id);
+        const needsPartsPurchase = deps.isPartsControlEnabled() && Boolean(ticket.parts_needed);
+        const hasRepairAppointment = Boolean(ticket.repair_scheduled || ticket.repair_scheduled_at);
+
+        if (needsPartsPurchase) {
+            const ctx = deps.getLogContext(ticket);
+            return await deps.updateStatus(ticket, 'Compra Peca', { budget_status: 'Aprovado' }, {
+                action: 'Aprovou Orçamento',
+                details: `${ctx.client} aprovou o orçamento do ${ctx.device}.`
+            });
         }
+
+        // Sem compra de peças, o agendamento de reparo é concluído antes da
+        // mudança de etapa. Cancelar o painel mantém a OS em Aprovação.
+        if (deps.isAppointmentTypeEnabled('repair') && !hasRepairAppointment) {
+            deps.state.openSchedulePanel('repair', ticket.technician_id, ticket, 'approveRepair');
+            return false;
+        }
+
+        return await this.completeBudgetApproval(ticket, deps);
+    },
+
+    async completeBudgetApproval(ticketOrId, deps) {
+        const ticket = deps.resolveTicket(ticketOrId);
+        if (!ticket) return false;
+        const ctx = deps.getLogContext(ticket);
+        return await deps.updateStatus(ticket, 'Andamento Reparo', { budget_status: 'Aprovado' }, {
+            action: 'Aprovou Orçamento',
+            details: `${ctx.client} aprovou o orçamento do ${ctx.device}.`
+        });
     },
 
     async denyRepair(ticketOrId, deps) {
@@ -234,7 +256,7 @@ window.AIDATicketActions = {
 
          // Se não há agendamento de reparo ativo, sugere criar
          if (deps.isAppointmentTypeEnabled('repair') && !ticket.repair_scheduled) {
-             deps.state.openSchedulePanel('repair', ticket.technician_id);
+             deps.state.openSchedulePanel('repair', ticket.technician_id, ticket);
          }
     },
 
@@ -550,7 +572,7 @@ window.AIDATicketActions = {
             deps.notify("Retornado para reparo com urgência!");
             // Aciona fluxo visual de Agendamento do Novo Reparo (Cenario de Retrabalho)
             if (deps.isAppointmentTypeEnabled('repair') && !ticket.repair_scheduled) {
-                deps.state.openSchedulePanel('repair', ticket.technician_id);
+                deps.state.openSchedulePanel('repair', ticket.technician_id, ticket);
             }
         }
     },
@@ -820,6 +842,17 @@ window.AIDATicketActions = {
     async sendBudget(ticketOrId, deps) {
         const ticket = deps.resolveTicket(ticketOrId);
         if (!ticket) return;
+
+        const shouldOpenWhatsApp = !deps.isWhatsAppDisabled();
+        const contactDigits = String(ticket.contact_info || '').replace(/\D/g, '');
+
+        // O contato pode ser opcional no cadastro, mas o WhatsApp precisa de um
+        // telefone válido. A validação deve ocorrer antes de marcar como enviado.
+        if (shouldOpenWhatsApp && contactDigits.length < 10) {
+            deps.notify("Cadastre um telefone válido no contato do cliente antes de enviar pelo WhatsApp.", "error");
+            return false;
+        }
+
         const ctx = deps.getLogContext(ticket);
         const actionLog = {
             action: 'Enviou Orçamento',
@@ -839,10 +872,10 @@ window.AIDATicketActions = {
                 ? `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`
                 : `Olá ${ticket.client_name}, seu orçamento está pronto.`;
 
-            let number = ticket.contact_info.replace(/\D/g, '');
+            let number = contactDigits;
             if (number.length <= 11) number = '55' + number;
 
-            if (!deps.isWhatsAppDisabled()) {
+            if (shouldOpenWhatsApp) {
                 window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
                 deps.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
             } else {

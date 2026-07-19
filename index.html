@@ -5536,12 +5536,14 @@
     </div>
 
     <!-- 1. NEW TICKET MODAL -->
-    <div x-show="modals.ticket" class="fixed inset-0 z-[60] overflow-y-auto" x-cloak>
+    <div x-show="modals.ticket || schedulePanelOpen"
+         :class="modals.ticket ? 'pointer-events-auto z-[60]' : 'pointer-events-none z-[80]'"
+         class="fixed inset-0 overflow-y-auto" x-cloak>
         <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.ticket = false"></div>
+            <div x-show="modals.ticket" class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.ticket = false"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
-            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full duration-300 ease-in-out" :class="schedulePanelOpen ? '-translate-x-32 sm:-translate-x-48' : ''">
+            <div x-show="modals.ticket" class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full duration-300 ease-in-out" :class="schedulePanelOpen ? '-translate-x-32 sm:-translate-x-48' : ''">
                 <!-- Header -->
                 <div class="bg-black px-6 py-4 flex justify-between items-center">
                     <h3 class="text-lg font-bold text-white">Novo Chamado</h3>
@@ -6014,7 +6016,7 @@
                  x-transition:leave="transition ease-in duration-200 transform"
                  x-transition:leave-start="translate-x-0"
                  x-transition:leave-end="translate-x-full"
-                 class="fixed inset-y-0 right-0 w-80 sm:w-96 bg-gray-50 shadow-2xl border-l border-gray-200 flex flex-col z-[80]"
+                 class="pointer-events-auto fixed inset-y-0 right-0 w-80 sm:w-96 bg-gray-50 shadow-2xl border-l border-gray-200 flex flex-col z-[80]"
                  @click.stop>
 
                 <!-- Header -->
@@ -6025,10 +6027,10 @@
                         </div>
                         <div>
                             <h3 class="font-bold text-gray-800 text-sm" x-text="schedulePanelMode === 'analysis' ? 'Agendar Análise' : 'Agendar Reparo'"></h3>
-                            <p class="text-xs text-gray-500 font-medium truncate max-w-[180px]" x-text="getTechnicianName(ticketForm.technician_id)"></p>
+                            <p class="text-xs text-gray-500 font-medium truncate max-w-[180px]" x-text="getTechnicianName(schedulePanelTechnicianId || ticketForm.technician_id)"></p>
                         </div>
                     </div>
-                    <button type="button" @click="schedulePanelOpen = false" class="text-gray-400 hover:text-gray-600 p-1 transition-colors">
+                    <button type="button" @click="closeSchedulePanel()" class="text-gray-400 hover:text-gray-600 p-1 transition-colors">
                         <i class="fa-solid fa-times text-lg"></i>
                     </button>
                 </div>
@@ -7519,7 +7521,7 @@
     <script src="js/modules/ticket-context.js"></script>
     <script src="js/modules/workflow-rules.js"></script>
     <script src="js/modules/ticket-mutations.js"></script>
-    <script src="js/modules/ticket-actions.js?v=3"></script>
+    <script src="js/modules/ticket-actions.js?v=4"></script>
     <script src="js/modules/api-client.js?v=2"></script>
     <script src="js/modules/storage-service.js?v=3"></script>
     <script src="js/modules/workspace-config-service.js"></script>
@@ -7533,7 +7535,7 @@
     <script src="js/modules/recycle-bin-service.js"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=17"></script>
+    <script src="js/main.js?v=18"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
