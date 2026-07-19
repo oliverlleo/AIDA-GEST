@@ -3,6 +3,22 @@
 // Parte da infraestrutura de módulos
 
 window.AIDAAuthSessionService = {
+    getAdminPasswordPolicyError(password) {
+        if (typeof password !== 'string' || password.length < 8) {
+            return 'A senha deve ter pelo menos 8 caracteres.';
+        }
+
+        const byteLength = typeof TextEncoder !== 'undefined'
+            ? new TextEncoder().encode(password).length
+            : unescape(encodeURIComponent(password)).length;
+
+        if (byteLength > 72) return 'A senha deve ter no máximo 72 bytes.';
+        if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(password) || !/[0-9]/.test(password)) {
+            return 'A senha deve incluir pelo menos uma letra e um número.';
+        }
+        return '';
+    },
+
     async loginAdmin(deps) {
         const { state, supabaseClient, notify, setLoading } = deps;
         setLoading(true);
@@ -19,6 +35,9 @@ window.AIDAAuthSessionService = {
 
     async registerAdmin(deps) {
         const { state, supabaseClient, notify, setLoading } = deps;
+        const passwordError = this.getAdminPasswordPolicyError(state.registerForm.password);
+        if (passwordError) return notify(passwordError, 'error');
+
         setLoading(true);
         try {
             const { data: authData, error: authError } = await supabaseClient.auth.signUp({
