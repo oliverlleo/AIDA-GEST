@@ -4614,7 +4614,10 @@
                             <!-- Register Form -->
                              <form x-show="authMode === 'admin_register'" @submit.prevent="registerAdmin" class="space-y-4">
                                 <input type="email" x-model="registerForm.email" placeholder="Seu E-mail" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
-                                <input type="password" x-model="registerForm.password" placeholder="Crie uma Senha" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
+                                <div>
+                                    <input type="password" x-model="registerForm.password" placeholder="Crie uma Senha" minlength="8" maxlength="72" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
+                                    <p class="mt-1.5 text-xs text-gray-500">Use no mínimo 8 caracteres, com pelo menos uma letra e um número.</p>
+                                </div>
                                 <button type="submit" class="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors">Cadastrar</button>
                                 <p class="text-center text-sm text-gray-500 mt-4 cursor-pointer hover:text-brand-500" @click="authMode = 'admin_login'">Voltar ao Login</p>
                             </form>
@@ -7582,7 +7585,7 @@
     <script src="js/modules/logs-notifications-service.js?v=3"></script>
     <script src="js/modules/notes-service.js"></script>
     <script src="js/modules/dashboard-service.js"></script>
-    <script src="js/modules/auth-session-service.js?v=2"></script>
+    <script src="js/modules/auth-session-service.js?v=3"></script>
     <script src="js/modules/employee-service.js?v=3"></script>
     <script src="js/modules/recycle-bin-service.js"></script>
 
