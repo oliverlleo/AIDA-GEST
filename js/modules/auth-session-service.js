@@ -68,6 +68,7 @@ window.AIDAAuthSessionService = {
         }
 
         state.employeeSession = emp;
+        state.employeeSessionLastValidatedAt = Date.now();
 
         // Revalida a sessão com o servidor para garantir workspace_id e roles exatas
         const freshSession = await validateSessionToken({ state, supabaseFetch });
@@ -146,7 +147,7 @@ window.AIDAAuthSessionService = {
             if (data && data.length > 0) {
                 await this.processEmployeeLoginResponse(data[0], state.loginForm.company_code, deps);
             } else {
-                 notify('Credenciais inválidas.', 'error');
+                 notify('Credenciais inválidas ou acesso temporariamente indisponível.', 'error');
             }
         } catch(err) {
              console.error(err);
@@ -190,6 +191,7 @@ window.AIDAAuthSessionService = {
             }
             return sessionData[0];
         } catch (err) {
+            if (deps.throwOnError) throw err;
             console.warn("Session validation failed:", err);
             return null;
         }
