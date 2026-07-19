@@ -1,3 +1,10 @@
+BEGIN;
+
+-- A ordem antiga dos parâmetros criou uma sobrecarga indistinguível para o
+-- PostgREST, pois as duas versões expunham os mesmos nomes de argumentos.
+-- Removemos somente a assinatura obsoleta, sem CASCADE.
+DROP FUNCTION IF EXISTS public.get_unscheduled_tickets(text, uuid, integer, integer, text);
+
 CREATE OR REPLACE FUNCTION public.get_unscheduled_tickets(p_technician_id uuid DEFAULT NULL::uuid, p_appointment_type text DEFAULT NULL::text, p_status text DEFAULT NULL::text, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -59,3 +66,7 @@ BEGIN
     );
 END;
 $function$;
+
+NOTIFY pgrst, 'reload schema';
+
+COMMIT;
