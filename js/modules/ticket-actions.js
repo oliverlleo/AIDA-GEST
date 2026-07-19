@@ -845,13 +845,7 @@ window.AIDATicketActions = {
 
         const shouldOpenWhatsApp = !deps.isWhatsAppDisabled();
         const contactDigits = String(ticket.contact_info || '').replace(/\D/g, '');
-
-        // O contato pode ser opcional no cadastro, mas o WhatsApp precisa de um
-        // telefone válido. A validação deve ocorrer antes de marcar como enviado.
-        if (shouldOpenWhatsApp && contactDigits.length < 10) {
-            deps.notify("Cadastre um telefone válido no contato do cliente antes de enviar pelo WhatsApp.", "error");
-            return false;
-        }
+        const hasWhatsAppNumber = contactDigits.length >= 10;
 
         const ctx = deps.getLogContext(ticket);
         const actionLog = {
@@ -872,12 +866,13 @@ window.AIDATicketActions = {
                 ? `Olá ${ticket.client_name}, seu orçamento está pronto. Acompanhe aqui: ${link}`
                 : `Olá ${ticket.client_name}, seu orçamento está pronto.`;
 
-            let number = contactDigits;
-            if (number.length <= 11) number = '55' + number;
-
-            if (shouldOpenWhatsApp) {
+            if (shouldOpenWhatsApp && hasWhatsAppNumber) {
+                let number = contactDigits;
+                if (number.length <= 11) number = '55' + number;
                 window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, '_blank');
                 deps.notify("Orçamento marcado como Enviado (WhatsApp aberto).");
+            } else if (shouldOpenWhatsApp) {
+                deps.notify("Orçamento marcado como Enviado. O WhatsApp não foi aberto porque o cliente não possui telefone cadastrado.");
             } else {
                 deps.notify("Orçamento marcado como Enviado.");
             }
