@@ -116,7 +116,7 @@ function makeBudgetDeps(ticket, overrides = {}) {
     };
 }
 
-test('orcamento sem telefone nao altera status quando WhatsApp esta ativo', async () => {
+test('orcamento sem telefone continua sendo enviado sem abrir WhatsApp', async () => {
     const ticket = makeTicket({ contact_info: null });
     let mutateCalls = 0;
     let notice;
@@ -125,7 +125,7 @@ test('orcamento sem telefone nao altera status quando WhatsApp esta ativo', asyn
     global.open = () => { openCalls += 1; };
 
     try {
-        const result = await global.AIDATicketActions.sendBudget(ticket, makeBudgetDeps(ticket, {
+        await global.AIDATicketActions.sendBudget(ticket, makeBudgetDeps(ticket, {
             mutateTicket: async () => {
                 mutateCalls += 1;
                 return true;
@@ -133,11 +133,11 @@ test('orcamento sem telefone nao altera status quando WhatsApp esta ativo', asyn
             notify: (message, type) => { notice = { message, type }; }
         }));
 
-        assert.equal(result, false);
-        assert.equal(mutateCalls, 0);
+        assert.equal(mutateCalls, 1);
         assert.equal(openCalls, 0);
-        assert.equal(notice.type, 'error');
-        assert.match(notice.message, /telefone v.lido/i);
+        assert.equal(notice.type, undefined);
+        assert.match(notice.message, /marcado como Enviado/);
+        assert.match(notice.message, /n.o possui telefone cadastrado/i);
     } finally {
         global.open = originalOpen;
     }
