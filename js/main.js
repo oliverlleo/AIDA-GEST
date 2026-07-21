@@ -2623,6 +2623,8 @@ function app() {
         },
 
         async selectScheduleSlot(dateStr, slot) {
+            if (this.loading) return;
+
             const targetTicket = this.schedulePanelTicket || (this.modals.viewTicket ? this.selectedTicket : null);
             const techId = this.schedulePanelTechnicianId || targetTicket?.technician_id || this.ticketForm.technician_id;
             const afterSave = this.schedulePanelAfterSave;
@@ -2676,7 +2678,15 @@ function app() {
                     }
                 } catch (e) {
                     console.error("Erro ao salvar agendamento:", e);
-                    this.notify("Falha ao salvar agendamento.", "error");
+                    this.notify(
+                        window.AIDAScheduleErrorService.getUserMessage(
+                            e,
+                            "Falha ao salvar agendamento."
+                        ),
+                        "error"
+                    );
+                    await this.fetchScheduleAvailability();
+                    return;
                 } finally {
                     this.loading = false;
                 }
@@ -3189,6 +3199,8 @@ function app() {
         // --- Management Mutations ---
 
         async submitReschedule() {
+            if (this.loading) return;
+
             const ea = this.scheduleManagement.editingAppointment;
             const ticketIdToRefresh = ea.ticket_id || (ea.original ? ea.original.ticket_id : null);
 
@@ -3322,7 +3334,13 @@ function app() {
 
             } catch (e) {
                 console.error(e);
-                this.notify("Erro ao gerenciar agendamento.", "error");
+                this.notify(
+                    window.AIDAScheduleErrorService.getUserMessage(
+                        e,
+                        "Erro ao gerenciar agendamento."
+                    ),
+                    "error"
+                );
             } finally {
                 this.loading = false;
                 this.bypassRepairCheck = false;
