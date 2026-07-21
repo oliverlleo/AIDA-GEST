@@ -3,6 +3,91 @@
 // Parte da infraestrutura de módulos
 
 window.AIDATicketQueryService = {
+    getTicketCardSortOptions(state) {
+        return {
+            p_use_priority: state.isPriorityRequestEnabled(),
+            p_use_analysis_appointment: state.isModuleEnabled('agenda') && state.isAppointmentTypeEnabled('analysis'),
+            p_use_repair_appointment: state.isModuleEnabled('agenda') && state.isAppointmentTypeEnabled('repair'),
+            p_use_analysis_deadline: state.isFieldVisible('analysis_deadline'),
+            p_use_delivery_deadline: state.isFieldVisible('deadline')
+        };
+    },
+
+    getTicketCardStatuses(state) {
+        if (state.view === 'tech_orders') {
+            return state.getTestFlowMode() === 'technician'
+                ? ['Analise Tecnica', 'Andamento Reparo', 'Teste Final']
+                : ['Analise Tecnica', 'Andamento Reparo'];
+        }
+
+        return state.STATUS_COLUMNS.filter(status => {
+            if (status === 'Finalizado' && !state.showFinalized) return false;
+            if (status === 'Terceirizado' && !state.isOutsourcedEnabled()) return false;
+            if (status === 'Teste Final' && state.getTestFlowMode() !== 'kanban') return false;
+            return true;
+        });
+    },
+
+    buildTicketCardPayload(state, status, cursor = null) {
+        const isBench = state.view === 'tech_orders';
+        const selectedTechnician = isBench && state.hasRole('admin')
+            && state.adminDashboardFilters.technician !== 'all'
+            ? state.adminDashboardFilters.technician
+            : null;
+
+        return {
+            p_status: status,
+            p_scope: isBench ? 'bench' : 'kanban',
+            p_technician_id: selectedTechnician,
+            p_search: String(state.searchQuery || '').trim() || null,
+            p_limit: state.ticketCardPageSize,
+            p_cursor: cursor,
+            ...this.getTicketCardSortOptions(state)
+        };
+    },
+
+    async fetchTicketCardBoardData(deps) {
+        const { state, supabaseFetch } = deps;
+        const statuses = this.getTicketCardStatuses(state);
+        const responses = await Promise.all(statuses.map(async status => {
+            const response = await supabaseFetch(
+                'rpc/get_ticket_cards_page',
+                'POST',
+                this.buildTicketCardPayload(state, status)
+            );
+            return { status, response: response || {} };
+        }));
+
+        const columns = {};
+        responses.forEach(({ status, response }) => {
+            columns[status] = {
+                items: Array.isArray(response.items) ? response.items : [],
+                total: Number(response.total || 0),
+                hasMore: Boolean(response.has_more),
+                nextCursor: response.next_cursor || null
+            };
+        });
+
+        return { mode: 'ticket_card_pages', columns };
+    },
+
+    async fetchTicketCardColumnData(deps, status, cursor) {
+        const { state, supabaseFetch } = deps;
+        return await supabaseFetch(
+            'rpc/get_ticket_cards_page',
+            'POST',
+            this.buildTicketCardPayload(state, status, cursor)
+        );
+    },
+
+    async fetchTicketDetails(deps, ticketId) {
+        const { state, supabaseFetch } = deps;
+        const safeId = encodeURIComponent(String(ticketId || ''));
+        const safeWorkspaceId = encodeURIComponent(String(state?.user?.workspace_id || ''));
+        const rows = await supabaseFetch(`tickets?select=*&id=eq.${safeId}&workspace_id=eq.${safeWorkspaceId}&limit=1`);
+        return Array.isArray(rows) && rows.length ? rows[0] : null;
+    },
+
     async fetchTicketsData(deps, loadMore) {
         const { state, supabaseFetch, hasRole } = deps;
 
@@ -31,6 +116,13 @@ window.AIDATicketQueryService = {
                 data: response.items || [],
                 counts: response.counts || { today: 0, today_tomorrow: 0, next_7_days: 0, overdue: 0, no_deadline: 0, all: 0 }
             };
+        }
+
+        // Default boards use bounded, per-column keyset pages. Operational
+        // filtering keeps its dedicated RPC because it has different ranking.
+        if ((state.view === 'kanban' && !state.isKanbanOperationalFilterActive())
+            || state.view === 'tech_orders') {
+            return await this.fetchTicketCardBoardData(deps);
         }
 
         // Base Endpoint with Workspace Filter

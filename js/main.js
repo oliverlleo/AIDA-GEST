@@ -272,6 +272,8 @@ function app() {
             isLoading: false,
             total: 0
         },
+        ticketCardPageSize: 20,
+        ticketColumnPagination: {},
         searchDebounceTimer: null,
         realtimeDebounceTimer: null,
 
@@ -1875,6 +1877,56 @@ function app() {
             this.fetchTickets(true);
         },
 
+        getTicketColumnTotal(status) {
+            const column = this.ticketColumnPagination?.[status];
+            if (column && Number.isFinite(Number(column.total))) return Number(column.total);
+            return this.tickets.filter(ticket => ticket.status === status).length;
+        },
+
+        getTicketColumnCountLabel(status, visibleCount) {
+            const total = this.getTicketColumnTotal(status);
+            const count = Number(visibleCount || 0);
+            return count < total ? `${count} de ${total}` : String(count);
+        },
+
+        hasMoreTicketColumn(status) {
+            return Boolean(this.ticketColumnPagination?.[status]?.hasMore);
+        },
+
+        isLoadingTicketColumn(status) {
+            return Boolean(this.ticketColumnPagination?.[status]?.loading);
+        },
+
+        async loadMoreTicketColumn(status) {
+            const column = this.ticketColumnPagination?.[status];
+            if (!column?.hasMore || column.loading) return;
+
+            column.loading = true;
+            try {
+                const response = await window.AIDATicketQueryService.fetchTicketCardColumnData({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, status, column.nextCursor);
+
+                const incoming = Array.isArray(response?.items) ? response.items : [];
+                const existingIds = new Set(this.tickets.map(ticket => ticket.id));
+                this.tickets.push(...incoming.filter(ticket => !existingIds.has(ticket.id)));
+
+                column.total = Number(response?.total || column.total || 0);
+                column.hasMore = Boolean(response?.has_more);
+                column.nextCursor = response?.next_cursor || null;
+
+                if (this.view === 'tech_orders') {
+                    this.techTickets = this.sortBenchTickets(this.tickets);
+                }
+            } catch (error) {
+                console.error('Failed to load more OS cards:', error);
+                this.notify('Erro ao carregar mais OS.', 'error');
+            } finally {
+                column.loading = false;
+            }
+        },
+
         async loadMoreFinalized() {
             if (this.isLoadingFinalized || !this.finalizedHasMore) return;
             this.isLoadingFinalized = true;
@@ -2051,6 +2103,30 @@ function app() {
 
                     if (result.data.length < this.ticketPagination.limit) {
                         this.ticketPagination.hasMore = false;
+                    }
+                    this.ticketPagination.isLoading = false;
+                    return;
+                }
+
+                if (result.mode === 'ticket_card_pages') {
+                    const columns = result.columns || {};
+                    this.ticketColumnPagination = {};
+                    this.tickets = [];
+
+                    Object.entries(columns).forEach(([status, column]) => {
+                        this.ticketColumnPagination[status] = {
+                            total: Number(column.total || 0),
+                            hasMore: Boolean(column.hasMore),
+                            nextCursor: column.nextCursor || null,
+                            loading: false
+                        };
+                        this.tickets.push(...(Array.isArray(column.items) ? column.items : []));
+                    });
+
+                    this.ticketPagination.hasMore = Object.values(this.ticketColumnPagination)
+                        .some(column => column.hasMore);
+                    if (this.view === 'tech_orders') {
+                        this.techTickets = this.sortBenchTickets(this.tickets);
                     }
                     this.ticketPagination.isLoading = false;
                     return;
@@ -2855,7 +2931,9 @@ function app() {
                     p_technician_id: null,
                     p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
                     p_status: null,
-                    p_limit: 500,
+                    // The hardened public RPC deliberately caps a page at 100.
+                    // Loading 500 at once also freezes the schedule sidebar on large bases.
+                    p_limit: 100,
                     p_offset: 0
                 });
 
@@ -3523,21 +3601,54 @@ function app() {
             };
         },
 
-        viewTicketDetails(ticket) {
+        async ensureCompleteTicket(ticket) {
+            if (!ticket?.id || !ticket._card_summary) return ticket || null;
+
+            try {
+                this.loading = true;
+                const completeTicket = await window.AIDATicketQueryService.fetchTicketDetails({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, ticket.id);
+                if (!completeTicket) {
+                    this.notify('A OS não está mais disponível.', 'error');
+                    return null;
+                }
+
+                const ticketIndex = this.tickets.findIndex(item => item.id === completeTicket.id);
+                if (ticketIndex >= 0) this.tickets[ticketIndex] = completeTicket;
+                const techIndex = this.techTickets.findIndex(item => item.id === completeTicket.id);
+                if (techIndex >= 0) this.techTickets[techIndex] = completeTicket;
+                return completeTicket;
+            } catch (error) {
+                console.error('Failed to load complete OS:', error);
+                this.notify('Erro ao carregar os dados completos da OS.', 'error');
+                return null;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async viewTicketDetails(ticket) {
+            if (!ticket?.id) return;
+
+            const completeTicket = await this.ensureCompleteTicket(ticket);
+            if (!completeTicket) return;
+
             // Establish Secure Context via Module
-            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'viewTicket');
+            const newContext = window.AIDATicketContext.setModalContext(completeTicket.id, 'viewTicket');
             this._applyContext(newContext);
-            this.selectedTicket = ticket;
+            this.selectedTicket = completeTicket;
 
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
             if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
             if (!Array.isArray(this.selectedTicket.photos_urls)) this.selectedTicket.photos_urls = [];
-            this.analysisForm = { needsParts: !!ticket.parts_needed, partsList: ticket.parts_needed || '' };
+            this.analysisForm = { needsParts: !!completeTicket.parts_needed, partsList: completeTicket.parts_needed || '' };
             this.editingDeadlines = false;
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
 
-            this.fetchInternalNotes(ticket.id);
-            this.fetchTicketAppointments(ticket.id);
+            this.fetchInternalNotes(completeTicket.id);
+            this.fetchTicketAppointments(completeTicket.id);
             this.newNoteText = '';
             this.noteIsChecklist = false;
             this.noteChecklistItems = [];
@@ -4086,8 +4197,9 @@ function app() {
             this.viewTicketDetails(ticket);
         },
 
-        openPurchaseModal(ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
+        async openPurchaseModal(ticketOrId) {
+            const resolvedTicket = this.resolveTicket(ticketOrId);
+            const ticket = await this.ensureCompleteTicket(resolvedTicket);
             if (!ticket) return;
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'supplierPurchase');
             this._applyContext(newContext);
@@ -4109,10 +4221,11 @@ function app() {
 
         async markPurchased(ticketOrId) {
             // Replaced by openPurchaseModal, kept for compatibility if needed elsewhere
-            this.openPurchaseModal(ticketOrId);
+            await this.openPurchaseModal(ticketOrId);
         },
-        openOutcomeModal(mode, ticketOrId) {
-            const ticket = this.resolveTicket(ticketOrId);
+        async openOutcomeModal(mode, ticketOrId) {
+            const resolvedTicket = this.resolveTicket(ticketOrId);
+            const ticket = await this.ensureCompleteTicket(resolvedTicket);
             if (!ticket) return;
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'outcome');
             this._applyContext(newContext);
