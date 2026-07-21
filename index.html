@@ -3727,7 +3727,7 @@
                                         <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide" x-text="(status === 'Retirada Cliente' && isLogisticsEnabled()) ? 'Expedição / Logística' : getStatusLabel(status)"></h3>
 
                                         <div class="flex items-center gap-2">
-                                            <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getSortedAndFilteredTickets(status).length"></span>
+                                            <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getTicketColumnCountLabel(status, getSortedAndFilteredTickets(status).length)"></span>
 
                                             <!-- Filter Button -->
                                             <button @click="filter.showMenu = !filter.showMenu" class="text-gray-500 hover:text-brand-500 transition-colors relative">
@@ -4032,6 +4032,13 @@
                                                 </div>
                                             </div>
                                         </template>
+                                        <button x-show="hasMoreTicketColumn(status)"
+                                                @click="loadMoreTicketColumn(status)"
+                                                :disabled="isLoadingTicketColumn(status)"
+                                                class="w-full py-2.5 rounded-lg border border-brand-200 bg-brand-50 text-brand-700 text-xs font-bold hover:bg-brand-100 disabled:opacity-50 transition-colors">
+                                            <i class="fa-solid fa-chevron-down mr-1"></i>
+                                            <span x-text="isLoadingTicketColumn(status) ? 'Carregando...' : 'Carregar mais OS'"></span>
+                                        </button>
                                     </div>
                                 </div>
                             </template>
@@ -4173,7 +4180,7 @@
                         <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
                              <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                                 <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Em Análise Técnica</h3>
-                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getVisibleBenchTickets('Analise Tecnica').length"></span>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getTicketColumnCountLabel('Analise Tecnica', getVisibleBenchTickets('Analise Tecnica').length)"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
                                 <template x-for="ticket in getVisibleBenchTickets('Analise Tecnica', true)" :key="ticket.id">
@@ -4268,6 +4275,10 @@
                                         </div>
                                      </div>
                                 </template>
+                                <button x-show="hasMoreTicketColumn('Analise Tecnica')" @click="loadMoreTicketColumn('Analise Tecnica')" :disabled="isLoadingTicketColumn('Analise Tecnica')" class="w-full py-2.5 rounded-lg border border-brand-200 bg-brand-50 text-brand-700 text-xs font-bold hover:bg-brand-100 disabled:opacity-50 transition-colors">
+                                    <i class="fa-solid fa-chevron-down mr-1"></i>
+                                    <span x-text="isLoadingTicketColumn('Analise Tecnica') ? 'Carregando...' : 'Carregar mais OS'"></span>
+                                </button>
                                 <div x-show="getVisibleBenchTickets('Analise Tecnica').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
                                     <span x-text="showTodayOnly ? 'Nenhuma análise agendada para hoje.' : 'Nenhum item em análise.'"></span>
                                 </div>
@@ -4278,7 +4289,7 @@
                         <div class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
                              <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                                 <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Em Andamento Reparo</h3>
-                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getVisibleBenchTickets('Andamento Reparo').length"></span>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getTicketColumnCountLabel('Andamento Reparo', getVisibleBenchTickets('Andamento Reparo').length)"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
                                 <template x-for="ticket in getVisibleBenchTickets('Andamento Reparo', true)" :key="ticket.id">
@@ -4369,6 +4380,10 @@
                                         </div>
                                      </div>
                                 </template>
+                                <button x-show="hasMoreTicketColumn('Andamento Reparo')" @click="loadMoreTicketColumn('Andamento Reparo')" :disabled="isLoadingTicketColumn('Andamento Reparo')" class="w-full py-2.5 rounded-lg border border-brand-200 bg-brand-50 text-brand-700 text-xs font-bold hover:bg-brand-100 disabled:opacity-50 transition-colors">
+                                    <i class="fa-solid fa-chevron-down mr-1"></i>
+                                    <span x-text="isLoadingTicketColumn('Andamento Reparo') ? 'Carregando...' : 'Carregar mais OS'"></span>
+                                </button>
                                 <div x-show="getVisibleBenchTickets('Andamento Reparo').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
                                     <span x-text="showTodayOnly ? 'Nenhum reparo agendado para hoje.' : 'Nenhum reparo em andamento.'"></span>
                                 </div>
@@ -4379,7 +4394,7 @@
                         <div x-show="getTestFlowMode() === 'technician'" class="flex flex-col h-full overflow-hidden bg-gray-100 rounded-xl border border-gray-200">
                              <div class="p-3 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                                 <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Teste Final</h3>
-                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="techTickets.filter(t => t.status === 'Teste Final').length"></span>
+                                <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="getTicketColumnCountLabel('Teste Final', techTickets.filter(t => t.status === 'Teste Final').length)"></span>
                             </div>
                             <div class="p-4 overflow-y-auto space-y-4 kanban-col flex-grow">
                                 <template x-for="ticket in techTickets.filter(t => t.status === 'Teste Final' && matchesSearch(t))" :key="ticket.id">
@@ -4428,6 +4443,10 @@
                                         </div>
                                     </div>
                                 </template>
+                                <button x-show="hasMoreTicketColumn('Teste Final')" @click="loadMoreTicketColumn('Teste Final')" :disabled="isLoadingTicketColumn('Teste Final')" class="w-full py-2.5 rounded-lg border border-brand-200 bg-brand-50 text-brand-700 text-xs font-bold hover:bg-brand-100 disabled:opacity-50 transition-colors">
+                                    <i class="fa-solid fa-chevron-down mr-1"></i>
+                                    <span x-text="isLoadingTicketColumn('Teste Final') ? 'Carregando...' : 'Carregar mais OS'"></span>
+                                </button>
                                 <div x-show="techTickets.filter(t => t.status === 'Teste Final').length === 0" class="text-center py-10 text-gray-400 italic text-sm">
                                     Nenhum teste pendente.
                                 </div>
@@ -7585,7 +7604,7 @@
     <script src="js/modules/storage-service.js?v=3"></script>
     <script src="js/modules/workspace-config-service.js"></script>
     <script src="js/modules/catalog-service.js"></script>
-    <script src="js/modules/ticket-query-service.js"></script>
+    <script src="js/modules/ticket-query-service.js?v=2"></script>
     <script src="js/modules/logs-notifications-service.js?v=3"></script>
     <script src="js/modules/notes-service.js"></script>
     <script src="js/modules/dashboard-service.js"></script>
@@ -7594,7 +7613,7 @@
     <script src="js/modules/recycle-bin-service.js"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=20"></script>
+    <script src="js/main.js?v=21"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
