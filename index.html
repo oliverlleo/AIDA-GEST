@@ -5545,7 +5545,7 @@
                                                     'bg-white border-gray-200 text-gray-700 hover:border-brand-300 hover:bg-gray-50': (slot.status === 'livre' || slot.status === 'ocupado') && scheduleManagement.editingAppointment.new_start !== extractTime(slot.start),
                                                     'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60': slot.status !== 'livre' && slot.status !== 'ocupado'
                                                 }"
-                                                :disabled="slot.status !== 'livre' && slot.status !== 'ocupado'"
+                                                :disabled="loading || (slot.status !== 'livre' && slot.status !== 'ocupado')"
                                                 class="border rounded p-2 text-xs text-center font-medium transition-all shadow-sm flex flex-col items-center">
                                                 <span class="font-bold text-[13px]" x-text="formatTimeOnly(slot.start)"></span>
                                                 <span class="text-[9px] mt-0.5 opacity-70" x-text="`até ${formatTimeOnly(slot.end)}`"></span>
@@ -5577,10 +5577,11 @@
                     </div>
                     <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
                         <button type="button" @click="closeRescheduleModal()" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors text-sm">Voltar</button>
-                        <button type="button" @click="submitReschedule()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors text-sm flex items-center justify-center min-w-[140px]">
-                            <i class="fa-solid fa-save mr-2" x-show="scheduleManagement.editingAppointment?.original?.id"></i>
-                            <i class="fa-solid fa-calendar-plus mr-2" x-show="!scheduleManagement.editingAppointment?.original?.id"></i>
-                            <span x-text="scheduleManagement.editingAppointment?.original?.id ? 'Salvar Alteração' : 'Agendar'"></span>
+                        <button type="button" @click="submitReschedule()" :disabled="loading" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-sm transition-colors text-sm flex items-center justify-center min-w-[140px] disabled:cursor-not-allowed disabled:opacity-60">
+                            <i class="fa-solid fa-circle-notch fa-spin mr-2" x-show="loading"></i>
+                            <i class="fa-solid fa-save mr-2" x-show="!loading && scheduleManagement.editingAppointment?.original?.id"></i>
+                            <i class="fa-solid fa-calendar-plus mr-2" x-show="!loading && !scheduleManagement.editingAppointment?.original?.id"></i>
+                            <span x-text="loading ? 'Salvando...' : (scheduleManagement.editingAppointment?.original?.id ? 'Salvar Alteração' : 'Agendar')"></span>
                         </button>
                     </div>
                 </div>
@@ -6117,9 +6118,10 @@
                                     </div>
                                     <div class="p-2 grid grid-cols-3 gap-2">
                                         <template x-for="slot in day.slots" :key="slot.start">
-                                            <button type="button"
-                                                    @click="(slot.status === 'livre' || slot.status === 'ocupado') ? selectScheduleSlot(day.date, slot) : null"
-                                                    :class="{
+                                             <button type="button"
+                                                     @click="(slot.status === 'livre' || slot.status === 'ocupado') ? selectScheduleSlot(day.date, slot) : null"
+                                                     :disabled="loading || (slot.status !== 'livre' && slot.status !== 'ocupado')"
+                                                     :class="{
                                                         'bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100 hover:border-brand-300 cursor-pointer shadow-sm': (slot.status === 'livre' || slot.status === 'ocupado') && !isSlotSelected(day.date, slot),
                                                         'bg-brand-500 border-brand-600 text-white shadow-inner': isSlotSelected(day.date, slot),
                                                         'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed': slot.status !== 'livre' && slot.status !== 'ocupado'
@@ -7473,8 +7475,9 @@
                 <button @click="modals.confirmScheduleRepair = false" class="flex-1 text-gray-500 font-bold text-sm bg-gray-100 hover:bg-gray-200 py-3 rounded-lg transition-colors shadow-sm">
                     Revisar
                 </button>
-                <button @click="bypassRepairCheck = true; modals.confirmScheduleRepair = false; submitReschedule()" class="flex-1 bg-brand-500 text-white py-3 rounded-lg font-bold hover:bg-brand-600 shadow-md transition-colors flex justify-center items-center">
-                    Agendar Reparo
+                <button @click="bypassRepairCheck = true; modals.confirmScheduleRepair = false; submitReschedule()" :disabled="loading" class="flex-1 bg-brand-500 text-white py-3 rounded-lg font-bold hover:bg-brand-600 shadow-md transition-colors flex justify-center items-center disabled:cursor-not-allowed disabled:opacity-60">
+                    <i class="fa-solid fa-circle-notch fa-spin mr-2" x-show="loading"></i>
+                    <span x-text="loading ? 'Salvando...' : 'Agendar Reparo'"></span>
                 </button>
             </div>
         </div>
@@ -7578,6 +7581,7 @@
     <script src="js/modules/ticket-mutations.js"></script>
     <script src="js/modules/ticket-actions.js?v=4"></script>
     <script src="js/modules/api-client.js?v=2"></script>
+    <script src="js/modules/schedule-error-service.js?v=1"></script>
     <script src="js/modules/storage-service.js?v=3"></script>
     <script src="js/modules/workspace-config-service.js"></script>
     <script src="js/modules/catalog-service.js"></script>
@@ -7590,7 +7594,7 @@
     <script src="js/modules/recycle-bin-service.js"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=19"></script>
+    <script src="js/main.js?v=20"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
