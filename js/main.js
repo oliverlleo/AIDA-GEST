@@ -275,6 +275,11 @@ function app() {
         },
         ticketCardPageSize: 20,
         ticketColumnPagination: {},
+        testerBenchPagination: {
+            total: 0,
+            hasMore: false,
+            nextCursor: null
+        },
         searchDebounceTimer: null,
         realtimeDebounceTimer: null,
 
@@ -1885,6 +1890,11 @@ function app() {
             this.fetchTickets(true);
         },
 
+        async loadMoreTesterBench() {
+            if (!this.testerBenchPagination.hasMore || this.ticketPagination.isLoading) return;
+            await this.fetchTickets(true);
+        },
+
         getTicketColumnTotal(status) {
             const column = this.ticketColumnPagination?.[status];
             if (column && Number.isFinite(Number(column.total))) return Number(column.total);
@@ -2098,6 +2108,29 @@ function app() {
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                     hasRole: (r) => this.hasRole(r)
                 }, loadMore);
+
+                if (result.mode === 'test_bench_page') {
+                    if (loadMore) {
+                        const existingIds = new Set(this.tickets.map(ticket => ticket.id));
+                        this.tickets = [
+                            ...this.tickets,
+                            ...result.data.filter(ticket => !existingIds.has(ticket.id))
+                        ];
+                    } else {
+                        this.tickets = result.data;
+                    }
+
+                    this.testerBenchPagination = {
+                        total: result.total,
+                        hasMore: result.hasMore,
+                        nextCursor: result.nextCursor
+                    };
+                    this.ticketPagination.total = result.total;
+                    this.ticketPagination.hasMore = result.hasMore;
+                    this.ticketPagination.nextCursor = result.nextCursor;
+                    this.ticketPagination.isLoading = false;
+                    return;
+                }
 
                 // OPERATIONAL RPC MODE HANDLING
                 if (result.mode === 'operational_rpc') {

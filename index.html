@@ -4492,10 +4492,10 @@
                     <div class="flex-grow bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex flex-col max-w-2xl mx-auto w-full">
                          <div class="p-4 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
                             <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Aparelhos em Teste</h3>
-                            <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="tickets.filter(t => t.status === 'Teste Final').length"></span>
+                            <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="testerBenchPagination.total"></span>
                         </div>
                         <div class="p-6 overflow-y-auto space-y-4 flex-grow">
-                            <template x-for="ticket in tickets.filter(t => t.status === 'Teste Final')" :key="ticket.id">
+                            <template x-for="ticket in tickets" :key="ticket.id">
                                  <!-- Reusing Card Design but Wider -->
                                  <div class="bg-white rounded-xl shadow border-t-4 border-purple-500 p-6 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                       @click="viewTicketDetails(ticket)">
@@ -4529,7 +4529,15 @@
                                     </div>
                                  </div>
                             </template>
-                            <div x-show="tickets.filter(t => t.status === 'Teste Final').length === 0" class="text-center py-20 text-gray-400 italic">
+                            <button x-show="testerBenchPagination.hasMore"
+                                    @click="loadMoreTesterBench()"
+                                    :disabled="ticketPagination.isLoading"
+                                    class="w-full py-3 rounded-lg border border-purple-200 bg-white text-purple-700 text-xs font-bold hover:bg-purple-50 disabled:opacity-50 transition-colors">
+                                <i x-show="!ticketPagination.isLoading" class="fa-solid fa-chevron-down mr-1"></i>
+                                <i x-show="ticketPagination.isLoading" class="fa-solid fa-circle-notch fa-spin mr-1"></i>
+                                <span x-text="ticketPagination.isLoading ? 'Carregando...' : 'Carregar mais OS'"></span>
+                            </button>
+                            <div x-show="tickets.length === 0 && !ticketPagination.isLoading" class="text-center py-20 text-gray-400 italic">
                                 <i class="fa-solid fa-check-circle text-4xl mb-4 text-gray-200"></i>
                                 <p>Nenhum aparelho aguardando teste.</p>
                             </div>
@@ -7634,7 +7642,7 @@
     <script src="js/modules/storage-service.js?v=3"></script>
     <script src="js/modules/workspace-config-service.js"></script>
     <script src="js/modules/catalog-service.js"></script>
-    <script src="js/modules/ticket-query-service.js?v=3"></script>
+    <script src="js/modules/ticket-query-service.js?v=4"></script>
     <script src="js/modules/logs-notifications-service.js?v=3"></script>
     <script src="js/modules/notes-service.js"></script>
     <script src="js/modules/dashboard-service.js"></script>
@@ -7643,7 +7651,7 @@
     <script src="js/modules/recycle-bin-service.js"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=24"></script>
+    <script src="js/main.js?v=25"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
