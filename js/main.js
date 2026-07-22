@@ -4634,6 +4634,7 @@ function app() {
                 open: false,
                 search: '',
                 highlightedIndex: -1,
+                loadingMore: false,
                 init() {
         this.$watch('search', () => {
                         this.highlightedIndex = -1;
