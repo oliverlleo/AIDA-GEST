@@ -91,13 +91,10 @@ window.AIDATicketQueryService = {
     async fetchTicketsData(deps, loadMore) {
         const { state, supabaseFetch, hasRole } = deps;
 
-        // OPERATIONAL QUEUE RPC
+        // OPERATIONAL FILTER PAGE
         // Activate only when operational filter is active and we are exactly in the kanban view
         if (state.isKanbanOperationalFilterActive() && state.view === 'kanban') {
             const f = state.kanbanOperationalFilters;
-            const limit = state.ticketPagination.limit;
-            const offset = state.ticketPagination.page * limit;
-
             const search = String(f.search || '').trim();
 
             const payload = {
@@ -106,15 +103,19 @@ window.AIDATicketQueryService = {
                 p_status: f.status !== 'all' ? f.status : null,
                 p_technician_id: f.technician !== 'all' ? f.technician : null,
                 p_search: search ? search : null,
-                p_limit: limit,
-                p_offset: offset
+                p_limit: state.ticketCardPageSize,
+                p_cursor: loadMore ? state.ticketPagination.nextCursor : null,
+                p_include_counts: !loadMore
             };
 
-            const response = await supabaseFetch('rpc/get_operational_queue', 'POST', payload);
+            const response = await supabaseFetch('rpc/get_operational_ticket_page', 'POST', payload);
             return {
                 mode: 'operational_rpc',
                 data: response.items || [],
-                counts: response.counts || { today: 0, today_tomorrow: 0, next_7_days: 0, overdue: 0, no_deadline: 0, all: 0 }
+                counts: response.counts || null,
+                total: response.total,
+                hasMore: Boolean(response.has_more),
+                nextCursor: response.next_cursor || null
             };
         }
 
