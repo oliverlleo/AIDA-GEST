@@ -418,6 +418,12 @@
                                                     </div>
                                                 </li>
                                             </template>
+                                            <li x-show="scheduleManagement.unscheduledPages.assigned.hasMore" class="p-2 bg-red-50/50">
+                                                <button type="button" @click.stop="loadMoreUnscheduledBucket('assigned')" :disabled="scheduleManagement.unscheduledPages.assigned.loading" class="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-[10px] font-bold text-red-700 hover:bg-red-50 transition-colors disabled:opacity-60">
+                                                    <i class="fa-solid fa-circle-notch fa-spin mr-1" x-show="scheduleManagement.unscheduledPages.assigned.loading"></i>
+                                                    <span x-text="scheduleManagement.unscheduledPages.assigned.loading ? 'Carregando...' : 'Carregar mais (' + getUnscheduledBucketProgressLabel('assigned') + ')' "></span>
+                                                </button>
+                                            </li>
                                         </ul>
                                     </div>
 
@@ -475,6 +481,12 @@
                                                     </div>
                                                 </li>
                                             </template>
+                                            <li x-show="scheduleManagement.unscheduledPages.unassigned.hasMore" class="p-2 bg-orange-50/50">
+                                                <button type="button" @click.stop="loadMoreUnscheduledBucket('unassigned')" :disabled="scheduleManagement.unscheduledPages.unassigned.loading" class="w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-[10px] font-bold text-orange-700 hover:bg-orange-50 transition-colors disabled:opacity-60">
+                                                    <i class="fa-solid fa-circle-notch fa-spin mr-1" x-show="scheduleManagement.unscheduledPages.unassigned.loading"></i>
+                                                    <span x-text="scheduleManagement.unscheduledPages.unassigned.loading ? 'Carregando...' : 'Carregar mais (' + getUnscheduledBucketProgressLabel('unassigned') + ')' "></span>
+                                                </button>
+                                            </li>
                                         </ul>
                                     </div>
 
@@ -532,6 +544,12 @@
                                                     </div>
                                                 </li>
                                             </template>
+                                            <li x-show="scheduleManagement.unscheduledPages.conflict.hasMore" class="p-2 bg-yellow-50/50">
+                                                <button type="button" @click.stop="loadMoreUnscheduledBucket('conflict')" :disabled="scheduleManagement.unscheduledPages.conflict.loading" class="w-full rounded-lg border border-yellow-200 bg-white px-3 py-2 text-[10px] font-bold text-yellow-700 hover:bg-yellow-50 transition-colors disabled:opacity-60">
+                                                    <i class="fa-solid fa-circle-notch fa-spin mr-1" x-show="scheduleManagement.unscheduledPages.conflict.loading"></i>
+                                                    <span x-text="scheduleManagement.unscheduledPages.conflict.loading ? 'Carregando...' : 'Carregar mais (' + getUnscheduledBucketProgressLabel('conflict') + ')' "></span>
+                                                </button>
+                                            </li>
                                         </ul>
                                     </div>
 
@@ -589,6 +607,12 @@
                                                     </div>
                                                 </li>
                                             </template>
+                                            <li x-show="scheduleManagement.unscheduledPages.late.hasMore" class="p-2 bg-gray-50">
+                                                <button type="button" @click.stop="loadMoreUnscheduledBucket('late')" :disabled="scheduleManagement.unscheduledPages.late.loading" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-[10px] font-bold text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-60">
+                                                    <i class="fa-solid fa-circle-notch fa-spin mr-1" x-show="scheduleManagement.unscheduledPages.late.loading"></i>
+                                                    <span x-text="scheduleManagement.unscheduledPages.late.loading ? 'Carregando...' : 'Carregar mais (' + getUnscheduledBucketProgressLabel('late') + ')' "></span>
+                                                </button>
+                                            </li>
                                         </ul>
                                     </div>
 
@@ -5516,6 +5540,12 @@
                                          <li x-show="getFilteredTickets().length === 0" class="text-gray-500 p-4 text-center italic text-xs">
                                              Nenhum chamado encontrado para este tipo de agendamento.
                                          </li>
+                                         <li x-show="hasMorePendingTickets()" class="p-2 bg-gray-50 sticky bottom-0 border-t border-gray-100">
+                                             <button type="button" @mousedown.stop.prevent="loadMorePendingTickets()" :disabled="loadingMore" class="w-full rounded-lg border border-brand-200 bg-white px-3 py-2 text-[10px] font-bold text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-60">
+                                                 <i class="fa-solid fa-circle-notch fa-spin mr-1" x-show="loadingMore"></i>
+                                                 <span x-text="loadingMore ? 'Carregando...' : 'Carregar mais chamados'"></span>
+                                             </button>
+                                         </li>
                                      </ul>
                                 </div>
                             </div>
@@ -7613,7 +7643,7 @@
     <script src="js/modules/recycle-bin-service.js"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=21"></script>
+    <script src="js/main.js?v=22"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
