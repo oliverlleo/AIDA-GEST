@@ -510,6 +510,13 @@ function app() {
             loading: false,
             data: null,
             unscheduledLoading: false,
+            unscheduledRequestId: 0,
+            unscheduledPages: {
+                assigned: { nextCursor: null, hasMore: false, loading: false },
+                unassigned: { nextCursor: null, hasMore: false, loading: false },
+                conflict: { nextCursor: null, hasMore: false, loading: false },
+                late: { nextCursor: null, hasMore: false, loading: false }
+            },
             unscheduledItems: [],
             unscheduledTotal: 0,
             withoutTechnicianItems: [],
@@ -2799,24 +2806,22 @@ function app() {
             this.scheduleManagement.loading = true;
             this.scheduleManagement.gridTechnicianId = this.scheduleManagement.selectedTechnicianId;
 
-            const tasks = [];
+            try {
+                // Conflict queues depend on the selected technician's current capacity,
+                // so finish the grid read before requesting the independently paged queues.
+                if (this.scheduleManagement.gridTechnicianId) {
+                    this.scheduleManagement.data = [];
+                    this.scheduleManagement.capacitySummary = { booked: 0, total: 0 };
+                    await this.fetchManagerSchedule();
+                } else {
+                    this.scheduleManagement.data = null;
+                    this.scheduleManagement.capacitySummary = null;
+                }
 
-            // 1. Unscheduled tickets should always load
-            tasks.push(this.fetchUnscheduledTickets());
-
-            // 2. Manager schedule only loads if a tech is selected
-            if (this.scheduleManagement.gridTechnicianId) {
-                this.scheduleManagement.data = [];
-                this.scheduleManagement.capacitySummary = { booked: 0, total: 0 };
-                tasks.push(this.fetchManagerSchedule());
-            } else {
-                this.scheduleManagement.data = null;
-                this.scheduleManagement.capacitySummary = null;
+                await this.fetchUnscheduledTickets();
+            } finally {
+                this.scheduleManagement.loading = false;
             }
-
-            await Promise.all(tasks);
-
-            this.scheduleManagement.loading = false;
         },
 
         previewTechnicianSchedule(ticket) {
@@ -2911,103 +2916,113 @@ function app() {
         },
 
         async fetchUnscheduledTickets() {
+            const requestId = ++this.scheduleManagement.unscheduledRequestId;
             this.scheduleManagement.unscheduledLoading = true;
             this.scheduleManagement.unscheduledItems = [];
             this.scheduleManagement.unscheduledTotal = 0;
             this.scheduleManagement.withoutTechnicianItems = [];
             this.scheduleManagement.withoutTechnicianTotal = 0;
-
             this.scheduleManagement.conflictItems = [];
             this.scheduleManagement.conflictTotal = 0;
             this.scheduleManagement.lateWithoutScheduleItems = [];
             this.scheduleManagement.lateWithoutScheduleTotal = 0;
 
+            for (const page of Object.values(this.scheduleManagement.unscheduledPages)) {
+                page.nextCursor = null;
+                page.hasMore = false;
+                page.loading = false;
+            }
+
             try {
                 const filterTechId = this.scheduleManagement.selectedTechnicianId;
+                const buckets = ['assigned', 'unassigned', 'late'];
+                if (filterTechId) buckets.push('conflict');
 
-                // Sempre puxamos a lista geral de não agendados enviando null
-                // porque queremos que a lateral se comporte como se não houvesse filtro caso techId = ''
-                const response = await this.supabaseFetch('rpc/get_unscheduled_tickets', 'POST', {
-                    p_technician_id: null,
-                    p_appointment_type: this.scheduleManagement.typeFilter === 'all' ? null : this.scheduleManagement.typeFilter,
-                    p_status: null,
-                    // The hardened public RPC deliberately caps a page at 100.
-                    // Loading 500 at once also freezes the schedule sidebar on large bases.
-                    p_limit: 100,
-                    p_offset: 0
-                });
-
-                let allItems = [];
-                if (response && typeof response === 'object' && response.items) {
-                    allItems = response.items;
-                }
-
-                // O usuário pediu: se não tem técnico selecionado, aparece todos os cards (de todos os técnicos)
-                // Se TEM técnico selecionado no select lá em cima, filtramos a lateral SOMENTE para aquele técnico e os SEM TÉCNICO.
-                let filteredItems = allItems;
-                if (filterTechId) {
-                    filteredItems = allItems.filter(t => !t.technician_id || t.technician_id === filterTechId);
-                }
-
-                // Sem Técnico Block
-                const purelyUnassigned = filteredItems.filter(t => !t.technician_id);
-                this.scheduleManagement.withoutTechnicianItems = purelyUnassigned;
-                this.scheduleManagement.withoutTechnicianTotal = purelyUnassigned.length;
-
-                // Com Técnico (Não Agendados)
-                const assignedUnscheduled = filteredItems.filter(t => t.technician_id);
-                this.scheduleManagement.unscheduledItems = assignedUnscheduled;
-                this.scheduleManagement.unscheduledTotal = assignedUnscheduled.length;
-
-                const now = new Date();
-                const uniqueItems = filteredItems;
-
-                const lateItems = uniqueItems.filter(t => {
-                    const deadlineToCheck = t.status === 'Analise Tecnica' ? t.analysis_deadline : t.deadline;
-                    if (!deadlineToCheck) return false;
-                    const d = new Date(deadlineToCheck);
-                    return d < now;
-                });
-
-                this.scheduleManagement.lateWithoutScheduleItems = lateItems;
-                this.scheduleManagement.lateWithoutScheduleTotal = lateItems.length;
-
-                // 4. Conflict Items (Derived conservative visual proxy)
-                // A reasonable visual proxy for "conflict" in the unscheduled list is tickets that are assigned
-                // but whose deadline is extremely close (e.g. today or earlier) while there is NO available capacity today.
-                // We analyze the loaded schedule capacity to derive this warning list.
-                const conflicts = [];
-
-                // Only evaluate if we have a technician and capacity loaded for the current view
-                if (filterTechId && this.scheduleManagement.capacitySummary && (this.scheduleManagement.capacitySummary.booked >= this.scheduleManagement.capacitySummary.total)) {
-                    const viewDateLimit = new Date(this.scheduleManagement.referenceDate);
-                    viewDateLimit.setHours(23, 59, 59, 999);
-
-                    for (const item of uniqueItems) {
-                        // Skip if it's not assigned to the completely booked technician
-                        if (item.technician_id !== filterTechId) continue;
-
-                        const deadlineToCheck = item.status === 'Analise Tecnica' ? item.analysis_deadline : item.deadline;
-                        if (!deadlineToCheck) continue;
-
-                        const itemDeadline = new Date(deadlineToCheck);
-                        // If the deadline is before the end of the loaded (booked) view and it's not scheduled, it's a conflict
-                        if (itemDeadline <= viewDateLimit) {
-                            conflicts.push(item);
-                        }
-                    }
-                }
-
-                // Deduplicate from late items to prevent noise (ticket can only be in one visual group logic here ideally, but arrays are separate)
-                // Let's keep them purely in conflict if capacity is full, but user might just want the list
-                this.scheduleManagement.conflictItems = conflicts;
-                this.scheduleManagement.conflictTotal = conflicts.length;
-
+                const results = await Promise.allSettled(
+                    buckets.map(bucket => this.loadUnscheduledBucket(bucket, true, requestId))
+                );
+                const failed = results.find(result => result.status === 'rejected');
+                if (failed) throw failed.reason;
             } catch (error) {
                 console.error("Error fetching unscheduled tickets:", error);
             } finally {
-                this.scheduleManagement.unscheduledLoading = false;
+                if (requestId === this.scheduleManagement.unscheduledRequestId) {
+                    this.scheduleManagement.unscheduledLoading = false;
+                }
             }
+        },
+
+        getUnscheduledBucketBinding(bucket) {
+            return {
+                assigned: { items: 'unscheduledItems', total: 'unscheduledTotal' },
+                unassigned: { items: 'withoutTechnicianItems', total: 'withoutTechnicianTotal' },
+                conflict: { items: 'conflictItems', total: 'conflictTotal' },
+                late: { items: 'lateWithoutScheduleItems', total: 'lateWithoutScheduleTotal' }
+            }[bucket] || null;
+        },
+
+        async loadUnscheduledBucket(bucket, reset = false, requestId = this.scheduleManagement.unscheduledRequestId) {
+            const binding = this.getUnscheduledBucketBinding(bucket);
+            const page = this.scheduleManagement.unscheduledPages[bucket];
+            if (!binding || !page || page.loading || (!reset && !page.hasMore)) return;
+
+            page.loading = true;
+            try {
+                const filterTechId = this.scheduleManagement.selectedTechnicianId || null;
+                const capacity = this.scheduleManagement.capacitySummary;
+                const capacityFull = Boolean(
+                    filterTechId && capacity && capacity.booked >= capacity.total
+                );
+
+                const response = await this.supabaseFetch('rpc/get_unscheduled_ticket_page', 'POST', {
+                    p_bucket: bucket,
+                    p_technician_id: filterTechId,
+                    p_appointment_type: this.scheduleManagement.typeFilter === 'all'
+                        ? null
+                        : this.scheduleManagement.typeFilter,
+                    p_status: null,
+                    p_reference_date: this.scheduleManagement.referenceDate,
+                    p_capacity_full: bucket === 'conflict' ? capacityFull : false,
+                    p_limit: 20,
+                    p_cursor: reset ? null : page.nextCursor,
+                    p_include_total: reset
+                });
+
+                if (requestId !== this.scheduleManagement.unscheduledRequestId) return;
+
+                const incoming = Array.isArray(response?.items) ? response.items : [];
+                const current = reset ? [] : this.scheduleManagement[binding.items];
+                const knownIds = new Set(current.map(ticket => ticket.id));
+                const merged = current.concat(incoming.filter(ticket => !knownIds.has(ticket.id)));
+
+                this.scheduleManagement[binding.items] = merged;
+                if (response?.total !== null && response?.total !== undefined && Number.isFinite(Number(response.total))) {
+                    this.scheduleManagement[binding.total] = Number(response.total);
+                }
+                page.nextCursor = response?.next_cursor || null;
+                page.hasMore = Boolean(response?.has_more && page.nextCursor);
+            } finally {
+                if (requestId === this.scheduleManagement.unscheduledRequestId) {
+                    page.loading = false;
+                }
+            }
+        },
+
+        async loadMoreUnscheduledBucket(bucket) {
+            try {
+                await this.loadUnscheduledBucket(bucket);
+            } catch (error) {
+                console.error(`Error loading more ${bucket} schedule tickets:`, error);
+                this.notify('Não foi possível carregar mais chamados.', 'error');
+            }
+        },
+
+        getUnscheduledBucketProgressLabel(bucket) {
+            const binding = this.getUnscheduledBucketBinding(bucket);
+            if (!binding) return '';
+            const loaded = this.scheduleManagement[binding.items]?.length || 0;
+            const total = this.scheduleManagement[binding.total] || 0;
+            return `${loaded} de ${total}`;
         },
 
         navigateScheduleManagement(direction) {
@@ -4512,6 +4527,7 @@ function app() {
                 open: false,
                 search: '',
                 highlightedIndex: -1,
+                loadingMore: false,
                 init() {
         this.search = this.ticketForm.model || '';
                     this.$watch('ticketForm.model', (val) => {
@@ -4649,6 +4665,25 @@ function app() {
                     }
 
                     return tickets;
+                },
+                hasMorePendingTickets() {
+                    return ['assigned', 'unassigned', 'late'].some(
+                        bucket => this.scheduleManagement.unscheduledPages[bucket]?.hasMore
+                    );
+                },
+                async loadMorePendingTickets() {
+                    if (this.loadingMore) return;
+                    const buckets = ['assigned', 'unassigned', 'late'].filter(
+                        bucket => this.scheduleManagement.unscheduledPages[bucket]?.hasMore
+                    );
+                    if (buckets.length === 0) return;
+
+                    this.loadingMore = true;
+                    try {
+                        await Promise.all(buckets.map(bucket => this.loadMoreUnscheduledBucket(bucket)));
+                    } finally {
+                        this.loadingMore = false;
+                    }
                 },
                 toggleArrow() {
                     if (this.open) {
