@@ -269,6 +269,7 @@ function app() {
             page: 0,
             limit: 50,
             hasMore: true,
+            nextCursor: null,
             isLoading: false,
             total: 0
         },
@@ -2087,6 +2088,7 @@ function app() {
             } else {
                 this.ticketPagination.page = 0;
                 this.ticketPagination.hasMore = true;
+                this.ticketPagination.nextCursor = null;
                 // Preserve UI smoothly until response arrives if not paginating
             }
 
@@ -2099,18 +2101,24 @@ function app() {
 
                 // OPERATIONAL RPC MODE HANDLING
                 if (result.mode === 'operational_rpc') {
-                    this.kanbanOperationalCounts = result.counts;
+                    if (result.counts) this.kanbanOperationalCounts = result.counts;
                     this.kanbanOperationalLastResponse = result.data;
 
                     if (loadMore) {
-                        this.tickets = [...this.tickets, ...result.data];
+                        const existingIds = new Set(this.tickets.map(ticket => ticket.id));
+                        this.tickets = [
+                            ...this.tickets,
+                            ...result.data.filter(ticket => !existingIds.has(ticket.id))
+                        ];
                     } else {
                         this.tickets = result.data;
                     }
 
-                    if (result.data.length < this.ticketPagination.limit) {
-                        this.ticketPagination.hasMore = false;
+                    if (result.total !== null && result.total !== undefined) {
+                        this.ticketPagination.total = Number(result.total || 0);
                     }
+                    this.ticketPagination.hasMore = Boolean(result.hasMore);
+                    this.ticketPagination.nextCursor = result.nextCursor;
                     this.ticketPagination.isLoading = false;
                     return;
                 }
@@ -5241,14 +5249,15 @@ function app() {
 
                 const payload = {
                     p_window: f.window,
-                    p_basis: f.basis,
+                    p_basis: this.getEffectiveOperationalBasis(f.basis),
                     p_status: f.status !== 'all' ? f.status : null,
                     p_technician_id: f.technician !== 'all' ? f.technician : null,
                     p_search: search ? search : null,
-                    p_limit: 0, // Only fetch counts, no items
-                    p_offset: 0
+                    p_limit: 0,
+                    p_cursor: null,
+                    p_include_counts: true
                 };
-                const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', payload);
+                const response = await this.supabaseFetch('rpc/get_operational_ticket_page', 'POST', payload);
                 if (response && response.counts) {
                     this.kanbanOperationalCounts = response.counts;
                 }
