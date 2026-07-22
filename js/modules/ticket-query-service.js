@@ -91,6 +91,23 @@ window.AIDATicketQueryService = {
     async fetchTicketsData(deps, loadMore) {
         const { state, supabaseFetch, hasRole } = deps;
 
+        if (state.view === 'tester_bench') {
+            const response = await supabaseFetch('rpc/get_test_bench_page', 'POST', {
+                p_limit: state.ticketCardPageSize,
+                p_cursor: loadMore ? state.testerBenchPagination.nextCursor : null,
+                p_use_priority: state.isPriorityRequestEnabled(),
+                p_use_delivery_deadline: state.isFieldVisible('deadline')
+            });
+
+            return {
+                mode: 'test_bench_page',
+                data: Array.isArray(response?.items) ? response.items : [],
+                total: Number(response?.total || 0),
+                hasMore: Boolean(response?.has_more),
+                nextCursor: response?.next_cursor || null
+            };
+        }
+
         // OPERATIONAL FILTER PAGE
         // Activate only when operational filter is active and we are exactly in the kanban view
         if (state.isKanbanOperationalFilterActive() && state.view === 'kanban') {
