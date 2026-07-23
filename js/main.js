@@ -201,6 +201,7 @@ function app() {
                 priority_requests: true
             },
             modules: {
+                customers: true,
                 agenda: true,
                 suppliers: true,
                 manager_dashboard: true,
@@ -406,7 +407,8 @@ function app() {
             admin_dashboard: false,
             kanban: false,
             tech_orders: false,
-            tester_bench: false
+            tester_bench: false,
+            customers: false
         },
 
         // Daily Report State
@@ -427,7 +429,7 @@ function app() {
 
         // Ticket Form
         ticketForm: {
-            client_name: '', os_number: '', model: '', serial: '',
+            customer_id: null, client_name: '', os_number: '', model: '', serial: '',
             defects: [], priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '',
@@ -436,6 +438,36 @@ function app() {
             checklist: [], checklist_final: [], photos: [], notes: ''
         },
         ticketFormErrors: {},
+        customerManagement: {
+            items: [],
+            total: 0,
+            hasMore: true,
+            nextCursor: null,
+            loading: false,
+            requestId: 0,
+            search: '',
+            searchTimer: null,
+            selected: null,
+            tickets: [],
+            ticketsTotal: 0,
+            ticketsHasMore: true,
+            ticketsNextCursor: null,
+            ticketsLoading: false,
+            ticketRequestId: 0,
+            ticketSearch: '',
+            ticketSearchTimer: null
+        },
+        customerLookup: {
+            items: [],
+            open: false,
+            loading: false,
+            requestId: 0,
+            timer: null
+        },
+        customerForm: window.AIDACustomerService.emptyForm(),
+        customerFormContext: 'customers',
+        customerFormSaving: false,
+        customerFormErrors: {},
         newChecklistItem: '',
         selectedTemplateId: '',
         newTemplateName: '',
@@ -581,7 +613,7 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
         bypassAnalysisCheck: false,
         bypassRepairCheck: false,
 
@@ -846,6 +878,7 @@ function app() {
 
             const disabledView =
                 (currentView === 'schedule_management' && !this.isModuleEnabled('agenda'))
+                || (currentView === 'customers' && (!this.isModuleEnabled('customers') || !(this.hasRole('admin') || this.hasRole('atendente'))))
                 || (currentView === 'admin_dashboard' && !this.isModuleEnabled('manager_dashboard'))
                 || (currentView === 'tracker_settings' && !this.isModuleEnabled('public_tracker'));
             if (disabledView) {
@@ -904,6 +937,8 @@ function app() {
                     await this.fetchTickets();
                     await this.fetchOperationalAlerts(); // Alerts are used in kanban header
                     await this.fetchKanbanOperationalCounts();
+                } else if (currentView === 'customers') {
+                    await this.fetchCustomerPage(true);
                 } else {
                     // Outras views (tech_orders, tester_bench, etc.)
                     await this.fetchTickets();
@@ -2488,7 +2523,7 @@ function app() {
             this.bypassAnalysisCheck = false;
             this.ticketForm = {
                 id: crypto.randomUUID(),
-                client_name: '', os_number: '', model: '', serial: '',
+                customer_id: null, client_name: '', os_number: '', model: '', serial: '',
                 defects: [], priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
                 technician_id: '',
@@ -2497,7 +2532,167 @@ function app() {
                 checklist: [], checklist_final: [], photos: [], notes: ''
             };
             this.ticketFormErrors = {};
+            this.customerLookup.items = [];
+            this.customerLookup.open = false;
+            this.customerLookup.loading = false;
             this.modals.ticket = true;
+        },
+
+        _getCustomerDeps() {
+            return {
+                state: this,
+                supabaseFetch: (endpoint, method, body) => this.supabaseFetch(endpoint, method, body)
+            };
+        },
+
+        async fetchCustomerPage(reset = false) {
+            if (!this.isModuleEnabled('customers') || !(this.hasRole('admin') || this.hasRole('atendente'))) return;
+            try {
+                await window.AIDACustomerService.fetchCustomerPage(this._getCustomerDeps(), { reset });
+            } catch (error) {
+                console.error('Failed to load customers:', error);
+                this.notify('Erro ao carregar os clientes.', 'error');
+            }
+        },
+
+        async loadMoreCustomers() {
+            await this.fetchCustomerPage(false);
+        },
+
+        scheduleCustomerSearch() {
+            clearTimeout(this.customerManagement.searchTimer);
+            this.customerManagement.searchTimer = setTimeout(() => this.fetchCustomerPage(true), 300);
+        },
+
+        async selectCustomer(customer) {
+            if (!customer?.id) return;
+            this.customerManagement.selected = customer;
+            this.customerManagement.ticketSearch = '';
+            this.customerManagement.tickets = [];
+            this.customerManagement.ticketsTotal = Number(customer.ticket_count || 0);
+            this.customerManagement.ticketsHasMore = true;
+            this.customerManagement.ticketsNextCursor = null;
+            await this.fetchCustomerTickets(true);
+        },
+
+        async fetchCustomerTickets(reset = false) {
+            try {
+                await window.AIDACustomerService.fetchCustomerTickets(this._getCustomerDeps(), { reset });
+            } catch (error) {
+                console.error('Failed to load customer tickets:', error);
+                this.notify('Erro ao carregar as OS deste cliente.', 'error');
+            }
+        },
+
+        async loadMoreCustomerTickets() {
+            await this.fetchCustomerTickets(false);
+        },
+
+        scheduleCustomerTicketSearch() {
+            clearTimeout(this.customerManagement.ticketSearchTimer);
+            this.customerManagement.ticketSearchTimer = setTimeout(() => this.fetchCustomerTickets(true), 300);
+        },
+
+        handleCustomerNameInput() {
+            if (!this.isModuleEnabled('customers')) return;
+            this.ticketForm.customer_id = null;
+            clearTimeout(this.customerLookup.timer);
+            const query = String(this.ticketForm.client_name || '').trim();
+            if (query.length < 2) {
+                this.customerLookup.requestId++;
+                this.customerLookup.items = [];
+                this.customerLookup.open = false;
+                this.customerLookup.loading = false;
+                return;
+            }
+            this.customerLookup.timer = setTimeout(async () => {
+                try {
+                    const matches = await window.AIDACustomerService.lookupCustomers(this._getCustomerDeps(), query);
+                    const exactMatches = matches.filter(customer => String(customer.name || '').localeCompare(query, 'pt-BR', { sensitivity: 'base' }) === 0);
+                    if (exactMatches.length === 1 && !this.ticketForm.customer_id && String(this.ticketForm.client_name || '').trim() === query) {
+                        this.selectTicketCustomer(exactMatches[0]);
+                    }
+                } catch (error) {
+                    console.error('Failed to search customers:', error);
+                    this.customerLookup.items = [];
+                    this.customerLookup.open = false;
+                }
+            }, 250);
+        },
+
+        selectTicketCustomer(customer) {
+            if (!customer?.id) return;
+            this.ticketForm.customer_id = customer.id;
+            this.ticketForm.client_name = customer.name || '';
+            this.ticketForm.contact = customer.whatsapp || customer.phone || '';
+            this.customerLookup.items = [];
+            this.customerLookup.open = false;
+            this.clearTicketFieldError('client_name');
+        },
+
+        clearSelectedTicketCustomer() {
+            this.ticketForm.customer_id = null;
+            this.customerLookup.open = false;
+        },
+
+        openCustomerForm(context = 'customers', customer = null) {
+            if (!this.isModuleEnabled('customers')) return;
+            this.customerFormContext = context === 'ticket' ? 'ticket' : 'customers';
+            const source = customer || (
+                this.customerFormContext === 'ticket'
+                    ? { name: this.ticketForm.client_name || '', phone: this.ticketForm.contact || '' }
+                    : {}
+            );
+            this.customerForm = window.AIDACustomerService.normalizeForm(source);
+            this.customerFormErrors = {};
+            this.modals.customerForm = true;
+        },
+
+        async saveCustomer() {
+            const name = String(this.customerForm.name || '').trim();
+            if (!name) {
+                this.customerFormErrors = { name: true };
+                setTimeout(() => document.querySelector('[data-customer-field="name"] input')?.focus(), 20);
+                return;
+            }
+            if (this.customerFormSaving) return;
+
+            this.customerFormSaving = true;
+            try {
+                const saved = await window.AIDACustomerService.saveCustomer(this._getCustomerDeps(), this.customerForm);
+                if (!saved?.id) throw new Error('O banco não retornou o cliente salvo.');
+
+                this.modals.customerForm = false;
+                this.notify(this.customerForm.id ? 'Cliente atualizado!' : 'Cliente cadastrado!');
+
+                if (this.customerFormContext === 'ticket') {
+                    this.selectTicketCustomer(saved);
+                } else {
+                    await this.fetchCustomerPage(true);
+                    const refreshed = this.customerManagement.items.find(item => item.id === saved.id) || saved;
+                    await this.selectCustomer(refreshed);
+                }
+            } catch (error) {
+                console.error('Failed to save customer:', error);
+                this.notify('Erro ao salvar cliente: ' + error.message, 'error');
+            } finally {
+                this.customerFormSaving = false;
+            }
+        },
+
+        getCustomerTicketOutcome(ticket) {
+            if (!ticket) return '';
+            if (ticket.repair_end_at && ticket.repair_successful === true) return 'Reparo concluído com sucesso';
+            if (ticket.repair_end_at && ticket.repair_successful === false) return 'Reparo concluído sem sucesso';
+            if (ticket.budget_status === 'Negado') return 'Orçamento não aprovado';
+            if (ticket.status === 'Finalizado') return 'Atendimento finalizado';
+            return '';
+        },
+
+        getCustomerTicketOutcomeClass(ticket) {
+            if (ticket?.repair_end_at && ticket.repair_successful === true) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            if ((ticket?.repair_end_at && ticket.repair_successful === false) || ticket?.budget_status === 'Negado') return 'bg-red-50 text-red-700 border-red-200';
+            return 'bg-gray-100 text-gray-600 border-gray-200';
         },
 
         focusTicketFields(fields) {
@@ -3828,14 +4023,21 @@ function app() {
             }
         },
 
-        copyTrackingLink() {
+        async copyTrackingLink(ticketOverride = null) {
              if (!this.isModuleEnabled('public_tracker')) return;
-             const ticket = this.resolveTicket();
-             if (!ticket) return;
+             const ticket = ticketOverride || this.resolveTicket();
+             if (!ticket?.id || !ticket?.public_token) {
+                 this.notify('Link de acompanhamento indisponível para esta OS.', 'error');
+                 return;
+             }
              const link = this.getTrackingLink(ticket);
-             navigator.clipboard.writeText(link).then(() => {
+             try {
+                 await navigator.clipboard.writeText(link);
                  this.notify("Link copiado!");
-             });
+             } catch (error) {
+                 console.error('Clipboard copy failed:', error);
+                 this.notify('Não foi possível copiar o link.', 'error');
+             }
         },
 
         sendTrackingWhatsApp() {
@@ -4117,6 +4319,29 @@ function app() {
         // == SUBFASE 1 — FLUXO ADMINISTRATIVO BASE ==
 
         async createTicket() {
+            if (this.isModuleEnabled('customers') && !this.ticketForm.customer_id) {
+                const customerName = String(this.ticketForm.client_name || '').trim();
+                if (customerName.length >= 2) {
+                    try {
+                        const matches = await window.AIDACustomerService.lookupCustomers(this._getCustomerDeps(), customerName);
+                        const exactMatches = matches.filter(customer =>
+                            String(customer.name || '').localeCompare(customerName, 'pt-BR', { sensitivity: 'base' }) === 0
+                        );
+                        if (exactMatches.length === 1) {
+                            this.selectTicketCustomer(exactMatches[0]);
+                        } else if (exactMatches.length > 1) {
+                            this.customerLookup.open = true;
+                            this.notify('Existe mais de um cliente com este nome. Selecione o cadastro correto.', 'error');
+                            return;
+                        }
+                    } catch (error) {
+                        console.error('Failed to validate ticket customer:', error);
+                        this.notify('Não foi possível validar o cadastro do cliente. Tente novamente.', 'error');
+                        return;
+                    }
+                }
+            }
+
             if (!this.bypassAnalysisCheck && this.ticketForm.analysis_deadline && this.selectedAnalysisAppointment) {
                 const deadlineDate = new Date(this.ticketForm.analysis_deadline);
                 const appendDate = new Date(`${this.selectedAnalysisAppointment.date}T${this.selectedAnalysisAppointment.end}`);

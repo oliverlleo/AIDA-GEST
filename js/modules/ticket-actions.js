@@ -62,6 +62,7 @@ window.AIDATicketActions = {
             const ticketData = {
                 id: deps.state.ticketForm.id,
                 workspace_id: deps.state.user.workspace_id,
+                customer_id: deps.isModuleEnabled('customers') ? (deps.state.ticketForm.customer_id || null) : null,
                 client_name: deps.state.ticketForm.client_name,
                 os_number: isOsAuto ? null : deps.state.ticketForm.os_number, // Send null if auto
                 device_model: deps.state.ticketForm.model,
