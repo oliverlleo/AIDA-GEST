@@ -25,6 +25,7 @@
     });
 
     const DEFAULT_MODULES = Object.freeze({
+        customers: true,
         agenda: true,
         suppliers: true,
         manager_dashboard: true,

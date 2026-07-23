@@ -37,6 +37,8 @@ window.AIDAWorkspaceConfigService = {
 
             if (deps.state.view === 'schedule_management' && !deps.state.isModuleEnabled('agenda')) {
                 deps.state.view = 'dashboard';
+            } else if (deps.state.view === 'customers' && !deps.state.isModuleEnabled('customers')) {
+                deps.state.view = 'dashboard';
             } else if (deps.state.view === 'admin_dashboard' && !deps.state.isModuleEnabled('manager_dashboard')) {
                 deps.state.view = 'dashboard';
             } else if (deps.state.view === 'tracker_settings' && !deps.state.isModuleEnabled('public_tracker')) {

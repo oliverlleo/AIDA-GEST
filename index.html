@@ -158,6 +158,16 @@
                                 <span class="ml-3 font-medium text-sm hidden md:block">Chamados</span>
                             </a>
                         </template>
+
+                        <!-- Customers (Admin/Attendant only) -->
+                        <template x-if="hasRole('admin') || hasRole('atendente')">
+                            <a href="#" x-show="isModuleEnabled('customers')" @click.prevent="view = 'customers'"
+                               :class="view === 'customers' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-users w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'customers' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Clientes</span>
+                            </a>
+                        </template>
                     </div>
 
                     <!-- Tech Section -->
@@ -236,6 +246,199 @@
 
             <!-- Main Content Area -->
             <main class="flex-grow bg-gray-50 relative overflow-hidden flex flex-col">
+
+                <!-- VIEW: CUSTOMERS -->
+                <div x-show="view === 'customers' && isModuleEnabled('customers') && (hasRole('admin') || hasRole('atendente'))"
+                     class="h-full flex flex-col bg-gray-50/70" x-cloak>
+                    <header class="bg-white px-5 md:px-8 py-5 border-b border-gray-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 flex-shrink-0">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-2xl bg-brand-50 text-brand-600 border border-brand-100 flex items-center justify-center">
+                                <i class="fa-solid fa-users text-lg"></i>
+                            </div>
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-800">Clientes</h1>
+                                <p class="text-sm text-gray-500">Cadastro e histórico de aparelhos atendidos.</p>
+                            </div>
+                        </div>
+                        <button @click="openCustomerForm('customers')"
+                                class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition flex items-center justify-center">
+                            <i class="fa-solid fa-user-plus mr-2"></i>Novo cliente
+                        </button>
+                    </header>
+
+                    <div class="flex-grow min-h-0 p-4 md:p-6 overflow-y-auto">
+                        <div class="min-h-full xl:h-full max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-5">
+                            <aside class="bg-white border border-gray-200 rounded-2xl shadow-sm flex flex-col min-h-[360px] overflow-hidden">
+                                <div class="p-4 border-b border-gray-100">
+                                    <div class="relative">
+                                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                        <input type="search" x-model="customerManagement.search" @input="scheduleCustomerSearch()"
+                                               placeholder="Nome, telefone, CPF/CNPJ, cidade..."
+                                               class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                    </div>
+                                    <div class="mt-3 flex items-center justify-between text-xs text-gray-500">
+                                        <span><b class="text-gray-700" x-text="customerManagement.total"></b> clientes encontrados</span>
+                                        <i x-show="customerManagement.loading" class="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
+                                    </div>
+                                </div>
+
+                                <div class="flex-grow overflow-y-auto p-2 space-y-1">
+                                    <template x-for="customer in customerManagement.items" :key="customer.id">
+                                        <button @click="selectCustomer(customer)"
+                                                :class="customerManagement.selected?.id === customer.id ? 'bg-brand-50 border-brand-200 shadow-sm' : 'bg-white border-transparent hover:bg-gray-50 hover:border-gray-200'"
+                                                class="w-full text-left border rounded-xl p-3 transition">
+                                            <div class="flex items-start gap-3">
+                                                <span class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center"
+                                                      :class="customerManagement.selected?.id === customer.id ? 'bg-white text-brand-600' : 'bg-gray-100 text-gray-500'">
+                                                    <i class="fa-solid" :class="customer.person_type === 'company' ? 'fa-building' : 'fa-user'"></i>
+                                                </span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="font-bold text-sm text-gray-800 block truncate" x-text="customer.name"></span>
+                                                    <span class="text-xs text-gray-500 block truncate" x-text="customer.whatsapp || customer.phone || customer.email || 'Somente nome cadastrado'"></span>
+                                                    <span class="text-[10px] text-gray-400 mt-1 block">
+                                                        <i class="fa-solid fa-screwdriver-wrench mr-1"></i>
+                                                        <span x-text="Number(customer.ticket_count || 0)"></span>
+                                                        <span x-text="Number(customer.ticket_count || 0) === 1 ? ' OS' : ' OS'"></span>
+                                                    </span>
+                                                </span>
+                                                <i class="fa-solid fa-chevron-right text-[10px] mt-3 text-gray-300"></i>
+                                            </div>
+                                        </button>
+                                    </template>
+
+                                    <button x-show="customerManagement.hasMore" @click="loadMoreCustomers()"
+                                            :disabled="customerManagement.loading"
+                                            class="w-full py-2.5 rounded-xl border border-brand-100 text-brand-700 bg-brand-50 hover:bg-brand-100 text-xs font-bold disabled:opacity-50 transition">
+                                        <i class="fa-solid fa-chevron-down mr-1"></i>
+                                        <span x-text="customerManagement.loading ? 'Carregando...' : 'Carregar mais clientes'"></span>
+                                    </button>
+
+                                    <div x-show="!customerManagement.loading && customerManagement.items.length === 0"
+                                         class="text-center py-14 px-5 text-gray-400">
+                                        <i class="fa-solid fa-user-group text-3xl text-gray-200 mb-3"></i>
+                                        <p class="text-sm font-medium">Nenhum cliente encontrado.</p>
+                                        <button @click="openCustomerForm('customers')" class="text-xs font-bold text-brand-600 mt-2 hover:underline">Cadastrar cliente</button>
+                                    </div>
+                                </div>
+                            </aside>
+
+                            <section class="bg-white border border-gray-200 rounded-2xl shadow-sm min-h-[460px] overflow-hidden flex flex-col">
+                                <template x-if="customerManagement.selected">
+                                    <div class="h-full flex flex-col min-h-0">
+                                        <div class="p-5 md:p-6 border-b border-gray-100 bg-gradient-to-r from-white to-brand-50/40">
+                                            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                                                <div class="flex items-start gap-3 min-w-0">
+                                                    <span class="w-12 h-12 rounded-2xl bg-brand-500 text-white flex-shrink-0 flex items-center justify-center shadow-sm">
+                                                        <i class="fa-solid" :class="customerManagement.selected.person_type === 'company' ? 'fa-building' : 'fa-user'"></i>
+                                                    </span>
+                                                    <div class="min-w-0">
+                                                        <h2 class="text-xl font-bold text-gray-900 truncate" x-text="customerManagement.selected.name"></h2>
+                                                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
+                                                            <span x-show="customerManagement.selected.whatsapp || customerManagement.selected.phone"><i class="fa-solid fa-phone mr-1 text-brand-500"></i><span x-text="customerManagement.selected.whatsapp || customerManagement.selected.phone"></span></span>
+                                                            <span x-show="customerManagement.selected.email"><i class="fa-solid fa-envelope mr-1 text-brand-500"></i><span x-text="customerManagement.selected.email"></span></span>
+                                                            <span x-show="customerManagement.selected.document_number"><i class="fa-solid fa-id-card mr-1 text-brand-500"></i><span x-text="customerManagement.selected.document_number"></span></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button @click="openCustomerForm('customers', customerManagement.selected)"
+                                                        class="px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:text-brand-600 hover:border-brand-200 text-xs font-bold transition">
+                                                    <i class="fa-solid fa-pen mr-1"></i>Editar cadastro
+                                                </button>
+                                            </div>
+
+                                            <div x-show="customerManagement.selected.address_line || customerManagement.selected.city || customerManagement.selected.notes"
+                                                 class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
+                                                <div x-show="customerManagement.selected.address_line || customerManagement.selected.city" class="bg-white/80 border border-gray-100 rounded-xl p-3 text-gray-600">
+                                                    <i class="fa-solid fa-location-dot text-brand-500 mr-1"></i>
+                                                    <span x-text="[
+                                                        customerManagement.selected.address_line,
+                                                        customerManagement.selected.address_number,
+                                                        customerManagement.selected.neighborhood,
+                                                        customerManagement.selected.city,
+                                                        customerManagement.selected.state
+                                                    ].filter(Boolean).join(', ')"></span>
+                                                </div>
+                                                <div x-show="customerManagement.selected.notes" class="bg-white/80 border border-gray-100 rounded-xl p-3 text-gray-600 truncate">
+                                                    <i class="fa-solid fa-note-sticky text-brand-500 mr-1"></i>
+                                                    <span x-text="customerManagement.selected.notes"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="p-4 md:px-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                            <div>
+                                                <h3 class="font-bold text-gray-800 text-sm">Ordens de serviço</h3>
+                                                <p class="text-xs text-gray-500"><span x-text="customerManagement.ticketsTotal"></span> atendimentos vinculados</p>
+                                            </div>
+                                            <div class="relative w-full md:w-80">
+                                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                                <input type="search" x-model="customerManagement.ticketSearch" @input="scheduleCustomerTicketSearch()"
+                                                       placeholder="OS, IMEI/série, modelo ou defeito"
+                                                       class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                            </div>
+                                        </div>
+
+                                        <div class="flex-grow min-h-0 overflow-y-auto p-4 md:p-6 bg-gray-50/60">
+                                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                                <template x-for="ticket in customerManagement.tickets" :key="ticket.id">
+                                                    <article @click="viewTicketDetails(ticket)"
+                                                             class="bg-white border border-gray-200 hover:border-brand-200 hover:shadow-md rounded-2xl p-4 cursor-pointer transition group">
+                                                        <div class="flex items-start justify-between gap-3">
+                                                            <div class="min-w-0">
+                                                                <button @click.stop="viewTicketDetails(ticket)" class="font-mono text-xs font-bold text-brand-600 hover:underline" x-text="'OS #' + ticket.os_number"></button>
+                                                                <h4 class="font-bold text-gray-900 mt-1 truncate" x-text="ticket.device_model"></h4>
+                                                                <p class="text-xs text-gray-500 truncate mt-0.5" x-text="ticket.serial_number ? 'IMEI/Série: ' + ticket.serial_number : 'Sem IMEI/Série informado'"></p>
+                                                            </div>
+                                                            <button x-show="isModuleEnabled('public_tracker')" @click.stop="copyTrackingLink(ticket)"
+                                                                    class="w-9 h-9 rounded-xl bg-gray-50 text-gray-400 hover:bg-brand-50 hover:text-brand-600 flex items-center justify-center transition"
+                                                                    title="Copiar link de acompanhamento">
+                                                                <i class="fa-solid fa-share-nodes"></i>
+                                                            </button>
+                                                        </div>
+                                                        <div class="mt-4 flex flex-wrap items-center gap-2">
+                                                            <span class="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold uppercase" x-text="getStatusLabel(ticket.status)"></span>
+                                                            <span x-show="getCustomerTicketOutcome(ticket)"
+                                                                  :class="getCustomerTicketOutcomeClass(ticket)"
+                                                                  class="px-2.5 py-1 rounded-full border text-[10px] font-bold"
+                                                                  x-text="getCustomerTicketOutcome(ticket)"></span>
+                                                        </div>
+                                                        <div class="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400">
+                                                            <span><i class="fa-regular fa-calendar mr-1"></i><span x-text="ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('pt-BR') : '-'"></span></span>
+                                                            <span class="font-bold group-hover:text-brand-600 transition">Ver OS <i class="fa-solid fa-arrow-right ml-1"></i></span>
+                                                        </div>
+                                                    </article>
+                                                </template>
+                                            </div>
+
+                                            <button x-show="customerManagement.ticketsHasMore" @click="loadMoreCustomerTickets()"
+                                                    :disabled="customerManagement.ticketsLoading"
+                                                    class="w-full mt-4 py-3 rounded-xl border border-brand-100 text-brand-700 bg-white hover:bg-brand-50 text-xs font-bold disabled:opacity-50 transition">
+                                                <i class="fa-solid fa-chevron-down mr-1"></i>
+                                                <span x-text="customerManagement.ticketsLoading ? 'Carregando...' : 'Carregar mais OS'"></span>
+                                            </button>
+
+                                            <div x-show="customerManagement.ticketsLoading && customerManagement.tickets.length === 0" class="text-center py-14 text-gray-400">
+                                                <i class="fa-solid fa-circle-notch fa-spin text-brand-500 text-2xl"></i>
+                                            </div>
+                                            <div x-show="!customerManagement.ticketsLoading && customerManagement.tickets.length === 0" class="text-center py-14 text-gray-400">
+                                                <i class="fa-solid fa-folder-open text-3xl text-gray-200 mb-3"></i>
+                                                <p class="text-sm font-medium">Nenhuma OS encontrada para este cliente.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <div x-show="!customerManagement.selected" class="h-full flex flex-col items-center justify-center text-center p-8 text-gray-400">
+                                    <div class="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+                                        <i class="fa-solid fa-user-check text-3xl text-gray-200"></i>
+                                    </div>
+                                    <h3 class="font-bold text-gray-700">Selecione um cliente</h3>
+                                    <p class="text-sm mt-1 max-w-sm">O cadastro e todas as OS vinculadas aparecerão aqui sem carregar o histórico inteiro de uma vez.</p>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- VIEW: DASHBOARD (Welcome) -->
                 <!-- VIEW: SCHEDULE MANAGEMENT (Agenda Técnica) -->
@@ -1662,6 +1865,7 @@
                                 </div>
                                 <div x-show="isCustomizationEnabled('modules')" x-transition x-cloak class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <template x-for="module in [
+                                    {key:'customers', icon:'fa-users', label:'Cadastro de clientes', description:'Clientes e histórico de atendimentos por OS'},
                                     {key:'agenda', icon:'fa-calendar-days', label:'Agenda', description:'Agenda semanal e Gerenciamento de Agenda'},
                                     {key:'suppliers', icon:'fa-store', label:'Fornecedores de peças', description:'Lojas e empresas onde a assistência compra peças e componentes'},
                                     {key:'manager_dashboard', icon:'fa-chart-line', label:'Dashboard Gestor', description:'Indicadores e análises gerenciais'},
@@ -5646,6 +5850,138 @@
         </div>
     </div>
 
+    <!-- CUSTOMER FORM MODAL -->
+    <div x-show="modals.customerForm && isModuleEnabled('customers')" class="fixed inset-0 z-[120] overflow-y-auto" x-cloak>
+        <div class="flex min-h-screen items-center justify-center p-4">
+            <div class="fixed inset-0 bg-gray-900/75" @click="modals.customerForm = false"></div>
+            <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden">
+                <div class="bg-black px-6 py-4 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-white" x-text="customerForm.id ? 'Editar cliente' : 'Cadastrar cliente'"></h3>
+                        <p class="text-xs text-gray-400">Somente o nome é obrigatório.</p>
+                    </div>
+                    <button @click="modals.customerForm = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+
+                <div class="p-5 md:p-6 max-h-[72vh] overflow-y-auto space-y-6"
+                     @input="if ($event.target.closest('[data-customer-field]')?.dataset.customerField === 'name') customerFormErrors.name = false">
+                    <section>
+                        <h4 class="text-xs font-bold text-brand-600 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-id-card"></i>Identificação
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="md:col-span-2" data-customer-field="name">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Nome / Razão social <span class="text-red-500">*</span></label>
+                                <input x-model="customerForm.name" type="text" maxlength="150"
+                                       :class="customerFormErrors.name ? 'border-red-500 bg-red-50 ring-2 ring-red-100' : 'border-gray-200 bg-gray-50'"
+                                       class="w-full rounded-xl border px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                <p x-show="customerFormErrors.name" class="text-xs text-red-600 font-semibold mt-1"><i class="fa-solid fa-circle-exclamation mr-1"></i>Informe o nome do cliente.</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Tipo de cliente</label>
+                                <select x-model="customerForm.person_type" class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-brand-400">
+                                    <option value="person">Pessoa física</option>
+                                    <option value="company">Pessoa jurídica</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1" x-text="customerForm.person_type === 'company' ? 'CNPJ' : 'CPF'"></label>
+                                <input x-model="customerForm.document_number" type="text" maxlength="30" placeholder="Opcional"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div x-show="customerForm.person_type === 'person'">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Data de nascimento</label>
+                                <input x-model="customerForm.birth_date" type="date"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h4 class="text-xs font-bold text-brand-600 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-address-book"></i>Contato
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Telefone</label>
+                                <input x-model="customerForm.phone" type="tel" maxlength="30" placeholder="(00) 00000-0000"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">WhatsApp / telefone alternativo</label>
+                                <input x-model="customerForm.whatsapp" type="tel" maxlength="30"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">E-mail</label>
+                                <input x-model="customerForm.email" type="email" maxlength="254" placeholder="cliente@email.com"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h4 class="text-xs font-bold text-brand-600 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-location-dot"></i>Endereço
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">CEP</label>
+                                <input x-model="customerForm.postal_code" type="text" maxlength="12"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div class="md:col-span-4">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Rua / Avenida</label>
+                                <input x-model="customerForm.address_line" type="text" maxlength="160"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Número</label>
+                                <input x-model="customerForm.address_number" type="text" maxlength="20"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div class="md:col-span-4">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Complemento</label>
+                                <input x-model="customerForm.address_complement" type="text" maxlength="100"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Bairro</label>
+                                <input x-model="customerForm.neighborhood" type="text" maxlength="100"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Cidade</label>
+                                <input x-model="customerForm.city" type="text" maxlength="100"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                            <div class="md:col-span-1">
+                                <label class="block text-xs font-bold text-gray-600 mb-1">UF</label>
+                                <input x-model="customerForm.state" type="text" maxlength="2" placeholder="SP"
+                                       class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm uppercase focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <label class="block text-xs font-bold text-gray-600 mb-1"><i class="fa-solid fa-note-sticky text-brand-500 mr-1"></i>Observações</label>
+                        <textarea x-model="customerForm.notes" rows="3" maxlength="1000" placeholder="Preferências de contato, referências ou outras informações úteis..."
+                                  class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none"></textarea>
+                    </section>
+                </div>
+
+                <div class="bg-gray-50 px-5 md:px-6 py-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                    <button @click="modals.customerForm = false" class="px-4 py-2.5 rounded-xl text-gray-600 font-bold text-sm hover:bg-gray-200 transition">Cancelar</button>
+                    <button @click="saveCustomer()" :disabled="customerFormSaving"
+                            class="px-5 py-2.5 rounded-xl bg-brand-500 text-white font-bold text-sm hover:bg-brand-600 disabled:opacity-60 transition shadow-sm">
+                        <i class="fa-solid mr-2" :class="customerFormSaving ? 'fa-circle-notch fa-spin' : 'fa-floppy-disk'"></i>
+                        <span x-text="customerFormSaving ? 'Salvando...' : 'Salvar cliente'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 1. NEW TICKET MODAL -->
     <div x-show="modals.ticket || schedulePanelOpen"
          :class="modals.ticket ? 'pointer-events-auto z-[60]' : 'pointer-events-none z-[80]'"
@@ -5670,7 +6006,54 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div data-ticket-field="client_name">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Cliente <span x-show="isFieldRequired('client_name')" class="text-red-500">*</span></label>
-                            <input type="text" x-model="ticketForm.client_name" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                            <div class="relative">
+                                <div class="flex items-stretch rounded-lg border border-gray-300 bg-gray-50 focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500 overflow-hidden">
+                                    <input type="text" x-model="ticketForm.client_name"
+                                           @input="handleCustomerNameInput()"
+                                           @focus="if (isModuleEnabled('customers') && customerLookup.items.length) customerLookup.open = true"
+                                           @keydown.escape="customerLookup.open = false"
+                                           autocomplete="off"
+                                           :placeholder="isModuleEnabled('customers') ? 'Digite para localizar o cliente' : ''"
+                                           class="min-w-0 flex-1 border-0 p-2.5 bg-transparent focus:ring-0">
+                                    <span x-show="isModuleEnabled('customers') && ticketForm.customer_id"
+                                          class="px-2 flex items-center text-emerald-600 bg-emerald-50 border-l border-emerald-100"
+                                          title="Cliente vinculado ao cadastro">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </span>
+                                    <button x-show="isModuleEnabled('customers')" type="button"
+                                            @click="openCustomerForm('ticket')"
+                                            class="w-11 flex items-center justify-center text-brand-600 bg-white border-l border-gray-200 hover:bg-brand-50 transition"
+                                            title="Cadastrar novo cliente">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+
+                                <div x-show="isModuleEnabled('customers') && customerLookup.open"
+                                     @click.outside="customerLookup.open = false"
+                                     class="absolute z-[95] left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+                                    <div x-show="customerLookup.loading" class="px-4 py-3 text-xs text-gray-500">
+                                        <i class="fa-solid fa-circle-notch fa-spin text-brand-500 mr-2"></i>Buscando clientes...
+                                    </div>
+                                    <template x-for="customer in customerLookup.items" :key="customer.id">
+                                        <button type="button" @click="selectTicketCustomer(customer)"
+                                                class="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-brand-50 border-b border-gray-50 last:border-0 transition">
+                                            <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
+                                                <i class="fa-solid" :class="customer.person_type === 'company' ? 'fa-building' : 'fa-user'"></i>
+                                            </span>
+                                            <span class="min-w-0 flex-1">
+                                                <b class="text-sm text-gray-800 block truncate" x-text="customer.name"></b>
+                                                <small class="text-xs text-gray-500 block truncate" x-text="[customer.whatsapp || customer.phone, customer.email].filter(Boolean).join(' • ') || 'Sem contato cadastrado'"></small>
+                                            </span>
+                                        </button>
+                                    </template>
+                                    <button x-show="!customerLookup.loading && customerLookup.items.length === 0"
+                                            type="button" @click="openCustomerForm('ticket')"
+                                            class="w-full px-4 py-3 text-left text-xs text-gray-600 hover:bg-brand-50 transition">
+                                        <i class="fa-solid fa-user-plus text-brand-500 mr-2"></i>
+                                        Nenhum cadastro encontrado. <b>Cadastrar agora</b>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div x-show="isFieldVisible('contact_info')" data-ticket-field="contact_info">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Contato <span x-show="isFieldRequired('contact_info')" class="text-red-500">*</span></label>
@@ -7631,16 +8014,16 @@
 
     <!-- JS MODULES (Infraestrutura inicial) -->
     <script src="js/supabase-config.js"></script>
-    <script src="js/modules/feature-config.js"></script>
+    <script src="js/modules/feature-config.js?v=2"></script>
     <script src="js/modules/config-helpers.js"></script>
     <script src="js/modules/ticket-context.js"></script>
     <script src="js/modules/workflow-rules.js"></script>
     <script src="js/modules/ticket-mutations.js"></script>
-    <script src="js/modules/ticket-actions.js?v=4"></script>
+    <script src="js/modules/ticket-actions.js?v=5"></script>
     <script src="js/modules/api-client.js?v=2"></script>
     <script src="js/modules/schedule-error-service.js?v=1"></script>
     <script src="js/modules/storage-service.js?v=3"></script>
-    <script src="js/modules/workspace-config-service.js"></script>
+    <script src="js/modules/workspace-config-service.js?v=2"></script>
     <script src="js/modules/catalog-service.js"></script>
     <script src="js/modules/ticket-query-service.js?v=4"></script>
     <script src="js/modules/logs-notifications-service.js?v=3"></script>
@@ -7649,9 +8032,10 @@
     <script src="js/modules/auth-session-service.js?v=3"></script>
     <script src="js/modules/employee-service.js?v=3"></script>
     <script src="js/modules/recycle-bin-service.js"></script>
+    <script src="js/modules/customer-service.js?v=1"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=25"></script>
+    <script src="js/main.js?v=26"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
