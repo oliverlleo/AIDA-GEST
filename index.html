@@ -139,16 +139,6 @@
                     <div class="mb-6 md:px-4">
                         <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 hidden md:block">Principal</p>
 
-                        <!-- Customers (Admin/Attendant only) -->
-                        <template x-if="hasRole('admin') || hasRole('atendente')">
-                            <a href="#" x-show="isModuleEnabled('customers')" @click.prevent="view = 'customers'"
-                               :class="view === 'customers' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
-                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
-                                <i class="fa-solid fa-users w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'customers' ? 'text-brand-500' : 'text-gray-400'"></i>
-                                <span class="ml-3 font-medium text-sm hidden md:block">Clientes</span>
-                            </a>
-                        </template>
-
                         <!-- Dashboard (Admin/Atendente only) -->
                         <template x-if="hasRole('admin') || hasRole('atendente')">
                             <a href="#" @click.prevent="view = 'dashboard'"
@@ -166,6 +156,16 @@
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
                                 <i class="fa-solid fa-table-columns w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'kanban' ? 'text-brand-500' : 'text-gray-400'"></i>
                                 <span class="ml-3 font-medium text-sm hidden md:block">Chamados</span>
+                            </a>
+                        </template>
+
+                        <!-- Customers (Admin/Attendant only) -->
+                        <template x-if="hasRole('admin') || hasRole('atendente')">
+                            <a href="#" x-show="isModuleEnabled('customers')" @click.prevent="view = 'customers'"
+                               :class="view === 'customers' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-users w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'customers' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Clientes</span>
                             </a>
                         </template>
                     </div>
