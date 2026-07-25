@@ -389,12 +389,27 @@
                                                                 <h4 class="font-bold text-gray-900 mt-1 truncate" x-text="ticket.device_model"></h4>
                                                                 <p class="text-xs text-gray-500 truncate mt-0.5" x-text="ticket.serial_number ? 'IMEI/Série: ' + ticket.serial_number : 'Sem IMEI/Série informado'"></p>
                                                             </div>
-                                                            <button x-show="isModuleEnabled('public_tracker')" @click.stop="copyTrackingLink(ticket)"
-                                                                    class="w-9 h-9 rounded-xl bg-gray-50 text-gray-400 hover:bg-brand-50 hover:text-brand-600 flex items-center justify-center transition"
-                                                                    title="Copiar link de acompanhamento">
-                                                                <i class="fa-solid fa-share-nodes"></i>
-                                                            </button>
+                                                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                                                <button x-show="isWarrantyEnabled() && customerManagement.warrantyEligibility[ticket.id]?.eligible"
+                                                                        @click.stop="openWarrantyClaim(ticket)"
+                                                                        class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 flex items-center justify-center transition"
+                                                                        title="Abrir retorno em garantia">
+                                                                    <i class="fa-solid fa-shield-halved"></i>
+                                                                </button>
+                                                                <button x-show="isModuleEnabled('public_tracker')" @click.stop="copyTrackingLink(ticket)"
+                                                                        class="w-9 h-9 rounded-xl bg-gray-50 text-gray-400 hover:bg-brand-50 hover:text-brand-600 flex items-center justify-center transition"
+                                                                        title="Copiar link de acompanhamento">
+                                                                    <i class="fa-solid fa-share-nodes"></i>
+                                                                </button>
+                                                            </div>
                                                         </div>
+                                                        <template x-if="getWarrantyBadge(ticket)">
+                                                            <span class="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full border text-[9px] font-black tracking-wide"
+                                                                  :class="getWarrantyBadge(ticket).className">
+                                                                <i class="fa-solid" :class="getWarrantyBadge(ticket).icon"></i>
+                                                                <span x-text="getWarrantyBadge(ticket).label"></span>
+                                                            </span>
+                                                        </template>
                                                         <div class="mt-4 flex flex-wrap items-center gap-2">
                                                             <span class="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold uppercase" x-text="getStatusLabel(ticket.status)"></span>
                                                             <span x-show="getCustomerTicketOutcome(ticket)"
@@ -1803,6 +1818,24 @@
                                         </span>
                                         <input type="checkbox" x-model="trackerConfig.workflow.parts_control" class="w-5 h-5 rounded text-brand-500">
                                     </label>
+                                    <div class="bg-white border border-gray-200 rounded-xl p-4 transition" :class="!isModuleEnabled('customers') ? 'opacity-60 bg-gray-100' : 'hover:border-brand-200'">
+                                        <label class="flex items-center justify-between gap-4" :class="isModuleEnabled('customers') ? 'cursor-pointer' : 'cursor-not-allowed'">
+                                            <span class="flex items-center gap-3 min-w-0">
+                                                <span class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-shield-halved"></i></span>
+                                                <span class="min-w-0"><b class="text-sm text-gray-800 block">Controle de garantia</b><small class="text-xs text-gray-500 leading-snug block">Vincula o retorno à OS original e registra a decisão técnica.</small></span>
+                                            </span>
+                                            <input type="checkbox" x-model="trackerConfig.workflow.warranty_control" :disabled="!isModuleEnabled('customers')" class="w-5 h-5 rounded text-brand-500 disabled:cursor-not-allowed">
+                                        </label>
+                                        <div x-show="trackerConfig.workflow.warranty_control && isModuleEnabled('customers')" x-transition class="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+                                            <label class="text-xs font-bold text-gray-600" for="warranty-days">Prazo padrão</label>
+                                            <div class="flex items-center gap-2">
+                                                <input id="warranty-days" type="number" min="1" max="730" step="1" x-model.number="trackerConfig.workflow.warranty_days"
+                                                       class="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-brand-200 outline-none">
+                                                <span class="text-xs text-gray-500">dias</span>
+                                            </div>
+                                        </div>
+                                        <small x-show="!isModuleEnabled('customers')" class="text-[10px] text-amber-700 font-semibold block mt-2">Ative o Cadastro de clientes para utilizar.</small>
+                                    </div>
                                     <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer hover:border-brand-200 transition">
                                         <span class="flex items-center gap-3 min-w-0">
                                             <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-arrow-up"></i></span>
@@ -2090,9 +2123,26 @@
                             </button>
                         </div>
                         </div>
-                        <button @click="openNewTicketModal()" class="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-brand-500 transition-colors shadow-lg flex items-center shrink-0">
-                            <i class="fa-solid fa-plus mr-2"></i> Abrir Chamado
-                        </button>
+                        <div class="relative flex shrink-0" @click.outside="newTicketMenuOpen = false">
+                            <button @click="openNewTicketModal()"
+                                    :class="isWarrantyEnabled() && (hasRole('admin') || hasRole('atendente')) ? 'rounded-l-lg' : 'rounded-lg'"
+                                    class="bg-black text-white pl-6 pr-5 py-3 font-bold hover:bg-brand-500 transition-colors shadow-lg flex items-center">
+                                <i class="fa-solid fa-plus mr-2"></i> Abrir Chamado
+                            </button>
+                            <button x-show="isWarrantyEnabled() && (hasRole('admin') || hasRole('atendente'))"
+                                    @click="newTicketMenuOpen = !newTicketMenuOpen"
+                                    class="bg-black text-white px-3 py-3 rounded-r-lg border-l border-white/20 hover:bg-brand-500 transition-colors shadow-lg"
+                                    title="Outras formas de abertura">
+                                <i class="fa-solid fa-chevron-down text-xs"></i>
+                            </button>
+                            <div x-show="newTicketMenuOpen" x-transition x-cloak
+                                 class="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden z-50">
+                                <button @click="openNewTicketModal('warranty')" class="w-full p-3 text-left hover:bg-indigo-50 flex items-center gap-3 transition">
+                                    <span class="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center"><i class="fa-solid fa-shield-halved"></i></span>
+                                    <span><b class="text-sm text-gray-800 block">Retorno em garantia</b><small class="text-xs text-gray-500">Vincular à OS original</small></span>
+                                </button>
+                            </div>
+                        </div>
                     </header>
 
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -3842,9 +3892,26 @@
                                         <i class="fa-solid" :class="showFinalized ? 'fa-eye' : 'fa-eye-slash'"></i>
                                         <span x-text="showFinalized ? 'Ocultar Finalizados' : 'Mostrar Finalizados'" class="ml-1 hidden sm:inline"></span>
                                     </button>
-                                    <button @click="openNewTicketModal()" class="bg-black text-white px-4 py-2 rounded font-medium hover:bg-gray-800 text-sm">
-                                        <i class="fa-solid fa-plus mr-1"></i> Novo
-                                    </button>
+                                    <div class="relative flex" @click.outside="newTicketMenuOpen = false">
+                                        <button @click="openNewTicketModal()"
+                                                :class="isWarrantyEnabled() && (hasRole('admin') || hasRole('atendente')) ? 'rounded-l' : 'rounded'"
+                                                class="bg-black text-white pl-4 pr-3 py-2 font-medium hover:bg-gray-800 text-sm">
+                                            <i class="fa-solid fa-plus mr-1"></i> Novo
+                                        </button>
+                                        <button x-show="isWarrantyEnabled() && (hasRole('admin') || hasRole('atendente'))"
+                                                @click="newTicketMenuOpen = !newTicketMenuOpen"
+                                                class="bg-black text-white px-2.5 py-2 rounded-r border-l border-white/20 hover:bg-gray-800 text-sm"
+                                                title="Outras formas de abertura">
+                                            <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                                        </button>
+                                        <div x-show="newTicketMenuOpen" x-transition x-cloak
+                                             class="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden z-50">
+                                            <button @click="openNewTicketModal('warranty')" class="w-full p-3 text-left hover:bg-indigo-50 flex items-center gap-3 transition">
+                                                <span class="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center"><i class="fa-solid fa-shield-halved"></i></span>
+                                                <span><b class="text-sm text-gray-800 block">Retorno em garantia</b><small class="text-xs text-gray-500">Vincular à OS original</small></span>
+                                            </button>
+                                        </div>
+                                    </div>
                                  </div>
                             </div>
                         </div>
@@ -4017,6 +4084,13 @@
                                                               :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
                                                         <!-- Outsourced Tag -->
                                                         <span x-show="ticket.is_outsourced" class="text-[9px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded border border-purple-200">TERCEIRIZADO</span>
+                                                        <template x-if="getWarrantyBadge(ticket)">
+                                                            <span class="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border tracking-wide"
+                                                                  :class="getWarrantyBadge(ticket).className">
+                                                                <i class="fa-solid" :class="getWarrantyBadge(ticket).icon"></i>
+                                                                <span x-text="getWarrantyBadge(ticket).label"></span>
+                                                            </span>
+                                                        </template>
                                                         <!-- Success/Fail Badge for Finished Tickets -->
                                                         <template x-if="ticket.repair_successful !== null && (ticket.status === 'Finalizado' || ticket.status === 'Retirada Cliente')">
                                                             <span class="text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase"
@@ -4420,6 +4494,13 @@
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
                                           ]">
 
+                                        <template x-if="getWarrantyBadge(ticket)">
+                                            <span class="mb-2 inline-flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border tracking-wide"
+                                                  :class="getWarrantyBadge(ticket).className">
+                                                <i class="fa-solid" :class="getWarrantyBadge(ticket).icon"></i>
+                                                <span x-text="getWarrantyBadge(ticket).label"></span>
+                                            </span>
+                                        </template>
                                         <!-- Outsourced Return Tag -->
                                         <div x-show="ticket.is_outsourced && ticket.outsourced_return_count > 0" class="mb-2">
                                             <span class="bg-red-100 text-red-700 text-[10px] font-extrabold px-2 py-1 rounded border border-red-200 flex items-center w-fit">
@@ -4528,6 +4609,13 @@
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
                                           ]">
 
+                                        <template x-if="getWarrantyBadge(ticket)">
+                                            <span class="mb-2 inline-flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border tracking-wide"
+                                                  :class="getWarrantyBadge(ticket).className">
+                                                <i class="fa-solid" :class="getWarrantyBadge(ticket).icon"></i>
+                                                <span x-text="getWarrantyBadge(ticket).label"></span>
+                                            </span>
+                                        </template>
                                         <!-- Outsourced Return Tag -->
                                         <div x-show="ticket.is_outsourced && ticket.outsourced_return_count > 0" class="mb-2">
                                             <span class="bg-red-100 text-red-700 text-[10px] font-extrabold px-2 py-1 rounded border border-red-200 flex items-center w-fit">
@@ -4633,6 +4721,13 @@
                                               (ticket.deadline && (new Date(ticket.deadline) - new Date()) > 0 && (new Date(ticket.deadline) - new Date()) < 3600000) ? 'animate-pulse ring-2 ring-red-400 ring-opacity-50' : ''
                                           ]">
 
+                                        <template x-if="getWarrantyBadge(ticket)">
+                                            <span class="mb-2 inline-flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border tracking-wide"
+                                                  :class="getWarrantyBadge(ticket).className">
+                                                <i class="fa-solid" :class="getWarrantyBadge(ticket).icon"></i>
+                                                <span x-text="getWarrantyBadge(ticket).label"></span>
+                                            </span>
+                                        </template>
                                         <!-- Priority Requested Badge -->
                                         <div x-show="isPriorityRequestEnabled() && ticket.priority_requested" class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
                                             <i class="fa-solid fa-bell fa-shake mr-1"></i> PRIORIDADE SOLICITADA
@@ -4704,6 +4799,13 @@
                                  <div class="bg-white rounded-xl shadow border-t-4 border-purple-500 p-6 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
                                       @click="viewTicketDetails(ticket)">
 
+                                    <template x-if="getWarrantyBadge(ticket)">
+                                        <span class="mb-3 inline-flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border tracking-wide"
+                                              :class="getWarrantyBadge(ticket).className">
+                                            <i class="fa-solid" :class="getWarrantyBadge(ticket).icon"></i>
+                                            <span x-text="getWarrantyBadge(ticket).label"></span>
+                                        </span>
+                                    </template>
                                     <div class="flex justify-between items-start mb-4">
                                         <div>
                                             <span class="font-mono text-gray-500 text-xs" x-text="'OS #' + ticket.os_number"></span>
@@ -5992,8 +6094,11 @@
 
             <div x-show="modals.ticket" class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full duration-300 ease-in-out" :class="schedulePanelOpen ? '-translate-x-32 sm:-translate-x-48' : ''">
                 <!-- Header -->
-                <div class="bg-black px-6 py-4 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-white">Novo Chamado</h3>
+                <div class="px-6 py-4 flex justify-between items-center" :class="ticketForm.warranty_claim ? 'bg-indigo-950' : 'bg-black'">
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid" :class="ticketForm.warranty_claim ? 'fa-shield-halved text-indigo-300' : 'fa-plus text-brand-400'"></i>
+                        <span x-text="ticketForm.warranty_claim ? 'Novo Retorno em Garantia' : 'Novo Chamado'"></span>
+                    </h3>
                     <button @click="modals.ticket = false" class="text-gray-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
                 </div>
 
@@ -6001,6 +6106,20 @@
                 <div class="p-6 max-h-[70vh] overflow-y-auto"
                      @input="clearTicketFieldError(($event.target.closest('[data-ticket-field]') || {}).dataset?.ticketField)"
                      @change="clearTicketFieldError(($event.target.closest('[data-ticket-field]') || {}).dataset?.ticketField)">
+                    <div x-show="ticketForm.warranty_claim" x-cloak class="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 p-4 flex items-start gap-3">
+                        <span class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-shield"></i></span>
+                        <div>
+                            <b class="text-sm text-indigo-950 block">Avaliação de garantia vinculada à OS original</b>
+                            <p class="text-xs text-indigo-700 mt-1">O técnico confirmará a cobertura ao concluir a análise. O retorno seguirá pelos mesmos quadros e etapas de uma OS comum.</p>
+                        </div>
+                    </div>
+                    <div x-show="ticketForm.warranty_source_claim_id" x-cloak class="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+                        <span class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+                        <div>
+                            <b class="text-sm text-amber-950 block">Nova OS normal após garantia não coberta</b>
+                            <p class="text-xs text-amber-700 mt-1">Revise os dados. Ao salvar, o retorno será encerrado e esta OS seguirá como atendimento pago.</p>
+                        </div>
+                    </div>
                     <!-- Section 1: Basic Info -->
                     <h4 class="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4 border-b pb-2">Informações do Cliente e Aparelho</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -6058,6 +6177,61 @@
                         <div x-show="isFieldVisible('contact_info')" data-ticket-field="contact_info">
                             <label class="block text-xs font-bold text-gray-500 mb-1">Contato <span x-show="isFieldRequired('contact_info')" class="text-red-500">*</span></label>
                             <input type="text" x-model="ticketForm.contact" class="w-full border rounded-lg p-2.5 bg-gray-50">
+                        </div>
+                        <div x-show="ticketForm.warranty_claim" x-cloak class="md:col-span-2 rounded-xl border p-4"
+                             :class="warrantyLookup.selectedOrigin ? 'border-indigo-200 bg-indigo-50/60' : 'border-gray-200 bg-gray-50'">
+                            <div class="flex items-center justify-between gap-3 mb-3">
+                                <div>
+                                    <label class="text-xs font-bold text-gray-800 block">OS original da garantia <span class="text-red-500">*</span></label>
+                                    <small class="text-[11px] text-gray-500">Somente reparos entregues com sucesso e dentro do prazo aparecem aqui.</small>
+                                </div>
+                                <button x-show="warrantyLookup.selectedOrigin" type="button" @click="clearWarrantyOrigin(); fetchWarrantyOrigins()"
+                                        class="text-xs font-bold text-indigo-700 hover:underline">Trocar OS</button>
+                            </div>
+
+                            <div x-show="warrantyLookup.selectedOrigin" class="bg-white rounded-xl border border-indigo-200 p-3 flex items-center gap-3">
+                                <span class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+                                <div class="min-w-0 flex-1">
+                                    <b class="text-sm text-gray-900 block" x-text="'OS #' + (warrantyLookup.selectedOrigin?.os_number || '')"></b>
+                                    <span class="text-xs text-gray-600 block truncate" x-text="[warrantyLookup.selectedOrigin?.device_model, warrantyLookup.selectedOrigin?.serial_number].filter(Boolean).join(' • ')"></span>
+                                </div>
+                                <div class="text-right flex-shrink-0">
+                                    <span class="text-[10px] uppercase font-bold text-emerald-700 block">Cobertura até</span>
+                                    <span class="text-xs font-bold text-gray-700" x-text="getTicketWarrantyExpiry(warrantyLookup.selectedOrigin)?.toLocaleDateString('pt-BR')"></span>
+                                </div>
+                            </div>
+
+                            <div x-show="!warrantyLookup.selectedOrigin">
+                                <div x-show="!ticketForm.customer_id" class="rounded-lg bg-white border border-dashed border-gray-300 px-4 py-5 text-center text-xs text-gray-500">
+                                    <i class="fa-solid fa-user-magnifying-glass text-indigo-400 mr-2"></i>Selecione primeiro o cliente cadastrado.
+                                </div>
+                                <div x-show="ticketForm.customer_id">
+                                    <div x-show="warrantyLookup.loading" class="rounded-lg bg-white border border-gray-200 px-4 py-5 text-center text-xs text-gray-500">
+                                        <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 mr-2"></i>Consultando garantias...
+                                    </div>
+                                    <div x-show="!warrantyLookup.loading" class="space-y-2 max-h-52 overflow-y-auto">
+                                        <template x-for="origin in warrantyLookup.items" :key="origin.id">
+                                            <button type="button" @click="if (origin.eligible) selectWarrantyOrigin(origin)"
+                                                    :disabled="!origin.eligible"
+                                                    class="w-full rounded-xl border p-3 flex items-center gap-3 text-left transition"
+                                                    :class="origin.eligible ? 'bg-white border-gray-200 hover:border-indigo-300 hover:bg-indigo-50' : 'bg-gray-100 border-gray-200 opacity-65 cursor-not-allowed'">
+                                                <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" :class="origin.eligible ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-500'"><i class="fa-solid fa-shield-halved"></i></span>
+                                                <span class="min-w-0 flex-1">
+                                                    <b class="text-xs text-gray-900 block" x-text="'OS #' + origin.os_number + ' • ' + origin.device_model"></b>
+                                                    <small class="text-[11px] text-gray-500 block truncate" x-text="origin.serial_number ? 'IMEI/Série: ' + origin.serial_number : 'Sem IMEI/Série'"></small>
+                                                </span>
+                                                <span class="text-right flex-shrink-0">
+                                                    <b class="text-[10px] block" :class="origin.eligible ? 'text-emerald-700' : 'text-amber-700'" x-text="origin.eligibility_reason"></b>
+                                                    <small class="text-[10px] text-gray-500" x-text="new Date(origin.warranty_expires_at).toLocaleDateString('pt-BR')"></small>
+                                                </span>
+                                            </button>
+                                        </template>
+                                        <div x-show="warrantyLookup.items.length === 0" class="rounded-lg bg-white border border-dashed border-gray-300 px-4 py-5 text-center text-xs text-gray-500">
+                                            Nenhuma OS finalizada com cobertura foi encontrada para este cliente.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div data-ticket-field="os_number">
                             <label class="block text-xs font-bold text-gray-500 mb-1">
@@ -6156,7 +6330,7 @@
                         </div>
 
                         <!-- Optional shortcut for services with approved budget at intake -->
-                        <div class="col-span-2" x-show="!ticketForm.is_outsourced">
+                        <div class="col-span-2" x-show="!ticketForm.is_outsourced && !ticketForm.warranty_claim && !ticketForm.warranty_source_claim_id">
                             <div class="rounded-xl border transition-colors"
                                  :class="ticketForm.budget_approved ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200 bg-gray-50'">
                                 <label class="flex items-center gap-3 px-4 py-3 cursor-pointer">
@@ -6206,7 +6380,7 @@
                                 </label>
 
                                 <!-- Small Inline Toggle -->
-                                <label x-show="isOutsourcedEnabled()" class="inline-flex items-center cursor-pointer">
+                                <label x-show="isOutsourcedEnabled() && !ticketForm.warranty_claim && !ticketForm.warranty_source_claim_id" class="inline-flex items-center cursor-pointer">
                                     <span class="mr-2 text-[10px] font-bold text-gray-400 uppercase" :class="ticketForm.is_outsourced ? 'text-purple-600' : ''">Terceirizado?</span>
                                     <input type="checkbox" x-model="ticketForm.is_outsourced" @change="if (ticketForm.is_outsourced) { ticketForm.budget_approved = false; handleBudgetApprovalEntryChange(); }" class="sr-only peer">
                                     <div class="relative w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
@@ -6498,7 +6672,10 @@
                 <!-- Footer -->
                 <div class="bg-gray-50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-200">
                     <button @click="modals.ticket = false" class="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg transition-colors">Cancelar</button>
-                    <button @click="createTicket()" class="px-6 py-2 bg-brand-500 text-white font-bold rounded-lg hover:bg-brand-600 shadow-lg shadow-orange-500/30 transition-colors">Criar Chamado</button>
+                    <button @click="createTicket()" class="px-6 py-2 text-white font-bold rounded-lg shadow-lg transition-colors"
+                            :class="ticketForm.warranty_claim ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20' : 'bg-brand-500 hover:bg-brand-600 shadow-orange-500/30'">
+                        <span x-text="ticketForm.warranty_claim ? 'Abrir Retorno' : 'Criar Chamado'"></span>
+                    </button>
                 </div>
             </div>
 
@@ -6610,12 +6787,24 @@
                             <div class="flex items-center space-x-2 mb-1">
                                 <span class="bg-black text-white text-xs font-bold px-2 py-1 rounded font-mono" x-text="'OS #' + selectedTicket.os_number"></span>
                                 <span class="text-xs font-bold px-2 py-1 rounded uppercase" :class="getPriorityColor(selectedTicket.priority)" x-text="selectedTicket.priority"></span>
+                                <template x-if="getWarrantyBadge(selectedTicket)">
+                                    <span class="inline-flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded border tracking-wide"
+                                          :class="getWarrantyBadge(selectedTicket).className">
+                                        <i class="fa-solid" :class="getWarrantyBadge(selectedTicket).icon"></i>
+                                        <span x-text="getWarrantyBadge(selectedTicket).label"></span>
+                                    </span>
+                                </template>
                             </div>
                             <h2 class="text-2xl font-bold text-gray-900" x-text="selectedTicket.device_model"></h2>
                             <p class="text-gray-500 text-sm" x-text="selectedTicket.client_name"></p>
                         </div>
                         <div class="flex flex-col items-end space-y-2">
                             <div class="flex items-center space-x-2">
+                                <button x-show="isTicketWarrantyEligible(selectedTicket) && (hasRole('admin') || hasRole('atendente'))"
+                                        @click="openWarrantyClaim(selectedTicket)"
+                                        class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded hover:bg-indigo-200 font-bold transition-colors">
+                                    <i class="fa-solid fa-shield-halved mr-1"></i> Abrir retorno
+                                </button>
                                 <!-- Share Button (New) -->
                                 <button x-show="isModuleEnabled('public_tracker')" @click="openShareModal()" class="text-xs bg-brand-500 text-white px-2 py-1 rounded hover:bg-brand-600 font-bold transition-colors">
                                     <i class="fa-solid fa-share-nodes mr-1"></i> Compartilhar
@@ -6645,6 +6834,31 @@
 
                     <!-- TAB: DETAILS -->
                     <div x-show="tab === 'details'">
+                    <div x-show="selectedTicket.warranty_claim" class="mx-6 mt-4 rounded-xl border p-4"
+                         :class="selectedTicket.warranty_status === 'covered' ? 'bg-emerald-50 border-emerald-200' : (selectedTicket.warranty_status === 'not_covered' ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200')">
+                        <div class="flex items-start gap-3">
+                            <span class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                                  :class="selectedTicket.warranty_status === 'covered' ? 'bg-emerald-600 text-white' : (selectedTicket.warranty_status === 'not_covered' ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white')">
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <b class="text-sm text-gray-900 block"
+                                   x-text="selectedTicket.warranty_status === 'covered' ? 'Defeito coberto pela garantia' : (selectedTicket.warranty_status === 'not_covered' ? 'Defeito não coberto pela garantia' : 'Cobertura aguardando análise técnica')"></b>
+                                <p class="text-xs text-gray-600 mt-1">
+                                    Vinculado à OS original
+                                    <button @click="viewTicketDetails({ id: selectedTicket.warranty_origin_ticket_id })"
+                                            class="font-bold text-indigo-700 hover:underline">— abrir OS</button>
+                                </p>
+                                <div x-show="selectedTicket.warranty_technical_report" class="mt-3 bg-white/80 border border-white rounded-lg p-3">
+                                    <span class="text-[10px] uppercase font-bold text-gray-500 block mb-1">Laudo técnico</span>
+                                    <p class="text-xs text-gray-700 whitespace-pre-line" x-text="selectedTicket.warranty_technical_report"></p>
+                                    <p x-show="selectedTicket.warranty_decided_by_name" class="text-[10px] text-gray-500 mt-2">
+                                        Registrado por <b x-text="selectedTicket.warranty_decided_by_name"></b>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <!-- Action Bar (Logic for Buttons) -->
                     <div class="bg-gray-50 px-6 py-3 border-b border-gray-200">
 
@@ -6690,18 +6904,10 @@
                                             Iniciado: <span x-text="new Date(selectedTicket.analysis_started_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
                                         </div>
                                     </div>
-                                    <div class="mb-3">
-                                        <label x-show="isPartsControlEnabled()" class="flex items-center space-x-2">
-                                            <input type="checkbox" x-model="analysisForm.needsParts" class="form-checkbox text-blue-600 h-5 w-5">
-                                            <span class="text-sm font-bold text-gray-700">Precisa comprar peças?</span>
-                                        </label>
-                                    </div>
-                                    <div x-show="isPartsControlEnabled() && analysisForm.needsParts" class="mb-3">
-                                        <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
-                                        <input type="text" x-model="analysisForm.partsList" class="w-full border rounded p-2 text-sm" placeholder="Ex: Tela, Bateria...">
-                                    </div>
-                                    <button @click="finishAnalysis(selectedTicket)" class="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 text-sm w-full">
-                                        Finalizar e Enviar para Aprovação
+                                    <p class="text-xs text-blue-700 mb-3"
+                                       x-text="selectedTicket.warranty_claim ? 'Registre o diagnóstico e confirme se o defeito é coberto pela garantia.' : 'Informe a necessidade de peças antes de concluir a análise.'"></p>
+                                    <button @click="finishAnalysisFromKanban(selectedTicket)" class="bg-indigo-600 text-white px-4 py-2 rounded font-bold hover:bg-indigo-700 text-sm w-full">
+                                        <span x-text="selectedTicket.warranty_claim ? 'Concluir análise da garantia' : 'Finalizar e enviar para aprovação'"></span>
                                     </button>
                                 </div>
                             </div>
@@ -6726,7 +6932,8 @@
                                         :disabled="!canExecuteAction(selectedTicket, 'approveRepair')"
                                         class="px-4 py-2 rounded font-bold text-sm transition-colors"
                                         :class="!canExecuteAction(selectedTicket, 'approveRepair') ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'">
-                                    <i class="fa-solid fa-check mr-1"></i> Aprovar
+                                    <i class="fa-solid fa-check mr-1"></i>
+                                    <span x-text="selectedTicket.warranty_claim && selectedTicket.warranty_status === 'not_covered' ? 'Cliente aceitou — criar nova OS' : 'Aprovar'"></span>
                                 </button>
 
                                 <button @click="denyRepair(selectedTicket)"
@@ -7926,25 +8133,91 @@
     <!-- 8.1 FINISH ANALYSIS MINI MODAL (New) -->
     <div x-show="modals.finishAnalysis" class="fixed inset-0 z-[80] flex items-center justify-center" x-cloak>
         <div class="fixed inset-0 bg-black bg-opacity-50" @click="modals.finishAnalysis = false"></div>
-        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm z-10 relative">
-            <h3 class="text-lg font-bold mb-4 text-blue-800">Conclusão da Análise</h3>
-
-            <div class="mb-4">
-                <label x-show="isPartsControlEnabled()" class="flex items-center space-x-2 mb-2 cursor-pointer">
-                    <input type="checkbox" x-model="analysisForm.needsParts" class="form-checkbox text-blue-600 h-5 w-5 rounded">
-                    <span class="text-sm font-bold text-gray-700">Deseja comprar peças?</span>
-                </label>
-
-                <div x-show="isPartsControlEnabled() && analysisForm.needsParts" x-transition>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
-                    <input type="text" x-model="analysisForm.partsList" class="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: Tela, Bateria...">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl z-10 relative overflow-hidden">
+            <div class="px-6 py-4 border-b flex items-center gap-3" :class="selectedTicket?.warranty_claim ? 'bg-indigo-950 border-indigo-900' : 'bg-blue-50 border-blue-100'">
+                <span class="w-10 h-10 rounded-xl flex items-center justify-center" :class="selectedTicket?.warranty_claim ? 'bg-indigo-700 text-white' : 'bg-blue-600 text-white'">
+                    <i class="fa-solid" :class="selectedTicket?.warranty_claim ? 'fa-shield-halved' : 'fa-microscope'"></i>
+                </span>
+                <div>
+                    <h3 class="text-lg font-bold" :class="selectedTicket?.warranty_claim ? 'text-white' : 'text-blue-900'"
+                        x-text="selectedTicket?.warranty_claim ? 'Conclusão da Garantia' : 'Conclusão da Análise'"></h3>
+                    <p class="text-xs" :class="selectedTicket?.warranty_claim ? 'text-indigo-200' : 'text-blue-700'"
+                       x-text="selectedTicket?.warranty_claim ? 'A decisão e o laudo ficarão registrados no histórico da OS.' : 'Informe se o serviço precisa de peças.'"></p>
                 </div>
             </div>
 
-            <div class="flex space-x-3">
+            <div class="p-6 max-h-[68vh] overflow-y-auto space-y-4">
+                <div x-show="selectedTicket?.warranty_claim" x-cloak class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-2">Defeito coberto pela garantia? <span class="text-red-500">*</span></label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="border-2 rounded-xl p-3 cursor-pointer transition"
+                                   :class="analysisForm.warrantyCovered === 'yes' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-emerald-200'">
+                                <input type="radio" value="yes" x-model="analysisForm.warrantyCovered" class="sr-only">
+                                <span class="flex items-center gap-3">
+                                    <span class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center"><i class="fa-solid fa-shield-check"></i></span>
+                                    <span><b class="text-sm text-gray-900 block">Sim, coberto</b><small class="text-[11px] text-gray-500">Segue sem orçamento</small></span>
+                                </span>
+                            </label>
+                            <label class="border-2 rounded-xl p-3 cursor-pointer transition"
+                                   :class="analysisForm.warrantyCovered === 'no' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-amber-200'">
+                                <input type="radio" value="no" x-model="analysisForm.warrantyCovered" class="sr-only">
+                                <span class="flex items-center gap-3">
+                                    <span class="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                    <span><b class="text-sm text-gray-900 block">Não coberto</b><small class="text-[11px] text-gray-500">Gera orçamento normal</small></span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Diagnóstico técnico <span class="text-red-500">*</span></label>
+                        <textarea x-model="analysisForm.warrantyDiagnosis" rows="3"
+                                  class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
+                                  placeholder="Descreva o defeito encontrado, os testes realizados e o resultado..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Causa identificada <span class="text-red-500">*</span></label>
+                        <input type="text" x-model="analysisForm.warrantyCause"
+                               class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
+                               placeholder="Ex: falha da peça substituída, impacto, oxidação...">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">
+                            <span x-text="analysisForm.warrantyCovered === 'no' ? 'Evidências de mau uso ou causa externa' : 'Relação com o serviço original'"></span>
+                            <span class="text-red-500">*</span>
+                        </label>
+                        <textarea x-model="analysisForm.warrantyEvidence" rows="2"
+                                  class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
+                                  :placeholder="analysisForm.warrantyCovered === 'no' ? 'Registre evidências objetivas que justificam a recusa...' : 'Explique por que o defeito está relacionado ao reparo original...'"></textarea>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <label x-show="isPartsControlEnabled()" class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="analysisForm.needsParts" class="form-checkbox text-indigo-600 h-5 w-5 rounded">
+                        <span class="text-sm font-bold text-gray-700" x-text="selectedTicket?.warranty_claim ? 'Será necessário comprar alguma peça?' : 'Deseja comprar peças?'"></span>
+                    </label>
+                    <p x-show="!isPartsControlEnabled()" class="text-xs text-gray-500">O controle de compra de peças está desativado.</p>
+
+                    <div x-show="isPartsControlEnabled() && analysisForm.needsParts" x-transition class="mt-3">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Quais peças?</label>
+                        <input type="text" x-model="analysisForm.partsList" class="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-200 outline-none" placeholder="Ex: Tela, bateria, conector...">
+                    </div>
+                </div>
+
+                <div x-show="selectedTicket?.warranty_claim && analysisForm.warrantyCovered === 'no'" class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                    <i class="fa-solid fa-circle-info mr-1"></i>
+                    O retorno ficará aguardando o orçamento. Se o cliente aceitar, o sistema abrirá uma <b>nova OS normal</b> vinculada a este laudo.
+                </div>
+            </div>
+
+            <div class="flex space-x-3 px-6 py-4 bg-gray-50 border-t">
                 <button @click="modals.finishAnalysis = false" class="flex-1 text-gray-500 font-bold text-sm hover:text-black">Cancelar</button>
-                <button @click="confirmFinishAnalysisKanban()" class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow">
-                    Confirmar
+                <button @click="confirmFinishAnalysisKanban()" :disabled="loading"
+                        class="flex-1 text-white py-3 rounded-lg font-bold transition-colors shadow disabled:opacity-50"
+                        :class="selectedTicket?.warranty_claim ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'">
+                    <span x-text="loading ? 'Salvando...' : (selectedTicket?.warranty_claim ? 'Registrar decisão' : 'Confirmar')"></span>
                 </button>
             </div>
         </div>
@@ -8014,28 +8287,29 @@
 
     <!-- JS MODULES (Infraestrutura inicial) -->
     <script src="js/supabase-config.js"></script>
-    <script src="js/modules/feature-config.js?v=2"></script>
-    <script src="js/modules/config-helpers.js"></script>
+    <script src="js/modules/feature-config.js?v=3"></script>
+    <script src="js/modules/config-helpers.js?v=2"></script>
     <script src="js/modules/ticket-context.js"></script>
     <script src="js/modules/workflow-rules.js"></script>
     <script src="js/modules/ticket-mutations.js"></script>
-    <script src="js/modules/ticket-actions.js?v=5"></script>
+    <script src="js/modules/ticket-actions.js?v=6"></script>
     <script src="js/modules/api-client.js?v=2"></script>
     <script src="js/modules/schedule-error-service.js?v=1"></script>
     <script src="js/modules/storage-service.js?v=3"></script>
     <script src="js/modules/workspace-config-service.js?v=2"></script>
     <script src="js/modules/catalog-service.js"></script>
-    <script src="js/modules/ticket-query-service.js?v=4"></script>
+    <script src="js/modules/ticket-query-service.js?v=5"></script>
     <script src="js/modules/logs-notifications-service.js?v=3"></script>
     <script src="js/modules/notes-service.js"></script>
     <script src="js/modules/dashboard-service.js"></script>
     <script src="js/modules/auth-session-service.js?v=3"></script>
     <script src="js/modules/employee-service.js?v=3"></script>
     <script src="js/modules/recycle-bin-service.js"></script>
-    <script src="js/modules/customer-service.js?v=1"></script>
+    <script src="js/modules/customer-service.js?v=2"></script>
+    <script src="js/modules/warranty-service.js?v=1"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=26"></script>
+    <script src="js/main.js?v=27"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
