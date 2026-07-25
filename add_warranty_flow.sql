@@ -77,9 +77,15 @@ create index if not exists idx_tickets_warranty_origin_active
     on public.tickets (workspace_id, warranty_origin_ticket_id, status)
     where deleted_at is null and warranty_claim;
 
+create index if not exists idx_tickets_warranty_origin_id
+    on public.tickets (warranty_origin_ticket_id);
+
 create unique index if not exists idx_tickets_warranty_source_claim_unique
     on public.tickets (warranty_source_claim_id)
     where deleted_at is null and warranty_source_claim_id is not null;
+
+create index if not exists idx_tickets_warranty_converted_id
+    on public.tickets (warranty_converted_ticket_id);
 
 create index if not exists idx_tickets_warranty_coverage
     on public.tickets (workspace_id, customer_id, delivered_at desc, id)

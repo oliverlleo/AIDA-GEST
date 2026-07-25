@@ -14,6 +14,8 @@ test('warranty links preserve the original, the claim and the paid follow-up OS'
     assert.match(migration, /warranty_converted_ticket_id uuid/i);
     assert.match(migration, /foreign key \(warranty_origin_ticket_id\)[\s\S]*references public\.tickets\(id\)/i);
     assert.match(migration, /create unique index if not exists idx_tickets_warranty_source_claim_unique/i);
+    assert.match(migration, /create index if not exists idx_tickets_warranty_origin_id[\s\S]*warranty_origin_ticket_id/i);
+    assert.match(migration, /create index if not exists idx_tickets_warranty_converted_id[\s\S]*warranty_converted_ticket_id/i);
     assert.match(migration, /Os vinculos da garantia nao podem ser alterados depois da abertura/i);
 });
 

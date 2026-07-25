@@ -17,6 +17,8 @@ drop function if exists public.aida_warranty_days();
 
 drop index if exists public.idx_tickets_warranty_source_claim_unique;
 drop index if exists public.idx_tickets_warranty_origin_active;
+drop index if exists public.idx_tickets_warranty_origin_id;
+drop index if exists public.idx_tickets_warranty_converted_id;
 drop index if exists public.idx_tickets_warranty_coverage;
 
 alter table public.tickets
