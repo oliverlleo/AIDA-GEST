@@ -50,6 +50,11 @@ window.AIDAConfigHelpers = {
             : true;
     },
 
+    isInventoryEnabled(trackerConfig) {
+        return this.isPartsControlEnabled(trackerConfig)
+            && this.isModuleEnabled(trackerConfig, 'inventory');
+    },
+
     isWarrantyEnabled(trackerConfig) {
         const customersEnabled = this.isModuleEnabled(trackerConfig, 'customers');
         return customersEnabled && (window.AIDAFeatureConfig

@@ -1,6 +1,10 @@
 // Arquivo de actions do Ticket
 // Parte da infraestrutura de módulos
 
+function inventoryEnabled(deps) {
+    return Boolean(deps.isInventoryEnabled?.());
+}
+
 window.AIDATicketActions = {
     // ==========================================
     // SUBFASE 1 — FLUXO ADMINISTRATIVO BASE
@@ -10,6 +14,8 @@ window.AIDATicketActions = {
         const startsWithApprovedBudget = Boolean(deps.state.ticketForm.budget_approved);
         const approvedRoute = deps.state.ticketForm.approved_route;
         const partsNeeded = String(deps.state.ticketForm.parts_needed || '').trim();
+        const inventoryParts = Array.isArray(deps.state.ticketForm.inventory_parts) ? deps.state.ticketForm.inventory_parts : [];
+        const usesDirectInventory = startsWithApprovedBudget && inventoryEnabled(deps) && inventoryParts.length > 0;
         const technicianIsRequired = !deps.state.ticketForm.is_outsourced && deps.isFieldRequired('responsible');
         const selectedTechnician = deps.state.ticketForm.technician_id;
         const isWarrantyClaim = Boolean(deps.state.ticketForm.warranty_claim);
@@ -41,7 +47,7 @@ window.AIDATicketActions = {
             return deps.notify("O atalho de orçamento aprovado é exclusivo para o fluxo interno de reparo.", "error");
         }
 
-        if (startsWithApprovedBudget && approvedRoute === 'purchase' && !partsNeeded) {
+        if (startsWithApprovedBudget && !inventoryEnabled(deps) && approvedRoute === 'purchase' && !partsNeeded) {
             deps.focusTicketField('parts_needed');
             return deps.notify("Informe as peças necessárias antes de enviar o chamado para compra.", "error");
         }
@@ -69,7 +75,7 @@ window.AIDATicketActions = {
 
             const isOsAuto = deps.isAutoOSGenerationEnabled();
             const initialStatus = startsWithApprovedBudget
-                ? (approvedRoute === 'purchase' ? 'Compra Peca' : 'Andamento Reparo')
+                ? (usesDirectInventory || approvedRoute === 'purchase' ? 'Compra Peca' : 'Andamento Reparo')
                 : 'Aberto';
 
             const ticketData = {
@@ -89,8 +95,8 @@ window.AIDATicketActions = {
                 deadline: deps.isFieldVisible('deadline') ? (deps.toUTC(deps.state.ticketForm.deadline) || null) : null,
                 analysis_deadline: (!startsWithApprovedBudget && deps.isFieldVisible('analysis_deadline')) ? (deps.toUTC(deps.state.ticketForm.analysis_deadline) || null) : null,
                 device_condition: deps.isFieldVisible('device_condition') ? deps.state.ticketForm.device_condition : null,
-                parts_needed: startsWithApprovedBudget && approvedRoute === 'purchase' ? partsNeeded : null,
-                parts_status: startsWithApprovedBudget && approvedRoute === 'purchase' ? 'Pendente' : 'N/A',
+                parts_needed: startsWithApprovedBudget && !inventoryEnabled(deps) && approvedRoute === 'purchase' ? partsNeeded : null,
+                parts_status: startsWithApprovedBudget && !inventoryEnabled(deps) && approvedRoute === 'purchase' ? 'Pendente' : (usesDirectInventory ? 'Pendente' : 'N/A'),
                 budget_status: startsWithApprovedBudget ? 'Aprovado' : 'Pendente',
                 technician_id: (deps.state.ticketForm.is_outsourced || !deps.isFieldVisible('responsible')) ? null : techId,
                 is_outsourced: deps.state.ticketForm.is_outsourced,
@@ -113,6 +119,12 @@ window.AIDATicketActions = {
             const createdData = await deps.supabaseFetch('tickets', 'POST', ticketData);
             let createdTicket = createdData && createdData.length > 0 ? createdData[0] : ticketData;
 
+            let inventoryRoute = null;
+            if (usesDirectInventory) {
+                inventoryRoute = await window.AIDAInventoryActions.requestTicketParts({
+                    supabaseFetch: (ep, method, payload) => deps.supabaseFetch(ep, method, payload)
+                }, createdTicket.id, inventoryParts, 'direct_repair', true);
+            }
             // Ensure we have the public_token (if backend generated it and frontend didn't get it back fully populated)
             if (!createdTicket.public_token) {
                 const fresh = await deps.supabaseFetch(`tickets?id=eq.${createdTicket.id}&select=*`);
@@ -134,9 +146,11 @@ window.AIDATicketActions = {
                     : startsWithApprovedBudget
                 ? {
                     action: 'Novo Chamado - Orçamento Aprovado',
-                    details: approvedRoute === 'purchase'
-                        ? `Chamado criado com orçamento já aprovado para ${ctx.device} de ${ctx.client} e enviado para **Compra de Peças**: **${partsNeeded}**.`
-                        : `Chamado criado com orçamento já aprovado para ${ctx.device} de ${ctx.client} e enviado direto para **Reparo**.`
+                    details: usesDirectInventory
+                        ? `Chamado criado com orçamento já aprovado para ${ctx.device} de ${ctx.client}. Foram vinculadas **${inventoryParts.length} peça(s)** do estoque e a rota foi definida como **${inventoryRoute?.route === 'purchase' ? 'Compra de Peças' : 'Reparo'}** conforme a disponibilidade.`
+                        : approvedRoute === 'purchase'
+                            ? `Chamado criado com orçamento já aprovado para ${ctx.device} de ${ctx.client} e enviado para **Compra de Peças**: **${partsNeeded}**.`
+                            : `Chamado criado com orçamento já aprovado para ${ctx.device} de ${ctx.client} e enviado direto para **Reparo**.`
                 }
                 : {
                     action: 'Novo Chamado',
@@ -173,7 +187,7 @@ window.AIDATicketActions = {
                     deps.notify("Chamado criado, mas falha ao salvar a agenda de análise.", "error");
                 }
             }
-            if (startsWithApprovedBudget && approvedRoute === 'repair' && deps.isAppointmentTypeEnabled('repair') && deps.state.selectedRepairAppointment) {
+            if (startsWithApprovedBudget && approvedRoute === 'repair' && inventoryRoute?.route !== 'purchase' && deps.isAppointmentTypeEnabled('repair') && deps.state.selectedRepairAppointment) {
                 try {
                     const appt = deps.state.selectedRepairAppointment;
                     await deps.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
@@ -205,7 +219,7 @@ window.AIDATicketActions = {
         const ticket = deps.resolveTicket(ticketOrId);
         if (!ticket) return;
 
-        if (deps.isPartsControlEnabled() && deps.state.analysisForm.needsParts && !deps.state.analysisForm.partsList) {
+        if (deps.isPartsControlEnabled() && !inventoryEnabled(deps) && deps.state.analysisForm.needsParts && !deps.state.analysisForm.partsList) {
             return deps.notify("Liste as peças necessárias.", "error");
         }
         const ctx = deps.getLogContext(ticket);
@@ -214,11 +228,13 @@ window.AIDATicketActions = {
             ? deps.state.selectedTicket.tech_notes
             : ticket.tech_notes;
 
-        await deps.updateStatus(ticket, 'Aprovacao', {
-            parts_needed: deps.isPartsControlEnabled() ? deps.state.analysisForm.partsList : null,
-            parts_status: deps.isPartsControlEnabled() && deps.state.analysisForm.partsList ? 'Pendente' : 'N/A',
-            tech_notes: techNotes
-        }, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
+        const analysisUpdates = { tech_notes: techNotes };
+        if (!inventoryEnabled(deps)) {
+            analysisUpdates.parts_needed = deps.isPartsControlEnabled() ? deps.state.analysisForm.partsList : null;
+            analysisUpdates.parts_status = deps.isPartsControlEnabled() && deps.state.analysisForm.partsList ? 'Pendente' : 'N/A';
+        }
+
+        await deps.updateStatus(ticket, 'Aprovacao', analysisUpdates, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
 
         await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
     },
@@ -230,7 +246,7 @@ window.AIDATicketActions = {
         const form = deps.state.analysisForm;
         const validationError = window.AIDAWarrantyService.validateTechnicalDecision(
             form,
-            deps.isPartsControlEnabled()
+            deps.isPartsControlEnabled() && !inventoryEnabled(deps)
         );
         if (validationError) {
             deps.notify(validationError, 'error');
@@ -241,23 +257,30 @@ window.AIDATicketActions = {
         const report = window.AIDAWarrantyService.buildTechnicalReport(form);
         deps.setLoading(true);
         try {
-            const updated = await deps.supabaseFetch('rpc/complete_warranty_analysis', 'POST', {
-                p_ticket_id: ticket.id,
-                p_covered: covered,
-                p_report: report,
-                p_needs_parts: deps.isPartsControlEnabled() && Boolean(form.needsParts),
-                p_parts: deps.isPartsControlEnabled() && form.needsParts
-                    ? String(form.partsList || '').trim()
-                    : null,
-                p_tech_notes: deps.state.selectedTicket?.id === ticket.id
-                    ? deps.state.selectedTicket.tech_notes
-                    : ticket.tech_notes
-            });
+            const techNotes = deps.state.selectedTicket?.id === ticket.id
+                ? deps.state.selectedTicket.tech_notes
+                : ticket.tech_notes;
+            const updated = covered && inventoryEnabled(deps) && form.needsParts
+                ? await deps.supabaseFetch('rpc/complete_warranty_analysis_with_inventory', 'POST', {
+                    p_ticket_id: ticket.id,
+                    p_report: report,
+                    p_tech_notes: techNotes
+                })
+                : await deps.supabaseFetch('rpc/complete_warranty_analysis', 'POST', {
+                    p_ticket_id: ticket.id,
+                    p_covered: covered,
+                    p_report: report,
+                    p_needs_parts: deps.isPartsControlEnabled() && Boolean(form.needsParts),
+                    p_parts: deps.isPartsControlEnabled() && form.needsParts
+                        ? String(form.partsList || '').trim()
+                        : null,
+                    p_tech_notes: techNotes
+                });
 
             const ctx = deps.getLogContext(ticket);
             const decision = covered ? '**coberto pela garantia**' : '**não coberto pela garantia**';
             const route = covered
-                ? (form.needsParts ? '**Compra de Peças**' : '**Reparo**')
+                ? (updated?.route === 'purchase' ? '**Compra de Peças**' : '**Reparo**')
                 : '**Orçamento ao cliente**';
             await deps.logTicketAction(
                 ticket.id,
@@ -298,6 +321,29 @@ window.AIDATicketActions = {
             return false;
         }
 
+        if (inventoryEnabled(deps) && ticket.parts_needed) {
+            deps.setLoading(true);
+            try {
+                const inventoryResult = await deps.supabaseFetch('rpc/approve_ticket_with_inventory', 'POST', {
+                    p_ticket_id: ticket.id
+                });
+                if (inventoryResult?.route !== 'no_inventory_parts') {
+                    if (inventoryResult?.route === 'schedule_repair') {
+                        deps.state.openSchedulePanel('repair', ticket.technician_id, ticket, 'approveRepair');
+                    } else {
+                        deps.notify(window.AIDAInventoryActions.routeMessage(inventoryResult));
+                    }
+                    await deps.fetchTickets(true);
+                    await deps.fetchGlobalLogs();
+                    return true;
+                }
+            } catch (error) {
+                deps.notify('Erro ao aprovar com estoque: ' + error.message, 'error');
+                return false;
+            } finally {
+                deps.setLoading(false);
+            }
+        }
         const needsPartsPurchase = deps.isPartsControlEnabled() && Boolean(ticket.parts_needed);
         const hasRepairAppointment = Boolean(ticket.repair_scheduled || ticket.repair_scheduled_at);
 
@@ -341,6 +387,10 @@ window.AIDATicketActions = {
          const ticket = deps.resolveTicket(ticketOrId);
          if (!ticket) return;
 
+         if (inventoryEnabled(deps)) {
+             await deps.openInventoryPurchasesForTicket(ticket);
+             return;
+         }
          // Quando a compra foi aberta no meio do reparo, o banco retoma um novo ciclo do cronômetro.
          if (ticket.repair_paused_at) {
              deps.setLoading(true);
@@ -584,10 +634,29 @@ window.AIDATicketActions = {
         if (!ticket) return;
         deps.setLoading(true);
         try {
-            await deps.supabaseFetch('rpc/complete_repair_with_timer', 'POST', {
-                p_ticket_id: ticket.id,
-                p_success: success
-            });
+            const usageState = deps.state.inventory?.repairUsage || { items: [], hasStructuredParts: false };
+            if (inventoryEnabled(deps) && usageState.loading) {
+                throw new Error('Aguarde a consulta das peças reservadas.');
+            }
+            if (inventoryEnabled(deps) && usageState.hasStructuredParts) {
+                const usage = (usageState.items || []).map(item => ({
+                    reservation_id: item.reservation_id,
+                    used_quantity: Number(item.used_quantity)
+                }));
+                if (usage.some(item => !item.reservation_id || !Number.isFinite(item.used_quantity) || item.used_quantity < 0)) {
+                    throw new Error('Revise as quantidades utilizadas.');
+                }
+                await deps.supabaseFetch('rpc/complete_repair_with_inventory', 'POST', {
+                    p_ticket_id: ticket.id,
+                    p_success: success,
+                    p_usage: usage
+                });
+            } else {
+                await deps.supabaseFetch('rpc/complete_repair_with_timer', 'POST', {
+                    p_ticket_id: ticket.id,
+                    p_success: success
+                });
+            }
             deps.closeModal('outcome');
             deps.notify(success ? "Reparo finalizado com sucesso!" : "Reparo finalizado.");
             await deps.fetchTickets(true);

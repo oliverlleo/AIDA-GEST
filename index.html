@@ -196,6 +196,18 @@
                         </div>
                     </template>
 
+                    <!-- Inventory management for attendants -->
+                    <template x-if="hasRole('atendente') && !hasRole('admin') && isInventoryEnabled()">
+                        <div class="mb-6 md:px-4">
+                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 hidden md:block">Gestão</p>
+                            <a href="#" @click.prevent="view = 'inventory'"
+                               :class="view === 'inventory' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-boxes-stacked w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'inventory' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Estoque</span>
+                            </a>
+                        </div>
+                    </template>
                     <!-- Admin Section (Renamed to Configuração) -->
                     <template x-if="hasRole('admin')">
                         <div class="mb-6 md:px-4">
@@ -205,6 +217,12 @@
                                class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
                                 <i class="fa-solid fa-chart-line w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'admin_dashboard' ? 'text-brand-500' : 'text-gray-400'"></i>
                                 <span class="ml-3 font-medium text-sm hidden md:block">Dashboard Gestor</span>
+                            </a>
+                            <a href="#" x-show="isInventoryEnabled()" @click.prevent="view = 'inventory'"
+                               :class="view === 'inventory' ? 'bg-brand-50 text-brand-600 border-brand-500' : 'text-gray-600 hover:bg-gray-50 border-transparent'"
+                               class="flex items-center px-3 py-3 rounded-lg border-l-4 transition-all group mb-1">
+                                <i class="fa-solid fa-boxes-stacked w-6 text-center text-lg group-hover:text-brand-500" :class="view === 'inventory' ? 'text-brand-500' : 'text-gray-400'"></i>
+                                <span class="ml-3 font-medium text-sm hidden md:block">Estoque</span>
                             </a>
                             <!-- NEW: Schedule Management Link -->
                             <a href="#" @click.prevent="view = 'schedule_management'" x-show="hasRole('admin') && isModuleEnabled('agenda')"
@@ -247,7 +265,141 @@
             <!-- Main Content Area -->
             <main class="flex-grow bg-gray-50 relative overflow-hidden flex flex-col">
 
+                <!-- VIEW: INVENTORY -->
+                <div x-show="view === 'inventory' && isInventoryEnabled() && (hasRole('admin') || hasRole('atendente'))"
+                     class="h-full flex flex-col bg-gray-50/70" x-cloak>
+                    <header class="bg-white px-5 md:px-8 py-5 border-b border-gray-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 flex-shrink-0">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-2xl bg-brand-50 text-brand-600 border border-brand-100 flex items-center justify-center">
+                                <i class="fa-solid fa-boxes-stacked text-lg"></i>
+                            </div>
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-800">Estoque</h1>
+                                <p class="text-sm text-gray-500">Peças, reservas, compras e disponibilidade para as OS.</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button @click="openInventoryMovements()" class="bg-white border border-gray-200 text-gray-700 px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50"><i class="fa-solid fa-clock-rotate-left mr-2 text-gray-400"></i>Movimentações</button>
+                            <button x-show="hasRole('admin')" @click="openInventoryLocationModal()" class="bg-white border border-gray-200 text-gray-700 px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50"><i class="fa-solid fa-location-dot mr-2 text-blue-500"></i>Localização</button>
+                            <button x-show="inventory.pendingParts.length > 0" @click="openInventoryPurchaseModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2.5 rounded-xl font-bold text-xs shadow-sm"><i class="fa-solid fa-cart-plus mr-2"></i>Nova compra</button>
+                            <button x-show="hasRole('admin')" @click="openInventoryItemModal()" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Novo item</button>
+                        </div>
+                    </header>
+
+                    <div class="flex-grow min-h-0 overflow-y-auto p-4 md:p-6">
+                        <div class="max-w-7xl mx-auto space-y-5">
+                            <div class="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                                <div class="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                                    <span class="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3"><i class="fa-solid fa-box"></i></span>
+                                    <b class="text-2xl text-gray-800 block" x-text="inventory.dashboard.active_items"></b>
+                                    <small class="text-gray-500">Itens ativos</small>
+                                </div>
+                                <div class="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                                    <span class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3"><i class="fa-solid fa-coins"></i></span>
+                                    <b class="text-lg text-gray-800 block" x-text="Number(inventory.dashboard.estimated_stock_value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })"></b>
+                                    <small class="text-gray-500">Valor estimado</small>
+                                </div>
+                                <div class="bg-white border border-amber-200 rounded-2xl p-4 shadow-sm">
+                                    <span class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                    <b class="text-2xl text-gray-800 block" x-text="inventory.dashboard.low_stock_items"></b>
+                                    <small class="text-gray-500">Estoque baixo</small>
+                                </div>
+                                <div class="bg-white border border-red-200 rounded-2xl p-4 shadow-sm">
+                                    <span class="w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center mb-3"><i class="fa-solid fa-box-open"></i></span>
+                                    <b class="text-2xl text-gray-800 block" x-text="inventory.dashboard.out_of_stock_items"></b>
+                                    <small class="text-gray-500">Sem estoque</small>
+                                </div>
+                                <div class="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                                    <span class="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-3"><i class="fa-solid fa-cart-shopping"></i></span>
+                                    <b class="text-2xl text-gray-800 block" x-text="inventory.dashboard.open_purchases"></b>
+                                    <small class="text-gray-500">Compras abertas</small>
+                                </div>
+                                <div class="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                                    <span class="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center mb-3"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+                                    <b class="text-2xl text-gray-800 block" x-text="inventory.dashboard.pending_ticket_parts"></b>
+                                    <small class="text-gray-500">Faltas nas OS</small>
+                                </div>
+                            </div>
+
+                            <section class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                                <div class="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-3">
+                                    <div class="relative flex-1">
+                                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                        <input type="search" x-model="inventory.search" @input="scheduleInventorySearch()"
+                                               placeholder="Nome, código, universal, marca ou localização..."
+                                               class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none">
+                                    </div>
+                                    <input type="search" x-model="inventory.category" @input="scheduleInventorySearch()"
+                                           placeholder="Categoria"
+                                           class="w-full md:w-44 px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 outline-none focus:border-brand-400">
+                                    <select x-model="inventory.stockFilter" @change="loadInventory(true)"
+                                            class="px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 outline-none focus:border-brand-400">
+                                        <option value="all">Todos os itens</option>
+                                        <option value="available">Com disponibilidade</option>
+                                        <option value="low">Estoque baixo</option>
+                                        <option value="out">Sem estoque</option>
+                                        <option value="catalog">Somente catálogo</option><option value="pending">Com solicitação pendente</option><option value="inactive">Itens arquivados</option>
+                                    </select>
+                                </div>
+
+                                <div class="hidden md:grid grid-cols-[minmax(0,2fr)_120px_120px_120px_120px] gap-3 px-5 py-3 bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-500 border-b border-gray-100">
+                                    <span>Item</span><span>Físico</span><span>Reservado</span><span>Disponível</span><span>Situação</span>
+                                </div>
+                                <div class="divide-y divide-gray-100">
+                                    <template x-for="item in inventory.items" :key="item.id">
+                                        <div class="w-full text-left grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_100px_100px_100px_150px] gap-2 md:gap-3 px-5 py-4 hover:bg-brand-50/40 transition">
+                                            <span class="min-w-0">
+                                                <span class="font-bold text-gray-800 block truncate" x-text="item.name"></span>
+                                                <span class="text-xs text-gray-500 block truncate">
+                                                    <span x-text="item.sku || 'Sem código'"></span><span> · custo médio <b x-text="Number(item.average_cost || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })"></b> · última compra <b x-text="Number(item.last_cost || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })"></b></span>
+                                                    <span x-show="item.brand"> · <span x-text="item.brand"></span></span>
+                                                </span>
+                                                <small x-show="item.primary_location" class="text-[11px] text-gray-500 block truncate mt-1"><i class="fa-solid fa-location-dot text-blue-500 mr-1"></i><span x-text="item.primary_location"></span></small>
+                                                <small class="text-[10px] text-gray-400 block mt-1">Mínimo <b x-text="item.minimum_quantity"></b> · ideal <b x-text="item.ideal_quantity"></b><span x-show="item.track_stock && Number(item.ideal_quantity) > Number(item.available_quantity)" class="text-amber-700 font-bold"> · sugestão de compra <span x-text="Math.max(0, Number(item.ideal_quantity) - Number(item.available_quantity))"></span></span></small>
+                                            </span>
+                                            <span class="text-sm text-gray-700"><small class="md:hidden text-gray-400 mr-1">Físico:</small><b x-text="item.physical_quantity"></b></span>
+                                            <span class="text-sm text-gray-700"><small class="md:hidden text-gray-400 mr-1">Reservado:</small><b x-text="item.reserved_quantity"></b></span>
+                                            <span class="text-sm font-bold" :class="Number(item.available_quantity) <= 0 ? 'text-red-600' : 'text-green-600'"><small class="md:hidden text-gray-400 mr-1">Disponível:</small><span x-text="item.available_quantity"></span></span>
+                                            <span class="flex flex-wrap items-center gap-1">
+                                                <span x-show="!item.track_stock" class="inline-flex px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-[11px] font-bold">Catálogo</span>
+                                                <span x-show="item.track_stock && Number(item.available_quantity) <= 0" class="inline-flex px-2 py-1 rounded-full bg-red-50 text-red-700 text-[11px] font-bold">Sem estoque</span>
+                                                <span x-show="item.track_stock && Number(item.available_quantity) > 0 && Number(item.available_quantity) <= Number(item.minimum_quantity)" class="inline-flex px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[11px] font-bold">Estoque baixo</span>
+                                                <span x-show="item.track_stock && Number(item.available_quantity) > Number(item.minimum_quantity)" class="inline-flex px-2 py-1 rounded-full bg-green-50 text-green-700 text-[11px] font-bold">Disponível</span>
+                                                <button @click="openInventoryMovements(item)" title="Movimentações" class="w-7 h-7 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-brand-600"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                                                <button x-show="hasRole('admin')" @click="openInventoryAdjustModal(item)" title="Entrada ou ajuste" class="w-7 h-7 rounded-lg bg-white border border-gray-200 text-blue-600"><i class="fa-solid fa-arrow-right-to-bracket"></i></button>
+                                                <button x-show="hasRole('admin')" @click="openInventoryTransferModal(item)" title="Transferir" class="w-7 h-7 rounded-lg bg-white border border-gray-200 text-purple-600"><i class="fa-solid fa-right-left"></i></button>
+                                                <button x-show="hasRole('admin')" @click="openInventoryItemModal(item)" title="Editar" class="w-7 h-7 rounded-lg bg-white border border-gray-200 text-gray-600"><i class="fa-solid fa-pen"></i></button>
+                                            </span>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div x-show="inventory.loading" class="py-8 text-center text-brand-500"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Carregando estoque...</div>
+                                <div x-show="!inventory.loading && inventory.items.length === 0" class="py-14 text-center text-gray-400">
+                                    <i class="fa-solid fa-box-open text-3xl text-gray-200 mb-3"></i>
+                                    <p class="text-sm">Nenhum item encontrado.</p>
+                                </div>
+                                <div x-show="inventory.hasMore" class="p-4 border-t border-gray-100">
+                                    <button @click="loadMoreInventory()" :disabled="inventory.loading"
+                                            class="w-full py-2.5 rounded-xl border border-brand-100 text-brand-700 bg-brand-50 hover:bg-brand-100 text-xs font-bold disabled:opacity-50">
+                                        Carregar mais itens
+                                    </button>
+                                </div>
+                            </section>
+                            <section class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                                    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between"><div><h3 class="font-bold text-gray-800"><i class="fa-solid fa-list-check text-brand-500 mr-2"></i>Peças aguardando compra</h3><p class="text-xs text-gray-500 mt-1">A reserva parcial é mantida; compre somente o saldo faltante.</p></div><span class="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-bold" x-text="inventory.pendingParts.length"></span></div>
+                                    <div class="max-h-72 overflow-y-auto divide-y divide-gray-100"><template x-for="part in inventory.pendingParts" :key="part.ticket_part_item_id"><div class="p-4 flex items-start justify-between gap-3"><div class="min-w-0"><b class="text-sm text-gray-800 block truncate" x-text="part.item_name"></b><small class="text-gray-500 block">OS <b x-text="part.os_number || 'sem número'"></b> · <span x-text="part.client_name"></span></small></div><span class="flex-shrink-0 px-2 py-1 rounded-lg bg-red-50 text-red-700 text-xs font-bold">Falta <span x-text="part.missing_quantity"></span></span></div></template><div x-show="inventory.pendingParts.length === 0" class="p-8 text-center text-sm text-gray-400">Nenhuma peça aguardando compra.</div></div>
+                                    <div x-show="inventory.pendingParts.length > 0" class="p-4 border-t border-gray-100"><button @click="openInventoryPurchaseModal()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold text-sm"><i class="fa-solid fa-cart-plus mr-2"></i>Montar compra</button></div>
+                                </div>
+                                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                                    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between"><div><h3 class="font-bold text-gray-800"><i class="fa-solid fa-truck-ramp-box text-purple-500 mr-2"></i>Compras aguardando recebimento</h3><p class="text-xs text-gray-500 mt-1">Receba total ou parcialmente e decida quando liberar as OS.</p></div><span class="px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold" x-text="inventory.purchases.length"></span></div>
+                                    <div class="max-h-72 overflow-y-auto divide-y divide-gray-100"><template x-for="purchase in inventory.purchases" :key="purchase.id"><button @click="openInventoryReceipt(purchase)" class="w-full p-4 text-left hover:bg-purple-50/40 flex items-start justify-between gap-3"><div class="min-w-0"><b class="text-sm text-gray-800 block truncate" x-text="purchase.supplier_name"></b><small class="text-gray-500"><span x-text="purchase.item_count"></span> item(ns) · recebido <b x-text="purchase.received_quantity"></b> de <b x-text="purchase.ordered_quantity"></b></small></div><span class="flex-shrink-0 px-2 py-1 rounded-lg text-xs font-bold" :class="purchase.status === 'partial' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'" x-text="purchase.status === 'partial' ? 'Parcial' : 'Aguardando'"></span></button></template><div x-show="inventory.purchases.length === 0" class="p-8 text-center text-sm text-gray-400">Nenhuma compra aberta.</div></div>
+                                </div>
+                            </section>                        </div>
+                    </div>
+                </div>
                 <!-- VIEW: CUSTOMERS -->
+
                 <div x-show="view === 'customers' && isModuleEnabled('customers') && (hasRole('admin') || hasRole('atendente'))"
                      class="h-full flex flex-col bg-gray-50/70" x-cloak>
                     <header class="bg-white px-5 md:px-8 py-5 border-b border-gray-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 flex-shrink-0">
@@ -1816,7 +1968,7 @@
                                             <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-box-open"></i></span>
                                             <span class="min-w-0"><b class="text-sm text-gray-800 block">Controle de compra de peças</b><small class="text-xs text-gray-500 leading-snug block">Fornecedores, etapa de compra e pausa do reparo.</small></span>
                                         </span>
-                                        <input type="checkbox" x-model="trackerConfig.workflow.parts_control" class="w-5 h-5 rounded text-brand-500">
+                                        <input type="checkbox" x-model="trackerConfig.workflow.parts_control" @change="if (!trackerConfig.workflow.parts_control) trackerConfig.modules.inventory = false" class="w-5 h-5 rounded text-brand-500">
                                     </label>
                                     <div class="bg-white border border-gray-200 rounded-xl p-4 transition" :class="!isModuleEnabled('customers') ? 'opacity-60 bg-gray-100' : 'hover:border-brand-200'">
                                         <label class="flex items-center justify-between gap-4" :class="isModuleEnabled('customers') ? 'cursor-pointer' : 'cursor-not-allowed'">
@@ -1901,11 +2053,13 @@
                                     {key:'customers', icon:'fa-users', label:'Cadastro de clientes', description:'Clientes e histórico de atendimentos por OS'},
                                     {key:'agenda', icon:'fa-calendar-days', label:'Agenda', description:'Agenda semanal e Gerenciamento de Agenda'},
                                     {key:'suppliers', icon:'fa-store', label:'Fornecedores de peças', description:'Lojas e empresas onde a assistência compra peças e componentes'},
+
+                                    {key:'inventory', icon:'fa-boxes-stacked', label:'Controle de estoque', description:'Catálogo, saldos, reservas, compras e consumo de peças'},
                                     {key:'manager_dashboard', icon:'fa-chart-line', label:'Dashboard Gestor', description:'Indicadores e análises gerenciais'},
                                     {key:'public_tracker', icon:'fa-mobile-screen-button', label:'Acompanhamento Público', description:'Link externo para o cliente acompanhar a OS'}
                                 ]" :key="module.key">
                                     <label class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between gap-4 transition"
-                                           :class="module.key === 'suppliers' && !isPartsControlEnabled() ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-brand-200'">
+                                           :class="['suppliers', 'inventory'].includes(module.key) && !isPartsControlEnabled() ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:border-brand-200'">
                                         <span class="flex items-center gap-3 min-w-0">
                                             <span class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
                                                 <i class="fa-solid" :class="module.icon"></i>
@@ -1913,11 +2067,11 @@
                                             <span class="min-w-0">
                                                 <b class="text-sm text-gray-800 block" x-text="module.label"></b>
                                                 <small class="text-xs text-gray-500 leading-snug block" x-text="module.description"></small>
-                                                <small x-show="module.key === 'suppliers' && !isPartsControlEnabled()" class="text-[10px] text-amber-700 font-semibold block mt-1">Ative “Controle de compra de peças” para utilizar.</small>
+                                                <small x-show="['suppliers', 'inventory'].includes(module.key) && !isPartsControlEnabled()" class="text-[10px] text-amber-700 font-semibold block mt-1">Ative “Controle de compra de peças” para utilizar.</small>
                                             </span>
                                         </span>
                                         <input type="checkbox" x-model="trackerConfig.modules[module.key]"
-                                               :disabled="module.key === 'suppliers' && !isPartsControlEnabled()"
+                                               :disabled="['suppliers', 'inventory'].includes(module.key) && !isPartsControlEnabled()"
                                                class="w-5 h-5 rounded text-brand-500 disabled:cursor-not-allowed">
                                     </label>
                                 </template>
@@ -4176,7 +4330,14 @@
                                                             <span x-text="(ticket.created_by_name || 'U').charAt(0)"></span>
                                                         </div>
                                                     </div>
-                                                    <div class="text-[10px] font-bold text-gray-600 truncate">
+                                                    <template x-if="isInventoryEnabled() && ticket.inventory_summary && Number(ticket.inventory_summary.item_count) > 0">
+    <div class="flex flex-wrap gap-1 py-1.5 border-t border-gray-50">
+        <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.item_count"></span> peça(s)</span>
+        <span x-show="Number(ticket.inventory_summary.reserved_quantity) > 0" class="px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.reserved_quantity"></span> reservada(s)</span>
+        <span x-show="Number(ticket.inventory_summary.missing_quantity) > 0" class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.missing_quantity"></span> aguardando compra</span>
+        <span x-show="Number(ticket.inventory_summary.consumed_quantity) > 0" class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.consumed_quantity"></span> usada(s)</span>
+    </div>
+</template><div class="text-[10px] font-bold text-gray-600 truncate">
                                                         Técnico: <span class="font-normal" x-text="getEmployeeName(ticket.technician_id)"></span>
                                                     </div>
                                                 </div>
@@ -4568,7 +4729,14 @@
                                                 </template>
                                             </div>
 
-                                            <div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
+                                            <template x-if="isInventoryEnabled() && ticket.inventory_summary && Number(ticket.inventory_summary.item_count) > 0">
+    <div class="flex flex-wrap gap-1 py-1.5 border-t border-gray-50">
+        <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.item_count"></span> peça(s)</span>
+        <span x-show="Number(ticket.inventory_summary.reserved_quantity) > 0" class="px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.reserved_quantity"></span> reservada(s)</span>
+        <span x-show="Number(ticket.inventory_summary.missing_quantity) > 0" class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.missing_quantity"></span> aguardando compra</span>
+        <span x-show="Number(ticket.inventory_summary.consumed_quantity) > 0" class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.consumed_quantity"></span> usada(s)</span>
+    </div>
+</template><div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
                                                 Técnico: <span class="font-normal" x-text="getEmployeeName(ticket.technician_id)"></span>
                                             </div>
 
@@ -4662,7 +4830,14 @@
                                                 </div>
                                             </div>
 
-                                            <div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
+                                            <template x-if="isInventoryEnabled() && ticket.inventory_summary && Number(ticket.inventory_summary.item_count) > 0">
+    <div class="flex flex-wrap gap-1 py-1.5 border-t border-gray-50">
+        <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.item_count"></span> peça(s)</span>
+        <span x-show="Number(ticket.inventory_summary.reserved_quantity) > 0" class="px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.reserved_quantity"></span> reservada(s)</span>
+        <span x-show="Number(ticket.inventory_summary.missing_quantity) > 0" class="px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.missing_quantity"></span> aguardando compra</span>
+        <span x-show="Number(ticket.inventory_summary.consumed_quantity) > 0" class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[9px] font-bold"><span x-text="ticket.inventory_summary.consumed_quantity"></span> usada(s)</span>
+    </div>
+</template><div class="text-[10px] font-bold text-gray-600 truncate border-t border-gray-50 pt-1">
                                                 Técnico: <span class="font-normal" x-text="getEmployeeName(ticket.technician_id)"></span>
                                             </div>
 
@@ -6348,8 +6523,8 @@
                                 </label>
 
                                 <div x-show="ticketForm.budget_approved" x-transition class="border-t border-emerald-100 px-4 py-4">
-                                    <p class="mb-3 text-xs font-bold uppercase tracking-wide text-emerald-800">Enviar inicialmente para</p>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <p x-show="!isInventoryEnabled()" class="mb-3 text-xs font-bold uppercase tracking-wide text-emerald-800">Enviar inicialmente para</p>
+                                    <div x-show="!isInventoryEnabled()" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <button type="button" @click="ticketForm.approved_route = 'repair'; handleApprovedRouteChange()"
                                                 :class="ticketForm.approved_route === 'repair' ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200' : 'border-gray-200 bg-white hover:border-brand-200'"
                                                 class="rounded-lg border p-3 text-left transition-colors">
@@ -6363,9 +6538,13 @@
                                             <span class="mt-1 block text-xs text-gray-500">Aguarda a compra antes de liberar o reparo.</span>
                                         </button>
                                     </div>
-                                    <div x-show="ticketForm.approved_route === 'purchase'" class="mt-3" data-ticket-field="parts_needed">
+                                    <div x-show="!isInventoryEnabled() && ticketForm.approved_route === 'purchase'" class="mt-3" data-ticket-field="parts_needed">
                                         <label class="mb-1 block text-xs font-bold text-gray-600">Peças necessárias <span class="text-red-500">*</span></label>
                                         <textarea x-model="ticketForm.parts_needed" rows="2" class="w-full rounded-lg border border-purple-200 bg-white p-2.5 text-sm focus:border-purple-500 focus:ring-purple-500" placeholder="Ex.: Tela OLED e adesivo de vedação"></textarea>
+                                    </div>                                    <div x-show="isInventoryEnabled()" class="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><p class="text-sm font-bold text-blue-900"><i class="fa-solid fa-boxes-stacked mr-2"></i>Peças do reparo</p><p class="text-xs text-blue-700 mt-1">Selecione as peças. Ao criar, o sistema reserva o saldo e envia para compra somente o que faltar.</p></div><button type="button" @click="openDirectTicketInventorySelector()" class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold"><i class="fa-solid fa-plus mr-2"></i>Selecionar peças</button></div>
+                                        <div x-show="ticketForm.inventory_parts.length > 0" class="mt-3 flex flex-wrap gap-2"><template x-for="part in ticketForm.inventory_parts" :key="part.item_id"><span class="inline-flex items-center px-2.5 py-1.5 rounded-lg bg-white border border-blue-100 text-xs text-blue-900"><b x-text="part.quantity"></b><span class="mx-1">×</span><span x-text="part.name"></span></span></template></div>
+                                        <p x-show="ticketForm.inventory_parts.length === 0" class="mt-3 text-xs text-blue-700"><i class="fa-solid fa-circle-info mr-1"></i>Se o serviço não precisar de peças, deixe vazio e ele seguirá direto para reparo.</p>
                                     </div>
                                 </div>
                             </div>
@@ -7271,7 +7450,7 @@
 
                                 <div class="mt-3">
                                     <label class="block text-xs font-bold text-gray-500 mb-1">Peças Necessárias</label>
-                                    <input type="text" x-model="selectedTicket.parts_needed" class="w-full text-sm border-gray-300 rounded-md" placeholder="Ex: Tela, Bateria...">
+                                    <input type="text" x-model="selectedTicket.parts_needed" :readonly="isInventoryEnabled()" class="w-full text-sm border-gray-300 rounded-md" :class="isInventoryEnabled() ? 'bg-gray-50 text-gray-500' : ''" placeholder="Ex: Tela, Bateria..."><button x-show="isInventoryEnabled()" type="button" @click="openTicketInventoryDetails(selectedTicket)" class="mt-2 w-full py-2 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold"><i class="fa-solid fa-boxes-stacked mr-2"></i>Ver reservas, consumo e devoluções</button>
                                 </div>
 
                                 <!-- Photos in Tech Notes -->
@@ -7936,6 +8115,20 @@
             <!-- Repair Outcome -->
             <div x-show="outcomeMode === 'repair'" class="space-y-4">
                 <p class="text-gray-600">O reparo foi realizado com sucesso?</p>
+                <div x-show="isInventoryEnabled() && inventory.repairUsage.loading" class="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">
+                    <i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Consultando peças reservadas...
+                </div>
+                <div x-show="isInventoryEnabled() && !inventory.repairUsage.loading && inventory.repairUsage.items.length > 0" class="rounded-xl border border-amber-200 bg-amber-50/70 p-3 space-y-3">
+                    <div><p class="text-sm font-bold text-amber-900"><i class="fa-solid fa-box-open mr-2"></i>Confirme as peças utilizadas</p><p class="text-xs text-amber-700 mt-1">Informe quanto foi realmente usado. O restante volta automaticamente ao saldo disponível.</p></div>
+                    <template x-for="item in inventory.repairUsage.items" :key="item.reservation_id">
+                        <label class="block rounded-lg bg-white border border-amber-100 p-3">
+                            <span class="flex items-start justify-between gap-3">
+                                <span class="min-w-0"><b class="text-sm text-gray-800 block truncate" x-text="item.item_name || item.requested_name"></b><small class="text-gray-500"><i class="fa-solid fa-location-dot mr-1"></i><span x-text="item.location_name"></span> · reservado: <b x-text="item.remaining_quantity"></b></small></span>
+                                <span class="w-24 flex-shrink-0"><small class="text-[10px] font-bold text-gray-500 block mb-1">Quantidade usada</small><input type="number" min="0" :max="item.remaining_quantity" step="0.001" x-model.number="item.used_quantity" class="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:border-brand-400"></span>
+                            </span>
+                        </label>
+                    </template>
+                </div>
                 <div class="flex space-x-3">
                     <button @click="finishRepair(true)" class="flex-1 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600">
                         <i class="fa-solid fa-check mr-2"></i> Sim, Sucesso
@@ -8285,20 +8478,143 @@
         </div>
     </div>
 
+    <!-- Inventory Location Modal -->
+    <div x-show="modals.inventoryLocation" x-cloak class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/55">
+        <div @click.outside="modals.inventoryLocation = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div class="flex items-center justify-between mb-5"><div><h3 class="font-bold text-lg text-gray-800">Nova localização</h3><p class="text-xs text-gray-500">Use um nome fácil de encontrar na bancada.</p></div><button @click="modals.inventoryLocation = false" class="text-gray-400"><i class="fa-solid fa-xmark"></i></button></div>
+            <div class="space-y-4"><label class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Nome *</span><input x-model="inventory.locationForm.name" class="w-full border rounded-xl px-3 py-2.5 outline-none focus:border-brand-400" placeholder="Ex.: Gaveta azul"></label><label class="block"><span class="flex items-center justify-between mb-1"><b class="text-xs text-gray-600">Padrão de endereço</b><button type="button" @click="openInventorySchemeModal()" class="text-[10px] text-brand-600 font-bold"><i class="fa-solid fa-plus mr-1"></i>Novo padrão</button></span><select x-model="inventory.locationForm.scheme_id" @change="resetInventoryLocationComponents()" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Livre</option><template x-for="scheme in inventory.schemes.filter(s => s.active)" :key="scheme.id"><option :value="scheme.id" x-text="scheme.name"></option></template></select></label><label x-show="!getInventoryLocationScheme() || getInventoryLocationScheme()?.mode === 'free'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Endereço mostrado *</span><input x-model="inventory.locationForm.normalized_address" class="w-full border rounded-xl px-3 py-2.5 outline-none focus:border-brand-400" placeholder="Ex.: Armário A / Gaveta 03"></label><div x-show="getInventoryLocationScheme()?.mode === 'structured'" class="rounded-xl bg-gray-50 border p-3"><p class="text-xs font-bold text-gray-600 mb-2">Preencha o endereço</p><div class="grid grid-cols-1 sm:grid-cols-2 gap-2"><template x-for="part in (getInventoryLocationScheme()?.component_labels || []).filter(p => !['fixed','separator'].includes(p.type))" :key="part.label"><label><small class="text-[10px] font-bold text-gray-500 block mb-1" x-text="part.label"></small><select x-show="part.type === 'options'" x-model="inventory.locationForm.address_components[part.label]" class="w-full border rounded-lg px-2 py-2 bg-white text-sm"><option value="">Selecione</option><template x-for="option in part.options" :key="option"><option :value="option" x-text="option"></option></template></select><input x-show="part.type !== 'options'" x-model="inventory.locationForm.address_components[part.label]" class="w-full border rounded-lg px-2 py-2 text-sm" :placeholder="part.type === 'letters' ? 'Letras' : (part.type === 'numbers' ? 'Números' : 'Letras e números')"></label></template></div></div></div>
+            <div class="flex justify-end gap-2 mt-6"><button @click="modals.inventoryLocation = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="saveInventoryLocation()" class="px-4 py-2 rounded-xl bg-brand-500 text-white font-bold text-sm">Salvar</button></div>
+        </div>
+    </div>
+
+    <!-- Inventory Location Scheme Modal -->
+    <div x-show="modals.inventoryScheme" x-cloak class="fixed inset-0 z-[115] flex items-center justify-center p-3 bg-black/60"><div @click.outside="modals.inventoryScheme = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"><div class="px-5 py-4 border-b"><h3 class="font-bold text-lg text-gray-800">Criar padrão de localização</h3><p class="text-xs text-gray-500">Monte as partes visualmente. Você não precisa escrever expressões ou códigos.</p></div><div class="p-5 overflow-y-auto space-y-4"><label><span class="text-xs font-bold text-gray-600 block mb-1">Nome do padrão</span><input x-model="inventory.schemeForm.name" class="w-full border rounded-xl px-3 py-2.5" placeholder="Ex.: Corredor / Estante / Caixa"></label><div class="space-y-2"><template x-for="(part, index) in inventory.schemeForm.component_labels" :key="index"><div class="grid grid-cols-1 md:grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 border rounded-xl p-3"><select x-model="part.type" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="letters">Letras</option><option value="numbers">Números</option><option value="alphanumeric">Letras e números</option><option value="fixed">Texto fixo</option><option value="separator">Separador</option><option value="options">Lista de opções</option></select><input x-show="!['fixed','separator'].includes(part.type)" x-model="part.label" class="border rounded-lg px-2 py-2 text-sm" placeholder="Nome: corredor, caixa..."><input x-show="['fixed','separator'].includes(part.type)" x-model="part.value" class="border rounded-lg px-2 py-2 text-sm" placeholder="Texto ou separador"><input x-show="part.type === 'options'" x-model="part.options_text" class="border rounded-lg px-2 py-2 text-sm" placeholder="Opções separadas por vírgula"><span x-show="part.type !== 'options'" class="hidden md:block"></span><button type="button" @click="removeInventorySchemePart(index)" class="text-red-500 px-2"><i class="fa-solid fa-trash"></i></button></div></template><button type="button" @click="addInventorySchemePart()" class="px-3 py-2 rounded-lg bg-brand-50 text-brand-700 text-xs font-bold"><i class="fa-solid fa-plus mr-2"></i>Adicionar parte</button></div></div><div class="p-5 border-t flex justify-end gap-2"><button @click="modals.inventoryScheme = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="saveInventoryScheme()" class="px-4 py-2 rounded-xl bg-brand-500 text-white font-bold text-sm">Salvar padrão</button></div></div></div>
+    <!-- Inventory Adjustment Modal -->
+    <div x-show="modals.inventoryAdjust" x-cloak class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/55">
+        <div @click.outside="modals.inventoryAdjust = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 class="font-bold text-lg text-gray-800">Entrada ou ajuste de saldo</h3><p class="text-sm text-gray-500 mt-1 mb-5" x-text="inventory.adjustForm.item_name"></p>
+            <div class="space-y-4"><div class="grid grid-cols-2 gap-2"><button type="button" @click="inventory.adjustForm.mode = 'entry'" :class="inventory.adjustForm.mode === 'entry' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'" class="border rounded-xl py-2 text-xs font-bold"><i class="fa-solid fa-arrow-right-to-bracket mr-2"></i>Registrar entrada</button><button type="button" @click="inventory.adjustForm.mode = 'adjust'" :class="inventory.adjustForm.mode === 'adjust' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200'" class="border rounded-xl py-2 text-xs font-bold"><i class="fa-solid fa-scale-balanced mr-2"></i>Corrigir saldo</button></div><label class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Localização</span><select x-model="inventory.adjustForm.location_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="location in inventory.locations.filter(l => l.active)" :key="location.id"><option :value="location.id" x-text="location.name"></option></template></select></label><label x-show="inventory.adjustForm.mode === 'entry'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Quantidade de entrada</span><input type="number" min="0.001" step="0.001" x-model.number="inventory.adjustForm.quantity" class="w-full border rounded-xl px-3 py-2.5"></label><label x-show="inventory.adjustForm.mode === 'entry'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Custo unitário <span class="font-normal text-gray-400">(opcional)</span></span><input type="number" min="0" step="0.01" x-model.number="inventory.adjustForm.unit_cost" class="w-full border rounded-xl px-3 py-2.5"></label><label x-show="inventory.adjustForm.mode === 'adjust'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Novo saldo físico</span><input type="number" min="0" step="0.001" x-model.number="inventory.adjustForm.physical_quantity" class="w-full border rounded-xl px-3 py-2.5"></label><label class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Motivo *</span><textarea x-model="inventory.adjustForm.reason" rows="2" class="w-full border rounded-xl px-3 py-2.5 resize-none" placeholder="Ex.: contagem física inicial"></textarea></label></div>
+            <p class="mt-3 text-xs text-amber-700 bg-amber-50 rounded-lg p-3"><i class="fa-solid fa-shield-halved mr-2"></i>O saldo não pode ficar abaixo do que já está reservado. Toda correção gera uma movimentação imutável.</p>
+            <div class="flex justify-end gap-2 mt-5"><button @click="modals.inventoryAdjust = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="submitInventoryAdjustment()" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm">Registrar</button></div>
+        </div>
+    </div>
+
+    <!-- Inventory Transfer Modal -->
+    <div x-show="modals.inventoryTransfer" x-cloak class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/55">
+        <div @click.outside="modals.inventoryTransfer = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+            <h3 class="font-bold text-lg text-gray-800">Transferir entre locais</h3><p class="text-sm text-gray-500 mt-1 mb-5" x-text="inventory.transferForm.item_name"></p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label><span class="text-xs font-bold text-gray-600 block mb-1">Origem</span><select x-model="inventory.transferForm.from_location_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="location in inventory.locations.filter(l => l.active)" :key="location.id"><option :value="location.id" x-text="location.name"></option></template></select></label><label><span class="text-xs font-bold text-gray-600 block mb-1">Destino</span><select x-model="inventory.transferForm.to_location_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="location in inventory.locations.filter(l => l.active)" :key="location.id"><option :value="location.id" x-text="location.name"></option></template></select></label><label><span class="text-xs font-bold text-gray-600 block mb-1">Quantidade</span><input type="number" min="0.001" step="0.001" x-model.number="inventory.transferForm.quantity" class="w-full border rounded-xl px-3 py-2.5"></label><label><span class="text-xs font-bold text-gray-600 block mb-1">Motivo</span><input x-model="inventory.transferForm.reason" class="w-full border rounded-xl px-3 py-2.5" placeholder="Organização do estoque"></label></div>
+            <div class="flex justify-end gap-2 mt-6"><button @click="modals.inventoryTransfer = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="submitInventoryTransfer()" class="px-4 py-2 rounded-xl bg-purple-600 text-white font-bold text-sm">Transferir</button></div>
+        </div>
+    </div>
+
+    <!-- Inventory Movements Modal -->
+    <div x-show="modals.inventoryMovements" x-cloak class="fixed inset-0 z-[110] flex items-center justify-center p-3 bg-black/55">
+        <div @click.outside="modals.inventoryMovements = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-5 py-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-lg text-gray-800">Histórico de movimentações</h3><p class="text-xs text-gray-500" x-text="inventory.itemDetail ? inventory.itemDetail.name : 'Todos os itens'"></p></div><button @click="modals.inventoryMovements = false" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="flex-grow overflow-y-auto divide-y divide-gray-100"><template x-for="movement in inventory.movements" :key="movement.id"><div class="p-4 grid grid-cols-1 md:grid-cols-[minmax(0,1.5fr)_140px_130px_minmax(0,1fr)] gap-2 text-sm"><div><b class="text-gray-800 block" x-text="movement.item_name"></b><small class="text-gray-500" x-text="movement.location_name"></small></div><span class="font-bold" :class="Number(movement.physical_delta) < 0 || Number(movement.reserved_delta) < 0 ? 'text-red-600' : 'text-green-600'"><span x-text="movement.physical_delta"></span> físico<br><small><span x-text="movement.reserved_delta"></span> reservado</small></span><span><b class="text-xs text-gray-700 block" x-text="movement.movement_type"></b><small class="text-gray-500" x-text="formatDateTime(movement.created_at)"></small></span><span class="text-xs text-gray-600"><b x-text="movement.actor_name"></b><span x-show="movement.os_number"> · OS <span x-text="movement.os_number"></span></span><small class="block mt-1" x-text="movement.reason"></small></span></div></template><div x-show="inventory.movements.length === 0" class="p-12 text-center text-gray-400">Nenhuma movimentação registrada.</div></div>
+            <div x-show="inventory.movementsHasMore" class="p-4 border-t"><button @click="loadInventoryMovements(false)" class="w-full py-2 rounded-xl bg-gray-50 border text-sm font-bold text-gray-600">Carregar mais</button></div>
+        </div>
+    </div>
+
+    <!-- Structured Purchase Modal -->
+    <div x-show="modals.inventoryPurchase" x-cloak class="fixed inset-0 z-[115] flex items-center justify-center p-3 bg-black/60">
+        <div @click.outside="modals.inventoryPurchase = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
+            <div class="px-5 py-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-lg text-gray-800">Montar compra de peças</h3><p class="text-xs text-gray-500">Selecione o fornecedor e somente as faltas que entrarão nesta compra.</p></div><button @click="modals.inventoryPurchase = false" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="p-5 border-b bg-gray-50 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-4"><label><span class="text-xs font-bold text-gray-600 block mb-1">Fornecedor *</span><select x-model="inventory.purchaseForm.supplier_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="supplier in fornecedores" :key="supplier.id"><option :value="supplier.id" x-text="supplier.razao_social"></option></template></select></label><label class="flex items-end pb-2"><span class="flex items-center gap-2 text-sm font-bold text-red-700"><input type="checkbox" x-model="inventory.purchaseForm.urgent" class="w-5 h-5 rounded text-red-600">Compra urgente</span></label></div>
+            <div class="flex-grow overflow-y-auto divide-y divide-gray-100"><template x-for="item in inventory.purchaseForm.items" :key="item.ticket_part_item_id"><label class="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50"><input type="checkbox" x-model="item.selected" class="w-5 h-5 rounded text-brand-500"><span class="min-w-0 flex-grow"><b class="text-sm text-gray-800 block truncate" x-text="item.item_name"></b><small class="text-gray-500">OS <span x-text="item.os_number || 'sem número'"></span> · falta <b x-text="item.missing_quantity"></b></small></span><span class="w-28"><small class="text-[10px] font-bold text-gray-500 block mb-1">Comprar</small><input type="number" min="0.001" :max="item.missing_quantity" step="0.001" x-model.number="item.quantity" :disabled="!item.selected" class="w-full border rounded-lg px-2 py-2 text-sm disabled:bg-gray-100"></span></label></template></div>
+            <div class="p-5 border-t space-y-3"><input x-model="inventory.purchaseForm.notes" class="w-full border rounded-xl px-3 py-2.5 text-sm" placeholder="Observação da compra (opcional)"><div class="flex justify-end gap-2"><button @click="modals.inventoryPurchase = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="submitInventoryPurchase()" class="px-5 py-2 rounded-xl bg-purple-600 text-white font-bold text-sm"><i class="fa-solid fa-cart-check mr-2"></i>Registrar compra</button></div></div>
+        </div>
+    </div>
+
+    <!-- Inventory Receipt Modal -->
+    <div x-show="modals.inventoryReceipt" x-cloak class="fixed inset-0 z-[115] flex items-center justify-center p-3 bg-black/60">
+        <div @click.outside="modals.inventoryReceipt = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
+            <div class="px-5 py-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-lg text-gray-800">Receber compra</h3><p class="text-xs text-gray-500" x-text="inventory.receiptForm.supplierName"></p></div><button @click="modals.inventoryReceipt = false" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="flex-grow overflow-y-auto divide-y divide-gray-100"><template x-for="item in inventory.receiptForm.items" :key="item.purchase_item_id"><div class="p-4 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_115px_130px_180px] gap-3 items-end"><div><b class="text-sm text-gray-800 block" x-text="item.item_name"></b><small class="text-gray-500">Pendente: <b x-text="item.pending_quantity"></b></small></div><label><small class="text-[10px] font-bold text-gray-500 block mb-1">Recebido agora</small><input type="number" min="0" :max="item.pending_quantity" step="0.001" x-model.number="item.receive_quantity" class="w-full border rounded-lg px-2 py-2 text-sm"></label><label><small class="text-[10px] font-bold text-gray-500 block mb-1">Custo unitário</small><input type="number" min="0" step="0.01" x-model.number="item.unit_cost" class="w-full border rounded-lg px-2 py-2 text-sm"></label><label><small class="text-[10px] font-bold text-gray-500 block mb-1">Local de entrada</small><select x-model="item.location_id" class="w-full border rounded-lg px-2 py-2 text-sm bg-white"><option value="">Selecione</option><template x-for="location in inventory.locations.filter(l => l.active)" :key="location.id"><option :value="location.id" x-text="location.name"></option></template></select></label></div></template></div>
+            <div class="p-5 border-t bg-gray-50"><label class="flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-100 p-3 cursor-pointer"><input type="checkbox" x-model="inventory.receiptForm.confirmAllocation" class="w-5 h-5 rounded text-blue-600 mt-0.5"><span><b class="text-sm text-blue-900 block">Reservar para as OS após receber</b><small class="text-xs text-blue-700">O sistema mostra o resultado e só libera para reparo as OS que ficarem com todas as peças reservadas.</small></span></label><div class="flex flex-wrap justify-end gap-2 mt-4"><button x-show="inventory.receiptForm.items.every(item => Number(item.received_quantity) === 0)" @click="openInventoryCancelPurchase()" class="mr-auto px-4 py-2 rounded-xl text-red-600 hover:bg-red-50 font-bold text-sm"><i class="fa-solid fa-ban mr-2"></i>Cancelar compra</button><button @click="modals.inventoryReceipt = false" class="px-4 py-2 rounded-xl border bg-white font-bold text-sm text-gray-600">Cancelar</button><button @click="submitInventoryReceipt()" class="px-5 py-2 rounded-xl bg-green-600 text-white font-bold text-sm"><i class="fa-solid fa-box-circle-check mr-2"></i>Confirmar recebimento</button></div></div>
+        </div>
+    </div>
+    <!-- Ticket Inventory Details Modal -->
+    <div x-show="modals.inventoryTicketParts" x-cloak class="fixed inset-0 z-[120] flex items-center justify-center p-3 bg-black/60"><div @click.outside="modals.inventoryTicketParts = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"><div class="px-5 py-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-lg text-gray-800">Peças da OS</h3><p class="text-xs text-gray-500">Reserva não é consumo. Cada local e quantidade permanecem rastreáveis.</p></div><button @click="modals.inventoryTicketParts = false" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button></div><div x-show="inventory.ticketPartsDetail.loading" class="p-12 text-center text-blue-600"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Consultando...</div><div x-show="!inventory.ticketPartsDetail.loading" class="flex-grow overflow-y-auto divide-y divide-gray-100"><template x-for="part in inventory.ticketPartsDetail.items" :key="part.ticket_part_item_id"><div class="p-4"><div class="flex items-start justify-between gap-3"><div><b class="text-sm text-gray-800" x-text="part.name"></b><small class="block text-gray-500">Solicitado: <b x-text="part.requested_quantity"></b> · situação: <b x-text="part.status"></b></small></div><span x-show="part.substitution_type" class="px-2 py-1 rounded-lg bg-green-50 text-green-700 text-[10px] font-bold" x-text="part.substitution_type === 'equivalent' ? 'Equivalente escolhida' : 'Substituta escolhida'"></span></div><div class="mt-3 space-y-2"><template x-for="reservation in part.reservations" :key="reservation.reservation_id"><div class="rounded-xl border bg-gray-50 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><b class="text-xs text-gray-800 block" x-text="reservation.item_name"></b><small class="text-gray-500"><i class="fa-solid fa-location-dot mr-1"></i><span x-text="reservation.location_name"></span> · reservado <span x-text="reservation.reserved_quantity"></span> · usado <span x-text="reservation.consumed_quantity"></span> · devolvido <span x-text="reservation.returned_quantity"></span></small></div><button x-show="Number(reservation.returnable_quantity) > 0 && (hasRole('admin') || (hasRole('tecnico') && isTicketAssignedToCurrentTechnician(selectedTicket)))" @click="openInventoryReturn(reservation)" class="flex-shrink-0 px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-bold"><i class="fa-solid fa-rotate-left mr-2"></i>Devolver ao estoque</button></div></template></div></div></template><div x-show="inventory.ticketPartsDetail.items.length === 0" class="p-12 text-center text-gray-400">Esta OS não possui peças estruturadas.</div></div></div></div>
+
+    <!-- Inventory Return Modal -->
+    <div x-show="modals.inventoryReturn" x-cloak class="fixed inset-0 z-[125] flex items-center justify-center p-4 bg-black/60"><div @click.outside="modals.inventoryReturn = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"><h3 class="font-bold text-lg text-gray-800">Devolver peça ao estoque</h3><p class="text-sm text-gray-500 mt-1 mb-4" x-text="inventory.returnForm.item_name"></p><div class="space-y-4"><label><span class="text-xs font-bold text-gray-600 block mb-1">Quantidade</span><input type="number" min="0.001" :max="inventory.returnForm.max_quantity" step="0.001" x-model.number="inventory.returnForm.quantity" class="w-full border rounded-xl px-3 py-2.5"></label><label><span class="text-xs font-bold text-gray-600 block mb-1">Motivo *</span><textarea x-model="inventory.returnForm.reason" rows="3" class="w-full border rounded-xl px-3 py-2.5 resize-none" placeholder="Ex.: peça retirada após novo diagnóstico"></textarea></label></div><div class="flex justify-end gap-2 mt-5"><button @click="modals.inventoryReturn = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="submitInventoryReturn()" class="px-4 py-2 rounded-xl bg-green-600 text-white font-bold text-sm">Confirmar devolução</button></div></div></div>
+    <!-- Inventory Purchase Cancellation Modal -->
+    <div x-show="modals.inventoryCancelPurchase" x-cloak class="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60"><div @click.outside="modals.inventoryCancelPurchase = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"><h3 class="font-bold text-lg text-gray-800">Cancelar compra</h3><p class="text-sm text-gray-500 mt-1 mb-4">Nenhuma entrada será apagada. As peças voltarão para a fila de compra.</p><label><span class="text-xs font-bold text-gray-600 block mb-1">Motivo *</span><textarea x-model="inventory.cancelPurchaseForm.reason" rows="3" class="w-full border rounded-xl px-3 py-2.5 resize-none" placeholder="Explique por que a compra foi cancelada"></textarea></label><div class="flex justify-end gap-2 mt-5"><button @click="modals.inventoryCancelPurchase = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Voltar</button><button @click="submitInventoryPurchaseCancellation()" class="px-4 py-2 rounded-xl bg-red-600 text-white font-bold text-sm">Confirmar cancelamento</button></div></div></div>
+    <!-- Inventory Item Modal -->
+    <div x-show="modals.inventoryItem" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="modals.inventoryItem = false">
+        <div @click.outside="modals.inventoryItem = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center"><i class="fa-solid fa-box"></i></span>
+                    <div><h3 class="font-bold text-lg text-gray-800" x-text="inventory.itemForm.id ? 'Editar item' : 'Novo item'"></h3><p class="text-xs text-gray-500">Somente o nome é obrigatório.</p></div>
+                </div>
+                <button @click="modals.inventoryItem = false" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <form @submit.prevent="saveInventoryItem()" class="p-6 space-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label class="md:col-span-2"><span class="text-xs font-bold text-gray-600 block mb-1">Nome *</span><input x-model="inventory.itemForm.name" required class="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:border-brand-400 outline-none" placeholder="Ex.: Tela OLED iPhone 13"></label>
+                    <label><span class="text-xs font-bold text-gray-600 block mb-1">Código interno</span><input x-model="inventory.itemForm.sku" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:border-brand-400 outline-none" placeholder="TEL-IP13-OLED"></label><label><span class="text-xs font-bold text-gray-600 block mb-1">Código universal / fabricante</span><input x-model="inventory.itemForm.universal_code" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:border-brand-400 outline-none" placeholder="EAN ou código do fabricante"></label><label class="md:col-span-2"><span class="text-xs font-bold text-gray-600 block mb-1">Foto (link opcional)</span><input type="url" x-model="inventory.itemForm.image_url" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:border-brand-400 outline-none" placeholder="https://..."></label>
+                    <label><span class="text-xs font-bold text-gray-600 block mb-1">Categoria</span><input x-model="inventory.itemForm.category" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:border-brand-400 outline-none" placeholder="Telas"></label>
+                    <label><span class="text-xs font-bold text-gray-600 block mb-1">Marca</span><input x-model="inventory.itemForm.brand" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:border-brand-400 outline-none"></label>
+                    <label><span class="text-xs font-bold text-gray-600 block mb-1">Unidade</span><select x-model="inventory.itemForm.unit_code" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 bg-white outline-none"><option value="un">Unidade</option><option value="pc">Peça</option><option value="kit">Kit</option><option value="m">Metro</option><option value="cm">Centímetro</option><option value="g">Grama</option><option value="kg">Quilograma</option><option value="ml">Mililitro</option><option value="l">Litro</option><option value="roll">Rolo</option><option value="box">Caixa</option><option value="custom">Personalizada</option></select></label><label><span class="text-xs font-bold text-gray-600 block mb-1">Localização padrão</span><select x-model="inventory.itemForm.default_location_id" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 bg-white outline-none"><option value="">Sem local padrão</option><template x-for="location in inventory.locations.filter(l => l.active)" :key="location.id"><option :value="location.id" x-text="location.name"></option></template></select></label>
+                    <label x-show="inventory.itemForm.unit_code === 'custom'" class="md:col-span-2"><span class="text-xs font-bold text-gray-600 block mb-1">Nome da unidade</span><input x-model="inventory.itemForm.custom_unit_name" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 outline-none"></label>
+                    <label><span class="text-xs font-bold text-gray-600 block mb-1">Estoque mínimo</span><input type="number" min="0" :step="inventory.itemForm.allow_decimal ? '0.001' : '1'" x-model.number="inventory.itemForm.minimum_quantity" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 outline-none"></label>
+                    <label><span class="text-xs font-bold text-gray-600 block mb-1">Estoque ideal</span><input type="number" min="0" :step="inventory.itemForm.allow_decimal ? '0.001' : '1'" x-model.number="inventory.itemForm.ideal_quantity" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 outline-none"></label>
+                    <label class="md:col-span-2"><span class="text-xs font-bold text-gray-600 block mb-1">Descrição</span><textarea x-model="inventory.itemForm.description" rows="3" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 outline-none resize-none"></textarea></label><label class="md:col-span-2"><span class="text-xs font-bold text-gray-600 block mb-1">Observações internas</span><textarea x-model="inventory.itemForm.internal_notes" rows="2" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 outline-none resize-none"></textarea></label>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label class="border rounded-xl p-4 flex items-center justify-between cursor-pointer"><span><b class="text-sm text-gray-800 block">Controlar saldo</b><small class="text-xs text-gray-500">Desligado, funciona apenas como catálogo.</small></span><input type="checkbox" x-model="inventory.itemForm.track_stock" class="w-5 h-5 rounded text-brand-500"></label>
+                    <label class="border rounded-xl p-4 flex items-center justify-between cursor-pointer"><span><b class="text-sm text-gray-800 block">Aceitar decimais</b><small class="text-xs text-gray-500">Para metros, peso e líquidos.</small></span><input type="checkbox" x-model="inventory.itemForm.allow_decimal" class="w-5 h-5 rounded text-brand-500"></label><label class="border rounded-xl p-4 flex items-center justify-between cursor-pointer"><span><b class="text-sm text-gray-800 block">Item ativo</b><small class="text-xs text-gray-500">Itens arquivados preservam todo o histórico.</small></span><input type="checkbox" x-model="inventory.itemForm.active" class="w-5 h-5 rounded text-brand-500"></label>
+                </div>
+                <details class="border border-gray-200 rounded-xl p-4"><summary class="font-bold text-sm text-gray-800 cursor-pointer"><i class="fa-solid fa-mobile-screen-button text-blue-500 mr-2"></i>Modelos compatíveis <span class="text-gray-400" x-text="`(${inventory.itemForm.model_ids.length})`"></span></summary><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 max-h-44 overflow-y-auto"><template x-for="model in deviceModels" :key="model.id"><label class="flex items-center gap-2 text-sm text-gray-700 border rounded-lg px-3 py-2 cursor-pointer"><input type="checkbox" :value="model.id" x-model="inventory.itemForm.model_ids" class="rounded text-brand-500"><span x-text="model.name"></span></label></template></div></details>
+                <details class="border border-gray-200 rounded-xl p-4"><summary class="font-bold text-sm text-gray-800 cursor-pointer"><i class="fa-solid fa-store text-purple-500 mr-2"></i>Fornecedores vinculados <span class="text-gray-400" x-text="`(${inventory.itemForm.suppliers.length})`"></span></summary><div class="mt-3 space-y-3"><template x-for="(supplier, index) in inventory.itemForm.suppliers" :key="index"><div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_130px_100px_auto] gap-2 border rounded-xl p-3"><select x-model="supplier.supplier_id" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="">Fornecedor</option><template x-for="option in fornecedores" :key="option.id"><option :value="option.id" x-text="option.razao_social"></option></template></select><input x-model="supplier.supplier_sku" class="border rounded-lg px-2 py-2 text-sm" placeholder="Cód. fornecedor"><input type="number" min="0" step="0.01" x-model.number="supplier.last_price" class="border rounded-lg px-2 py-2 text-sm" placeholder="Último preço"><button type="button" @click="removeInventorySupplierLink(index)" class="text-red-500 px-2"><i class="fa-solid fa-trash"></i></button><input x-model="supplier.purchase_url" class="md:col-span-2 border rounded-lg px-2 py-2 text-sm" placeholder="Link de compra"><input type="number" min="0" x-model.number="supplier.lead_time_days" class="border rounded-lg px-2 py-2 text-sm" placeholder="Prazo médio (dias)"><input type="number" min="0.001" step="0.001" x-model.number="supplier.minimum_order_quantity" class="border rounded-lg px-2 py-2 text-sm" placeholder="Compra mínima"><input x-model="supplier.notes" class="md:col-span-3 border rounded-lg px-2 py-2 text-sm" placeholder="Observações deste fornecedor"><label class="flex items-center gap-2 text-xs font-bold text-gray-600"><input type="checkbox" x-model="supplier.preferred" class="rounded text-brand-500">Preferencial</label></div></template><button type="button" @click="addInventorySupplierLink()" class="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-2 rounded-lg"><i class="fa-solid fa-plus mr-1"></i>Vincular fornecedor</button></div></details>
+                <details class="border border-gray-200 rounded-xl p-4"><summary class="font-bold text-sm text-gray-800 cursor-pointer"><i class="fa-solid fa-code-branch text-green-500 mr-2"></i>Equivalentes e substitutas <span class="text-gray-400" x-text="`(${inventory.itemForm.relations.length})`"></span></summary><div class="mt-3 space-y-2"><template x-for="(relation, index) in inventory.itemForm.relations" :key="index"><div class="grid grid-cols-[130px_minmax(0,1fr)_auto] gap-2"><select x-model="relation.relation_type" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="equivalent">Equivalente</option><option value="substitute">Substituta</option></select><select x-model="relation.target_item_id" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="">Selecione a peça</option><template x-for="option in inventory.items.filter(i => i.id !== inventory.itemForm.id)" :key="option.id"><option :value="option.id" x-text="option.name"></option></template></select><button type="button" @click="removeInventoryRelation(index)" class="text-red-500 px-2"><i class="fa-solid fa-trash"></i></button></div></template><button type="button" @click="addInventoryRelation()" class="text-xs font-bold text-green-700 bg-green-50 px-3 py-2 rounded-lg"><i class="fa-solid fa-plus mr-1"></i>Adicionar relação</button></div></details>
+                <div x-show="inventory.itemForm.id" class="flex justify-start"><button type="button" @click="archiveInventoryItem(inventory.itemForm); modals.inventoryItem = false" class="text-red-600 text-xs font-bold px-3 py-2 rounded-lg hover:bg-red-50"><i class="fa-solid fa-box-archive mr-2"></i>Arquivar item</button></div>                <div class="flex justify-end gap-3 pt-2"><button type="button" @click="modals.inventoryItem = false" class="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm">Cancelar</button><button type="submit" :disabled="loading" class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-sm disabled:opacity-50"><i class="fa-solid fa-check mr-2"></i>Salvar item</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Ticket Inventory Parts Modal -->
+    <div x-show="modals.inventoryPartRequest" x-cloak class="fixed inset-0 z-[90] flex items-center justify-center p-3 md:p-5 bg-black/55" @keydown.escape.window="modals.inventoryPartRequest = false">
+        <div @click.outside="modals.inventoryPartRequest = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[94vh] overflow-hidden flex flex-col">
+            <div class="px-5 md:px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                <div class="flex items-center gap-3"><span class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center"><i class="fa-solid fa-screwdriver-wrench"></i></span><div><h3 class="font-bold text-lg text-gray-800">Selecionar peças</h3><p class="text-xs text-gray-500" x-text="inventory.partRequest.allocateNow ? 'O sistema reservará o saldo e comprará somente o que faltar.' : 'A necessidade será registrada; a reserva ocorrerá após a aprovação.'"></p></div></div>
+                <button @click="modals.inventoryPartRequest = false" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="flex-grow min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
+                <section class="p-4 md:p-5 border-b lg:border-b-0 lg:border-r border-gray-100 min-h-0 flex flex-col">
+                    <div class="relative mb-3"><i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i><input type="search" x-model="inventory.partRequest.search" @input.debounce.300ms="loadInventoryPartCatalog(true)" placeholder="Buscar nome, código ou marca..." class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm outline-none focus:border-brand-400"></div>
+                    <div class="flex-grow min-h-[250px] overflow-y-auto space-y-2 pr-1">
+                        <template x-for="item in inventory.partRequest.catalog" :key="item.id">
+                            <div class="border border-gray-200 rounded-xl overflow-hidden hover:border-brand-300 transition">
+                                <button @click="selectInventoryPart(item)" class="w-full hover:bg-brand-50/40 p-3 text-left transition"><span class="flex items-start justify-between gap-3"><span class="min-w-0"><b class="text-sm text-gray-800 block truncate" x-text="item.name"></b><small class="text-gray-500 block truncate"><span x-text="item.sku || 'Sem código'"></span><span x-show="item.primary_location"> · <i class="fa-solid fa-location-dot"></i> <span x-text="item.primary_location"></span></span></small><small x-show="item.compatible_with_ticket" class="inline-flex mt-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold">Compatível com este aparelho</small></span><span class="text-right flex-shrink-0"><b class="text-sm block" :class="Number(item.available_quantity) > 0 ? 'text-green-600' : 'text-red-600'" x-text="item.track_stock ? item.available_quantity : 'Catálogo'"></b><small class="text-gray-400">disponível</small></span></span></button>
+                                <div x-show="Number(item.available_quantity) <= 0 && (item.alternatives || []).length > 0" class="px-3 pb-3"><p class="text-[10px] font-bold uppercase text-gray-400 mb-1">Alternativas — escolha manualmente</p><div class="flex flex-wrap gap-1"><template x-for="alternative in item.alternatives" :key="alternative.id"><button @click.stop="selectInventoryPart(alternative)" class="px-2 py-1 rounded-lg bg-green-50 text-green-800 text-[11px] font-bold border border-green-100"><span x-text="alternative.name"></span> · <span x-text="alternative.available_quantity"></span> disp.</button></template></div></div>
+                            </div>
+                        </template>
+                        <button x-show="inventory.partRequest.hasMore" @click="loadInventoryPartCatalog(false)" class="w-full py-2.5 rounded-xl bg-brand-50 text-brand-700 text-xs font-bold">Carregar mais peças</button>
+                        <div x-show="inventory.partRequest.loading" class="py-8 text-center text-brand-500"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Consultando...</div>
+                    </div>
+                </section>
+                <section class="p-4 md:p-5 bg-gray-50/70 min-h-0 flex flex-col"><h4 class="font-bold text-sm text-gray-800 mb-3">Peças desta solicitação</h4><div class="flex-grow min-h-[180px] overflow-y-auto space-y-3"><template x-for="(item, index) in inventory.partRequest.items" :key="item.item_id"><div class="bg-white border border-gray-200 rounded-xl p-3"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><b class="text-sm text-gray-800 block truncate" x-text="item.name"></b><small class="text-gray-500">Disponível agora: <b x-text="item.available_quantity"></b></small></div><button @click="removeInventoryPart(index)" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button></div><div class="mt-3 grid grid-cols-[100px_minmax(0,1fr)] gap-2"><label><small class="text-[10px] font-bold text-gray-500 block mb-1">Quantidade</small><input type="number" min="0.001" step="0.001" x-model.number="item.quantity" class="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:border-brand-400"></label><label><small class="text-[10px] font-bold text-gray-500 block mb-1">Observação</small><input x-model="item.notes" class="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:border-brand-400" placeholder="Opcional"></label></div></div></template><div x-show="inventory.partRequest.items.length === 0" class="text-center py-12 text-gray-400"><i class="fa-solid fa-basket-shopping text-2xl text-gray-200 mb-2"></i><p class="text-xs">Escolha as peças ao lado.</p></div></div><button @click="submitInventoryPartRequest()" :disabled="loading || inventory.partRequest.items.length === 0" class="mt-4 w-full bg-brand-500 hover:bg-brand-600 text-white py-3 rounded-xl font-bold text-sm disabled:opacity-50"><i class="fa-solid fa-check mr-2"></i>Confirmar peças</button></section>
+            </div>
+        </div>
+    </div>
     <!-- JS MODULES (Infraestrutura inicial) -->
     <script src="js/supabase-config.js"></script>
-    <script src="js/modules/feature-config.js?v=3"></script>
-    <script src="js/modules/config-helpers.js?v=2"></script>
+    <script src="js/modules/feature-config.js?v=4"></script>
+    <script src="js/modules/config-helpers.js?v=3"></script>
     <script src="js/modules/ticket-context.js"></script>
     <script src="js/modules/workflow-rules.js"></script>
     <script src="js/modules/ticket-mutations.js"></script>
-    <script src="js/modules/ticket-actions.js?v=6"></script>
+    <script src="js/modules/ticket-actions.js?v=7"></script>
     <script src="js/modules/api-client.js?v=2"></script>
     <script src="js/modules/schedule-error-service.js?v=1"></script>
     <script src="js/modules/storage-service.js?v=3"></script>
     <script src="js/modules/workspace-config-service.js?v=2"></script>
     <script src="js/modules/catalog-service.js"></script>
-    <script src="js/modules/ticket-query-service.js?v=5"></script>
+    <script src="js/modules/ticket-query-service.js?v=6"></script>
     <script src="js/modules/logs-notifications-service.js?v=3"></script>
     <script src="js/modules/notes-service.js"></script>
     <script src="js/modules/dashboard-service.js"></script>
@@ -8307,9 +8623,13 @@
     <script src="js/modules/recycle-bin-service.js"></script>
     <script src="js/modules/customer-service.js?v=2"></script>
     <script src="js/modules/warranty-service.js?v=1"></script>
+    <script src="js/modules/inventory-query-service.js?v=1"></script>
+    <script src="js/modules/inventory-catalog-service.js?v=1"></script>
+    <script src="js/modules/inventory-actions.js?v=1"></script>
+    <script src="js/modules/inventory-management-service.js?v=1"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=27"></script>
+    <script src="js/main.js?v=30"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
