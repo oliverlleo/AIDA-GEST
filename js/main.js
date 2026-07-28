@@ -507,6 +507,7 @@ function app() {
             search: '', searchTimer: null, category: '', stockFilter: 'all',
             itemForm: window.AIDAInventoryCatalogService.emptyItem(),
             locationForm: window.AIDAInventoryCatalogService.emptyLocation(),
+            locationBatchForm: { prefix: 'Estante', unit_start: 1, unit_end: 1, level_start: 'A', level_end: 'A', position_start: 1, position_end: 1 },
             schemeForm: { id: null, name: '', mode: 'structured', component_labels: [] },
             locations: [], schemes: [], pendingParts: [], purchases: [], movements: [], movementCursor: null, movementsHasMore: false,
             itemDetail: null,
@@ -2188,8 +2189,19 @@ function app() {
         resetInventoryLocationComponents() {
             this.inventory.locationForm.address_components = {};
         },
+        inventoryLocationBatchCount() { const f = this.inventory.locationBatchForm; return Math.max(0, Number(f.unit_end)-Number(f.unit_start)+1) * Math.max(0, String(f.level_end).toUpperCase().charCodeAt(0)-String(f.level_start).toUpperCase().charCodeAt(0)+1) * Math.max(0, Number(f.position_end)-Number(f.position_start)+1); },
+
+        editInventoryLocation(location) { this.inventory.locationForm = { id: location.id, name: location.name, normalized_address: location.normalized_address, scheme_id: null, address_components: {} }; },
+
+        resetInventoryLocationForm() { this.inventory.locationForm = window.AIDAInventoryCatalogService.emptyLocation(); },
+
+        async generateInventoryLocations() { this.loading=true; try { const r=await window.AIDAInventoryCatalogService.generateLocations({supabaseFetch:(e,m,p)=>this.supabaseFetch(e,m,p)},this.inventory.locationBatchForm); await this.loadInventoryWorkspaceData(); this.notify(` endereço(s) criado(s).`); } catch(e){this.notify('Erro ao gerar endereços: '+e.message,'error');} finally{this.loading=false;} },
+
+        async manageInventoryLocation(location, action) { if(action==='delete'&&!confirm(`Excluir definitivamente ?`))return; try{await window.AIDAInventoryCatalogService.manageLocation({supabaseFetch:(e,m,p)=>this.supabaseFetch(e,m,p)},location.id,action);await this.loadInventoryWorkspaceData();this.notify('Localização atualizada.');}catch(e){this.notify('Não foi possível alterar: '+e.message,'error');} },
+
         async openInventoryLocationModal() {
             this.inventory.locationForm = window.AIDAInventoryCatalogService.emptyLocation();
+            await this.loadInventoryWorkspaceData();
             this.modals.inventoryLocation = true;
         },
 
