@@ -117,6 +117,18 @@ window.AIDAStorageService = {
     },
 
     // Helper to resolve view URLs
+    async uploadInventoryImage(file, itemId, deps) {
+        const workspaceId = deps.state.employeeSession?.workspace_id || deps.state.user?.workspace_id;
+        if (!workspaceId || !itemId) throw new Error('Empresa ou item não identificado.');
+        if (!['image/jpeg','image/png','image/webp'].includes(file?.type)) throw new Error('Use JPG, PNG ou WebP.');
+        if (file.size > 5242880) throw new Error('A imagem deve ter no máximo 5 MB.');
+        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const path = `${workspaceId}/inventory//_`;
+        const res = await fetch(`/storage/v1/object/inventory_images/`, { method: 'POST', headers: this.getStorageHeaders(file.type, deps), body: file });
+        if (!res.ok) throw new Error(`Falha no upload (): `);
+        return path;
+    },
+
     async getPhotoUrl(input, deps) {
         const { SUPABASE_URL } = deps;
         if (!input) return '';
