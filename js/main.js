@@ -2195,9 +2195,47 @@ function app() {
 
         resetInventoryLocationForm() { this.inventory.locationForm = window.AIDAInventoryCatalogService.emptyLocation(); },
 
-        async generateInventoryLocations() { this.loading=true; try { const r=await window.AIDAInventoryCatalogService.generateLocations({supabaseFetch:(e,m,p)=>this.supabaseFetch(e,m,p)},this.inventory.locationBatchForm); await this.loadInventoryWorkspaceData(); this.notify(` endereço(s) criado(s).`); } catch(e){this.notify('Erro ao gerar endereços: '+e.message,'error');} finally{this.loading=false;} },
+        async generateInventoryLocations() {
+            this.loading = true;
+            try {
+                const result = await window.AIDAInventoryCatalogService.generateLocations({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.locationBatchForm);
+                await this.loadInventoryWorkspaceData();
+                const skipped = Number(result?.skipped || 0);
+                this.notify(`${Number(result?.created || 0)} endereço(s) criado(s).${skipped ? ` ${skipped} já existia(m).` : ''}`);
+            } catch (error) {
+                this.notify('Erro ao gerar endereços: ' + error.message, 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
 
-        async manageInventoryLocation(location, action) { if(action==='delete'&&!confirm(`Excluir definitivamente ?`))return; try{await window.AIDAInventoryCatalogService.manageLocation({supabaseFetch:(e,m,p)=>this.supabaseFetch(e,m,p)},location.id,action);await this.loadInventoryWorkspaceData();this.notify('Localização atualizada.');}catch(e){this.notify('Não foi possível alterar: '+e.message,'error');} },
+        async manageInventoryLocation(location, action) {
+            if (action === 'delete' && !confirm(`Excluir definitivamente "${location.normalized_address || location.name}"?`)) return;
+            try {
+                await window.AIDAInventoryCatalogService.manageLocation({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, location.id, action);
+                await this.loadInventoryWorkspaceData();
+                this.notify('Localização atualizada.');
+            } catch (error) {
+                this.notify('Não foi possível alterar: ' + error.message, 'error');
+            }
+        },
+
+        async manageInventoryLocationScheme(scheme, action) {
+            if (action === 'delete' && !confirm(`Excluir definitivamente o padrão "${scheme.name}"?`)) return;
+            try {
+                await window.AIDAInventoryCatalogService.manageLocationScheme({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, scheme.id, action);
+                await this.loadInventoryWorkspaceData();
+                this.notify('Padrão de localização atualizado.');
+            } catch (error) {
+                this.notify('Não foi possível alterar o padrão: ' + error.message, 'error');
+            }
+        },
 
         async openInventoryLocationModal() {
             this.inventory.locationForm = window.AIDAInventoryCatalogService.emptyLocation();
@@ -2432,13 +2470,23 @@ function app() {
                         supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                     }, item.id);
                     this.inventory.itemDetail = detail;
+                    const storedImagePath = detail.item?.image_url || item.image_url || '';
+                    const activeLocationIds = new Set((this.inventory.locations || []).filter(location => location.active).map(location => location.id));
+                    const selectedLocationIds = (detail.balances || [])
+                        .map(balance => balance.location_id)
+                        .filter(locationId => activeLocationIds.size === 0 || activeLocationIds.has(locationId));
                     this.inventory.itemForm = {
                         ...window.AIDAInventoryCatalogService.emptyItem(),
                         ...(detail.item || item),
                         model_ids: detail.model_ids || [],
                         suppliers: detail.suppliers || [],
                         relations: detail.relations || [],
-                        location_ids: (detail.balances || []).map(balance => balance.location_id)
+                        location_ids: selectedLocationIds,
+                        default_location_id: selectedLocationIds.includes(detail.item?.default_location_id) ? detail.item.default_location_id : '',
+                        original_image_url: storedImagePath,
+                        image_preview: storedImagePath
+                            ? await window.AIDAStorageService.getInventoryImageUrl(storedImagePath, { SUPABASE_URL, SUPABASE_KEY, state: this })
+                            : ''
                     };
                 } catch (error) {
                     this.modals.inventoryItem = false;
@@ -2464,28 +2512,59 @@ function app() {
         },
 
         selectInventoryItemImage(event) {
-            const file = event.target.files?.[0]; if (!file) return;
-            if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5242880) { event.target.value = ''; return this.notify('Use JPG, PNG ou WebP de até 5 MB.', 'error'); }
-            this.inventory.itemForm.pending_image_file = file; this.inventory.itemForm.image_preview = URL.createObjectURL(file);
+            const file = event.target.files?.[0];
+            if (!file) return;
+            if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5242880) {
+                event.target.value = '';
+                return this.notify('Use JPG, PNG ou WebP de até 5 MB.', 'error');
+            }
+            if (this.inventory.itemForm.image_preview?.startsWith('blob:')) URL.revokeObjectURL(this.inventory.itemForm.image_preview);
+            this.inventory.itemForm.pending_image_file = file;
+            this.inventory.itemForm.image_preview = URL.createObjectURL(file);
+            this.inventory.itemForm.image_removed = false;
         },
 
-        removeInventoryItemImage() { this.inventory.itemForm.pending_image_file = null; this.inventory.itemForm.image_preview = ''; this.inventory.itemForm.image_url = ''; },
+        removeInventoryItemImage() {
+            if (this.inventory.itemForm.image_preview?.startsWith('blob:')) URL.revokeObjectURL(this.inventory.itemForm.image_preview);
+            this.inventory.itemForm.pending_image_file = null;
+            this.inventory.itemForm.image_preview = '';
+            this.inventory.itemForm.image_url = '';
+            this.inventory.itemForm.image_removed = true;
+        },
 
         async saveInventoryItem() {
             this.loading = true;
+            const wasNew = !this.inventory.itemForm.id;
+            const originalImagePath = this.inventory.itemForm.original_image_url || '';
             try {
-                const itemId = await window.AIDAInventoryCatalogService.saveItem({
-                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-                }, this.inventory.itemForm);
+                const selectedLocations = [...new Set((this.inventory.itemForm.location_ids || []).filter(Boolean))];
+                this.inventory.itemForm.location_ids = selectedLocations;
+                if (!selectedLocations.includes(this.inventory.itemForm.default_location_id)) this.inventory.itemForm.default_location_id = '';
+                const deps = { supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload) };
+                const itemId = await window.AIDAInventoryCatalogService.saveItem(deps, this.inventory.itemForm);
+                this.inventory.itemForm.id = itemId;
+
                 if (this.inventory.itemForm.pending_image_file) {
-                    this.inventory.itemForm.image_url = await window.AIDAStorageService.uploadInventoryImage(this.inventory.itemForm.pending_image_file, itemId, { SUPABASE_URL, SUPABASE_KEY, state: this });
-                    await window.AIDAInventoryCatalogService.saveItem({ supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload) }, this.inventory.itemForm);
+                    const uploadedPath = await window.AIDAStorageService.uploadInventoryImage(
+                        this.inventory.itemForm.pending_image_file, itemId,
+                        { SUPABASE_URL, SUPABASE_KEY, state: this }
+                    );
+                    this.inventory.itemForm.image_url = uploadedPath;
+                    await window.AIDAInventoryCatalogService.saveItem(deps, this.inventory.itemForm);
                 }
-                await window.AIDAInventoryManagementService.saveLinks({
-                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-                }, itemId, this.inventory.itemForm);
+
+                await window.AIDAInventoryManagementService.saveLinks(deps, itemId, this.inventory.itemForm);
+                if (originalImagePath && originalImagePath !== this.inventory.itemForm.image_url
+                    && (this.inventory.itemForm.image_removed || this.inventory.itemForm.pending_image_file)) {
+                    try {
+                        await window.AIDAStorageService.deleteInventoryImage(originalImagePath, { SUPABASE_URL, SUPABASE_KEY, state: this });
+                    } catch (cleanupError) {
+                        console.warn('Inventory image cleanup failed:', cleanupError);
+                    }
+                }
+
                 this.modals.inventoryItem = false;
-                this.notify(this.inventory.itemForm.id ? 'Item atualizado.' : 'Item cadastrado.');
+                this.notify(wasNew ? 'Item cadastrado.' : 'Item atualizado.');
                 await this.loadInventory(true);
             } catch (error) {
                 this.notify('Erro ao salvar item: ' + error.message, 'error');

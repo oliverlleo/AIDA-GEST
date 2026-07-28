@@ -23,6 +23,8 @@ Execute exatamente nesta ordem:
 10. `inventory_movement_snapshots.sql`
 11. `inventory_manual_entry.sql`
 12. `inventory_creation_catalog.sql`
+13. `inventory_location_and_images.sql`
+14. `inventory_location_scheme_management.sql`
 
 Depois de aplicar, atualize o cache de esquema da API, se necessário, e execute o checklist deste documento antes de habilitar o módulo.
 
@@ -30,18 +32,20 @@ Depois de aplicar, atualize o cache de esquema da API, se necessário, e execute
 
 O rollback é destinado a uma reversão completa e deve ser feito com o módulo desativado e sem operações abertas. Execute na ordem inversa:
 
-1. `rollback_inventory_creation_catalog.sql`
-2. `rollback_inventory_manual_entry.sql`
-3. `rollback_inventory_movement_snapshots.sql`
-4. `rollback_inventory_location_validation.sql`
-5. `rollback_inventory_returns.sql`
-6. `rollback_inventory_ticket_summaries.sql`
-7. `rollback_inventory_warranty_integration.sql`
-8. `rollback_inventory_catalog_extension.sql`
-9. `rollback_inventory_operations.sql`
-10. `rollback_inventory_purchase_and_consumption.sql`
-11. `rollback_inventory_workflow_integration.sql`
-12. `rollback_inventory_module.sql`
+1. `rollback_inventory_location_scheme_management.sql`
+2. `rollback_inventory_location_and_images.sql`
+3. `rollback_inventory_creation_catalog.sql`
+4. `rollback_inventory_manual_entry.sql`
+5. `rollback_inventory_movement_snapshots.sql`
+6. `rollback_inventory_location_validation.sql`
+7. `rollback_inventory_returns.sql`
+8. `rollback_inventory_ticket_summaries.sql`
+9. `rollback_inventory_warranty_integration.sql`
+10. `rollback_inventory_catalog_extension.sql`
+11. `rollback_inventory_operations.sql`
+12. `rollback_inventory_purchase_and_consumption.sql`
+13. `rollback_inventory_workflow_integration.sql`
+14. `rollback_inventory_module.sql`
 
 O rollback não apaga tickets nem altera os campos legados de peças.
 

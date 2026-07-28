@@ -51,7 +51,9 @@
                 default_location_id: '',
                 location_ids: [],
                 pending_image_file: null,
-                image_preview: ''
+                image_preview: '',
+                original_image_url: '',
+                image_removed: false
             };
         },
 
@@ -133,6 +135,8 @@
         async generateLocations(deps, form) { return await deps.supabaseFetch('rpc/generate_inventory_locations', 'POST', { p_prefix: String(form.prefix || '').trim(), p_unit_start: Number(form.unit_start), p_unit_end: Number(form.unit_end), p_level_start: String(form.level_start || ''), p_level_end: String(form.level_end || ''), p_position_start: Number(form.position_start), p_position_end: Number(form.position_end) }); },
 
         async manageLocation(deps, id, action) { return await deps.supabaseFetch('rpc/manage_inventory_location', 'POST', { p_location_id: id, p_action: action }); },
+
+        async manageLocationScheme(deps, id, action) { return await deps.supabaseFetch('rpc/manage_inventory_location_scheme', 'POST', { p_scheme_id: id, p_action: action }); },
 
         async registerEntry(deps, form) {
             const quantity = normalizeNumber(form?.quantity, -1);

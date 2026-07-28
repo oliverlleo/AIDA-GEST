@@ -12,6 +12,10 @@ const operations = read('inventory_operations.sql');
 const creationCatalog = read('inventory_creation_catalog.sql');
 const returns = read('inventory_returns.sql');
 const rollback = read('rollback_inventory_module.sql');
+const locationImages = read('inventory_location_and_images.sql');
+const schemeManagement = read('inventory_location_scheme_management.sql');
+const locationImagesRollback = read('rollback_inventory_location_and_images.sql');
+const schemeManagementRollback = read('rollback_inventory_location_scheme_management.sql');
 
 test('inventory tables are tenant-bound, protected by RLS and closed to direct Data API writes', () => {
     const tables = [
@@ -75,4 +79,22 @@ test('rollback removes inventory objects without deleting legacy tickets or lega
     assert.doesNotMatch(rollback, /delete from public\.tickets/i);
     assert.doesNotMatch(rollback, /drop column if exists parts_needed/i);
     assert.doesNotMatch(rollback, /drop column if exists supplier_purchases/i);
+});
+
+test('location and image extensions keep actor-derived tenant isolation', () => {
+    const sql = [locationImages, schemeManagement].join('\n');
+    assert.match(sql, /get_current_actor_context\(\)/i);
+    assert.match(sql, /inventory_assert_access\(v_ctx\.workspace_id, 'admin'\)/i);
+    assert.doesNotMatch(sql, /p_workspace_id\s+uuid/i);
+    assert.match(sql, /security definer[\s\S]*?set search_path\s*=\s*''/i);
+    assert.match(locationImages, /inventory_images[\s\S]*storage\.foldername\(name\)/i);
+    assert.match(locationImages, /file_size_limit[\s\S]*5242880/i);
+    assert.match(locationImages, /image\/jpeg[\s\S]*image\/png[\s\S]*image\/webp/i);
+});
+
+test('location extensions include non-destructive rollback scripts', () => {
+    assert.match(locationImagesRollback, /drop function if exists public\.set_inventory_item_locations/i);
+    assert.match(locationImagesRollback, /not exists \(select 1 from storage\.objects/i);
+    assert.match(schemeManagementRollback, /drop function if exists public\.manage_inventory_location_scheme/i);
+    assert.doesNotMatch([locationImagesRollback, schemeManagementRollback].join('\n'), /delete from public\.inventory_(items|movements|balances)/i);
 });

@@ -10,6 +10,8 @@ const main = fs.readFileSync(path.join(root, 'js', 'main.js'), 'utf8');
 const featureConfig = fs.readFileSync(path.join(root, 'js', 'modules', 'feature-config.js'), 'utf8');
 const ticketActions = fs.readFileSync(path.join(root, 'js', 'modules', 'ticket-actions.js'), 'utf8');
 const queryServiceSource = fs.readFileSync(path.join(root, 'js', 'modules', 'inventory-query-service.js'), 'utf8');
+const catalogServiceSource = fs.readFileSync(path.join(root, 'js', 'modules', 'inventory-catalog-service.js'), 'utf8');
+const storageServiceSource = fs.readFileSync(path.join(root, 'js', 'modules', 'storage-service.js'), 'utf8');
 
 test('inventory defaults off and remains dependent on the existing parts flow', () => {
     assert.match(featureConfig, /DEFAULT_MODULES[\s\S]*inventory:\s*false/);
@@ -79,4 +81,26 @@ test('creation selector calls the bounded model-aware RPC without sending a work
     assert.equal(call.payload.p_search, 'tela');
     assert.equal(Object.hasOwn(call.payload, 'workspace_id'), false);
     assert.equal(Object.hasOwn(call.payload, 'p_workspace_id'), false);
+});
+
+test('item form supports private image files and multiple independent storage locations', () => {
+    assert.match(html, /type="file"[^>]+accept="image\/jpeg,image\/png,image\/webp"/i);
+    assert.match(html, /x-model="inventory\.itemForm\.location_ids"/);
+    assert.match(html, /Endereço principal \(opcional\)/);
+    assert.match(catalogServiceSource, /rpc\/set_inventory_item_locations/);
+    assert.match(storageServiceSource, /inventory_images\/\$\{encodedPath\}/);
+    assert.match(storageServiceSource, /getInventoryImageUrl/);
+    assert.match(storageServiceSource, /deleteInventoryImage/);
+    assert.doesNotMatch(storageServiceSource, /inventory\/\/\_/);
+    assert.match(main, /this\.inventory\.itemForm\.id = itemId/);
+});
+
+test('location manager creates concrete addresses and manages old patterns safely', () => {
+    assert.match(html, /Gerar várias posições/);
+    assert.match(html, /Endereços cadastrados/);
+    assert.match(html, /Padrões antigos/);
+    assert.match(html, /manageInventoryLocationScheme/);
+    assert.match(main, /generateInventoryLocations/);
+    assert.match(main, /manageInventoryLocation\(location, action\)/);
+    assert.match(main, /manageInventoryLocationScheme\(scheme, action\)/);
 });
