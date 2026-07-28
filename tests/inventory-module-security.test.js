@@ -16,6 +16,8 @@ const locationImages = read('inventory_location_and_images.sql');
 const schemeManagement = read('inventory_location_scheme_management.sql');
 const locationImagesRollback = read('rollback_inventory_location_and_images.sql');
 const schemeManagementRollback = read('rollback_inventory_location_scheme_management.sql');
+const locationGroups = read('inventory_location_groups.sql');
+const directReceipt = read('inventory_direct_ticket_receipt.sql');
 
 test('inventory tables are tenant-bound, protected by RLS and closed to direct Data API writes', () => {
     const tables = [
@@ -97,4 +99,26 @@ test('location extensions include non-destructive rollback scripts', () => {
     assert.match(locationImagesRollback, /not exists \(select 1 from storage\.objects/i);
     assert.match(schemeManagementRollback, /drop function if exists public\.manage_inventory_location_scheme/i);
     assert.doesNotMatch([locationImagesRollback, schemeManagementRollback].join('\n'), /delete from public\.inventory_(items|movements|balances)/i);
+});
+test('location groups remain tenant-scoped and unavailable for direct Data API access', () => {
+    assert.match(locationGroups, /alter table public\.inventory_location_groups enable row level security/i);
+    assert.match(locationGroups, /revoke all on table public\.inventory_location_groups from public, anon, authenticated/i);
+    assert.match(locationGroups, /get_current_actor_context\(\)/i);
+    assert.match(locationGroups, /inventory_assert_access\(v_ctx\.workspace_id, 'manage'\)/i);
+    assert.match(locationGroups, /set search_path = ''/i);
+    assert.doesNotMatch(locationGroups, /create or replace function public\.[^(]+\([^)]*p_workspace_id\s+uuid/i);
+    assert.match(locationGroups, /l\.system_type is null/i);
+});
+
+test('direct-to-ticket receipt does not require a user location and preserves stock invariants', () => {
+    assert.match(directReceipt, /v_destination not in \('stock', 'direct_ticket'\)/i);
+    assert.match(directReceipt, /if v_destination = 'direct_ticket'[\s\S]*inventory_get_direct_ticket_location/i);
+    assert.match(directReceipt, /elsif not exists \([\s\S]*l\.system_type is null[\s\S]*Escolha um endereco ativo/i);
+    assert.match(directReceipt, /allocated_quantity - a\.fulfilled_quantity/i);
+    assert.match(directReceipt, /reserved_quantity = reserved_quantity \+ v_direct_take/i);
+    assert.match(directReceipt, /'reserve',[\s\S]*v_direct_take/i);
+    assert.match(directReceipt, /inventory_resume_ready_ticket/i);
+    assert.match(directReceipt, /revoke all on function private\.inventory_get_direct_ticket_location\(uuid\)[\s\S]*from public, anon, authenticated/i);
+    assert.match(directReceipt, /get_current_actor_context\(\)/i);
+    assert.match(directReceipt, /set search_path = ''/i);
 });

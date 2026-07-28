@@ -62,6 +62,7 @@
                 id: null,
                 name: '',
                 normalized_address: '',
+                group_id: '',
                 scheme_id: null,
                 address_components: {}
             };
@@ -126,10 +127,34 @@
                     id: form.id || null,
                     name,
                     normalized_address: address,
+                    group_id: form.group_id || null,
                     scheme_id: form.scheme_id || null,
                     address_components: form.address_components || {}
                 }
             });
+        },
+
+        async saveLocationGroup(deps, form) {
+            if (String(form?.name || '').trim().length < 2) throw new Error('Informe o nome da estante, armário ou área.');
+            return await deps.supabaseFetch('rpc/save_inventory_location_group', 'POST', {
+                p_group: {
+                    id: form.id || null,
+                    name: String(form.name).trim(),
+                    kind: form.kind || 'shelf',
+                    description: String(form.description || '').trim() || null
+                }
+            });
+        },
+
+        async manageLocationGroup(deps, id, action) {
+            return await deps.supabaseFetch('rpc/manage_inventory_location_group', 'POST', { p_group_id: id, p_action: action });
+        },
+
+        async saveLocationBatch(deps, groupId, names) {
+            const cleanNames = [...new Set((names || []).map(name => String(name).trim()).filter(Boolean))];
+            if (!groupId) throw new Error('Escolha uma estante, armário ou área.');
+            if (!cleanNames.length || cleanNames.length > 50) throw new Error('Informe entre 1 e 50 endereços.');
+            return await deps.supabaseFetch('rpc/save_inventory_locations_batch', 'POST', { p_group_id: groupId, p_names: cleanNames });
         },
 
         async generateLocations(deps, form) { return await deps.supabaseFetch('rpc/generate_inventory_locations', 'POST', { p_prefix: String(form.prefix || '').trim(), p_unit_start: Number(form.unit_start), p_unit_end: Number(form.unit_end), p_level_start: String(form.level_start || ''), p_level_end: String(form.level_end || ''), p_position_start: Number(form.position_start), p_position_end: Number(form.position_end) }); },

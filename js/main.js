@@ -507,9 +507,11 @@ function app() {
             search: '', searchTimer: null, category: '', stockFilter: 'all',
             itemForm: window.AIDAInventoryCatalogService.emptyItem(),
             locationForm: window.AIDAInventoryCatalogService.emptyLocation(),
-            locationBatchForm: { prefix: 'Estante', unit_start: 1, unit_end: 1, level_start: 'A', level_end: 'A', position_start: 1, position_end: 1 },
+            locationGroupForm: { id: null, name: '', kind: 'shelf', description: '' },
+            locationBatchForm: { group_id: '', names_text: '' },
+            selectedLocationGroupId: '',
             schemeForm: { id: null, name: '', mode: 'structured', component_labels: [] },
-            locations: [], schemes: [], pendingParts: [], purchases: [], ticketPurchases: [], movements: [], movementCursor: null, movementsHasMore: false,
+            groups: [], locations: [], schemes: [], pendingParts: [], purchases: [], ticketPurchases: [], movements: [], movementCursor: null, movementsHasMore: false,
             itemDetail: null,
             adjustForm: { mode: 'entry', item_id: '', location_id: '', physical_quantity: 0, quantity: 1, unit_cost: '', reason: '' },
             transferForm: { item_id: '', from_location_id: '', to_location_id: '', quantity: 1, reason: '' },
@@ -655,7 +657,7 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryTicketPurchases: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryLocationGroup: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryTicketPurchases: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
         bypassAnalysisCheck: false,
         bypassRepairCheck: false,
 
@@ -2150,6 +2152,7 @@ function app() {
             const data = await window.AIDAInventoryManagementService.loadWorkspaceData({
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
             });
+            this.inventory.groups = data.groups || [];
             this.inventory.locations = data.locations;
             this.inventory.schemes = data.schemes;
             this.inventory.pendingParts = data.pendingParts;
@@ -2186,14 +2189,92 @@ function app() {
             return this.inventory.schemes.find(scheme => scheme.id === this.inventory.locationForm.scheme_id) || null;
         },
 
+        selectedInventoryLocationGroup() {
+            return this.inventory.groups.find(group => group.id === this.inventory.selectedLocationGroupId) || null;
+        },
+
+        inventoryLocationsForGroup(groupId, includeArchived = true) {
+            return this.inventory.locations.filter(location => location.group_id === groupId && (includeArchived || location.active));
+        },
+
+        inventoryLocationGroupKindLabel(kind) {
+            return ({ shelf: 'Estante', cabinet: 'Armário', drawer: 'Gaveteiro', room: 'Área / Sala', other: 'Outro' })[kind] || 'Outro';
+        },
+
+        inventoryLocationGroupIcon(kind) {
+            return ({ shelf: 'fa-solid fa-layer-group', cabinet: 'fa-solid fa-door-closed', drawer: 'fa-solid fa-boxes-stacked', room: 'fa-solid fa-warehouse', other: 'fa-solid fa-location-dot' })[kind] || 'fa-solid fa-location-dot';
+        },
+
+        selectInventoryLocationGroup(group) {
+            this.inventory.selectedLocationGroupId = group?.id || '';
+            this.inventory.locationForm = { ...window.AIDAInventoryCatalogService.emptyLocation(), group_id: group?.id || '' };
+            this.inventory.locationBatchForm = { group_id: group?.id || '', names_text: '' };
+        },
+
+        openInventoryLocationGroupModal(group = null) {
+            this.inventory.locationGroupForm = group
+                ? { id: group.id, name: group.name, kind: group.kind, description: group.description || '' }
+                : { id: null, name: '', kind: 'shelf', description: '' };
+            this.modals.inventoryLocationGroup = true;
+        },
+
+        async saveInventoryLocationGroup() {
+            this.loading = true;
+            try {
+                const groupId = await window.AIDAInventoryCatalogService.saveLocationGroup({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.locationGroupForm);
+                this.modals.inventoryLocationGroup = false;
+                await this.loadInventoryWorkspaceData();
+                const group = this.inventory.groups.find(item => item.id === groupId);
+                this.selectInventoryLocationGroup(group || null);
+                this.notify(this.inventory.locationGroupForm.id ? 'Organizador atualizado.' : 'Organizador criado. Agora adicione os endereços internos.');
+            } catch (error) { this.notify('Erro ao salvar organizador: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        async manageInventoryLocationGroup(group, action) {
+            if (action === 'delete' && !confirm(`Excluir definitivamente "${group.name}"?`)) return;
+            try {
+                await window.AIDAInventoryCatalogService.manageLocationGroup({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, group.id, action);
+                await this.loadInventoryWorkspaceData();
+                const next = this.inventory.groups.find(item => item.id === group.id)
+                    || this.inventory.groups.find(item => item.active)
+                    || this.inventory.groups[0];
+                this.selectInventoryLocationGroup(next || null);
+                this.notify(action === 'delete' ? 'Organizador excluído.' : 'Organizador atualizado.');
+            } catch (error) { this.notify('Não foi possível alterar o organizador: ' + error.message, 'error'); }
+        },
+
+        async saveInventoryLocationBatch() {
+            const form = this.inventory.locationBatchForm;
+            const names = String(form.names_text || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+            this.loading = true;
+            try {
+                const result = await window.AIDAInventoryCatalogService.saveLocationBatch({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, form.group_id, names);
+                form.names_text = '';
+                await this.loadInventoryWorkspaceData();
+                this.notify(`${Number(result?.created || 0)} endereço(s) adicionado(s).${Number(result?.skipped || 0) ? ` ${result.skipped} já existia(m).` : ''}`);
+            } catch (error) { this.notify('Erro ao adicionar endereços: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
         resetInventoryLocationComponents() {
             this.inventory.locationForm.address_components = {};
         },
         inventoryLocationBatchCount() { const f = this.inventory.locationBatchForm; return Math.max(0, Number(f.unit_end)-Number(f.unit_start)+1) * Math.max(0, String(f.level_end).toUpperCase().charCodeAt(0)-String(f.level_start).toUpperCase().charCodeAt(0)+1) * Math.max(0, Number(f.position_end)-Number(f.position_start)+1); },
 
-        editInventoryLocation(location) { this.inventory.locationForm = { id: location.id, name: location.name, normalized_address: location.normalized_address, scheme_id: null, address_components: {} }; },
+        editInventoryLocation(location) {
+            this.inventory.locationForm = { ...window.AIDAInventoryCatalogService.emptyLocation(), id: location.id, group_id: location.group_id, name: location.name, normalized_address: location.normalized_address };
+        },
 
-        resetInventoryLocationForm() { this.inventory.locationForm = window.AIDAInventoryCatalogService.emptyLocation(); },
+        resetInventoryLocationForm() {
+            this.inventory.locationForm = { ...window.AIDAInventoryCatalogService.emptyLocation(), group_id: this.inventory.selectedLocationGroupId || '' };
+        },
 
         async generateInventoryLocations() {
             this.loading = true;
@@ -2238,8 +2319,11 @@ function app() {
         },
 
         async openInventoryLocationModal() {
-            this.inventory.locationForm = window.AIDAInventoryCatalogService.emptyLocation();
             await this.loadInventoryWorkspaceData();
+            const selected = this.inventory.groups.find(group => group.id === this.inventory.selectedLocationGroupId)
+                || this.inventory.groups.find(group => group.active)
+                || this.inventory.groups[0];
+            this.selectInventoryLocationGroup(selected || null);
             this.modals.inventoryLocation = true;
         },
 
@@ -2249,10 +2333,12 @@ function app() {
                 await window.AIDAInventoryCatalogService.saveLocation({
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 }, this.inventory.locationForm);
-                this.modals.inventoryLocation = false;
+                const editing = Boolean(this.inventory.locationForm.id);
                 await this.loadInventoryWorkspaceData();
-                this.notify('Localização salva.');
-            } catch (error) { this.notify('Erro ao salvar localização: ' + error.message, 'error'); }
+                const selected = this.inventory.groups.find(group => group.id === this.inventory.selectedLocationGroupId);
+                this.selectInventoryLocationGroup(selected || null);
+                this.notify(editing ? 'Endereço atualizado.' : 'Endereço adicionado.');
+            } catch (error) { this.notify('Erro ao salvar endereço: ' + error.message, 'error'); }
             finally { this.loading = false; }
         },
 
@@ -2428,7 +2514,10 @@ function app() {
                         ...item,
                         receive_quantity: Number(item.pending_quantity),
                         unit_cost: item.unit_cost == null ? '' : Number(item.unit_cost),
-                        location_id: this.inventory.locations.find(l => l.active)?.id || ''
+                        destination: Number(item.direct_quantity_available || 0) >= Number(item.pending_quantity || 0)
+                            ? 'direct_ticket'
+                            : 'stock',
+                        location_id: ''
                     }))
                 };
                 this.modals.inventoryReceipt = true;

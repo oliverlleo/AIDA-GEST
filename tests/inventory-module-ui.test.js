@@ -95,12 +95,21 @@ test('item form supports private image files and multiple independent storage lo
     assert.match(main, /this\.inventory\.itemForm\.id = itemId/);
 });
 
-test('location manager creates concrete addresses and manages old patterns safely', () => {
-    assert.match(html, /Gerar várias posições/);
-    assert.match(html, /Endereços cadastrados/);
-    assert.match(html, /Padrões antigos/);
-    assert.match(html, /manageInventoryLocationScheme/);
-    assert.match(main, /generateInventoryLocations/);
+test('location manager uses organizer groups and internal addresses', () => {
+    assert.match(html, /Nova estante, armário ou área/);
+    assert.match(html, /Endereços internos/);
+    assert.match(html, /Adicionar vários endereços/);
+    assert.match(html, /inventoryLocationGroup/);
+    assert.match(main, /saveInventoryLocationGroup/);
+    assert.match(main, /saveInventoryLocationBatch/);
     assert.match(main, /manageInventoryLocation\(location, action\)/);
-    assert.match(main, /manageInventoryLocationScheme\(scheme, action\)/);
+});
+
+test('purchase receipt can go directly to its OS without a stock address', () => {
+    assert.match(html, /Direto para a OS/);
+    assert.match(html, /Não exige localização/);
+    assert.match(html, /Guardar no estoque/);
+    assert.match(html, /item\.destination === 'stock'/);
+    assert.match(html, /item\.destination === 'direct_ticket'/);
+    assert.match(main, /direct_quantity_available/);
 });

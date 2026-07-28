@@ -15,6 +15,7 @@
                 request(deps, 'get_inventory_purchase_queue')
             ]);
             return {
+                groups: locations?.groups || [],
                 locations: locations?.locations || [],
                 schemes: locations?.schemes || [],
                 pendingParts: queue?.pending_parts || [],
@@ -122,11 +123,15 @@
                     purchase_item_id: row.purchase_item_id,
                     quantity: number(row.receive_quantity),
                     unit_cost: number(row.unit_cost, -1),
-                    location_id: row.location_id
+                    destination: row.destination === 'stock' ? 'stock' : 'direct_ticket',
+                    location_id: row.destination === 'stock' ? (row.location_id || null) : null
                 }));
             if (!receipts.length) throw new Error('Informe ao menos uma quantidade recebida.');
-            if (receipts.some(row => row.unit_cost < 0 || !row.location_id)) {
-                throw new Error('Informe o custo e o local de cada item recebido.');
+            if (receipts.some(row => row.unit_cost < 0)) {
+                throw new Error('Informe o custo unitário dos itens recebidos.');
+            }
+            if (receipts.some(row => row.destination === 'stock' && !row.location_id)) {
+                throw new Error('Escolha o endereço somente para as peças que serão guardadas no estoque.');
             }
             return await request(deps, 'receive_inventory_purchase', {
                 p_purchase_id: purchaseId,
