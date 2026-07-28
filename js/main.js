@@ -2197,6 +2197,15 @@ function app() {
             return this.inventory.locations.filter(location => location.group_id === groupId && (includeArchived || location.active));
         },
 
+        inventoryLocationLabel(location) {
+            if (!location) return '';
+            return location.display_address
+                || (location.group_name ? `${location.group_name} · ${location.name}` : '')
+                || location.normalized_address
+                || location.name
+                || '';
+        },
+
         inventoryLocationGroupKindLabel(kind) {
             return ({ shelf: 'Estante', cabinet: 'Armário', drawer: 'Gaveteiro', room: 'Área / Sala', other: 'Outro' })[kind] || 'Outro';
         },
