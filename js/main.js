@@ -2425,7 +2425,8 @@ function app() {
                         ...(detail.item || item),
                         model_ids: detail.model_ids || [],
                         suppliers: detail.suppliers || [],
-                        relations: detail.relations || []
+                        relations: detail.relations || [],
+                        location_ids: (detail.balances || []).map(balance => balance.location_id)
                     };
                 } catch (error) {
                     this.modals.inventoryItem = false;
@@ -2450,12 +2451,24 @@ function app() {
             this.inventory.itemForm.relations.splice(index, 1);
         },
 
+        selectInventoryItemImage(event) {
+            const file = event.target.files?.[0]; if (!file) return;
+            if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5242880) { event.target.value = ''; return this.notify('Use JPG, PNG ou WebP de até 5 MB.', 'error'); }
+            this.inventory.itemForm.pending_image_file = file; this.inventory.itemForm.image_preview = URL.createObjectURL(file);
+        },
+
+        removeInventoryItemImage() { this.inventory.itemForm.pending_image_file = null; this.inventory.itemForm.image_preview = ''; this.inventory.itemForm.image_url = ''; },
+
         async saveInventoryItem() {
             this.loading = true;
             try {
                 const itemId = await window.AIDAInventoryCatalogService.saveItem({
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 }, this.inventory.itemForm);
+                if (this.inventory.itemForm.pending_image_file) {
+                    this.inventory.itemForm.image_url = await window.AIDAStorageService.uploadInventoryImage(this.inventory.itemForm.pending_image_file, itemId, { SUPABASE_URL, SUPABASE_KEY, state: this });
+                    await window.AIDAInventoryCatalogService.saveItem({ supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload) }, this.inventory.itemForm);
+                }
                 await window.AIDAInventoryManagementService.saveLinks({
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 }, itemId, this.inventory.itemForm);
