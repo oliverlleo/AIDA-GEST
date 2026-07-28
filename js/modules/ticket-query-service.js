@@ -57,11 +57,17 @@ window.AIDATicketQueryService = {
             );
             return { status, response: response || {} };
         }));
+        const allItems = responses.flatMap(({ response }) =>
+            Array.isArray(response.items) ? response.items : []
+        );
+        const hydratedItems = await window.AIDAWarrantyService.hydrateTickets(deps, allItems);
+        const hydratedById = new Map(hydratedItems.map(ticket => [ticket.id, ticket]));
 
         const columns = {};
         responses.forEach(({ status, response }) => {
             columns[status] = {
-                items: Array.isArray(response.items) ? response.items : [],
+                items: (Array.isArray(response.items) ? response.items : [])
+                    .map(ticket => hydratedById.get(ticket.id) || ticket),
                 total: Number(response.total || 0),
                 hasMore: Boolean(response.has_more),
                 nextCursor: response.next_cursor || null
@@ -73,11 +79,16 @@ window.AIDATicketQueryService = {
 
     async fetchTicketCardColumnData(deps, status, cursor) {
         const { state, supabaseFetch } = deps;
-        return await supabaseFetch(
+        const response = await supabaseFetch(
             'rpc/get_ticket_cards_page',
             'POST',
             this.buildTicketCardPayload(state, status, cursor)
+        ) || {};
+        response.items = await window.AIDAWarrantyService.hydrateTickets(
+            deps,
+            Array.isArray(response?.items) ? response.items : []
         );
+        return response;
     },
 
     async fetchTicketDetails(deps, ticketId) {
@@ -101,7 +112,10 @@ window.AIDATicketQueryService = {
 
             return {
                 mode: 'test_bench_page',
-                data: Array.isArray(response?.items) ? response.items : [],
+                data: await window.AIDAWarrantyService.hydrateTickets(
+                    deps,
+                    Array.isArray(response?.items) ? response.items : []
+                ),
                 total: Number(response?.total || 0),
                 hasMore: Boolean(response?.has_more),
                 nextCursor: response?.next_cursor || null
@@ -128,7 +142,7 @@ window.AIDATicketQueryService = {
             const response = await supabaseFetch('rpc/get_operational_ticket_page', 'POST', payload);
             return {
                 mode: 'operational_rpc',
-                data: response.items || [],
+                data: await window.AIDAWarrantyService.hydrateTickets(deps, response.items || []),
                 counts: response.counts || null,
                 total: response.total,
                 hasMore: Boolean(response.has_more),

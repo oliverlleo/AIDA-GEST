@@ -194,6 +194,8 @@ function app() {
             },
             workflow: {
                 parts_control: true,
+                warranty_control: true,
+                warranty_days: 90,
                 final_test: true,
                 analysis_timer: true,
                 repair_timer: true,
@@ -434,8 +436,17 @@ function app() {
             deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '',
             budget_approved: false, approved_route: 'repair', parts_needed: '',
+            warranty_claim: false, warranty_origin_ticket_id: null, warranty_source_claim_id: null,
             is_outsourced: false, outsourced_company_id: '', // New fields
             checklist: [], checklist_final: [], photos: [], notes: ''
+        },
+        newTicketMenuOpen: false,
+        warrantyLookup: {
+            items: [],
+            loading: false,
+            search: '',
+            selectedOrigin: null,
+            requestId: 0
         },
         ticketFormErrors: {},
         customerManagement: {
@@ -455,7 +466,9 @@ function app() {
             ticketsLoading: false,
             ticketRequestId: 0,
             ticketSearch: '',
-            ticketSearchTimer: null
+            ticketSearchTimer: null,
+            warrantyEligibility: {},
+            warrantyLoading: false
         },
         customerLookup: {
             items: [],
@@ -477,7 +490,14 @@ function app() {
 
         // UI State for Actions
         selectedTicketAppointments: [],
-        analysisForm: { needsParts: false, partsList: '' },
+        analysisForm: {
+            needsParts: false,
+            partsList: '',
+            warrantyCovered: '',
+            warrantyDiagnosis: '',
+            warrantyCause: '',
+            warrantyEvidence: ''
+        },
         pauseRepairForPartsForm: { ticketId: '', parts: '' },
         outcomeMode: '',
         showTestFailureForm: false,
@@ -746,6 +766,14 @@ function app() {
         },
         isPartsControlEnabled() {
             return window.AIDAConfigHelpers.isPartsControlEnabled(this.trackerConfig);
+        },
+
+        isWarrantyEnabled() {
+            return window.AIDAConfigHelpers.isWarrantyEnabled(this.trackerConfig);
+        },
+
+        getWarrantyDays() {
+            return window.AIDAConfigHelpers.getWarrantyDays(this.trackerConfig);
         },
         isFinalTestEnabled() {
             return window.AIDAConfigHelpers.isFinalTestEnabled(this.trackerConfig);
@@ -2512,7 +2540,14 @@ function app() {
             }
         },
 
-        openNewTicketModal() {
+        openNewTicketModal(mode = 'standard', originTicket = null) {
+            const isWarranty = mode === 'warranty';
+            if (isWarranty && !this.isWarrantyEnabled()) {
+                return this.notify('O controle de garantia está desativado no Gerenciamento.', 'error');
+            }
+            if (isWarranty && !(this.hasRole('admin') || this.hasRole('atendente'))) {
+                return this.notify('Somente administradores e atendentes podem abrir um retorno em garantia.', 'error');
+            }
             this.closeSchedulePanel();
             this.schedulePanelMode = '';
             this.scheduleAvailabilityLoading = false;
@@ -2528,14 +2563,153 @@ function app() {
                 deadline: '', analysis_deadline: '', device_condition: '',
                 technician_id: '',
                 budget_approved: false, approved_route: 'repair', parts_needed: '',
+                warranty_claim: isWarranty,
+                warranty_origin_ticket_id: null,
+                warranty_source_claim_id: null,
                 is_outsourced: false, outsourced_company_id: '',
                 checklist: [], checklist_final: [], photos: [], notes: ''
+            };
+            this.newTicketMenuOpen = false;
+            this.warrantyLookup = {
+                items: [],
+                loading: false,
+                search: '',
+                selectedOrigin: null,
+                requestId: this.warrantyLookup.requestId + 1
             };
             this.ticketFormErrors = {};
             this.customerLookup.items = [];
             this.customerLookup.open = false;
             this.customerLookup.loading = false;
             this.modals.ticket = true;
+            if (isWarranty && originTicket?.id) {
+                this.selectWarrantyOrigin(originTicket);
+            }
+        },
+
+        async openWarrantyClaim(ticket) {
+            if (!ticket?.id) return this.openNewTicketModal('warranty');
+            const completeTicket = ticket._card_summary
+                ? await this.ensureCompleteTicket(ticket)
+                : ticket;
+            if (!completeTicket) return;
+            if (!this.isTicketWarrantyEligible(completeTicket)) {
+                const expiry = this.getTicketWarrantyExpiry(completeTicket);
+                return this.notify(
+                    expiry && expiry < new Date()
+                        ? `A garantia desta OS expirou em ${expiry.toLocaleDateString('pt-BR')}.`
+                        : 'Esta OS não está disponível para abertura de garantia.',
+                    'error'
+                );
+            }
+            let originTicket = completeTicket;
+            if (completeTicket.customer_id) {
+                try {
+                    const knownEligibility = this.customerManagement.warrantyEligibility[completeTicket.id];
+                    const warrantyItems = knownEligibility
+                        ? [knownEligibility]
+                        : await window.AIDAWarrantyService.fetchEligibleForCustomer(
+                            this._getCustomerDeps(),
+                            completeTicket.customer_id,
+                            completeTicket.os_number || completeTicket.serial_number || completeTicket.device_model
+                        );
+                    const eligibility = warrantyItems.find(item => item.id === completeTicket.id);
+                    if (!eligibility?.eligible) {
+                        return this.notify(
+                            eligibility?.eligibility_reason || 'Esta OS não está disponível para um novo retorno em garantia.',
+                            'error'
+                        );
+                    }
+                    originTicket = { ...completeTicket, ...eligibility };
+                } catch (error) {
+                    return this.notify('Não foi possível confirmar a garantia desta OS: ' + error.message, 'error');
+                }
+            }
+            this.modals.viewTicket = false;
+            this.openNewTicketModal('warranty', originTicket);
+        },
+
+        async fetchWarrantyOrigins() {
+            if (!this.ticketForm.warranty_claim || !this.ticketForm.customer_id) return;
+            try {
+                await window.AIDAWarrantyService.fetchEligibleTickets(
+                    this._getCustomerDeps(),
+                    this.ticketForm.customer_id,
+                    this.warrantyLookup.search
+                );
+            } catch (error) {
+                console.error('Failed to load warranty origins:', error);
+                this.warrantyLookup.items = [];
+                this.notify('Erro ao consultar as OS deste cliente: ' + error.message, 'error');
+            }
+        },
+
+        selectWarrantyOrigin(ticket) {
+            if (!ticket?.id) return;
+            if (ticket.eligible === false) {
+                return this.notify(ticket.eligibility_reason || 'Esta OS não está disponível para garantia.', 'error');
+            }
+            this.warrantyLookup.selectedOrigin = ticket;
+            this.ticketForm.warranty_origin_ticket_id = ticket.id;
+            this.ticketForm.customer_id = ticket.customer_id || this.ticketForm.customer_id;
+            this.ticketForm.client_name = ticket.client_name || this.ticketForm.client_name;
+            this.ticketForm.contact = ticket.contact_info || this.ticketForm.contact;
+            this.ticketForm.model = ticket.device_model || '';
+            this.ticketForm.serial = ticket.serial_number || '';
+            this.ticketForm.technician_id = ticket.technician_id || '';
+            this.warrantyLookup.items = this.warrantyLookup.items.length
+                ? this.warrantyLookup.items
+                : [ticket];
+            this.clearTicketFieldError('client_name');
+        },
+
+        clearWarrantyOrigin() {
+            this.warrantyLookup.selectedOrigin = null;
+            this.ticketForm.warranty_origin_ticket_id = null;
+            this.ticketForm.model = '';
+            this.ticketForm.serial = '';
+        },
+
+        async openPaidServiceFromWarranty(ticket) {
+            const claim = ticket?._card_summary ? await this.ensureCompleteTicket(ticket) : ticket;
+            if (!claim?.warranty_claim || claim.warranty_status !== 'not_covered') {
+                return this.notify('Este retorno não está disponível para abertura de uma nova OS paga.', 'error');
+            }
+
+            this.modals.viewTicket = false;
+            this.openNewTicketModal('standard');
+            this.ticketForm.customer_id = claim.customer_id;
+            this.ticketForm.client_name = claim.client_name || '';
+            this.ticketForm.contact = claim.contact_info || '';
+            this.ticketForm.model = claim.device_model || '';
+            this.ticketForm.serial = claim.serial_number || '';
+            this.ticketForm.defects = claim.defect_reported ? [claim.defect_reported] : [];
+            this.ticketForm.device_condition = claim.device_condition || '';
+            this.ticketForm.technician_id = claim.technician_id || '';
+            this.ticketForm.budget_approved = true;
+            this.ticketForm.approved_route = claim.parts_needed && this.isPartsControlEnabled() ? 'purchase' : 'repair';
+            this.ticketForm.parts_needed = claim.parts_needed || '';
+            this.ticketForm.warranty_source_claim_id = claim.id;
+            this.notify('Nova OS normal preparada com o laudo da garantia. Confirme os dados e salve.');
+        },
+
+        getTicketWarrantyExpiry(ticket) {
+            if (!ticket?.delivered_at && !ticket?.warranty_start_at) return null;
+            if (ticket.warranty_expires_at) return new Date(ticket.warranty_expires_at);
+            const start = new Date(ticket.warranty_start_at || ticket.delivered_at);
+            start.setDate(start.getDate() + Number(ticket.warranty_days || this.getWarrantyDays()));
+            return start;
+        },
+
+        isTicketWarrantyEligible(ticket) {
+            if (!this.isWarrantyEnabled() || !ticket || ticket.warranty_claim) return false;
+            if (ticket.status !== 'Finalizado' || ticket.repair_successful !== true || !ticket.delivered_at) return false;
+            const expiry = this.getTicketWarrantyExpiry(ticket);
+            return Boolean(expiry && expiry >= new Date());
+        },
+
+        getWarrantyBadge(ticket) {
+            return window.AIDAWarrantyService.badge(ticket);
         },
 
         _getCustomerDeps() {
@@ -2572,7 +2746,24 @@ function app() {
             this.customerManagement.ticketsTotal = Number(customer.ticket_count || 0);
             this.customerManagement.ticketsHasMore = true;
             this.customerManagement.ticketsNextCursor = null;
+            this.customerManagement.warrantyEligibility = {};
             await this.fetchCustomerTickets(true);
+            if (this.isWarrantyEnabled()) {
+                this.customerManagement.warrantyLoading = true;
+                try {
+                    const warrantyItems = await window.AIDAWarrantyService.fetchEligibleForCustomer(
+                        this._getCustomerDeps(),
+                        customer.id
+                    );
+                    this.customerManagement.warrantyEligibility = Object.fromEntries(
+                        warrantyItems.map(item => [item.id, item])
+                    );
+                } catch (error) {
+                    console.error('Failed to load customer warranty eligibility:', error);
+                } finally {
+                    this.customerManagement.warrantyLoading = false;
+                }
+            }
         },
 
         async fetchCustomerTickets(reset = false) {
@@ -2595,6 +2786,10 @@ function app() {
 
         handleCustomerNameInput() {
             if (!this.isModuleEnabled('customers')) return;
+            if (this.ticketForm.warranty_claim && this.ticketForm.customer_id) {
+                this.clearWarrantyOrigin();
+                this.warrantyLookup.items = [];
+            }
             this.ticketForm.customer_id = null;
             clearTimeout(this.customerLookup.timer);
             const query = String(this.ticketForm.client_name || '').trim();
@@ -2622,12 +2817,15 @@ function app() {
 
         selectTicketCustomer(customer) {
             if (!customer?.id) return;
+            const customerChanged = this.ticketForm.customer_id && this.ticketForm.customer_id !== customer.id;
             this.ticketForm.customer_id = customer.id;
             this.ticketForm.client_name = customer.name || '';
             this.ticketForm.contact = customer.whatsapp || customer.phone || '';
             this.customerLookup.items = [];
             this.customerLookup.open = false;
             this.clearTicketFieldError('client_name');
+            if (customerChanged) this.clearWarrantyOrigin();
+            if (this.ticketForm.warranty_claim) this.fetchWarrantyOrigins();
         },
 
         clearSelectedTicketCustomer() {
@@ -2991,6 +3189,16 @@ function app() {
                             return;
                         }
                         this.notify("Reparo agendado e chamado enviado para reparo.");
+                    } else if (afterSave === 'finishWarrantyAnalysis') {
+                        const advanced = await window.AIDATicketActions.finishWarrantyAnalysis(
+                            targetTicket,
+                            this._getActionDeps()
+                        );
+                        if (!advanced) {
+                            this.notify('O reparo foi agendado, mas a decisão da garantia não foi concluída. Abra a OS e tente finalizar a análise novamente.', 'error');
+                            this.closeSchedulePanel();
+                            return;
+                        }
                     } else {
                         this.notify("Agendamento criado com sucesso!");
                         this.fetchTickets();
@@ -3894,7 +4102,7 @@ function app() {
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
             if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
             if (!Array.isArray(this.selectedTicket.photos_urls)) this.selectedTicket.photos_urls = [];
-            this.analysisForm = { needsParts: !!completeTicket.parts_needed, partsList: completeTicket.parts_needed || '' };
+            this.analysisForm = window.AIDAWarrantyService.emptyAnalysisForm(completeTicket);
             this.editingDeadlines = false;
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
 
@@ -4283,6 +4491,7 @@ function app() {
                 isWhatsAppDisabled: () => this.isWhatsAppDisabled(),
                 isLogisticsEnabled: () => this.isLogisticsEnabled(),
                 isPartsControlEnabled: () => this.isPartsControlEnabled(),
+                isWarrantyEnabled: () => this.isWarrantyEnabled(),
                 isFinalTestEnabled: () => this.isFinalTestEnabled(),
                 isTimerEnabled: (type) => this.isTimerEnabled(type),
                 getDeliveryMode: () => this.getDeliveryMode(),
@@ -4302,6 +4511,7 @@ function app() {
                 setLoading: (val) => { this.loading = val; },
                 closeModal: (name) => { this.modals[name] = false; },
                 openLogisticsModal: (t) => this.openLogisticsModal(t),
+                openPaidServiceFromWarranty: (t) => this.openPaidServiceFromWarranty(t),
                 setEditingDeadlines: (val) => { this.editingDeadlines = val; }
             };
         },
@@ -4359,6 +4569,10 @@ function app() {
 
         async finishAnalysis(ticketOrId) {
             return await window.AIDATicketActions.finishAnalysis(ticketOrId, this._getActionDeps());
+        },
+
+        async finishWarrantyAnalysis(ticketOrId) {
+            return await window.AIDATicketActions.finishWarrantyAnalysis(ticketOrId, this._getActionDeps());
         },
 
         async approveRepair(ticketOrId) {
@@ -4448,16 +4662,37 @@ function app() {
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'finishAnalysis');
             this._applyContext(newContext);
             this.selectedTicket = ticket;
-            this.analysisForm = { needsParts: false, partsList: '' };
+            this.analysisForm = window.AIDAWarrantyService.emptyAnalysisForm(ticket);
             this.modals.finishAnalysis = true;
         },
 
         async confirmFinishAnalysisKanban() {
-            if (this.analysisForm.needsParts && !this.analysisForm.partsList) {
+            const ticket = this.resolveTicket();
+            if (!ticket) return;
+
+            if (ticket.warranty_claim && ticket.warranty_status === 'pending') {
+                const validationError = window.AIDAWarrantyService.validateTechnicalDecision(
+                    this.analysisForm,
+                    this.isPartsControlEnabled()
+                );
+                if (validationError) return this.notify(validationError, 'error');
+
+                const coveredWithoutPurchase = this.analysisForm.warrantyCovered === 'yes'
+                    && !(this.isPartsControlEnabled() && this.analysisForm.needsParts);
+                const hasRepairAppointment = Boolean(ticket.repair_scheduled || ticket.repair_scheduled_at);
+                if (coveredWithoutPurchase && this.isAppointmentTypeEnabled('repair') && !hasRepairAppointment) {
+                    this.modals.finishAnalysis = false;
+                    this.openSchedulePanel('repair', ticket.technician_id, ticket, 'finishWarrantyAnalysis');
+                    return;
+                }
+                return await this.finishWarrantyAnalysis(ticket);
+            }
+
+            if (this.isPartsControlEnabled() && this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
             this.modals.finishAnalysis = false;
-            await this.finishAnalysis(this.resolveTicket());
+            await this.finishAnalysis(ticket);
         },
 
         openWhatsApp(phone) {

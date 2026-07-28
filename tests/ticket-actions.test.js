@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 global.window = global;
+require('../js/modules/warranty-service.js');
 require('../js/modules/ticket-actions.js');
 
 function makeTicket(overrides = {}) {
@@ -101,6 +102,78 @@ test('aprovar com compra de pecas envia para compra sem abrir agenda', async () 
 
     assert.equal(nextStatus, 'Compra Peca');
     assert.equal(scheduleOpened, false);
+});
+
+test('garantia nao coberta abre uma nova OS sem mover o retorno para reparo', async () => {
+    const ticket = makeTicket({
+        warranty_claim: true,
+        warranty_status: 'not_covered'
+    });
+    let openedTicket;
+    let updateCalls = 0;
+
+    const result = await global.AIDATicketActions.approveRepair(ticket, makeApprovalDeps(ticket, {
+        openPaidServiceFromWarranty: value => { openedTicket = value; },
+        updateStatus: async () => {
+            updateCalls += 1;
+            return true;
+        }
+    }));
+
+    assert.equal(result, false);
+    assert.equal(openedTicket, ticket);
+    assert.equal(updateCalls, 0);
+});
+
+test('decisao da garantia e salva pelo RPC e encerra o agendamento da analise', async () => {
+    const ticket = makeTicket({
+        warranty_claim: true,
+        warranty_status: 'pending',
+        status: 'Analise Tecnica'
+    });
+    const calls = [];
+    const state = {
+        analysisForm: {
+            needsParts: false,
+            partsList: '',
+            warrantyCovered: 'yes',
+            warrantyDiagnosis: 'Falha confirmada no componente substituido.',
+            warrantyCause: 'Defeito recorrente da peca.',
+            warrantyEvidence: 'O defeito esta diretamente ligado ao reparo original.'
+        },
+        selectedTicket: { ...ticket, tech_notes: 'Teste tecnico realizado.' },
+        modals: { finishAnalysis: true }
+    };
+
+    const result = await global.AIDATicketActions.finishWarrantyAnalysis(ticket, {
+        resolveTicket: () => ticket,
+        state,
+        isPartsControlEnabled: () => true,
+        setLoading: value => calls.push({ path: 'loading', value }),
+        supabaseFetch: async (path, _method, payload) => {
+            calls.push({ path, payload });
+            return path === 'rpc/complete_warranty_analysis'
+                ? { ...ticket, warranty_status: 'covered', status: 'Andamento Reparo' }
+                : null;
+        },
+        getLogContext: () => ({ client: 'Cliente', device: 'Aparelho' }),
+        logTicketAction: async (...args) => { calls.push({ path: 'log', args }); },
+        notify: (...args) => { calls.push({ path: 'notify', args }); },
+        fetchTickets: async () => { calls.push({ path: 'fetchTickets' }); },
+        fetchGlobalLogs: async () => { calls.push({ path: 'fetchGlobalLogs' }); }
+    });
+
+    assert.equal(result, true);
+    assert.equal(state.modals.finishAnalysis, false);
+    assert.equal(state.selectedTicket.warranty_status, 'covered');
+    assert.equal(
+        calls.find(call => call.path === 'rpc/complete_warranty_analysis').payload.p_covered,
+        true
+    );
+    assert.deepEqual(
+        calls.find(call => call.path === 'rpc/complete_ticket_appointment').payload,
+        { p_ticket_id: ticket.id, p_type: 'analysis' }
+    );
 });
 
 function makeBudgetDeps(ticket, overrides = {}) {

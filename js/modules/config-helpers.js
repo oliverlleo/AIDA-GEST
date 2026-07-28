@@ -50,6 +50,18 @@ window.AIDAConfigHelpers = {
             : true;
     },
 
+    isWarrantyEnabled(trackerConfig) {
+        const customersEnabled = this.isModuleEnabled(trackerConfig, 'customers');
+        return customersEnabled && (window.AIDAFeatureConfig
+            ? window.AIDAFeatureConfig.isWorkflowEnabled(trackerConfig, 'warranty_control')
+            : true);
+    },
+
+    getWarrantyDays(trackerConfig) {
+        const days = Number(window.AIDAFeatureConfig?.normalize(trackerConfig)?.workflow?.warranty_days);
+        return Number.isInteger(days) ? Math.max(1, Math.min(730, days)) : 90;
+    },
+
     isFinalTestEnabled(trackerConfig) {
         return window.AIDAFeatureConfig
             ? window.AIDAFeatureConfig.isWorkflowEnabled(trackerConfig, 'final_test')

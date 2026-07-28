@@ -12,6 +12,17 @@ window.AIDATicketActions = {
         const partsNeeded = String(deps.state.ticketForm.parts_needed || '').trim();
         const technicianIsRequired = !deps.state.ticketForm.is_outsourced && deps.isFieldRequired('responsible');
         const selectedTechnician = deps.state.ticketForm.technician_id;
+        const isWarrantyClaim = Boolean(deps.state.ticketForm.warranty_claim);
+        const warrantyOriginId = deps.state.ticketForm.warranty_origin_ticket_id || null;
+        const warrantySourceClaimId = deps.state.ticketForm.warranty_source_claim_id || null;
+
+        if (isWarrantyClaim && !warrantyOriginId) {
+            return deps.notify('Selecione a OS original antes de abrir o retorno em garantia.', 'error');
+        }
+        if (isWarrantyClaim && !deps.state.ticketForm.customer_id) {
+            deps.focusTicketField('client_name');
+            return deps.notify('Selecione o cliente cadastrado da OS original.', 'error');
+        }
 
         if (technicianIsRequired && (!selectedTechnician || selectedTechnician === 'all')) {
             deps.focusTicketField('technician');
@@ -36,7 +47,9 @@ window.AIDATicketActions = {
         }
 
         // Basic Integrity Checks
-        if (deps.state.deviceModels && deps.state.deviceModels.length > 0 && !deps.state.deviceModels.find(m => m.name === deps.state.ticketForm.model)) {
+        if (!isWarrantyClaim && !warrantySourceClaimId
+            && deps.state.deviceModels && deps.state.deviceModels.length > 0
+            && !deps.state.deviceModels.find(m => m.name === deps.state.ticketForm.model)) {
             return deps.notify("Modelo inválido. Cadastre-o no ícone + antes de salvar.", "error");
         }
 
@@ -63,6 +76,9 @@ window.AIDATicketActions = {
                 id: deps.state.ticketForm.id,
                 workspace_id: deps.state.user.workspace_id,
                 customer_id: deps.isModuleEnabled('customers') ? (deps.state.ticketForm.customer_id || null) : null,
+                warranty_claim: isWarrantyClaim,
+                warranty_origin_ticket_id: isWarrantyClaim ? warrantyOriginId : null,
+                warranty_source_claim_id: !isWarrantyClaim ? warrantySourceClaimId : null,
                 client_name: deps.state.ticketForm.client_name,
                 os_number: isOsAuto ? null : deps.state.ticketForm.os_number, // Send null if auto
                 device_model: deps.state.ticketForm.model,
@@ -104,7 +120,18 @@ window.AIDATicketActions = {
             }
 
             const ctx = deps.getLogContext(createdTicket);
-            const initialLog = startsWithApprovedBudget
+            const origin = deps.state.warrantyLookup?.selectedOrigin;
+            const initialLog = isWarrantyClaim
+                ? {
+                    action: 'Retorno em Garantia Aberto',
+                    details: `Retorno em garantia aberto para o ${ctx.device} de ${ctx.client}, vinculado à **OS ${origin?.os_number || 'original'}**. A cobertura será confirmada na análise técnica.`
+                }
+                : warrantySourceClaimId
+                    ? {
+                        action: 'Nova OS após Garantia Não Coberta',
+                        details: `Nova OS normal criada para o ${ctx.device} de ${ctx.client} após o laudo concluir que o defeito não é coberto pela garantia.`
+                    }
+                    : startsWithApprovedBudget
                 ? {
                     action: 'Novo Chamado - Orçamento Aprovado',
                     details: approvedRoute === 'purchase'
@@ -116,6 +143,18 @@ window.AIDATicketActions = {
                     details: `Um novo chamado foi criado para o ${ctx.device} de ${ctx.client}.`
                 };
             await deps.logTicketAction(createdTicket.id, initialLog.action, initialLog.details);
+
+            if (warrantySourceClaimId) {
+                await deps.supabaseFetch('rpc/link_warranty_paid_ticket', 'POST', {
+                    p_claim_ticket_id: warrantySourceClaimId,
+                    p_paid_ticket_id: createdTicket.id
+                });
+                await deps.logTicketAction(
+                    warrantySourceClaimId,
+                    'Garantia Convertida em Nova OS',
+                    `O defeito não coberto foi convertido na nova **OS ${createdTicket.os_number || 'normal'}** para atendimento pago.`
+                );
+            }
 
             // Check and process appointments if present in state
             if (!startsWithApprovedBudget && deps.isAppointmentTypeEnabled('analysis') && deps.state.selectedAnalysisAppointment) {
@@ -184,9 +223,80 @@ window.AIDATicketActions = {
         await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
     },
 
+    async finishWarrantyAnalysis(ticketOrId, deps) {
+        const ticket = deps.resolveTicket(ticketOrId);
+        if (!ticket?.warranty_claim || ticket.warranty_status !== 'pending') return false;
+
+        const form = deps.state.analysisForm;
+        const validationError = window.AIDAWarrantyService.validateTechnicalDecision(
+            form,
+            deps.isPartsControlEnabled()
+        );
+        if (validationError) {
+            deps.notify(validationError, 'error');
+            return false;
+        }
+
+        const covered = form.warrantyCovered === 'yes';
+        const report = window.AIDAWarrantyService.buildTechnicalReport(form);
+        deps.setLoading(true);
+        try {
+            const updated = await deps.supabaseFetch('rpc/complete_warranty_analysis', 'POST', {
+                p_ticket_id: ticket.id,
+                p_covered: covered,
+                p_report: report,
+                p_needs_parts: deps.isPartsControlEnabled() && Boolean(form.needsParts),
+                p_parts: deps.isPartsControlEnabled() && form.needsParts
+                    ? String(form.partsList || '').trim()
+                    : null,
+                p_tech_notes: deps.state.selectedTicket?.id === ticket.id
+                    ? deps.state.selectedTicket.tech_notes
+                    : ticket.tech_notes
+            });
+
+            const ctx = deps.getLogContext(ticket);
+            const decision = covered ? '**coberto pela garantia**' : '**não coberto pela garantia**';
+            const route = covered
+                ? (form.needsParts ? '**Compra de Peças**' : '**Reparo**')
+                : '**Orçamento ao cliente**';
+            await deps.logTicketAction(
+                ticket.id,
+                covered ? 'Garantia Confirmada' : 'Garantia Não Coberta',
+                `A análise do ${ctx.device} de ${ctx.client} concluiu que o defeito é ${decision}. Próxima etapa: ${route}. Laudo técnico registrado na OS.`
+            );
+            await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', {
+                p_ticket_id: ticket.id,
+                p_type: 'analysis'
+            });
+
+            deps.state.modals.finishAnalysis = false;
+            if (deps.state.selectedTicket?.id === ticket.id && updated?.id) {
+                deps.state.selectedTicket = { ...deps.state.selectedTicket, ...updated };
+            }
+            deps.notify(
+                covered
+                    ? 'Garantia confirmada e OS encaminhada para a próxima etapa.'
+                    : 'Laudo registrado. O atendimento seguirá como orçamento normal.'
+            );
+            await deps.fetchTickets(true);
+            await deps.fetchGlobalLogs();
+            return true;
+        } catch (error) {
+            deps.notify('Erro ao concluir a garantia: ' + error.message, 'error');
+            return false;
+        } finally {
+            deps.setLoading(false);
+        }
+    },
+
     async approveRepair(ticketOrId, deps) {
         const ticket = deps.resolveTicket(ticketOrId);
         if (!ticket) return;
+
+        if (ticket.warranty_claim && ticket.warranty_status === 'not_covered') {
+            deps.openPaidServiceFromWarranty(ticket);
+            return false;
+        }
 
         const needsPartsPurchase = deps.isPartsControlEnabled() && Boolean(ticket.parts_needed);
         const hasRepairAppointment = Boolean(ticket.repair_scheduled || ticket.repair_scheduled_at);

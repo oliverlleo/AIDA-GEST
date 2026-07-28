@@ -115,7 +115,10 @@
                 });
                 if (requestId !== management.ticketRequestId || management.selected?.id !== customerId) return;
 
-                const incoming = Array.isArray(response?.items) ? response.items : [];
+                const incoming = await window.AIDAWarrantyService.hydrateTickets(
+                    deps,
+                    Array.isArray(response?.items) ? response.items : []
+                );
                 management.tickets = reset ? incoming : mergeUnique(management.tickets, incoming);
                 if (response?.total !== null && response?.total !== undefined) {
                     management.ticketsTotal = Number(response.total || 0);

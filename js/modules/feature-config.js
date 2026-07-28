@@ -17,6 +17,8 @@
 
     const DEFAULT_WORKFLOW = Object.freeze({
         parts_control: true,
+        warranty_control: true,
+        warranty_days: 90,
         final_test: true,
         analysis_timer: true,
         repair_timer: true,
@@ -52,7 +54,7 @@
     });
 
     const CUSTOMIZABLE_WORKFLOW_KEYS = [
-        'parts_control', 'analysis_timer', 'repair_timer',
+        'parts_control', 'warranty_control', 'analysis_timer', 'repair_timer',
         'delivery_mode', 'priority_requests'
     ];
 
@@ -95,6 +97,10 @@
             });
         }
         workflow.delivery_mode = workflow.delivery_mode === 'simple' ? 'simple' : 'complete';
+        const requestedWarrantyDays = Number(workflow.warranty_days);
+        workflow.warranty_days = Number.isInteger(requestedWarrantyDays)
+            ? Math.max(1, Math.min(730, requestedWarrantyDays))
+            : DEFAULT_WORKFLOW.warranty_days;
 
         const modules = customization.modules
             ? { ...DEFAULT_MODULES, ...(config.modules || {}) }
