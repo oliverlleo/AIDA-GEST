@@ -48,7 +48,10 @@
                 track_stock: true,
                 minimum_quantity: 0,
                 ideal_quantity: 0,
-                default_location_id: ''
+                default_location_id: '',
+                location_ids: [],
+                pending_image_file: null,
+                image_preview: ''
             };
         },
 
@@ -85,9 +88,9 @@
         async saveItem(deps, form) {
             const error = this.validateItem(form);
             if (error) throw new Error(error);
-            return await deps.supabaseFetch('rpc/save_inventory_item', 'POST', {
-                p_item: itemPayload(form)
-            });
+            const itemId = await deps.supabaseFetch('rpc/save_inventory_item', 'POST', { p_item: itemPayload(form) });
+            await deps.supabaseFetch('rpc/set_inventory_item_locations', 'POST', { p_item_id: itemId, p_location_ids: Array.isArray(form.location_ids) ? form.location_ids : [], p_default_location_id: form.default_location_id || null });
+            return itemId;
         },
 
         async saveLocationScheme(deps, form) {
