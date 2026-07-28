@@ -509,7 +509,7 @@ function app() {
             locationForm: window.AIDAInventoryCatalogService.emptyLocation(),
             locationBatchForm: { prefix: 'Estante', unit_start: 1, unit_end: 1, level_start: 'A', level_end: 'A', position_start: 1, position_end: 1 },
             schemeForm: { id: null, name: '', mode: 'structured', component_labels: [] },
-            locations: [], schemes: [], pendingParts: [], purchases: [], movements: [], movementCursor: null, movementsHasMore: false,
+            locations: [], schemes: [], pendingParts: [], purchases: [], ticketPurchases: [], movements: [], movementCursor: null, movementsHasMore: false,
             itemDetail: null,
             adjustForm: { mode: 'entry', item_id: '', location_id: '', physical_quantity: 0, quantity: 1, unit_cost: '', reason: '' },
             transferForm: { item_id: '', from_location_id: '', to_location_id: '', quantity: 1, reason: '' },
@@ -655,7 +655,7 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryTicketPurchases: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
         bypassAnalysisCheck: false,
         bypassRepairCheck: false,
 
@@ -2332,21 +2332,44 @@ function app() {
                 await this.loadInventoryWorkspaceData();
                 const purchases = this.inventory.purchases.filter(purchase => (purchase.ticket_ids || []).includes(ticket.id));
                 if (purchases.length === 1) return await this.openInventoryReceipt(purchases[0]);
-                this.view = 'inventory';
-                await this.loadInventory(true);
-                this.notify(purchases.length > 1 ? 'A OS possui mais de uma compra aberta. Escolha qual deseja receber.' : 'Registre primeiro a compra estruturada das peças pendentes.');
+                if (purchases.length > 1) {
+                    this.inventory.ticketPurchases = purchases;
+                    this.modals.inventoryTicketPurchases = true;
+                    return;
+                }
+                this.notify('Esta OS ainda não possui uma compra aberta para recebimento.', 'error');
             } catch (error) { this.notify('Erro ao consultar compras da OS: ' + error.message, 'error'); }
+        },
+
+        async chooseInventoryTicketPurchase(purchase) {
+            this.modals.inventoryTicketPurchases = false;
+            await this.openInventoryReceipt(purchase);
         },
 
         async submitInventoryPurchase() {
             this.loading = true;
             try {
-                await window.AIDAInventoryManagementService.createPurchase({
+                const purchaseResult = await window.AIDAInventoryManagementService.createPurchase({
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 }, this.inventory.purchaseForm);
+                const affectedTicketIds = purchaseResult?.ticket_ids || [];
+                if (this.selectedTicket && affectedTicketIds.includes(this.selectedTicket.id)) {
+                    const currentSummary = this.selectedTicket.inventory_summary || {};
+                    this.selectedTicket = {
+                        ...this.selectedTicket,
+                        parts_status: 'Comprado',
+                        inventory_summary: {
+                            ...currentSummary,
+                            open_purchase_count: Number(currentSummary.open_purchase_count || 0) + 1,
+                            purchase_state: 'awaiting_receipt'
+                        }
+                    };
+                }
                 this.modals.inventoryPurchase = false;
                 this.notify('Compra estruturada registrada.');
                 await this.loadInventory(true);
+                await this.refreshPostMutation(true);
+                await this.fetchGlobalLogs();
             } catch (error) { this.notify('Erro ao registrar compra: ' + error.message, 'error'); }
             finally { this.loading = false; }
         },
@@ -2582,7 +2605,7 @@ function app() {
             this.modals.inventoryPartRequest = true;
             await this.loadInventoryPartCatalog(true);
         },
-        async openInventoryPartRequest(ticketOrId, stage = 'repair', allocateNow = true, afterSubmit = null) {
+        async openInventoryPartRequest(ticketOrId, stage = 'repair', allocateNow = true, afterSubmit = null, initialSearch = '') {
             const ticket = await this.ensureCompleteTicket(this.resolveTicket(ticketOrId));
             if (!ticket) return;
             this.inventory.partRequest = {
@@ -2590,7 +2613,7 @@ function app() {
                 stage,
                 allocateNow,
                 afterSubmit,
-                search: '',
+                search: String(initialSearch || '').trim(),
                 items: [],
                 catalog: [],
                 hasMore: false,
@@ -2672,6 +2695,13 @@ function app() {
                 } else if (request.afterSubmit === 'finishWarrantyAnalysis') {
                     this.analysisForm.partsList = request.items.map(item => `${item.quantity} x ${item.name}`).join(', ');
                     await this.finishWarrantyAnalysis(request.ticketId);
+                } else if (request.afterSubmit === 'openInventoryPurchaseAfterAdapt') {
+                    await this.refreshPostMutation(true);
+                    await this.fetchGlobalLogs();
+                    if (result?.route === 'purchase') {
+                        await this.loadInventoryWorkspaceData();
+                        this.openInventoryPurchaseModal(request.ticketId);
+                    }
                 } else {
                     await this.refreshPostMutation(true);
                     await this.fetchGlobalLogs();
@@ -4694,11 +4724,14 @@ function app() {
                     return null;
                 }
 
+                const hydratedTicket = ticket.inventory_summary
+                    ? { ...completeTicket, inventory_summary: ticket.inventory_summary }
+                    : completeTicket;
                 const ticketIndex = this.tickets.findIndex(item => item.id === completeTicket.id);
-                if (ticketIndex >= 0) this.tickets[ticketIndex] = completeTicket;
+                if (ticketIndex >= 0) this.tickets[ticketIndex] = hydratedTicket;
                 const techIndex = this.techTickets.findIndex(item => item.id === completeTicket.id);
-                if (techIndex >= 0) this.techTickets[techIndex] = completeTicket;
-                return completeTicket;
+                if (techIndex >= 0) this.techTickets[techIndex] = hydratedTicket;
+                return hydratedTicket;
             } catch (error) {
                 console.error('Failed to load complete OS:', error);
                 this.notify('Erro ao carregar os dados completos da OS.', 'error');
@@ -5361,9 +5394,30 @@ function app() {
             if (!ticket) return;
             if (this.isInventoryEnabled()) {
                 await this.loadInventoryWorkspaceData();
-                this.openInventoryPurchaseModal(ticket.id);
+                const purchases = this.inventory.purchases.filter(purchase => (purchase.ticket_ids || []).includes(ticket.id));
+                if (purchases.length) {
+                    await this.openInventoryPurchasesForTicket(ticket);
+                    return;
+                }
+                const pending = this.inventory.pendingParts.filter(item => item.ticket_id === ticket.id);
+                if (pending.length) {
+                    this.openInventoryPurchaseModal(ticket.id);
+                    return;
+                }
+                const itemCount = Number(ticket.inventory_summary?.item_count || 0);
+                if (!itemCount) {
+                    const legacyPart = String(ticket.parts_needed || '')
+                        .split(/\r?\n|,/)[0]
+                        .replace(/^\s*\d+(?:[.,]\d+)?\s*x?\s*/i, '')
+                        .trim();
+                    await this.openInventoryPartRequest(ticket, 'direct_repair', true, 'openInventoryPurchaseAfterAdapt', legacyPart);
+                    return;
+                }
+                await this.refreshPostMutation(true);
+                this.notify('As peças desta OS não possuem falta aberta para compra.', 'error');
                 return;
-            }            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'supplierPurchase');
+            }
+            const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'supplierPurchase');
             this._applyContext(newContext);
             this.purchaseFlow = {
                 ticketId: ticket.id,
@@ -5384,6 +5438,39 @@ function app() {
         async markPurchased(ticketOrId) {
             // Replaced by openPurchaseModal, kept for compatibility if needed elsewhere
             await this.openPurchaseModal(ticketOrId);
+        },
+
+        ticketPartsActionLabel(ticket) {
+            if (!this.isInventoryEnabled()) {
+                return ticket?.parts_status === 'Comprado' ? 'Recebido' : 'Confirmar Compra';
+            }
+            const summary = ticket?.inventory_summary || {};
+            if (Number(summary.open_purchase_count || 0) > 0 || summary.purchase_state === 'awaiting_receipt') {
+                return 'Receber Peças';
+            }
+            return Number(summary.item_count || 0) > 0 ? 'Registrar Compra' : 'Vincular Peças ao Estoque';
+        },
+
+        ticketPartsActionIcon(ticket) {
+            const label = this.ticketPartsActionLabel(ticket);
+            if (label === 'Receber Peças' || label === 'Recebido') return 'fa-solid fa-box-open';
+            if (label === 'Vincular Peças ao Estoque') return 'fa-solid fa-boxes-stacked';
+            return 'fa-solid fa-cart-shopping';
+        },
+
+        canManageTicketParts(ticket) {
+            return Boolean(ticket) && ['Compra Peca', 'Aprovacao'].includes(ticket.status)
+                && (this.hasRole('admin') || this.hasRole('atendente'));
+        },
+
+        async handleTicketPartsAction(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket || !this.canManageTicketParts(ticket)) return;
+            if (!this.isInventoryEnabled() && ticket.parts_status === 'Comprado') {
+                await this.confirmReceived(ticket);
+                return;
+            }
+            await this.openPurchaseModal(ticket);
         },
         async openOutcomeModal(mode, ticketOrId) {
             const resolvedTicket = this.resolveTicket(ticketOrId);

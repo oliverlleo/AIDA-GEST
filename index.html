@@ -4403,18 +4403,15 @@
                                                     <!-- Compra -->
                                                     <template x-if="ticket.status === 'Compra Peca'">
                                                         <div class="space-y-2">
-                                                            <template x-if="ticket.parts_status !== 'Comprado'">
-                                                                <button @click.stop="markPurchased(ticket)" class="w-full bg-purple-50 text-purple-600 text-xs font-bold py-2 rounded hover:bg-purple-100 transition-colors">
-                                                                    Confirmar Compra
-                                                                </button>
-                                                            </template>
-                                                            <template x-if="ticket.parts_status === 'Comprado'">
-                                                                <button @click.stop="confirmReceived(ticket)" class="w-full bg-teal-50 text-teal-600 text-xs font-bold py-2 rounded hover:bg-teal-100 transition-colors">
-                                                                    Recebido
-                                                                </button>
-                                                            </template>
+                                                            <button @click.stop="handleTicketPartsAction(ticket)"
+                                                                    :disabled="!canManageTicketParts(ticket)"
+                                                                    class="w-full text-xs font-bold py-2 rounded transition-colors"
+                                                                    :class="ticketPartsActionLabel(ticket).includes('Receber') || ticketPartsActionLabel(ticket) === 'Recebido' ? 'bg-teal-50 text-teal-700 hover:bg-teal-100' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'">
+                                                                <i :class="ticketPartsActionIcon(ticket)" class="mr-1.5"></i>
+                                                                <span x-text="ticketPartsActionLabel(ticket)"></span>
+                                                            </button>
                                                             <!-- Engajamento de Agenda no Card (Kanban / Início) -->
-                                                            <template x-if="ticket.parts_status === 'Comprado' && !ticket.repair_scheduled && !ticket.repair_scheduled_at">
+                                                            <template x-if="!isInventoryEnabled() && ticket.parts_status === 'Comprado' && !ticket.repair_scheduled && !ticket.repair_scheduled_at">
                                                                 <button x-show="!ticket.repair_scheduled_at" @click.stop="openScheduleModalFromSidebar(ticket)" class="w-full border border-brand-200 bg-brand-50 text-brand-700 text-[11px] font-bold py-1.5 rounded hover:bg-brand-100 flex justify-center items-center gap-1.5 transition-colors shadow-sm">
                                                                     <i class="fa-regular fa-calendar-plus"></i> Agendar Reparo
                                                                 </button>
@@ -7146,25 +7143,16 @@
                         <template x-if="selectedTicket.status === 'Compra Peca'">
                             <div class="flex flex-col space-y-3">
                                 <div class="flex space-x-3 items-center">
-                                    <button @click="markPurchased(selectedTicket)"
-                                            :disabled="!canExecuteAction(selectedTicket, 'markPurchased')"
-                                            class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                            :class="!canExecuteAction(selectedTicket, 'markPurchased') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'">
-                                        <i class="fa-solid fa-cart-shopping mr-2"></i>
-                                        <span x-text="selectedTicket.parts_status === 'Comprado' ? 'Peça Comprada' : 'Confirmar Compra'"></span>
-                                    </button>
-
-                                    <div class="h-8 w-px bg-gray-300 mx-2"></div>
-
-                                    <button @click="confirmReceived(selectedTicket)"
-                                            :disabled="!canExecuteAction(selectedTicket, 'confirmReceived')"
-                                            class="px-4 py-2 rounded font-bold text-sm transition-colors"
-                                            :class="!canExecuteAction(selectedTicket, 'confirmReceived') ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-teal-600 text-white hover:bg-teal-700'">
-                                        <i class="fa-solid fa-box-open mr-1"></i> Recebido (Iniciar Reparo)
+                                    <button @click="handleTicketPartsAction(selectedTicket)"
+                                            :disabled="!canManageTicketParts(selectedTicket)"
+                                            class="px-5 py-2 rounded font-bold text-sm text-white transition-colors disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                            :class="ticketPartsActionLabel(selectedTicket).includes('Receber') || ticketPartsActionLabel(selectedTicket) === 'Recebido' ? 'bg-teal-600 hover:bg-teal-700' : 'bg-purple-600 hover:bg-purple-700'">
+                                        <i :class="ticketPartsActionIcon(selectedTicket)" class="mr-2"></i>
+                                        <span x-text="ticketPartsActionLabel(selectedTicket)"></span>
                                     </button>
                                 </div>
 
-                                <button type="button" @click="openSchedulePanel('repair')" x-show="isAppointmentTypeEnabled('repair') && selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled_at" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
+                                <button type="button" @click="openSchedulePanel('repair')" x-show="!isInventoryEnabled() && isAppointmentTypeEnabled('repair') && selectedTicket.parts_status === 'Comprado' && !selectedTicket.repair_scheduled_at" class="px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 rounded text-sm font-bold flex items-center justify-center transition-colors">
                                     <i class="fa-regular fa-calendar-plus mr-2"></i> Agendar Reparo
                                 </button>
                             </div>
@@ -8596,6 +8584,23 @@
     </div>
 
     <!-- Inventory Receipt Modal -->
+    <div x-show="modals.inventoryTicketPurchases" x-cloak class="fixed inset-0 z-[116] flex items-center justify-center p-3 bg-black/60">
+        <div @click.outside="modals.inventoryTicketPurchases = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div class="px-5 py-4 border-b flex items-center justify-between">
+                <div><h3 class="font-bold text-lg text-gray-800">Receber peças da OS</h3><p class="text-xs text-gray-500">Esta OS possui mais de uma compra aberta. Escolha qual chegou.</p></div>
+                <button @click="modals.inventoryTicketPurchases = false" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-4 overflow-y-auto space-y-2">
+                <template x-for="purchase in inventory.ticketPurchases" :key="purchase.id">
+                    <button @click="chooseInventoryTicketPurchase(purchase)" class="w-full text-left border border-gray-200 rounded-xl p-4 hover:border-teal-300 hover:bg-teal-50 transition-colors">
+                        <div class="flex items-center justify-between gap-3"><b class="text-sm text-gray-800" x-text="purchase.supplier_name"></b><span class="text-xs font-bold text-teal-700" x-text="purchase.status === 'partial' ? 'Recebimento parcial' : 'Aguardando recebimento'"></span></div>
+                        <div class="text-xs text-gray-500 mt-2"><span x-text="purchase.item_count"></span> item(ns) · <span x-text="purchase.received_quantity"></span> de <span x-text="purchase.ordered_quantity"></span> recebido(s)</div>
+                    </button>
+                </template>
+            </div>
+        </div>
+    </div>
+
     <div x-show="modals.inventoryReceipt" x-cloak class="fixed inset-0 z-[115] flex items-center justify-center p-3 bg-black/60">
         <div @click.outside="modals.inventoryReceipt = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
             <div class="px-5 py-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-lg text-gray-800">Receber compra</h3><p class="text-xs text-gray-500" x-text="inventory.receiptForm.supplierName"></p></div><button @click="modals.inventoryReceipt = false" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
@@ -8697,7 +8702,7 @@
     <script src="js/modules/inventory-management-service.js?v=1"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=31"></script>
+    <script src="js/main.js?v=32"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
