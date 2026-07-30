@@ -45,6 +45,16 @@ test('boards expose independent totals and load-more controls per status', () =>
     assert.match(html, /Carregar mais OS/);
 });
 
+test('stale searches and view loads cannot replace the current ticket list', () => {
+    assert.match(main, /ticketFetchRequestId:\s*0/);
+    assert.match(main, /const requestId = \+\+this\.ticketFetchRequestId/);
+    assert.match(main, /requestId !== this\.ticketFetchRequestId\) return/);
+    assert.match(main, /if \(loadMore && this\.ticketPagination\.isLoading\)/);
+    assert.match(main, /handleSearchInput\(\)[\s\S]*this\.ticketFetchRequestId\+\+/);
+    assert.match(main, /else if \(\['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'\]\.includes\(this\.view\)\)/);
+    assert.match(main, /async loadMoreTicketColumn\(status\)[\s\S]*const requestId = this\.ticketFetchRequestId[\s\S]*requestId !== this\.ticketFetchRequestId/);
+});
+
 test('rollback removes only the new read API', () => {
     assert.match(rollback, /drop function if exists public\.get_ticket_cards_page/);
     assert.doesNotMatch(rollback, /drop table|delete from|truncate/i);

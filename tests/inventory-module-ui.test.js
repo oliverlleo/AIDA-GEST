@@ -122,3 +122,11 @@ test('receiving new ticket parts opens repair scheduling and supports consecutiv
     assert.match(main, /afterSave === 'inventoryReceiptRepair'/);
     assert.match(main, /Reparo agendado e chamado enviado para reparo/);
 });
+
+test('received parts awaiting schedule never return to the purchase action', () => {
+    assert.match(main, /ticketAwaitsRepairSchedule\(ticket\)/);
+    assert.match(main, /return 'Agendar Reparo'/);
+    assert.match(main, /ticket\?\.parts_status === 'Recebido'/);
+    assert.match(main, /ticketAwaitsRepairSchedule\(ticket\)[\s\S]*openSchedulePanel\([\s\S]*'inventoryReceiptRepair'/);
+    assert.match(html, /ticketPartsActionLabel\(ticket\) === 'Agendar Reparo'/);
+});

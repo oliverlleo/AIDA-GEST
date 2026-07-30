@@ -279,6 +279,7 @@ function app() {
         },
         ticketCardPageSize: 20,
         ticketColumnPagination: {},
+        ticketFetchRequestId: 0,
         testerBenchPagination: {
             total: 0,
             hasMore: false,
@@ -1961,6 +1962,9 @@ function app() {
 
         handleSearchInput() {
             if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+            // Invalida imediatamente qualquer resposta iniciada com o texto anterior.
+            // A busca nova começa após o debounce sem deixar a antiga apagar os cards.
+            this.ticketFetchRequestId++;
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
                 // Synchronize search for operational filters based on view
@@ -1971,7 +1975,7 @@ function app() {
                 }
                 if (this.view === 'dashboard') {
                     this.fetchHomeOperationalQueue();
-                } else {
+                } else if (['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'].includes(this.view)) {
                     this.fetchTickets();
                 }
                 if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
@@ -2014,12 +2018,15 @@ function app() {
             const column = this.ticketColumnPagination?.[status];
             if (!column?.hasMore || column.loading) return;
 
+            const requestId = this.ticketFetchRequestId;
             column.loading = true;
             try {
                 const response = await window.AIDATicketQueryService.fetchTicketCardColumnData({
                     state: this,
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 }, status, column.nextCursor);
+
+                if (requestId !== this.ticketFetchRequestId) return;
 
                 const incoming = Array.isArray(response?.items) ? response.items : [];
                 const existingIds = new Set(this.tickets.map(ticket => ticket.id));
@@ -2033,6 +2040,7 @@ function app() {
                     this.techTickets = this.sortBenchTickets(this.tickets);
                 }
             } catch (error) {
+                if (requestId !== this.ticketFetchRequestId) return;
                 console.error('Failed to load more OS cards:', error);
                 this.notify('Erro ao carregar mais OS.', 'error');
             } finally {
@@ -2932,12 +2940,14 @@ function app() {
         async fetchTickets(loadMore = false) {
             if (!this.user?.workspace_id) return;
 
-            // Guard: Prevent concurrent fetches (unless forced by loadMore)
-            if (this.ticketPagination.isLoading) {
+            // Paginação depende do resultado atual e não pode concorrer com outra
+            // página. Recarregamentos normais podem substituir uma busca antiga.
+            if (loadMore && this.ticketPagination.isLoading) {
                 console.log("[FetchTickets] Blocked by isLoading guard");
                 return;
             }
 
+            const requestId = ++this.ticketFetchRequestId;
             this.ticketPagination.isLoading = true;
 
             if (loadMore) {
@@ -2955,6 +2965,10 @@ function app() {
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                     hasRole: (r) => this.hasRole(r)
                 }, loadMore);
+
+                // Uma resposta de tela, filtro ou texto anterior nunca pode
+                // substituir a lista correspondente ao contexto atual.
+                if (requestId !== this.ticketFetchRequestId) return;
 
                 if (result.mode === 'test_bench_page') {
                     if (loadMore) {
@@ -3069,10 +3083,13 @@ function app() {
                     }
                 }
             } catch (err) {
+                 if (requestId !== this.ticketFetchRequestId) return;
                  console.warn("Fetch exception:", err);
                  this.notify("Erro ao buscar chamados.", "error");
             } finally {
-                 this.ticketPagination.isLoading = false;
+                 if (requestId === this.ticketFetchRequestId) {
+                     this.ticketPagination.isLoading = false;
+                 }
             }
         },
 
@@ -5591,6 +5608,9 @@ function app() {
             if (!this.isInventoryEnabled()) {
                 return ticket?.parts_status === 'Comprado' ? 'Recebido' : 'Confirmar Compra';
             }
+            if (this.ticketAwaitsRepairSchedule(ticket)) {
+                return 'Agendar Reparo';
+            }
             const summary = ticket?.inventory_summary || {};
             if (Number(summary.open_purchase_count || 0) > 0 || summary.purchase_state === 'awaiting_receipt') {
                 return 'Receber Peças';
@@ -5600,6 +5620,7 @@ function app() {
 
         ticketPartsActionIcon(ticket) {
             const label = this.ticketPartsActionLabel(ticket);
+            if (label === 'Agendar Reparo') return 'fa-regular fa-calendar-plus';
             if (label === 'Receber Peças' || label === 'Recebido') return 'fa-solid fa-box-open';
             if (label === 'Vincular Peças ao Estoque') return 'fa-solid fa-boxes-stacked';
             return 'fa-solid fa-cart-shopping';
@@ -5610,9 +5631,29 @@ function app() {
                 && (this.hasRole('admin') || this.hasRole('atendente'));
         },
 
+        ticketAwaitsRepairSchedule(ticket) {
+            return Boolean(
+                this.isInventoryEnabled()
+                && ticket?.status === 'Compra Peca'
+                && ticket?.parts_status === 'Recebido'
+                && this.isAppointmentTypeEnabled('repair')
+                && !ticket?.repair_scheduled
+                && !ticket?.repair_scheduled_at
+            );
+        },
+
         async handleTicketPartsAction(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket || !this.canManageTicketParts(ticket)) return;
+            if (this.ticketAwaitsRepairSchedule(ticket)) {
+                this.openSchedulePanel(
+                    'repair',
+                    ticket.technician_id,
+                    ticket,
+                    'inventoryReceiptRepair'
+                );
+                return;
+            }
             if (!this.isInventoryEnabled() && ticket.parts_status === 'Comprado') {
                 await this.confirmReceived(ticket);
                 return;

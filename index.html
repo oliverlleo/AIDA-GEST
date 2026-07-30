@@ -4406,7 +4406,7 @@
                                                             <button @click.stop="handleTicketPartsAction(ticket)"
                                                                     :disabled="!canManageTicketParts(ticket)"
                                                                     class="w-full text-xs font-bold py-2 rounded transition-colors"
-                                                                    :class="ticketPartsActionLabel(ticket).includes('Receber') || ticketPartsActionLabel(ticket) === 'Recebido' ? 'bg-teal-50 text-teal-700 hover:bg-teal-100' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'">
+                                                                    :class="ticketPartsActionLabel(ticket) === 'Agendar Reparo' ? 'bg-brand-50 text-brand-700 hover:bg-brand-100 border border-brand-200' : (ticketPartsActionLabel(ticket).includes('Receber') || ticketPartsActionLabel(ticket) === 'Recebido' ? 'bg-teal-50 text-teal-700 hover:bg-teal-100' : 'bg-purple-50 text-purple-700 hover:bg-purple-100')">
                                                                 <i :class="ticketPartsActionIcon(ticket)" class="mr-1.5"></i>
                                                                 <span x-text="ticketPartsActionLabel(ticket)"></span>
                                                             </button>
@@ -7146,7 +7146,7 @@
                                     <button @click="handleTicketPartsAction(selectedTicket)"
                                             :disabled="!canManageTicketParts(selectedTicket)"
                                             class="px-5 py-2 rounded font-bold text-sm text-white transition-colors disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
-                                            :class="ticketPartsActionLabel(selectedTicket).includes('Receber') || ticketPartsActionLabel(selectedTicket) === 'Recebido' ? 'bg-teal-600 hover:bg-teal-700' : 'bg-purple-600 hover:bg-purple-700'">
+                                            :class="ticketPartsActionLabel(selectedTicket) === 'Agendar Reparo' ? 'bg-brand-500 hover:bg-brand-600' : (ticketPartsActionLabel(selectedTicket).includes('Receber') || ticketPartsActionLabel(selectedTicket) === 'Recebido' ? 'bg-teal-600 hover:bg-teal-700' : 'bg-purple-600 hover:bg-purple-700')">
                                         <i :class="ticketPartsActionIcon(selectedTicket)" class="mr-2"></i>
                                         <span x-text="ticketPartsActionLabel(selectedTicket)"></span>
                                     </button>
@@ -8688,7 +8688,7 @@
     <script src="js/modules/inventory-management-service.js?v=2"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=35"></script>
+    <script src="js/main.js?v=36"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
