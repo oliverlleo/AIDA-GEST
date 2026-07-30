@@ -151,6 +151,13 @@ test('inventory header can start the existing audited entry flow with a paginate
     assert.doesNotMatch(main, /loadInventoryAdjustmentItems[\s\S]{0,800}p_workspace_id/);
 });
 
+test('inventory table separates stock status from row actions', () => {
+    assert.match(html, /<span>Situação<\/span><span>Ações<\/span>/);
+    assert.match(html, /grid-cols-\[minmax\(0,2fr\)_90px_110px_100px_120px_132px\]/);
+    assert.match(html, /Situação:<\/small>[\s\S]*Sem estoque[\s\S]*Disponível[\s\S]*<\/span>\s*<span class="flex flex-wrap items-center gap-1">\s*<small class="md:hidden text-gray-400 mr-1">Ações:/);
+    assert.match(html, /Ações:<\/small>[\s\S]*openInventoryMovements\(item\)[\s\S]*openInventoryAdjustModal\(item\)[\s\S]*openInventoryTransferModal\(item\)[\s\S]*openInventoryItemModal\(item\)/);
+});
+
 test('location manager uses organizer groups and internal addresses', () => {
     assert.match(html, /Nova estante, armário ou área/);
     assert.match(html, /Endereços internos/);

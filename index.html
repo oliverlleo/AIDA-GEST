@@ -343,12 +343,12 @@
                                     </select>
                                 </div>
 
-                                <div class="hidden md:grid grid-cols-[minmax(0,2fr)_120px_120px_120px_120px] gap-3 px-5 py-3 bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-500 border-b border-gray-100">
-                                    <span>Item</span><span>Físico</span><span>Reservado</span><span>Disponível</span><span>Situação</span>
+                                <div class="hidden md:grid grid-cols-[minmax(0,2fr)_90px_110px_100px_120px_132px] gap-3 px-5 py-3 bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-500 border-b border-gray-100">
+                                    <span>Item</span><span>Físico</span><span>Reservado</span><span>Disponível</span><span>Situação</span><span>Ações</span>
                                 </div>
                                 <div class="divide-y divide-gray-100">
                                     <template x-for="item in inventory.items" :key="item.id">
-                                        <div class="w-full text-left grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_100px_100px_100px_150px] gap-2 md:gap-3 px-5 py-4 hover:bg-brand-50/40 transition">
+                                        <div class="w-full text-left grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_90px_110px_100px_120px_132px] gap-2 md:gap-3 px-5 py-4 hover:bg-brand-50/40 transition">
                                             <span class="min-w-0">
                                                 <span class="font-bold text-gray-800 block truncate" x-text="item.name"></span>
                                                 <span class="text-xs text-gray-500 block truncate">
@@ -369,10 +369,14 @@
                                             </span>
                                             <span class="text-sm font-bold" :class="Number(item.available_quantity) <= 0 ? 'text-red-600' : 'text-green-600'"><small class="md:hidden text-gray-400 mr-1">Disponível:</small><span x-text="item.available_quantity"></span></span>
                                             <span class="flex flex-wrap items-center gap-1">
+                                                <small class="md:hidden text-gray-400 mr-1">Situação:</small>
                                                 <span x-show="!item.track_stock" class="inline-flex px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-[11px] font-bold">Catálogo</span>
                                                 <span x-show="item.track_stock && Number(item.available_quantity) <= 0" class="inline-flex px-2 py-1 rounded-full bg-red-50 text-red-700 text-[11px] font-bold">Sem estoque</span>
                                                 <span x-show="item.track_stock && Number(item.available_quantity) > 0 && Number(item.available_quantity) <= Number(item.minimum_quantity)" class="inline-flex px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-[11px] font-bold">Estoque baixo</span>
                                                 <span x-show="item.track_stock && Number(item.available_quantity) > Number(item.minimum_quantity)" class="inline-flex px-2 py-1 rounded-full bg-green-50 text-green-700 text-[11px] font-bold">Disponível</span>
+                                            </span>
+                                            <span class="flex flex-wrap items-center gap-1">
+                                                <small class="md:hidden text-gray-400 mr-1">Ações:</small>
                                                 <button @click="openInventoryMovements(item)" title="Movimentações" class="w-7 h-7 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-brand-600"><i class="fa-solid fa-clock-rotate-left"></i></button>
                                                 <button x-show="hasRole('admin')" @click="openInventoryAdjustModal(item)" title="Entrada ou ajuste" class="w-7 h-7 rounded-lg bg-white border border-gray-200 text-blue-600"><i class="fa-solid fa-arrow-right-to-bracket"></i></button>
                                                 <button x-show="hasRole('admin')" @click="openInventoryTransferModal(item)" title="Transferir" class="w-7 h-7 rounded-lg bg-white border border-gray-200 text-purple-600"><i class="fa-solid fa-right-left"></i></button>
