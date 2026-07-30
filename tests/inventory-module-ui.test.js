@@ -137,6 +137,20 @@ test('reserved stock opens a paginated OS list only when requested', async () =>
     assert.equal(Object.hasOwn(call.payload, 'workspace_id'), false);
 });
 
+test('inventory header can start the existing audited entry flow with a paginated item picker', () => {
+    assert.match(html, /@click="openInventoryAdjustModal\(\)"[^>]*>[\s\S]*?Registrar entrada/);
+    assert.match(html, /Buscar por nome, código, marca ou localização/);
+    assert.match(html, /Carregar mais itens/);
+    assert.match(html, /selectInventoryAdjustmentItem\(item\)/);
+    assert.match(main, /openInventoryAdjustModal\(item = null\)/);
+    assert.match(main, /loadInventoryAdjustmentItems\(reset = false\)[\s\S]*fetchItems/);
+    assert.match(main, /stockFilter:\s*'all'/);
+    assert.match(main, /limit:\s*15/);
+    assert.match(main, /selectInventoryAdjustmentItem\(item\)[\s\S]*item_id:\s*item\.id/);
+    assert.match(main, /submitInventoryAdjustment\(\)[\s\S]*registerEntry\(deps, this\.inventory\.adjustForm\)/);
+    assert.doesNotMatch(main, /loadInventoryAdjustmentItems[\s\S]{0,800}p_workspace_id/);
+});
+
 test('location manager uses organizer groups and internal addresses', () => {
     assert.match(html, /Nova estante, armário ou área/);
     assert.match(html, /Endereços internos/);

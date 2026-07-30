@@ -282,6 +282,7 @@
                             <button @click="openInventoryMovements()" class="bg-white border border-gray-200 text-gray-700 px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50"><i class="fa-solid fa-clock-rotate-left mr-2 text-gray-400"></i>Movimentações</button>
                             <button x-show="hasRole('admin')" @click="openInventoryLocationModal()" class="bg-white border border-gray-200 text-gray-700 px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50"><i class="fa-solid fa-location-dot mr-2 text-blue-500"></i>Localizações</button>
                             <button x-show="inventory.pendingParts.length > 0" @click="openInventoryPurchaseModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2.5 rounded-xl font-bold text-xs shadow-sm"><i class="fa-solid fa-cart-plus mr-2"></i>Nova compra</button>
+                            <button x-show="hasRole('admin')" @click="openInventoryAdjustModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"><i class="fa-solid fa-arrow-right-to-bracket mr-2"></i>Registrar entrada</button>
                             <button x-show="hasRole('admin')" @click="openInventoryItemModal()" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Novo item</button>
                         </div>
                     </header>
@@ -8594,11 +8595,80 @@
     <div x-show="modals.inventoryScheme" x-cloak class="fixed inset-0 z-[115] flex items-center justify-center p-3 bg-black/60"><div @click.outside="modals.inventoryScheme = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"><div class="px-5 py-4 border-b"><h3 class="font-bold text-lg text-gray-800">Criar padrão de localização</h3><p class="text-xs text-gray-500">Monte as partes visualmente. Você não precisa escrever expressões ou códigos.</p></div><div class="p-5 overflow-y-auto space-y-4"><label><span class="text-xs font-bold text-gray-600 block mb-1">Nome do padrão</span><input x-model="inventory.schemeForm.name" class="w-full border rounded-xl px-3 py-2.5" placeholder="Ex.: Corredor / Estante / Caixa"></label><div class="space-y-2"><template x-for="(part, index) in inventory.schemeForm.component_labels" :key="index"><div class="grid grid-cols-1 md:grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 border rounded-xl p-3"><select x-model="part.type" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="letters">Letras</option><option value="numbers">Números</option><option value="alphanumeric">Letras e números</option><option value="fixed">Texto fixo</option><option value="separator">Separador</option><option value="options">Lista de opções</option></select><input x-show="!['fixed','separator'].includes(part.type)" x-model="part.label" class="border rounded-lg px-2 py-2 text-sm" placeholder="Nome: corredor, caixa..."><input x-show="['fixed','separator'].includes(part.type)" x-model="part.value" class="border rounded-lg px-2 py-2 text-sm" placeholder="Texto ou separador"><input x-show="part.type === 'options'" x-model="part.options_text" class="border rounded-lg px-2 py-2 text-sm" placeholder="Opções separadas por vírgula"><span x-show="part.type !== 'options'" class="hidden md:block"></span><button type="button" @click="removeInventorySchemePart(index)" class="text-red-500 px-2"><i class="fa-solid fa-trash"></i></button></div></template><button type="button" @click="addInventorySchemePart()" class="px-3 py-2 rounded-lg bg-brand-50 text-brand-700 text-xs font-bold"><i class="fa-solid fa-plus mr-2"></i>Adicionar parte</button></div></div><div class="p-5 border-t flex justify-end gap-2"><button @click="modals.inventoryScheme = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="saveInventoryScheme()" class="px-4 py-2 rounded-xl bg-brand-500 text-white font-bold text-sm">Salvar padrão</button></div></div></div>
     <!-- Inventory Adjustment Modal -->
     <div x-show="modals.inventoryAdjust" x-cloak class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/55">
-        <div @click.outside="modals.inventoryAdjust = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h3 class="font-bold text-lg text-gray-800">Entrada ou ajuste de saldo</h3><p class="text-sm text-gray-500 mt-1 mb-5" x-text="inventory.adjustForm.item_name"></p>
-            <div class="space-y-4"><div class="grid grid-cols-2 gap-2"><button type="button" @click="inventory.adjustForm.mode = 'entry'" :class="inventory.adjustForm.mode === 'entry' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'" class="border rounded-xl py-2 text-xs font-bold"><i class="fa-solid fa-arrow-right-to-bracket mr-2"></i>Registrar entrada</button><button type="button" @click="inventory.adjustForm.mode = 'adjust'" :class="inventory.adjustForm.mode === 'adjust' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200'" class="border rounded-xl py-2 text-xs font-bold"><i class="fa-solid fa-scale-balanced mr-2"></i>Corrigir saldo</button></div><label class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Localização</span><select x-model="inventory.adjustForm.location_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="location in inventory.locations.filter(l => l.active)" :key="location.id"><option :value="location.id" x-text="inventoryLocationLabel(location)"></option></template></select></label><label x-show="inventory.adjustForm.mode === 'entry'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Quantidade de entrada</span><input type="number" min="0.001" step="0.001" x-model.number="inventory.adjustForm.quantity" class="w-full border rounded-xl px-3 py-2.5"></label><label x-show="inventory.adjustForm.mode === 'entry'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Custo unitário <span class="font-normal text-gray-400">(opcional)</span></span><input type="number" min="0" step="0.01" x-model.number="inventory.adjustForm.unit_cost" class="w-full border rounded-xl px-3 py-2.5"></label><label x-show="inventory.adjustForm.mode === 'adjust'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Novo saldo físico</span><input type="number" min="0" step="0.001" x-model.number="inventory.adjustForm.physical_quantity" class="w-full border rounded-xl px-3 py-2.5"></label><label class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Motivo *</span><textarea x-model="inventory.adjustForm.reason" rows="2" class="w-full border rounded-xl px-3 py-2.5 resize-none" placeholder="Ex.: contagem física inicial"></textarea></label></div>
-            <p class="mt-3 text-xs text-amber-700 bg-amber-50 rounded-lg p-3"><i class="fa-solid fa-shield-halved mr-2"></i>O saldo não pode ficar abaixo do que já está reservado. Toda correção gera uma movimentação imutável.</p>
-            <div class="flex justify-end gap-2 mt-5"><button @click="modals.inventoryAdjust = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="submitInventoryAdjustment()" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm">Registrar</button></div>
+        <div @click.outside="modals.inventoryAdjust = false" class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div class="flex items-start justify-between gap-4 border-b bg-gradient-to-r from-blue-50 to-white px-6 py-5">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700"><i class="fa-solid fa-arrow-right-to-bracket"></i></span>
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-800">Entrada ou ajuste de saldo</h3>
+                        <p class="text-xs text-gray-500">A mesma operação auditável usada no card do item.</p>
+                    </div>
+                </div>
+                <button type="button" @click="modals.inventoryAdjust = false" class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-white hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <div class="flex-grow overflow-y-auto p-6">
+                <section class="mb-5 rounded-2xl border border-gray-200 bg-gray-50/70 p-3">
+                    <div x-show="inventory.adjustForm.item_id && !inventory.adjustItemPicker.open" class="flex items-center justify-between gap-3">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm"><i class="fa-solid fa-box"></i></span>
+                            <div class="min-w-0">
+                                <small class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Item selecionado</small>
+                                <b class="block truncate text-sm text-gray-800" x-text="inventory.adjustForm.item_name"></b>
+                            </div>
+                        </div>
+                        <button type="button" @click="changeInventoryAdjustmentItem()" class="flex-shrink-0 rounded-lg px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"><i class="fa-solid fa-rotate mr-1.5"></i>Trocar</button>
+                    </div>
+
+                    <div x-show="inventory.adjustItemPicker.open">
+                        <label class="relative block">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
+                            <input type="search" x-model="inventory.adjustItemPicker.search" @input="scheduleInventoryAdjustmentItemSearch()" class="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" placeholder="Buscar por nome, código, marca ou localização">
+                        </label>
+                        <div class="mt-2 max-h-64 space-y-1 overflow-y-auto">
+                            <template x-for="item in inventory.adjustItemPicker.items" :key="item.id">
+                                <button type="button" @click="selectInventoryAdjustmentItem(item)" class="flex w-full items-center justify-between gap-3 rounded-xl border border-transparent bg-white px-3 py-2.5 text-left transition hover:border-blue-200 hover:bg-blue-50">
+                                    <span class="min-w-0">
+                                        <b class="block truncate text-sm text-gray-800" x-text="item.name"></b>
+                                        <small class="block truncate text-gray-500">
+                                            <span x-show="item.sku" x-text="item.sku"></span>
+                                            <span x-show="item.sku && (item.brand || item.category)"> · </span>
+                                            <span x-text="[item.brand, item.category].filter(Boolean).join(' · ') || 'Sem código ou categoria'"></span>
+                                        </small>
+                                    </span>
+                                    <span class="flex-shrink-0 text-right">
+                                        <small class="block text-[9px] font-bold uppercase text-gray-400">Disponível</small>
+                                        <b class="text-sm" :class="Number(item.available_quantity) > 0 ? 'text-green-600' : 'text-red-600'" x-text="item.available_quantity"></b>
+                                    </span>
+                                </button>
+                            </template>
+                            <div x-show="inventory.adjustItemPicker.loading && inventory.adjustItemPicker.items.length === 0" class="p-8 text-center text-blue-600"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Buscando itens...</div>
+                            <div x-show="!inventory.adjustItemPicker.loading && inventory.adjustItemPicker.items.length === 0" class="p-8 text-center text-gray-400"><i class="fa-solid fa-box-open mb-2 text-2xl"></i><p class="text-xs font-bold text-gray-500">Nenhum item encontrado</p></div>
+                        </div>
+                        <button x-show="inventory.adjustItemPicker.hasMore" type="button" @click="loadInventoryAdjustmentItems(false)" :disabled="inventory.adjustItemPicker.loading" class="mt-2 w-full rounded-lg py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+                            <i :class="inventory.adjustItemPicker.loading ? 'fa-circle-notch fa-spin' : 'fa-chevron-down'" class="fa-solid mr-2"></i>Carregar mais itens
+                        </button>
+                    </div>
+                </section>
+
+                <div x-show="inventory.adjustForm.item_id" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" @click="inventory.adjustForm.mode = 'entry'" :class="inventory.adjustForm.mode === 'entry' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'" class="border rounded-xl py-2 text-xs font-bold"><i class="fa-solid fa-arrow-right-to-bracket mr-2"></i>Registrar entrada</button>
+                        <button type="button" @click="inventory.adjustForm.mode = 'adjust'" :class="inventory.adjustForm.mode === 'adjust' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-gray-600 border-gray-200'" class="border rounded-xl py-2 text-xs font-bold"><i class="fa-solid fa-scale-balanced mr-2"></i>Corrigir saldo</button>
+                    </div>
+                    <label class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Localização</span><select x-model="inventory.adjustForm.location_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="location in inventory.locations.filter(l => l.active)" :key="location.id"><option :value="location.id" x-text="inventoryLocationLabel(location)"></option></template></select></label>
+                    <label x-show="inventory.adjustForm.mode === 'entry'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Quantidade de entrada</span><input type="number" min="0.001" step="0.001" x-model.number="inventory.adjustForm.quantity" class="w-full border rounded-xl px-3 py-2.5"></label>
+                    <label x-show="inventory.adjustForm.mode === 'entry'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Custo unitário <span class="font-normal text-gray-400">(opcional)</span></span><input type="number" min="0" step="0.01" x-model.number="inventory.adjustForm.unit_cost" class="w-full border rounded-xl px-3 py-2.5"></label>
+                    <label x-show="inventory.adjustForm.mode === 'adjust'" class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Novo saldo físico</span><input type="number" min="0" step="0.001" x-model.number="inventory.adjustForm.physical_quantity" class="w-full border rounded-xl px-3 py-2.5"></label>
+                    <label class="block"><span class="text-xs font-bold text-gray-600 block mb-1">Motivo *</span><textarea x-model="inventory.adjustForm.reason" rows="2" class="w-full border rounded-xl px-3 py-2.5 resize-none" placeholder="Ex.: compra para reposição do estoque"></textarea></label>
+                    <p class="text-xs text-amber-700 bg-amber-50 rounded-lg p-3"><i class="fa-solid fa-shield-halved mr-2"></i>O saldo não pode ficar abaixo do que já está reservado. Toda correção gera uma movimentação imutável.</p>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 border-t bg-gray-50 px-6 py-4">
+                <button @click="modals.inventoryAdjust = false" class="px-4 py-2 rounded-xl border bg-white font-bold text-sm text-gray-600">Cancelar</button>
+                <button @click="submitInventoryAdjustment()" :disabled="!inventory.adjustForm.item_id || inventory.adjustItemPicker.open" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm disabled:cursor-not-allowed disabled:opacity-40">Registrar</button>
+            </div>
         </div>
     </div>
 
@@ -8943,7 +9013,7 @@
     <script src="js/modules/inventory-management-service.js?v=4"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=39"></script>
+    <script src="js/main.js?v=40"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"

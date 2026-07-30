@@ -514,7 +514,8 @@ function app() {
             schemeForm: { id: null, name: '', mode: 'structured', component_labels: [] },
             groups: [], locations: [], schemes: [], pendingParts: [], purchases: [], ticketPurchases: [], movements: [], movementCursor: null, movementsHasMore: false,
             itemDetail: null,
-            adjustForm: { mode: 'entry', item_id: '', location_id: '', physical_quantity: 0, quantity: 1, unit_cost: '', reason: '' },
+            adjustForm: { mode: 'entry', item_id: '', item_name: '', location_id: '', physical_quantity: 0, quantity: 1, unit_cost: '', reason: '' },
+            adjustItemPicker: { open: false, search: '', items: [], hasMore: false, nextCursor: null, loading: false, requestId: 0, searchTimer: null },
             transferForm: { item_id: '', from_location_id: '', to_location_id: '', quantity: 1, reason: '' },
             purchaseForm: { supplier_id: '', urgent: false, notes: '', items: [] },
             receiptForm: { purchaseId: '', supplierName: '', items: [], confirmAllocation: true },
@@ -2424,10 +2425,90 @@ function app() {
             finally { this.loading = false; }
         },
 
-        openInventoryAdjustModal(item) {
-            const locationId = item.default_location_id || this.inventory.locations.find(l => l.active)?.id || '';
-            this.inventory.adjustForm = { mode: 'entry', item_id: item.id, item_name: item.name, location_id: locationId, physical_quantity: Number(item.physical_quantity || 0), quantity: 1, unit_cost: item.last_cost || '', reason: '' };
+        openInventoryAdjustModal(item = null) {
+            const locationId = item?.default_location_id || this.inventory.locations.find(location => location.active)?.id || '';
+            this.inventory.adjustForm = {
+                mode: 'entry',
+                item_id: item?.id || '',
+                item_name: item?.name || '',
+                location_id: locationId,
+                physical_quantity: Number(item?.physical_quantity || 0),
+                quantity: 1,
+                unit_cost: item?.last_cost || '',
+                reason: ''
+            };
+            clearTimeout(this.inventory.adjustItemPicker.searchTimer);
+            this.inventory.adjustItemPicker = {
+                open: !item,
+                search: '',
+                items: item ? [item] : [],
+                hasMore: false,
+                nextCursor: null,
+                loading: false,
+                requestId: this.inventory.adjustItemPicker.requestId + 1,
+                searchTimer: null
+            };
             this.modals.inventoryAdjust = true;
+            if (!item) this.loadInventoryAdjustmentItems(true);
+        },
+
+        scheduleInventoryAdjustmentItemSearch() {
+            clearTimeout(this.inventory.adjustItemPicker.searchTimer);
+            this.inventory.adjustItemPicker.searchTimer = setTimeout(
+                () => this.loadInventoryAdjustmentItems(true),
+                300
+            );
+        },
+
+        async loadInventoryAdjustmentItems(reset = false) {
+            const picker = this.inventory.adjustItemPicker;
+            if (picker.loading || (!reset && !picker.hasMore)) return;
+            picker.loading = true;
+            const requestId = reset ? ++picker.requestId : picker.requestId;
+            try {
+                const page = await window.AIDAInventoryQueryService.fetchItems({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, {
+                    search: picker.search,
+                    stockFilter: 'all',
+                    limit: 15,
+                    cursor: reset ? null : picker.nextCursor
+                });
+                if (requestId !== this.inventory.adjustItemPicker.requestId) return;
+                const incoming = Array.isArray(page?.items) ? page.items : [];
+                if (reset) {
+                    picker.items = incoming;
+                } else {
+                    const existing = new Set(picker.items.map(item => item.id));
+                    picker.items.push(...incoming.filter(item => !existing.has(item.id)));
+                }
+                picker.hasMore = Boolean(page?.has_more);
+                picker.nextCursor = page?.next_cursor || null;
+            } catch (error) {
+                this.notify('Erro ao buscar itens: ' + error.message, 'error');
+            } finally {
+                if (requestId === this.inventory.adjustItemPicker.requestId) picker.loading = false;
+            }
+        },
+
+        selectInventoryAdjustmentItem(item) {
+            const locationId = item.default_location_id || this.inventory.locations.find(location => location.active)?.id || '';
+            this.inventory.adjustForm = {
+                ...this.inventory.adjustForm,
+                item_id: item.id,
+                item_name: item.name,
+                location_id: locationId,
+                physical_quantity: Number(item.physical_quantity || 0),
+                unit_cost: item.last_cost || ''
+            };
+            this.inventory.adjustItemPicker.open = false;
+        },
+
+        changeInventoryAdjustmentItem() {
+            this.inventory.adjustForm.item_id = '';
+            this.inventory.adjustForm.item_name = '';
+            this.inventory.adjustItemPicker.open = true;
+            this.loadInventoryAdjustmentItems(true);
         },
 
         async submitInventoryAdjustment() {
