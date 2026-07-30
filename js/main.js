@@ -651,6 +651,7 @@ function app() {
         schedulePanelTicket: null,
         schedulePanelTechnicianId: null,
         schedulePanelAfterSave: null,
+        inventoryRepairScheduleQueue: [],
         scheduleAvailabilityLoading: false,
         scheduleAvailabilityData: null,
         selectedAnalysisAppointment: null,
@@ -2561,10 +2562,46 @@ function app() {
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 }, form.purchaseId, form.items, form.confirmAllocation);
                 this.modals.inventoryReceipt = false;
-                const resumed = (result.ready_tickets || []).length;
-                this.notify(resumed ? `Recebimento concluído. ${resumed} OS liberada(s) para reparo.` : 'Recebimento registrado.');
                 await this.loadInventory(true);
                 await this.refreshPostMutation(true);
+                const readyTickets = Array.isArray(result.ready_tickets) ? result.ready_tickets : [];
+                const scheduleCandidates = [];
+
+                for (const readyTicket of readyTickets) {
+                    if (!readyTicket?.ticket_id || readyTicket.resumed) continue;
+                    const ticket = await window.AIDATicketQueryService.fetchTicketDetails({
+                        state: this,
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    }, readyTicket.ticket_id);
+                    if (ticket
+                        && ticket.status === 'Compra Peca'
+                        && ticket.parts_status === 'Recebido'
+                        && !ticket.repair_scheduled_at
+                        && this.isAppointmentTypeEnabled('repair')) {
+                        scheduleCandidates.push(ticket);
+                    }
+                }
+
+                if (scheduleCandidates.length) {
+                    const [firstTicket, ...remainingTickets] = scheduleCandidates;
+                    this.inventoryRepairScheduleQueue = remainingTickets;
+                    this.notify(
+                        `Peças recebidas. Agende o reparo da OS ${firstTicket.os_number || ''}.`
+                    );
+                    this.openSchedulePanel(
+                        'repair',
+                        firstTicket.technician_id,
+                        firstTicket,
+                        'inventoryReceiptRepair'
+                    );
+                } else {
+                    const released = readyTickets.length;
+                    this.notify(
+                        released
+                            ? `Recebimento concluído. ${released} OS liberada(s) para reparo.`
+                            : 'Recebimento registrado.'
+                    );
+                }
             } catch (error) { this.notify('Erro ao receber compra: ' + error.message, 'error'); }
             finally { this.loading = false; }
         },
@@ -3946,6 +3983,18 @@ function app() {
                             this.notify('O reparo foi agendado, mas a decisão da garantia não foi concluída. Abra a OS e tente finalizar a análise novamente.', 'error');
                             this.closeSchedulePanel();
                             return;
+                        }
+                    } else if (afterSave === 'inventoryReceiptRepair') {
+                        this.notify("Reparo agendado e chamado enviado para reparo.");
+                        await this.refreshPostMutation(true);
+                        const nextTicket = this.inventoryRepairScheduleQueue.shift() || null;
+                        if (nextTicket) {
+                            setTimeout(() => this.openSchedulePanel(
+                                'repair',
+                                nextTicket.technician_id,
+                                nextTicket,
+                                'inventoryReceiptRepair'
+                            ), 0);
                         }
                     } else {
                         this.notify("Agendamento criado com sucesso!");

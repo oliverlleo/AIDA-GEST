@@ -18,6 +18,7 @@ const locationImagesRollback = read('rollback_inventory_location_and_images.sql'
 const schemeManagementRollback = read('rollback_inventory_location_scheme_management.sql');
 const locationGroups = read('inventory_location_groups.sql');
 const directReceipt = read('inventory_direct_ticket_receipt.sql');
+const receiptScheduling = read('inventory_receipt_repair_scheduling.sql');
 
 test('inventory tables are tenant-bound, protected by RLS and closed to direct Data API writes', () => {
     const tables = [
@@ -121,4 +122,21 @@ test('direct-to-ticket receipt does not require a user location and preserves st
     assert.match(directReceipt, /revoke all on function private\.inventory_get_direct_ticket_location\(uuid\)[\s\S]*from public, anon, authenticated/i);
     assert.match(directReceipt, /get_current_actor_context\(\)/i);
     assert.match(directReceipt, /set search_path = ''/i);
+});
+
+test('new receipt waits for repair scheduling while a paused repair resumes directly', () => {
+    assert.match(receiptScheduling, /v_schedule_enabled[\s\S]*not v_has_repair_appointment[\s\S]*not v_is_resuming/i);
+    assert.match(receiptScheduling, /'schedule_required', true/i);
+    assert.match(receiptScheduling, /status = 'Compra Peca'[\s\S]*parts_status = 'Recebido'/i);
+    assert.match(receiptScheduling, /when v_is_resuming then now\(\)/i);
+    assert.match(receiptScheduling, /trg_inventory_release_after_repair_schedule/i);
+    assert.match(receiptScheduling, /new\.appointment_type <> 'repair'/i);
+});
+
+test('inventory scheduling bridge remains private and actor-bound', () => {
+    assert.match(receiptScheduling, /get_current_actor_context\(\)/i);
+    assert.match(receiptScheduling, /v_ctx\.workspace_id is distinct from p_workspace_id/i);
+    assert.match(receiptScheduling, /set search_path = ''/i);
+    assert.match(receiptScheduling, /revoke all on function private\.inventory_resume_ready_ticket\(uuid, uuid\)[\s\S]*from public, anon, authenticated, service_role/i);
+    assert.match(receiptScheduling, /revoke all on function private\.inventory_release_ticket_after_repair_schedule\(\)[\s\S]*from public, anon, authenticated, service_role/i);
 });

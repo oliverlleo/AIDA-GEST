@@ -113,3 +113,12 @@ test('purchase receipt can go directly to its OS without a stock address', () =>
     assert.match(html, /item\.destination === 'direct_ticket'/);
     assert.match(main, /direct_quantity_available/);
 });
+
+test('receiving new ticket parts opens repair scheduling and supports consecutive tickets', () => {
+    assert.match(main, /inventoryRepairScheduleQueue:\s*\[\]/);
+    assert.match(main, /ticket\.status === 'Compra Peca'/);
+    assert.match(main, /ticket\.parts_status === 'Recebido'/);
+    assert.match(main, /openSchedulePanel\([\s\S]*'inventoryReceiptRepair'/);
+    assert.match(main, /afterSave === 'inventoryReceiptRepair'/);
+    assert.match(main, /Reparo agendado e chamado enviado para reparo/);
+});
