@@ -541,6 +541,7 @@ function app() {
         activeTicketId: null,
         activeModalContext: { name: null, ticketId: null },
         selectedTicket: null, // Kept primarily for Alpine.js UI bindings
+        ticketModalRefreshRequestId: 0,
         ticketLogs: [],
         dashboardLogs: [],
         logViewMode: 'timeline',
@@ -5152,6 +5153,59 @@ function app() {
             }
         },
 
+        async refreshOpenTicketModal(ticketId = this.selectedTicket?.id) {
+            if (!ticketId || !this.modals.viewTicket || this.selectedTicket?.id !== ticketId) return null;
+
+            const requestId = ++this.ticketModalRefreshRequestId;
+            const inventorySummary = this.selectedTicket?.inventory_summary;
+            try {
+                const refreshedTicket = await window.AIDATicketQueryService.fetchTicketDetails({
+                    state: this,
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, ticketId);
+
+                if (requestId !== this.ticketModalRefreshRequestId
+                    || !this.modals.viewTicket
+                    || this.selectedTicket?.id !== ticketId
+                    || !refreshedTicket) {
+                    return null;
+                }
+
+                const hydratedTicket = inventorySummary
+                    ? { ...refreshedTicket, inventory_summary: inventorySummary }
+                    : refreshedTicket;
+                if (!Array.isArray(hydratedTicket.checklist_data)) hydratedTicket.checklist_data = [];
+                if (!Array.isArray(hydratedTicket.checklist_final_data)) hydratedTicket.checklist_final_data = [];
+                if (!Array.isArray(hydratedTicket.photos_urls)) hydratedTicket.photos_urls = [];
+
+                this.selectedTicket = hydratedTicket;
+
+                const ticketIndex = this.tickets.findIndex(ticket => ticket.id === ticketId);
+                if (ticketIndex >= 0) {
+                    this.tickets[ticketIndex] = { ...this.tickets[ticketIndex], ...hydratedTicket };
+                }
+                const techIndex = this.techTickets.findIndex(ticket => ticket.id === ticketId);
+                if (techIndex >= 0) {
+                    this.techTickets[techIndex] = { ...this.techTickets[techIndex], ...hydratedTicket };
+                }
+
+                await this.fetchTicketAppointments(ticketId);
+                if (this.modals.logs) {
+                    this.ticketLogs = await this.fetchTicketLogs(ticketId);
+                }
+                if (hydratedTicket.status === 'Aprovacao') {
+                    this.loadTicketInventoryBudgetCosts(hydratedTicket);
+                } else if (this.inventory.budgetCosts.ticketId === ticketId) {
+                    this.inventory.budgetCosts = { ticketId: '', items: [], total: 0, missingCostCount: 0, loading: false };
+                }
+
+                return hydratedTicket;
+            } catch (error) {
+                console.warn('Não foi possível atualizar a OS aberta após a ação:', error);
+                return null;
+            }
+        },
+
         async viewTicketDetails(ticket) {
             if (!ticket?.id) return;
 
@@ -5523,6 +5577,12 @@ function app() {
                  } else {
                      await this.fetchTickets();
                  }
+            }
+
+            // Cards e modal possuem cargas diferentes. Reidrata somente a OS
+            // aberta para refletir alterações feitas por RPCs e gatilhos.
+            if (this.modals.viewTicket && this.selectedTicket?.id) {
+                await this.refreshOpenTicketModal(this.selectedTicket.id);
             }
 
             // Atualiza métricas ou alertas complementares dependendo da view
