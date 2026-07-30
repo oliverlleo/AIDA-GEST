@@ -2582,7 +2582,7 @@ function app() {
                         supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                     }, readyTicket.ticket_id);
                     if (ticket
-                        && ticket.status === 'Compra Peca'
+                        && ticket.status === 'Andamento Reparo'
                         && ticket.parts_status === 'Recebido'
                         && !ticket.repair_scheduled_at
                         && this.isAppointmentTypeEnabled('repair')) {

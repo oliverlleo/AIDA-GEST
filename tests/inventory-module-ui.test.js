@@ -116,7 +116,7 @@ test('purchase receipt can go directly to its OS without a stock address', () =>
 
 test('receiving new ticket parts opens repair scheduling and supports consecutive tickets', () => {
     assert.match(main, /inventoryRepairScheduleQueue:\s*\[\]/);
-    assert.match(main, /ticket\.status === 'Compra Peca'/);
+    assert.match(main, /ticket\.status === 'Andamento Reparo'/);
     assert.match(main, /ticket\.parts_status === 'Recebido'/);
     assert.match(main, /openSchedulePanel\([\s\S]*'inventoryReceiptRepair'/);
     assert.match(main, /afterSave === 'inventoryReceiptRepair'/);

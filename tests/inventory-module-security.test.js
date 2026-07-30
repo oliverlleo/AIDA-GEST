@@ -124,11 +124,13 @@ test('direct-to-ticket receipt does not require a user location and preserves st
     assert.match(directReceipt, /set search_path = ''/i);
 });
 
-test('new receipt waits for repair scheduling while a paused repair resumes directly', () => {
-    assert.match(receiptScheduling, /v_schedule_enabled[\s\S]*not v_has_repair_appointment[\s\S]*not v_is_resuming/i);
-    assert.match(receiptScheduling, /'schedule_required', true/i);
-    assert.match(receiptScheduling, /status = 'Compra Peca'[\s\S]*parts_status = 'Recebido'/i);
+test('new receipt enters repair even when scheduling is still pending, while a paused repair resumes directly', () => {
+    assert.match(receiptScheduling, /v_schedule_required[\s\S]*v_schedule_enabled[\s\S]*not v_has_repair_appointment[\s\S]*not v_is_resuming/i);
+    assert.match(receiptScheduling, /'schedule_required', v_schedule_required/i);
+    assert.match(receiptScheduling, /status = 'Andamento Reparo'[\s\S]*parts_status = 'Recebido'/i);
     assert.match(receiptScheduling, /when v_is_resuming then now\(\)/i);
+    assert.match(receiptScheduling, /A OS foi enviada para \*\*Em Reparo\*\* e aguarda agendamento/i);
+    assert.match(receiptScheduling, /with moved as \([\s\S]*set status = 'Andamento Reparo'[\s\S]*t\.status = 'Compra Peca'[\s\S]*t\.parts_status = 'Recebido'/i);
     assert.match(receiptScheduling, /trg_inventory_release_after_repair_schedule/i);
     assert.match(receiptScheduling, /new\.appointment_type <> 'repair'/i);
 });

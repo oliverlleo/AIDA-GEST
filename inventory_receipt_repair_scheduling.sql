@@ -18,6 +18,7 @@ declare
     v_schedule_enabled boolean;
     v_has_repair_appointment boolean;
     v_is_resuming boolean;
+    v_schedule_required boolean;
 begin
     select * into v_ctx from public.get_current_actor_context();
 
@@ -85,37 +86,10 @@ begin
     )
     into v_has_repair_appointment;
 
-    if v_schedule_enabled
-       and not v_has_repair_appointment
-       and not v_is_resuming then
-        update public.tickets
-        set status = 'Compra Peca',
-            parts_status = 'Recebido',
-            parts_received_at = coalesce(parts_received_at, now()),
-            repair_paused_at = null,
-            updated_at = now()
-        where workspace_id = p_workspace_id
-          and id = p_ticket_id;
-
-        insert into public.ticket_logs(ticket_id, action, details, user_name)
-        values (
-            p_ticket_id,
-            'Recebeu Peças',
-            format(
-                'Todas as peças da **OS %s** foram recebidas e reservadas por **%s**. O reparo aguarda agendamento.',
-                coalesce(v_ticket.os_number, 'não informada'),
-                v_ctx.actor_name
-            ),
-            v_ctx.actor_name
-        );
-
-        return jsonb_build_object(
-            'ready', true,
-            'status', 'Compra Peca',
-            'resumed', false,
-            'schedule_required', true
-        );
-    end if;
+    v_schedule_required :=
+        v_schedule_enabled
+        and not v_has_repair_appointment
+        and not v_is_resuming;
 
     update public.tickets
     set status = 'Andamento Reparo',
@@ -144,12 +118,15 @@ begin
         p_ticket_id,
         case
             when v_is_resuming then 'Retomou Reparo após Compra'
+            when v_schedule_required then 'Recebeu Peças'
             else 'Liberou Reparo após Agendamento'
         end,
         format(
             case
                 when v_is_resuming then
                     'Todas as peças da **OS %s** foram recebidas e reservadas. O reparo foi retomado por **%s**.%s'
+                when v_schedule_required then
+                    'Todas as peças da **OS %s** foram recebidas e reservadas por **%s**. A OS foi enviada para **Em Reparo** e aguarda agendamento.%s'
                 else
                     'O reparo da **OS %s** foi agendado e liberado por **%s**.%s'
             end,
@@ -170,7 +147,7 @@ begin
         'ready', true,
         'status', 'Andamento Reparo',
         'resumed', v_is_resuming,
-        'schedule_required', false
+        'schedule_required', v_schedule_required
     );
 end;
 $$;
@@ -232,6 +209,46 @@ $$;
 
 revoke all on function private.inventory_release_ticket_after_repair_schedule()
 from public, anon, authenticated, service_role;
+
+-- Corrige OS recebidas por versões anteriores: elas pertencem ao quadro
+-- Em Reparo mesmo quando o usuário fecha o painel sem escolher uma data.
+with moved as (
+    update public.tickets t
+    set status = 'Andamento Reparo',
+        updated_at = now()
+    from public.workspaces w
+    where w.id = t.workspace_id
+      and t.deleted_at is null
+      and t.status = 'Compra Peca'
+      and t.parts_status = 'Recebido'
+      and t.repair_paused_at is null
+      and public.aida_config_bool(
+          coalesce(w.tracker_config, '{}'::jsonb),
+          'modules',
+          'inventory',
+          false
+      )
+      and not exists (
+          select 1
+          from public.ticket_part_items tp
+          where tp.workspace_id = t.workspace_id
+            and tp.ticket_id = t.id
+            and tp.status in (
+                'needed', 'pending_approval', 'partial', 'purchase_pending'
+            )
+      )
+    returning t.id, t.os_number
+)
+insert into public.ticket_logs(ticket_id, action, details, user_name)
+select
+    moved.id,
+    'Liberou Reparo após Recebimento',
+    format(
+        'A **OS %s** foi movida automaticamente para **Em Reparo** após o recebimento integral das peças. O cronômetro não foi iniciado.',
+        coalesce(moved.os_number, 'não informada')
+    ),
+    'Sistema'
+from moved;
 
 drop trigger if exists trg_inventory_release_after_repair_schedule
 on public.ticket_appointments;
