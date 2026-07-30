@@ -31,7 +31,8 @@
         agenda: true,
         suppliers: true,
         manager_dashboard: true,
-        public_tracker: true
+        public_tracker: true,
+        inventory: false
     });
 
     const DEFAULT_OVERVIEW = Object.freeze({
@@ -105,6 +106,7 @@
         const modules = customization.modules
             ? { ...DEFAULT_MODULES, ...(config.modules || {}) }
             : { ...DEFAULT_MODULES };
+        if (workflow.parts_control === false) modules.inventory = false;
         const overviewSections = customization.overview
             ? { ...DEFAULT_OVERVIEW, ...(config.overview_sections || {}) }
             : { ...DEFAULT_OVERVIEW };
@@ -127,6 +129,7 @@
     function moduleEnabled(config, key) {
         const normalized = normalize(config);
         if (key === 'suppliers' && normalized.workflow.parts_control === false) return false;
+        if (key === 'inventory' && normalized.workflow.parts_control === false) return false;
         return normalized.modules[key] !== false;
     }
 

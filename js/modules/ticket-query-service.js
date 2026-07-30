@@ -3,6 +3,10 @@
 // Parte da infraestrutura de módulos
 
 window.AIDATicketQueryService = {
+    async hydrateTickets(deps, tickets) {
+        const warrantyHydrated = await window.AIDAWarrantyService.hydrateTickets(deps, tickets);
+        return await window.AIDAInventoryQueryService.hydrateTickets(deps, warrantyHydrated);
+    },
     getTicketCardSortOptions(state) {
         return {
             p_use_priority: state.isPriorityRequestEnabled(),
@@ -60,7 +64,7 @@ window.AIDATicketQueryService = {
         const allItems = responses.flatMap(({ response }) =>
             Array.isArray(response.items) ? response.items : []
         );
-        const hydratedItems = await window.AIDAWarrantyService.hydrateTickets(deps, allItems);
+        const hydratedItems = await this.hydrateTickets(deps, allItems);
         const hydratedById = new Map(hydratedItems.map(ticket => [ticket.id, ticket]));
 
         const columns = {};
@@ -84,7 +88,7 @@ window.AIDATicketQueryService = {
             'POST',
             this.buildTicketCardPayload(state, status, cursor)
         ) || {};
-        response.items = await window.AIDAWarrantyService.hydrateTickets(
+        response.items = await this.hydrateTickets(
             deps,
             Array.isArray(response?.items) ? response.items : []
         );
@@ -112,7 +116,7 @@ window.AIDATicketQueryService = {
 
             return {
                 mode: 'test_bench_page',
-                data: await window.AIDAWarrantyService.hydrateTickets(
+                data: await this.hydrateTickets(
                     deps,
                     Array.isArray(response?.items) ? response.items : []
                 ),
@@ -142,7 +146,7 @@ window.AIDATicketQueryService = {
             const response = await supabaseFetch('rpc/get_operational_ticket_page', 'POST', payload);
             return {
                 mode: 'operational_rpc',
-                data: await window.AIDAWarrantyService.hydrateTickets(deps, response.items || []),
+                data: await this.hydrateTickets(deps, response.items || []),
                 counts: response.counts || null,
                 total: response.total,
                 hasMore: Boolean(response.has_more),

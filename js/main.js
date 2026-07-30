@@ -207,7 +207,8 @@ function app() {
                 agenda: true,
                 suppliers: true,
                 manager_dashboard: true,
-                public_tracker: true
+                public_tracker: true,
+                inventory: false
             },
             overview_sections: {
                 awaiting_start: true,
@@ -278,6 +279,7 @@ function app() {
         },
         ticketCardPageSize: 20,
         ticketColumnPagination: {},
+        ticketFetchRequestId: 0,
         testerBenchPagination: {
             total: 0,
             hasMore: false,
@@ -410,7 +412,8 @@ function app() {
             kanban: false,
             tech_orders: false,
             tester_bench: false,
-            customers: false
+            customers: false,
+            inventory: false
         },
 
         // Daily Report State
@@ -435,7 +438,7 @@ function app() {
             defects: [], priority: 'Normal', contact: '',
             deadline: '', analysis_deadline: '', device_condition: '',
             technician_id: '',
-            budget_approved: false, approved_route: 'repair', parts_needed: '',
+            budget_approved: false, approved_route: 'repair', parts_needed: '', inventory_parts: [],
             warranty_claim: false, warranty_origin_ticket_id: null, warranty_source_claim_id: null,
             is_outsourced: false, outsourced_company_id: '', // New fields
             checklist: [], checklist_final: [], photos: [], notes: ''
@@ -499,6 +502,32 @@ function app() {
             warrantyEvidence: ''
         },
         pauseRepairForPartsForm: { ticketId: '', parts: '' },
+        inventory: {
+            dashboard: { active_items: 0, tracked_items: 0, low_stock_items: 0, out_of_stock_items: 0, estimated_stock_value: 0, open_purchases: 0, pending_ticket_parts: 0 },
+            items: [], hasMore: false, nextCursor: null, loading: false, requestId: 0,
+            search: '', searchTimer: null, category: '', stockFilter: 'all',
+            itemForm: window.AIDAInventoryCatalogService.emptyItem(),
+            locationForm: window.AIDAInventoryCatalogService.emptyLocation(),
+            locationGroupForm: { id: null, name: '', kind: 'shelf', description: '' },
+            locationBatchForm: { group_id: '', names_text: '' },
+            selectedLocationGroupId: '',
+            schemeForm: { id: null, name: '', mode: 'structured', component_labels: [] },
+            groups: [], locations: [], schemes: [], pendingParts: [], purchases: [], ticketPurchases: [], movements: [], movementCursor: null, movementsHasMore: false,
+            itemDetail: null,
+            adjustForm: { mode: 'entry', item_id: '', item_name: '', location_id: '', physical_quantity: 0, quantity: 1, unit_cost: '', reason: '' },
+            adjustItemPicker: { open: false, search: '', items: [], hasMore: false, nextCursor: null, loading: false, requestId: 0, searchTimer: null },
+            transferForm: { item_id: '', from_location_id: '', to_location_id: '', quantity: 1, reason: '' },
+            purchaseForm: { supplier_id: '', urgent: false, notes: '', items: [] },
+            receiptForm: { purchaseId: '', supplierName: '', items: [], confirmAllocation: true },
+            ticketPartsDetail: { ticketId: '', items: [], loading: false },
+            reservationViewer: { item: null, items: [], total: 0, hasMore: false, nextCursor: null, loading: false, requestId: 0 },
+            budgetCosts: { ticketId: '', items: [], total: 0, missingCostCount: 0, loading: false },
+            returnForm: { reservation_id: '', item_name: '', max_quantity: 0, quantity: 0, reason: '' },
+            cancelPurchaseForm: { purchaseId: '', reason: '' },
+            itemLocationPicker: { open: false, search: '', groupId: '', visibleLimit: 24 },
+            partRequest: { ticketId: '', stage: 'analysis', allocateNow: false, afterSubmit: null, search: '', items: [], catalog: [], hasMore: false, nextCursor: null, loading: false },
+            repairUsage: { loading: false, items: [], hasStructuredParts: false }
+        },
         outcomeMode: '',
         showTestFailureForm: false,
         testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '', action: '' }, // action: 'repair' or 'return'
@@ -627,13 +656,14 @@ function app() {
         schedulePanelTicket: null,
         schedulePanelTechnicianId: null,
         schedulePanelAfterSave: null,
+        inventoryRepairScheduleQueue: [],
         scheduleAvailabilityLoading: false,
         scheduleAvailabilityData: null,
         selectedAnalysisAppointment: null,
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryLocationGroup: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryTicketPurchases: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReservations: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
         bypassAnalysisCheck: false,
         bypassRepairCheck: false,
 
@@ -768,6 +798,28 @@ function app() {
             return window.AIDAConfigHelpers.isPartsControlEnabled(this.trackerConfig);
         },
 
+        isInventoryEnabled() {
+            return window.AIDAConfigHelpers.isInventoryEnabled(this.trackerConfig);
+        },
+
+        canViewInventoryCosts() {
+            return this.isInventoryEnabled() && (this.hasRole('admin') || this.hasRole('atendente'));
+        },
+
+        formatCurrency(value) {
+            const amount = Number(value);
+            return Number.isFinite(amount)
+                ? amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                : '—';
+        },
+
+        inventoryCostSourceLabel(source) {
+            if (source === 'current_purchase') return 'Compra registrada';
+            if (source === 'last_purchase') return 'Última compra';
+            if (source === 'last_cost') return 'Último custo';
+            return 'Sem histórico';
+        },
+
         isWarrantyEnabled() {
             return window.AIDAConfigHelpers.isWarrantyEnabled(this.trackerConfig);
         },
@@ -881,7 +933,7 @@ function app() {
                     this.fetchDeviceModels(),
                     this.fetchDefectOptions(),
                     this.fetchOutsourcedCompanies(),
-                    this.isModuleEnabled('suppliers') ? this.fetchFornecedores() : Promise.resolve()
+                    (this.isModuleEnabled('suppliers') || this.isInventoryEnabled()) ? this.fetchFornecedores() : Promise.resolve()
                 ]);
 
                 // Initial global logs load
@@ -908,7 +960,8 @@ function app() {
                 (currentView === 'schedule_management' && !this.isModuleEnabled('agenda'))
                 || (currentView === 'customers' && (!this.isModuleEnabled('customers') || !(this.hasRole('admin') || this.hasRole('atendente'))))
                 || (currentView === 'admin_dashboard' && !this.isModuleEnabled('manager_dashboard'))
-                || (currentView === 'tracker_settings' && !this.isModuleEnabled('public_tracker'));
+                || (currentView === 'tracker_settings' && !this.isModuleEnabled('public_tracker'))
+                || (currentView === 'inventory' && (!this.isInventoryEnabled() || !(this.hasRole('admin') || this.hasRole('atendente'))));
             if (disabledView) {
                 currentView = 'dashboard';
                 this.view = 'dashboard';
@@ -967,6 +1020,8 @@ function app() {
                     await this.fetchKanbanOperationalCounts();
                 } else if (currentView === 'customers') {
                     await this.fetchCustomerPage(true);
+                } else if (currentView === 'inventory') {
+                    await this.loadInventory(true);
                 } else {
                     // Outras views (tech_orders, tester_bench, etc.)
                     await this.fetchTickets();
@@ -1929,6 +1984,9 @@ function app() {
 
         handleSearchInput() {
             if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+            // Invalida imediatamente qualquer resposta iniciada com o texto anterior.
+            // A busca nova começa após o debounce sem deixar a antiga apagar os cards.
+            this.ticketFetchRequestId++;
             this.searchDebounceTimer = setTimeout(() => {
                 this.ticketPagination.page = 0; // Reset to first page
                 // Synchronize search for operational filters based on view
@@ -1939,7 +1997,7 @@ function app() {
                 }
                 if (this.view === 'dashboard') {
                     this.fetchHomeOperationalQueue();
-                } else {
+                } else if (['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'].includes(this.view)) {
                     this.fetchTickets();
                 }
                 if (this.view === 'dashboard' || this.view === 'admin_dashboard') {
@@ -1982,12 +2040,15 @@ function app() {
             const column = this.ticketColumnPagination?.[status];
             if (!column?.hasMore || column.loading) return;
 
+            const requestId = this.ticketFetchRequestId;
             column.loading = true;
             try {
                 const response = await window.AIDATicketQueryService.fetchTicketCardColumnData({
                     state: this,
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 }, status, column.nextCursor);
+
+                if (requestId !== this.ticketFetchRequestId) return;
 
                 const incoming = Array.isArray(response?.items) ? response.items : [];
                 const existingIds = new Set(this.tickets.map(ticket => ticket.id));
@@ -2001,6 +2062,7 @@ function app() {
                     this.techTickets = this.sortBenchTickets(this.tickets);
                 }
             } catch (error) {
+                if (requestId !== this.ticketFetchRequestId) return;
                 console.error('Failed to load more OS cards:', error);
                 this.notify('Erro ao carregar mais OS.', 'error');
             } finally {
@@ -2065,6 +2127,983 @@ function app() {
             });
         },
 
+        async loadInventory(reset = false) {
+            if (!this.isInventoryEnabled() || !(this.hasRole('admin') || this.hasRole('atendente'))) return;
+            if (this.inventory.loading) return;
+            this.inventory.loading = true;
+            const requestId = ++this.inventory.requestId;
+            try {
+                const [dashboard, page] = await Promise.all([
+                    window.AIDAInventoryQueryService.fetchDashboard({
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    }),
+                    window.AIDAInventoryQueryService.fetchItems({
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    }, {
+                        search: this.inventory.search,
+                        category: this.inventory.category,
+                        stockFilter: this.inventory.stockFilter,
+                        limit: 25,
+                        cursor: reset ? null : this.inventory.nextCursor
+                    })
+                ]);
+                if (requestId !== this.inventory.requestId) return;
+                this.inventory.dashboard = dashboard;
+                const incoming = Array.isArray(page.items) ? page.items : [];
+                if (reset) {
+                    this.inventory.items = incoming;
+                } else {
+                    const existing = new Set(this.inventory.items.map(item => item.id));
+                    this.inventory.items = [
+                        ...this.inventory.items,
+                        ...incoming.filter(item => !existing.has(item.id))
+                    ];
+                }
+                this.inventory.hasMore = Boolean(page.has_more);
+                this.inventory.nextCursor = page.next_cursor || null;
+                if (reset) await this.loadInventoryWorkspaceData();
+            } catch (error) {
+                console.error('Inventory load failed:', error);
+                this.notify('Erro ao carregar o estoque: ' + error.message, 'error');
+            } finally {
+                if (requestId === this.inventory.requestId) this.inventory.loading = false;
+            }
+        },
+
+        scheduleInventorySearch() {
+            clearTimeout(this.inventory.searchTimer);
+            this.inventory.searchTimer = setTimeout(() => this.loadInventory(true), 300);
+        },
+
+        async loadMoreInventory() {
+            if (!this.inventory.hasMore || this.inventory.loading) return;
+            await this.loadInventory(false);
+        },
+        async loadInventoryWorkspaceData() {
+            const data = await window.AIDAInventoryManagementService.loadWorkspaceData({
+                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            });
+            this.inventory.groups = data.groups || [];
+            this.inventory.locations = data.locations;
+            this.inventory.schemes = data.schemes;
+            this.inventory.pendingParts = data.pendingParts;
+            this.inventory.purchases = data.purchases;
+        },
+
+        openInventorySchemeModal() {
+            this.inventory.schemeForm = { id: null, name: '', mode: 'structured', component_labels: [] };
+            this.modals.inventoryScheme = true;
+        },
+
+        addInventorySchemePart() {
+            this.inventory.schemeForm.component_labels.push({ type: 'letters', label: '', value: '', options_text: '' });
+        },
+
+        removeInventorySchemePart(index) {
+            this.inventory.schemeForm.component_labels.splice(index, 1);
+        },
+
+        async saveInventoryScheme() {
+            this.loading = true;
+            try {
+                await window.AIDAInventoryCatalogService.saveLocationScheme({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.schemeForm);
+                this.modals.inventoryScheme = false;
+                await this.loadInventoryWorkspaceData();
+                this.notify('Padrão de localização salvo.');
+            } catch (error) { this.notify('Erro ao salvar padrão: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        getInventoryLocationScheme() {
+            return this.inventory.schemes.find(scheme => scheme.id === this.inventory.locationForm.scheme_id) || null;
+        },
+
+        selectedInventoryLocationGroup() {
+            return this.inventory.groups.find(group => group.id === this.inventory.selectedLocationGroupId) || null;
+        },
+
+        inventoryLocationsForGroup(groupId, includeArchived = true) {
+            return this.inventory.locations.filter(location => location.group_id === groupId && (includeArchived || location.active));
+        },
+
+        inventoryLocationLabel(location) {
+            if (!location) return '';
+            return location.display_address
+                || (location.group_name ? `${location.group_name} · ${location.name}` : '')
+                || location.normalized_address
+                || location.name
+                || '';
+        },
+
+        resetInventoryItemLocationPicker() {
+            this.inventory.itemLocationPicker = { open: false, search: '', groupId: '', visibleLimit: 24 };
+        },
+
+        inventoryItemLocationResults() {
+            const search = String(this.inventory.itemLocationPicker.search || '').trim().toLocaleLowerCase('pt-BR');
+            const groupId = this.inventory.itemLocationPicker.groupId;
+            return (this.inventory.locations || []).filter(location => {
+                if (!location.active) return false;
+                if (groupId && location.group_id !== groupId) return false;
+                if (!search) return true;
+                return this.inventoryLocationLabel(location).toLocaleLowerCase('pt-BR').includes(search);
+            });
+        },
+
+        visibleInventoryItemLocations() {
+            return this.inventoryItemLocationResults().slice(0, this.inventory.itemLocationPicker.visibleLimit);
+        },
+
+        selectedInventoryItemLocations() {
+            const selectedIds = new Set(this.inventory.itemForm.location_ids || []);
+            return (this.inventory.locations || []).filter(location => selectedIds.has(location.id));
+        },
+
+        setInventoryItemLocation(location, selected) {
+            const ids = new Set(this.inventory.itemForm.location_ids || []);
+            if (selected) ids.add(location.id);
+            else ids.delete(location.id);
+            this.inventory.itemForm.location_ids = [...ids];
+            if (!ids.has(this.inventory.itemForm.default_location_id)) {
+                this.inventory.itemForm.default_location_id = '';
+            }
+        },
+
+        removeInventoryItemLocation(locationId) {
+            const location = (this.inventory.locations || []).find(item => item.id === locationId);
+            if (location) this.setInventoryItemLocation(location, false);
+        },
+
+        resetInventoryItemLocationResults() {
+            this.inventory.itemLocationPicker.visibleLimit = 24;
+        },
+
+        inventoryLocationGroupKindLabel(kind) {
+            return ({ shelf: 'Estante', cabinet: 'Armário', drawer: 'Gaveteiro', room: 'Área / Sala', other: 'Outro' })[kind] || 'Outro';
+        },
+
+        inventoryLocationGroupIcon(kind) {
+            return ({ shelf: 'fa-solid fa-layer-group', cabinet: 'fa-solid fa-door-closed', drawer: 'fa-solid fa-boxes-stacked', room: 'fa-solid fa-warehouse', other: 'fa-solid fa-location-dot' })[kind] || 'fa-solid fa-location-dot';
+        },
+
+        selectInventoryLocationGroup(group) {
+            this.inventory.selectedLocationGroupId = group?.id || '';
+            this.inventory.locationForm = { ...window.AIDAInventoryCatalogService.emptyLocation(), group_id: group?.id || '' };
+            this.inventory.locationBatchForm = { group_id: group?.id || '', names_text: '' };
+        },
+
+        openInventoryLocationGroupModal(group = null) {
+            this.inventory.locationGroupForm = group
+                ? { id: group.id, name: group.name, kind: group.kind, description: group.description || '' }
+                : { id: null, name: '', kind: 'shelf', description: '' };
+            this.modals.inventoryLocationGroup = true;
+        },
+
+        async saveInventoryLocationGroup() {
+            this.loading = true;
+            try {
+                const groupId = await window.AIDAInventoryCatalogService.saveLocationGroup({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.locationGroupForm);
+                this.modals.inventoryLocationGroup = false;
+                await this.loadInventoryWorkspaceData();
+                const group = this.inventory.groups.find(item => item.id === groupId);
+                this.selectInventoryLocationGroup(group || null);
+                this.notify(this.inventory.locationGroupForm.id ? 'Organizador atualizado.' : 'Organizador criado. Agora adicione os endereços internos.');
+            } catch (error) { this.notify('Erro ao salvar organizador: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        async manageInventoryLocationGroup(group, action) {
+            if (action === 'delete' && !confirm(`Excluir definitivamente "${group.name}"?`)) return;
+            try {
+                await window.AIDAInventoryCatalogService.manageLocationGroup({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, group.id, action);
+                await this.loadInventoryWorkspaceData();
+                const next = this.inventory.groups.find(item => item.id === group.id)
+                    || this.inventory.groups.find(item => item.active)
+                    || this.inventory.groups[0];
+                this.selectInventoryLocationGroup(next || null);
+                this.notify(action === 'delete' ? 'Organizador excluído.' : 'Organizador atualizado.');
+            } catch (error) { this.notify('Não foi possível alterar o organizador: ' + error.message, 'error'); }
+        },
+
+        async saveInventoryLocationBatch() {
+            const form = this.inventory.locationBatchForm;
+            const names = String(form.names_text || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+            this.loading = true;
+            try {
+                const result = await window.AIDAInventoryCatalogService.saveLocationBatch({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, form.group_id, names);
+                form.names_text = '';
+                await this.loadInventoryWorkspaceData();
+                this.notify(`${Number(result?.created || 0)} endereço(s) adicionado(s).${Number(result?.skipped || 0) ? ` ${result.skipped} já existia(m).` : ''}`);
+            } catch (error) { this.notify('Erro ao adicionar endereços: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        resetInventoryLocationComponents() {
+            this.inventory.locationForm.address_components = {};
+        },
+        inventoryLocationBatchCount() { const f = this.inventory.locationBatchForm; return Math.max(0, Number(f.unit_end)-Number(f.unit_start)+1) * Math.max(0, String(f.level_end).toUpperCase().charCodeAt(0)-String(f.level_start).toUpperCase().charCodeAt(0)+1) * Math.max(0, Number(f.position_end)-Number(f.position_start)+1); },
+
+        editInventoryLocation(location) {
+            this.inventory.locationForm = { ...window.AIDAInventoryCatalogService.emptyLocation(), id: location.id, group_id: location.group_id, name: location.name, normalized_address: location.normalized_address };
+        },
+
+        resetInventoryLocationForm() {
+            this.inventory.locationForm = { ...window.AIDAInventoryCatalogService.emptyLocation(), group_id: this.inventory.selectedLocationGroupId || '' };
+        },
+
+        async generateInventoryLocations() {
+            this.loading = true;
+            try {
+                const result = await window.AIDAInventoryCatalogService.generateLocations({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.locationBatchForm);
+                await this.loadInventoryWorkspaceData();
+                const skipped = Number(result?.skipped || 0);
+                this.notify(`${Number(result?.created || 0)} endereço(s) criado(s).${skipped ? ` ${skipped} já existia(m).` : ''}`);
+            } catch (error) {
+                this.notify('Erro ao gerar endereços: ' + error.message, 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async manageInventoryLocation(location, action) {
+            if (action === 'delete' && !confirm(`Excluir definitivamente "${location.normalized_address || location.name}"?`)) return;
+            try {
+                await window.AIDAInventoryCatalogService.manageLocation({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, location.id, action);
+                await this.loadInventoryWorkspaceData();
+                this.notify('Localização atualizada.');
+            } catch (error) {
+                this.notify('Não foi possível alterar: ' + error.message, 'error');
+            }
+        },
+
+        async manageInventoryLocationScheme(scheme, action) {
+            if (action === 'delete' && !confirm(`Excluir definitivamente o padrão "${scheme.name}"?`)) return;
+            try {
+                await window.AIDAInventoryCatalogService.manageLocationScheme({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, scheme.id, action);
+                await this.loadInventoryWorkspaceData();
+                this.notify('Padrão de localização atualizado.');
+            } catch (error) {
+                this.notify('Não foi possível alterar o padrão: ' + error.message, 'error');
+            }
+        },
+
+        async openInventoryLocationModal() {
+            await this.loadInventoryWorkspaceData();
+            const selected = this.inventory.groups.find(group => group.id === this.inventory.selectedLocationGroupId)
+                || this.inventory.groups.find(group => group.active)
+                || this.inventory.groups[0];
+            this.selectInventoryLocationGroup(selected || null);
+            this.modals.inventoryLocation = true;
+        },
+
+        async saveInventoryLocation() {
+            this.loading = true;
+            try {
+                await window.AIDAInventoryCatalogService.saveLocation({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.locationForm);
+                const editing = Boolean(this.inventory.locationForm.id);
+                await this.loadInventoryWorkspaceData();
+                const selected = this.inventory.groups.find(group => group.id === this.inventory.selectedLocationGroupId);
+                this.selectInventoryLocationGroup(selected || null);
+                this.notify(editing ? 'Endereço atualizado.' : 'Endereço adicionado.');
+            } catch (error) { this.notify('Erro ao salvar endereço: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        openInventoryAdjustModal(item = null) {
+            const locationId = item?.default_location_id || this.inventory.locations.find(location => location.active)?.id || '';
+            this.inventory.adjustForm = {
+                mode: 'entry',
+                item_id: item?.id || '',
+                item_name: item?.name || '',
+                location_id: locationId,
+                physical_quantity: Number(item?.physical_quantity || 0),
+                quantity: 1,
+                unit_cost: item?.last_cost || '',
+                reason: ''
+            };
+            clearTimeout(this.inventory.adjustItemPicker.searchTimer);
+            this.inventory.adjustItemPicker = {
+                open: !item,
+                search: '',
+                items: item ? [item] : [],
+                hasMore: false,
+                nextCursor: null,
+                loading: false,
+                requestId: this.inventory.adjustItemPicker.requestId + 1,
+                searchTimer: null
+            };
+            this.modals.inventoryAdjust = true;
+            if (!item) this.loadInventoryAdjustmentItems(true);
+        },
+
+        scheduleInventoryAdjustmentItemSearch() {
+            clearTimeout(this.inventory.adjustItemPicker.searchTimer);
+            this.inventory.adjustItemPicker.searchTimer = setTimeout(
+                () => this.loadInventoryAdjustmentItems(true),
+                300
+            );
+        },
+
+        async loadInventoryAdjustmentItems(reset = false) {
+            const picker = this.inventory.adjustItemPicker;
+            if (picker.loading || (!reset && !picker.hasMore)) return;
+            picker.loading = true;
+            const requestId = reset ? ++picker.requestId : picker.requestId;
+            try {
+                const page = await window.AIDAInventoryQueryService.fetchItems({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, {
+                    search: picker.search,
+                    stockFilter: 'all',
+                    limit: 15,
+                    cursor: reset ? null : picker.nextCursor
+                });
+                if (requestId !== this.inventory.adjustItemPicker.requestId) return;
+                const incoming = Array.isArray(page?.items) ? page.items : [];
+                if (reset) {
+                    picker.items = incoming;
+                } else {
+                    const existing = new Set(picker.items.map(item => item.id));
+                    picker.items.push(...incoming.filter(item => !existing.has(item.id)));
+                }
+                picker.hasMore = Boolean(page?.has_more);
+                picker.nextCursor = page?.next_cursor || null;
+            } catch (error) {
+                this.notify('Erro ao buscar itens: ' + error.message, 'error');
+            } finally {
+                if (requestId === this.inventory.adjustItemPicker.requestId) picker.loading = false;
+            }
+        },
+
+        selectInventoryAdjustmentItem(item) {
+            const locationId = item.default_location_id || this.inventory.locations.find(location => location.active)?.id || '';
+            this.inventory.adjustForm = {
+                ...this.inventory.adjustForm,
+                item_id: item.id,
+                item_name: item.name,
+                location_id: locationId,
+                physical_quantity: Number(item.physical_quantity || 0),
+                unit_cost: item.last_cost || ''
+            };
+            this.inventory.adjustItemPicker.open = false;
+        },
+
+        changeInventoryAdjustmentItem() {
+            this.inventory.adjustForm.item_id = '';
+            this.inventory.adjustForm.item_name = '';
+            this.inventory.adjustItemPicker.open = true;
+            this.loadInventoryAdjustmentItems(true);
+        },
+
+        async submitInventoryAdjustment() {
+            this.loading = true;
+            try {
+                const deps = { supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload) };
+                if (this.inventory.adjustForm.mode === 'entry') {
+                    await window.AIDAInventoryCatalogService.registerEntry(deps, this.inventory.adjustForm);
+                } else {
+                    await window.AIDAInventoryCatalogService.adjustStock(deps, this.inventory.adjustForm);
+                }
+                this.modals.inventoryAdjust = false;
+                this.notify(this.inventory.adjustForm.mode === 'entry' ? 'Entrada registrada.' : 'Saldo ajustado e movimentação registrada.');
+                await this.loadInventory(true);
+            } catch (error) { this.notify('Erro ao ajustar saldo: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        openInventoryTransferModal(item) {
+            this.inventory.transferForm = { item_id: item.id, item_name: item.name, from_location_id: '', to_location_id: '', quantity: 1, reason: '' };
+            this.modals.inventoryTransfer = true;
+        },
+
+        async submitInventoryTransfer() {
+            this.loading = true;
+            try {
+                await window.AIDAInventoryManagementService.transfer({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.transferForm);
+                this.modals.inventoryTransfer = false;
+                this.notify('Transferência registrada.');
+                await this.loadInventory(true);
+            } catch (error) { this.notify('Erro ao transferir: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        async openInventoryMovements(item = null) {
+            this.inventory.itemDetail = item;
+            this.inventory.movements = [];
+            this.inventory.movementCursor = null;
+            this.modals.inventoryMovements = true;
+            await this.loadInventoryMovements(true);
+        },
+
+        async loadInventoryMovements(reset = false) {
+            try {
+                const page = await window.AIDAInventoryManagementService.loadMovements({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.itemDetail?.id || null, reset ? null : this.inventory.movementCursor);
+                this.inventory.movements = reset ? (page.items || []) : [...this.inventory.movements, ...(page.items || [])];
+                this.inventory.movementsHasMore = Boolean(page.has_more);
+                this.inventory.movementCursor = page.next_cursor || null;
+            } catch (error) { this.notify('Erro ao carregar movimentações: ' + error.message, 'error'); }
+        },
+
+        openInventoryPurchaseModal(ticketId = null) {
+            const pending = ticketId
+                ? this.inventory.pendingParts.filter(item => item.ticket_id === ticketId)
+                : this.inventory.pendingParts;
+            if (!pending.length) return this.notify('Esta OS não possui quantidade aguardando compra.', 'error');
+            this.inventory.purchaseForm = {
+                supplier_id: '', urgent: false, notes: '',
+                items: pending.map(item => ({
+                    ...item,
+                    selected: true,
+                    quantity: Number(item.missing_quantity),
+                    unit_cost: item.has_cost_history ? Number(item.last_cost) : ''
+                }))
+            };
+            this.modals.inventoryPurchase = true;
+        },
+
+        async openInventoryPurchasesForTicket(ticket) {
+            try {
+                await this.loadInventoryWorkspaceData();
+                const purchases = this.inventory.purchases.filter(purchase => (purchase.ticket_ids || []).includes(ticket.id));
+                if (purchases.length === 1) return await this.openInventoryReceipt(purchases[0]);
+                if (purchases.length > 1) {
+                    this.inventory.ticketPurchases = purchases;
+                    this.modals.inventoryTicketPurchases = true;
+                    return;
+                }
+                this.notify('Esta OS ainda não possui uma compra aberta para recebimento.', 'error');
+            } catch (error) { this.notify('Erro ao consultar compras da OS: ' + error.message, 'error'); }
+        },
+
+        async chooseInventoryTicketPurchase(purchase) {
+            this.modals.inventoryTicketPurchases = false;
+            await this.openInventoryReceipt(purchase);
+        },
+
+        async submitInventoryPurchase() {
+            this.loading = true;
+            try {
+                const purchaseResult = await window.AIDAInventoryManagementService.createPurchase({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.purchaseForm);
+                const affectedTicketIds = purchaseResult?.ticket_ids || [];
+                if (this.selectedTicket && affectedTicketIds.includes(this.selectedTicket.id)) {
+                    const currentSummary = this.selectedTicket.inventory_summary || {};
+                    this.selectedTicket = {
+                        ...this.selectedTicket,
+                        parts_status: 'Comprado',
+                        inventory_summary: {
+                            ...currentSummary,
+                            open_purchase_count: Number(currentSummary.open_purchase_count || 0) + 1,
+                            purchase_state: 'awaiting_receipt'
+                        }
+                    };
+                }
+                this.modals.inventoryPurchase = false;
+                this.notify('Compra estruturada registrada.');
+                await this.loadInventory(true);
+                await this.refreshPostMutation(true);
+                await this.fetchGlobalLogs();
+                if (this.selectedTicket && affectedTicketIds.includes(this.selectedTicket.id)) {
+                    await this.loadTicketInventoryBudgetCosts(this.selectedTicket);
+                }
+            } catch (error) { this.notify('Erro ao registrar compra: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        async openTicketInventoryDetails(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket) return;
+            this.inventory.ticketPartsDetail = { ticketId: ticket.id, items: [], loading: true };
+            this.modals.inventoryTicketParts = true;
+            try {
+                const result = await window.AIDAInventoryManagementService.loadTicketParts({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, ticket.id);
+                this.inventory.ticketPartsDetail.items = result.items || [];
+            } catch (error) {
+                this.modals.inventoryTicketParts = false;
+                this.notify('Erro ao carregar peças da OS: ' + error.message, 'error');
+            } finally { this.inventory.ticketPartsDetail.loading = false; }
+        },
+
+        async loadTicketInventoryBudgetCosts(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket || !this.canViewInventoryCosts() || ticket.status !== 'Aprovacao') {
+                this.inventory.budgetCosts = { ticketId: '', items: [], total: 0, missingCostCount: 0, loading: false };
+                return;
+            }
+            const requestTicketId = ticket.id;
+            this.inventory.budgetCosts = {
+                ticketId: requestTicketId,
+                items: [],
+                total: 0,
+                missingCostCount: 0,
+                loading: true
+            };
+            try {
+                const result = await window.AIDAInventoryManagementService.loadTicketBudgetCosts({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, requestTicketId);
+                if (this.inventory.budgetCosts.ticketId !== requestTicketId) return;
+                this.inventory.budgetCosts = {
+                    ticketId: requestTicketId,
+                    items: result?.items || [],
+                    total: Number(result?.total || 0),
+                    missingCostCount: Number(result?.missing_cost_count || 0),
+                    loading: false
+                };
+            } catch (error) {
+                if (this.inventory.budgetCosts.ticketId !== requestTicketId) return;
+                this.inventory.budgetCosts.loading = false;
+                this.notify('Erro ao consultar o custo das peças: ' + error.message, 'error');
+            }
+        },
+
+        openInventoryReturn(reservation) {
+            this.inventory.returnForm = {
+                reservation_id: reservation.reservation_id,
+                item_name: reservation.item_name,
+                max_quantity: Number(reservation.returnable_quantity || 0),
+                quantity: Number(reservation.returnable_quantity || 0),
+                reason: ''
+            };
+            this.modals.inventoryReturn = true;
+        },
+
+        async submitInventoryReturn() {
+            this.loading = true;
+            try {
+                await window.AIDAInventoryManagementService.returnTicketPart({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, this.inventory.returnForm);
+                this.modals.inventoryReturn = false;
+                this.notify('Peça devolvida ao estoque e registrada no histórico.');
+                await this.openTicketInventoryDetails(this.inventory.ticketPartsDetail.ticketId);
+                await this.fetchGlobalLogs();
+            } catch (error) { this.notify('Erro ao devolver peça: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+        async openInventoryReceipt(purchase) {
+            this.loading = true;
+            try {
+                const detail = await window.AIDAInventoryManagementService.loadPurchase({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, purchase.id);
+                this.inventory.receiptForm = {
+                    purchaseId: purchase.id,
+                    supplierName: purchase.supplier_name,
+                    confirmAllocation: true,
+                    items: (detail.items || []).map(item => ({
+                        ...item,
+                        receive_quantity: Number(item.pending_quantity),
+                        unit_cost: item.unit_cost == null ? '' : Number(item.unit_cost),
+                        destination: Number(item.direct_quantity_available || 0) >= Number(item.pending_quantity || 0)
+                            ? 'direct_ticket'
+                            : 'stock',
+                        location_id: ''
+                    }))
+                };
+                this.modals.inventoryReceipt = true;
+            } catch (error) { this.notify('Erro ao abrir compra: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        openInventoryCancelPurchase() {
+            this.inventory.cancelPurchaseForm = { purchaseId: this.inventory.receiptForm.purchaseId, reason: '' };
+            this.modals.inventoryReceipt = false;
+            this.modals.inventoryCancelPurchase = true;
+        },
+
+        async submitInventoryPurchaseCancellation() {
+            this.loading = true;
+            try {
+                const form = this.inventory.cancelPurchaseForm;
+                await window.AIDAInventoryManagementService.cancelPurchase({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, form.purchaseId, form.reason);
+                this.modals.inventoryCancelPurchase = false;
+                this.notify('Compra cancelada. As faltas voltaram para a fila de compra.');
+                await this.loadInventory(true);
+            } catch (error) { this.notify('Erro ao cancelar compra: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+        async submitInventoryReceipt() {
+            this.loading = true;
+            try {
+                const form = this.inventory.receiptForm;
+                const result = await window.AIDAInventoryManagementService.receivePurchase({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, form.purchaseId, form.items, form.confirmAllocation);
+                this.modals.inventoryReceipt = false;
+                await this.loadInventory(true);
+                await this.refreshPostMutation(true);
+                const readyTickets = Array.isArray(result.ready_tickets) ? result.ready_tickets : [];
+                const scheduleCandidates = [];
+
+                for (const readyTicket of readyTickets) {
+                    if (!readyTicket?.ticket_id || readyTicket.resumed) continue;
+                    const ticket = await window.AIDATicketQueryService.fetchTicketDetails({
+                        state: this,
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    }, readyTicket.ticket_id);
+                    if (ticket
+                        && ticket.status === 'Andamento Reparo'
+                        && ticket.parts_status === 'Recebido'
+                        && !ticket.repair_scheduled_at
+                        && this.isAppointmentTypeEnabled('repair')) {
+                        scheduleCandidates.push(ticket);
+                    }
+                }
+
+                if (scheduleCandidates.length) {
+                    const [firstTicket, ...remainingTickets] = scheduleCandidates;
+                    this.inventoryRepairScheduleQueue = remainingTickets;
+                    this.notify(
+                        `Peças recebidas. Agende o reparo da OS ${firstTicket.os_number || ''}.`
+                    );
+                    this.openSchedulePanel(
+                        'repair',
+                        firstTicket.technician_id,
+                        firstTicket,
+                        'inventoryReceiptRepair'
+                    );
+                } else {
+                    const released = readyTickets.length;
+                    this.notify(
+                        released
+                            ? `Recebimento concluído. ${released} OS liberada(s) para reparo.`
+                            : 'Recebimento registrado.'
+                    );
+                }
+            } catch (error) { this.notify('Erro ao receber compra: ' + error.message, 'error'); }
+            finally { this.loading = false; }
+        },
+
+        async archiveInventoryItem(item) {
+            if (!confirm(`Arquivar ${item.name}? O histórico será preservado.`)) return;
+            try {
+                await window.AIDAInventoryManagementService.archiveItem({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, item.id);
+                this.notify('Item arquivado.');
+                await this.loadInventory(true);
+            } catch (error) { this.notify('Erro ao arquivar item: ' + error.message, 'error'); }
+        },
+
+        async openInventoryReservations(item) {
+            if (!item?.id || Number(item.reserved_quantity || 0) <= 0) return;
+            this.inventory.reservationViewer = {
+                item,
+                items: [],
+                total: 0,
+                hasMore: false,
+                nextCursor: null,
+                loading: false,
+                requestId: this.inventory.reservationViewer.requestId + 1
+            };
+            this.modals.inventoryReservations = true;
+            await this.loadInventoryReservations(true);
+        },
+
+        async loadInventoryReservations(reset = false) {
+            const viewer = this.inventory.reservationViewer;
+            if (!viewer.item?.id || viewer.loading || (!reset && !viewer.hasMore)) return;
+            viewer.loading = true;
+            const requestId = viewer.requestId;
+            try {
+                const page = await window.AIDAInventoryManagementService.loadItemReservations({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, viewer.item.id, reset ? null : viewer.nextCursor);
+                if (requestId !== this.inventory.reservationViewer.requestId) return;
+                const incoming = Array.isArray(page?.items) ? page.items : [];
+                if (reset) {
+                    viewer.items = incoming;
+                } else {
+                    const existing = new Set(viewer.items.map(ticket => ticket.id));
+                    viewer.items.push(...incoming.filter(ticket => !existing.has(ticket.id)));
+                }
+                viewer.total = Number(page?.total || 0);
+                viewer.hasMore = Boolean(page?.has_more);
+                viewer.nextCursor = page?.next_cursor || null;
+            } catch (error) {
+                this.notify('Erro ao consultar as reservas: ' + error.message, 'error');
+            } finally {
+                if (requestId === this.inventory.reservationViewer.requestId) viewer.loading = false;
+            }
+        },
+
+        async openTicketFromInventoryReservation(ticket) {
+            this.modals.inventoryReservations = false;
+            await this.viewTicketDetails({ ...ticket, _card_summary: true });
+        },
+
+        formatInventoryReservationDate(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        },
+
+        async openInventoryItemModal(item = null) {
+            this.inventory.itemForm = item
+                ? { ...window.AIDAInventoryCatalogService.emptyItem(), ...item }
+                : window.AIDAInventoryCatalogService.emptyItem();
+            this.resetInventoryItemLocationPicker();
+            this.modals.inventoryItem = true;
+            if (item?.id) {
+                try {
+                    const detail = await window.AIDAInventoryManagementService.loadItemDetail({
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    }, item.id);
+                    this.inventory.itemDetail = detail;
+                    const storedImagePath = detail.item?.image_url || item.image_url || '';
+                    const activeLocationIds = new Set((this.inventory.locations || []).filter(location => location.active).map(location => location.id));
+                    const selectedLocationIds = (detail.balances || [])
+                        .map(balance => balance.location_id)
+                        .filter(locationId => activeLocationIds.size === 0 || activeLocationIds.has(locationId));
+                    this.inventory.itemForm = {
+                        ...window.AIDAInventoryCatalogService.emptyItem(),
+                        ...(detail.item || item),
+                        model_ids: detail.model_ids || [],
+                        suppliers: detail.suppliers || [],
+                        relations: detail.relations || [],
+                        location_ids: selectedLocationIds,
+                        default_location_id: selectedLocationIds.includes(detail.item?.default_location_id) ? detail.item.default_location_id : '',
+                        original_image_url: storedImagePath,
+                        image_preview: storedImagePath
+                            ? await window.AIDAStorageService.getInventoryImageUrl(storedImagePath, { SUPABASE_URL, SUPABASE_KEY, state: this })
+                            : ''
+                    };
+                } catch (error) {
+                    this.modals.inventoryItem = false;
+                    this.notify('Erro ao abrir item: ' + error.message, 'error');
+                }
+            }
+        },
+
+        addInventorySupplierLink() {
+            this.inventory.itemForm.suppliers.push({ supplier_id: '', supplier_sku: '', purchase_url: '', last_price: '', lead_time_days: '', minimum_order_quantity: '', preferred: false, notes: '' });
+        },
+
+        removeInventorySupplierLink(index) {
+            this.inventory.itemForm.suppliers.splice(index, 1);
+        },
+
+        addInventoryRelation() {
+            this.inventory.itemForm.relations.push({ target_item_id: '', relation_type: 'equivalent' });
+        },
+
+        removeInventoryRelation(index) {
+            this.inventory.itemForm.relations.splice(index, 1);
+        },
+
+        selectInventoryItemImage(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5242880) {
+                event.target.value = '';
+                return this.notify('Use JPG, PNG ou WebP de até 5 MB.', 'error');
+            }
+            if (this.inventory.itemForm.image_preview?.startsWith('blob:')) URL.revokeObjectURL(this.inventory.itemForm.image_preview);
+            this.inventory.itemForm.pending_image_file = file;
+            this.inventory.itemForm.image_preview = URL.createObjectURL(file);
+            this.inventory.itemForm.image_removed = false;
+        },
+
+        removeInventoryItemImage() {
+            if (this.inventory.itemForm.image_preview?.startsWith('blob:')) URL.revokeObjectURL(this.inventory.itemForm.image_preview);
+            this.inventory.itemForm.pending_image_file = null;
+            this.inventory.itemForm.image_preview = '';
+            this.inventory.itemForm.image_url = '';
+            this.inventory.itemForm.image_removed = true;
+        },
+
+        async saveInventoryItem() {
+            this.loading = true;
+            const wasNew = !this.inventory.itemForm.id;
+            const originalImagePath = this.inventory.itemForm.original_image_url || '';
+            try {
+                const selectedLocations = [...new Set((this.inventory.itemForm.location_ids || []).filter(Boolean))];
+                this.inventory.itemForm.location_ids = selectedLocations;
+                if (!selectedLocations.includes(this.inventory.itemForm.default_location_id)) this.inventory.itemForm.default_location_id = '';
+                const deps = { supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload) };
+                const itemId = await window.AIDAInventoryCatalogService.saveItem(deps, this.inventory.itemForm);
+                this.inventory.itemForm.id = itemId;
+
+                if (this.inventory.itemForm.pending_image_file) {
+                    const uploadedPath = await window.AIDAStorageService.uploadInventoryImage(
+                        this.inventory.itemForm.pending_image_file, itemId,
+                        { SUPABASE_URL, SUPABASE_KEY, state: this }
+                    );
+                    this.inventory.itemForm.image_url = uploadedPath;
+                    await window.AIDAInventoryCatalogService.saveItem(deps, this.inventory.itemForm);
+                }
+
+                await window.AIDAInventoryManagementService.saveLinks(deps, itemId, this.inventory.itemForm);
+                if (originalImagePath && originalImagePath !== this.inventory.itemForm.image_url
+                    && (this.inventory.itemForm.image_removed || this.inventory.itemForm.pending_image_file)) {
+                    try {
+                        await window.AIDAStorageService.deleteInventoryImage(originalImagePath, { SUPABASE_URL, SUPABASE_KEY, state: this });
+                    } catch (cleanupError) {
+                        console.warn('Inventory image cleanup failed:', cleanupError);
+                    }
+                }
+
+                this.modals.inventoryItem = false;
+                this.notify(wasNew ? 'Item cadastrado.' : 'Item atualizado.');
+                await this.loadInventory(true);
+            } catch (error) {
+                this.notify('Erro ao salvar item: ' + error.message, 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async openDirectTicketInventorySelector() {
+            this.inventory.partRequest = {
+                ticketId: '', stage: 'direct_create', allocateNow: true, afterSubmit: null,
+                search: '', items: (this.ticketForm.inventory_parts || []).map(item => ({ ...item })),
+                catalog: [], hasMore: false, nextCursor: null, loading: false
+            };
+            this.modals.inventoryPartRequest = true;
+            await this.loadInventoryPartCatalog(true);
+        },
+        async openInventoryPartRequest(ticketOrId, stage = 'repair', allocateNow = true, afterSubmit = null, initialSearch = '') {
+            const ticket = await this.ensureCompleteTicket(this.resolveTicket(ticketOrId));
+            if (!ticket) return;
+            this.inventory.partRequest = {
+                ticketId: ticket.id,
+                stage,
+                allocateNow,
+                afterSubmit,
+                search: String(initialSearch || '').trim(),
+                items: [],
+                catalog: [],
+                hasMore: false,
+                nextCursor: null,
+                loading: false
+            };
+            this.modals.inventoryPartRequest = true;
+            await this.loadInventoryPartCatalog(true);
+        },
+
+        async loadInventoryPartCatalog(reset = false) {
+            const request = this.inventory.partRequest;
+            if ((request.stage !== 'direct_create' && !request.ticketId) || request.loading) return;
+            request.loading = true;
+            try {
+                const deps = { supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload) };
+                const page = request.stage === 'direct_create'
+                    ? await window.AIDAInventoryQueryService.fetchCreationCatalog(deps, this.ticketForm.device_model || this.ticketForm.model, {
+                        search: request.search, limit: 20,
+                        cursor: reset ? null : request.nextCursor
+                    })
+                    : await window.AIDAInventoryQueryService.fetchCatalog(deps, request.ticketId, {
+                        search: request.search, limit: 20,
+                        cursor: reset ? null : request.nextCursor
+                    });
+                const incoming = Array.isArray(page.items) ? page.items : [];
+                request.catalog = reset ? incoming : [...request.catalog, ...incoming];
+                request.hasMore = Boolean(page.has_more);
+                request.nextCursor = page.next_cursor || null;
+            } catch (error) {
+                this.notify('Erro ao consultar peças: ' + error.message, 'error');
+            } finally {
+                request.loading = false;
+            }
+        },
+
+        selectInventoryPart(item) {
+            const request = this.inventory.partRequest;
+            const existing = request.items.find(selected => selected.item_id === item.id);
+            if (existing) {
+                existing.quantity = Number(existing.quantity || 0) + 1;
+                return;
+            }
+            request.items.push({
+                item_id: item.id,
+                name: item.name,
+                unit_code: item.unit_code,
+                available_quantity: Number(item.available_quantity || 0),
+                quantity: 1,
+                notes: item.relation_type ? `Alternativa escolhida para ${item.requested_original_name || 'a peça solicitada'}.` : '',
+                original_item_id: item.original_item_id || null,
+                substitution_type: item.relation_type || null
+            });
+        },
+
+        removeInventoryPart(index) {
+            this.inventory.partRequest.items.splice(index, 1);
+        },
+
+        async submitInventoryPartRequest() {
+            const request = this.inventory.partRequest;
+            if (request.stage === 'direct_create') {
+                this.ticketForm.inventory_parts = request.items
+                    .filter(item => item.item_id && Number(item.quantity) > 0)
+                    .map(item => ({ ...item, quantity: Number(item.quantity) }));
+                this.modals.inventoryPartRequest = false;
+                this.notify(this.ticketForm.inventory_parts.length ? 'Peças adicionadas ao chamado.' : 'Nenhuma peça adicionada.');
+                return;
+            }
+            this.loading = true;
+            try {
+                const result = await window.AIDAInventoryActions.requestTicketParts({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, request.ticketId, request.items, request.stage, request.allocateNow);
+                this.modals.inventoryPartRequest = false;
+                this.notify(window.AIDAInventoryActions.routeMessage(result));
+                if (request.afterSubmit === 'finishAnalysis') {
+                    await this.finishAnalysis(request.ticketId);
+                } else if (request.afterSubmit === 'finishWarrantyAnalysis') {
+                    this.analysisForm.partsList = request.items.map(item => `${item.quantity} x ${item.name}`).join(', ');
+                    await this.finishWarrantyAnalysis(request.ticketId);
+                } else if (request.afterSubmit === 'openInventoryPurchaseAfterAdapt') {
+                    await this.refreshPostMutation(true);
+                    await this.fetchGlobalLogs();
+                    if (result?.route === 'purchase') {
+                        await this.loadInventoryWorkspaceData();
+                        this.openInventoryPurchaseModal(request.ticketId);
+                    }
+                } else {
+                    await this.refreshPostMutation(true);
+                    await this.fetchGlobalLogs();
+                }
+                return result;
+            } catch (error) {
+                this.notify('Erro ao registrar peças: ' + error.message, 'error');
+                return null;
+            } finally {
+                this.loading = false;
+            }
+        },
         getBenchAppointmentDate(ticket) {
             if (!ticket) return null;
             if (ticket.status === 'Analise Tecnica') return this.isAppointmentTypeEnabled('analysis') ? (ticket.analysis_scheduled_at || null) : null;
@@ -2148,12 +3187,14 @@ function app() {
         async fetchTickets(loadMore = false) {
             if (!this.user?.workspace_id) return;
 
-            // Guard: Prevent concurrent fetches (unless forced by loadMore)
-            if (this.ticketPagination.isLoading) {
+            // Paginação depende do resultado atual e não pode concorrer com outra
+            // página. Recarregamentos normais podem substituir uma busca antiga.
+            if (loadMore && this.ticketPagination.isLoading) {
                 console.log("[FetchTickets] Blocked by isLoading guard");
                 return;
             }
 
+            const requestId = ++this.ticketFetchRequestId;
             this.ticketPagination.isLoading = true;
 
             if (loadMore) {
@@ -2171,6 +3212,10 @@ function app() {
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                     hasRole: (r) => this.hasRole(r)
                 }, loadMore);
+
+                // Uma resposta de tela, filtro ou texto anterior nunca pode
+                // substituir a lista correspondente ao contexto atual.
+                if (requestId !== this.ticketFetchRequestId) return;
 
                 if (result.mode === 'test_bench_page') {
                     if (loadMore) {
@@ -2285,10 +3330,13 @@ function app() {
                     }
                 }
             } catch (err) {
+                 if (requestId !== this.ticketFetchRequestId) return;
                  console.warn("Fetch exception:", err);
                  this.notify("Erro ao buscar chamados.", "error");
             } finally {
-                 this.ticketPagination.isLoading = false;
+                 if (requestId === this.ticketFetchRequestId) {
+                     this.ticketPagination.isLoading = false;
+                 }
             }
         },
 
@@ -2562,7 +3610,7 @@ function app() {
                 defects: [], priority: 'Normal', contact: '',
                 deadline: '', analysis_deadline: '', device_condition: '',
                 technician_id: '',
-                budget_approved: false, approved_route: 'repair', parts_needed: '',
+                budget_approved: false, approved_route: 'repair', parts_needed: '', inventory_parts: [],
                 warranty_claim: isWarranty,
                 warranty_origin_ticket_id: null,
                 warranty_source_claim_id: null,
@@ -2947,6 +3995,7 @@ function app() {
                 this.selectedAnalysisAppointment = null;
             } else {
                 this.ticketForm.parts_needed = '';
+                this.ticketForm.inventory_parts = [];
                 this.selectedRepairAppointment = null;
             }
         },
@@ -3198,6 +4247,18 @@ function app() {
                             this.notify('O reparo foi agendado, mas a decisão da garantia não foi concluída. Abra a OS e tente finalizar a análise novamente.', 'error');
                             this.closeSchedulePanel();
                             return;
+                        }
+                    } else if (afterSave === 'inventoryReceiptRepair') {
+                        this.notify("Reparo agendado e chamado enviado para reparo.");
+                        await this.refreshPostMutation(true);
+                        const nextTicket = this.inventoryRepairScheduleQueue.shift() || null;
+                        if (nextTicket) {
+                            setTimeout(() => this.openSchedulePanel(
+                                'repair',
+                                nextTicket.technician_id,
+                                nextTicket,
+                                'inventoryReceiptRepair'
+                            ), 0);
                         }
                     } else {
                         this.notify("Agendamento criado com sucesso!");
@@ -4074,11 +5135,14 @@ function app() {
                     return null;
                 }
 
+                const hydratedTicket = ticket.inventory_summary
+                    ? { ...completeTicket, inventory_summary: ticket.inventory_summary }
+                    : completeTicket;
                 const ticketIndex = this.tickets.findIndex(item => item.id === completeTicket.id);
-                if (ticketIndex >= 0) this.tickets[ticketIndex] = completeTicket;
+                if (ticketIndex >= 0) this.tickets[ticketIndex] = hydratedTicket;
                 const techIndex = this.techTickets.findIndex(item => item.id === completeTicket.id);
-                if (techIndex >= 0) this.techTickets[techIndex] = completeTicket;
-                return completeTicket;
+                if (techIndex >= 0) this.techTickets[techIndex] = hydratedTicket;
+                return hydratedTicket;
             } catch (error) {
                 console.error('Failed to load complete OS:', error);
                 this.notify('Erro ao carregar os dados completos da OS.', 'error');
@@ -4113,6 +5177,7 @@ function app() {
             this.noteChecklistItems = [];
 
             this.modals.viewTicket = true;
+            this.loadTicketInventoryBudgetCosts(completeTicket);
         },
 
         startEditingDeadlines() {
@@ -4491,6 +5556,7 @@ function app() {
                 isWhatsAppDisabled: () => this.isWhatsAppDisabled(),
                 isLogisticsEnabled: () => this.isLogisticsEnabled(),
                 isPartsControlEnabled: () => this.isPartsControlEnabled(),
+                isInventoryEnabled: () => this.isInventoryEnabled(),
                 isWarrantyEnabled: () => this.isWarrantyEnabled(),
                 isFinalTestEnabled: () => this.isFinalTestEnabled(),
                 isTimerEnabled: (type) => this.isTimerEnabled(type),
@@ -4512,6 +5578,7 @@ function app() {
                 closeModal: (name) => { this.modals[name] = false; },
                 openLogisticsModal: (t) => this.openLogisticsModal(t),
                 openPaidServiceFromWarranty: (t) => this.openPaidServiceFromWarranty(t),
+                openInventoryPurchasesForTicket: (t) => this.openInventoryPurchasesForTicket(t),
                 setEditingDeadlines: (val) => { this.editingDeadlines = val; }
             };
         },
@@ -4623,15 +5690,24 @@ function app() {
             return await window.AIDATicketActions.startRepair(ticketOrId, this._getActionDeps());
         },
 
+        isTicketAssignedToCurrentTechnician(ticket) {
+            const employeeId = this.employeeSession?.employee_id || this.employeeSession?.id || this.user?.id;
+            return Boolean(ticket?.technician_id && employeeId && ticket.technician_id === employeeId);
+        },
+
         canPauseRepairForParts(ticket) {
             if (!this.isPartsControlEnabled() || !ticket || ticket.status !== 'Andamento Reparo' || !ticket.repair_start_at) return false;
             if (this.hasRole('admin') || this.hasRole('atendente')) return true;
-            return this.hasRole('tecnico') && ticket.technician_id === this.user?.id;
+            return this.hasRole('tecnico') && this.isTicketAssignedToCurrentTechnician(ticket);
         },
 
-        openPauseRepairForParts(ticketOrId) {
+        async openPauseRepairForParts(ticketOrId) {
             const ticket = this.resolveTicket(ticketOrId);
             if (!ticket || !this.canPauseRepairForParts(ticket)) return;
+            if (this.isInventoryEnabled()) {
+                await this.openInventoryPartRequest(ticket, 'repair', true);
+                return;
+            }
             this.pauseRepairForPartsForm = { ticketId: ticket.id, parts: '' };
             this.modals.pauseRepairForParts = true;
         },
@@ -4673,10 +5749,15 @@ function app() {
             if (ticket.warranty_claim && ticket.warranty_status === 'pending') {
                 const validationError = window.AIDAWarrantyService.validateTechnicalDecision(
                     this.analysisForm,
-                    this.isPartsControlEnabled()
+                    this.isPartsControlEnabled() && !this.isInventoryEnabled()
                 );
                 if (validationError) return this.notify(validationError, 'error');
 
+                if (this.analysisForm.warrantyCovered === 'yes' && this.isInventoryEnabled() && this.analysisForm.needsParts) {
+                    this.modals.finishAnalysis = false;
+                    await this.openInventoryPartRequest(ticket, 'warranty', false, 'finishWarrantyAnalysis');
+                    return;
+                }
                 const coveredWithoutPurchase = this.analysisForm.warrantyCovered === 'yes'
                     && !(this.isPartsControlEnabled() && this.analysisForm.needsParts);
                 const hasRepairAppointment = Boolean(ticket.repair_scheduled || ticket.repair_scheduled_at);
@@ -4686,6 +5767,12 @@ function app() {
                     return;
                 }
                 return await this.finishWarrantyAnalysis(ticket);
+            }
+
+            if (this.isInventoryEnabled() && this.analysisForm.needsParts) {
+                this.modals.finishAnalysis = false;
+                await this.openInventoryPartRequest(ticket, 'analysis', false, 'finishAnalysis');
+                return;
             }
 
             if (this.isPartsControlEnabled() && this.analysisForm.needsParts && !this.analysisForm.partsList) {
@@ -4717,6 +5804,31 @@ function app() {
             const resolvedTicket = this.resolveTicket(ticketOrId);
             const ticket = await this.ensureCompleteTicket(resolvedTicket);
             if (!ticket) return;
+            if (this.isInventoryEnabled()) {
+                await this.loadInventoryWorkspaceData();
+                const purchases = this.inventory.purchases.filter(purchase => (purchase.ticket_ids || []).includes(ticket.id));
+                if (purchases.length) {
+                    await this.openInventoryPurchasesForTicket(ticket);
+                    return;
+                }
+                const pending = this.inventory.pendingParts.filter(item => item.ticket_id === ticket.id);
+                if (pending.length) {
+                    this.openInventoryPurchaseModal(ticket.id);
+                    return;
+                }
+                const itemCount = Number(ticket.inventory_summary?.item_count || 0);
+                if (!itemCount) {
+                    const legacyPart = String(ticket.parts_needed || '')
+                        .split(/\r?\n|,/)[0]
+                        .replace(/^\s*\d+(?:[.,]\d+)?\s*x?\s*/i, '')
+                        .trim();
+                    await this.openInventoryPartRequest(ticket, 'direct_repair', true, 'openInventoryPurchaseAfterAdapt', legacyPart);
+                    return;
+                }
+                await this.refreshPostMutation(true);
+                this.notify('As peças desta OS não possuem falta aberta para compra.', 'error');
+                return;
+            }
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'supplierPurchase');
             this._applyContext(newContext);
             this.purchaseFlow = {
@@ -4739,6 +5851,63 @@ function app() {
             // Replaced by openPurchaseModal, kept for compatibility if needed elsewhere
             await this.openPurchaseModal(ticketOrId);
         },
+
+        ticketPartsActionLabel(ticket) {
+            if (!this.isInventoryEnabled()) {
+                return ticket?.parts_status === 'Comprado' ? 'Recebido' : 'Confirmar Compra';
+            }
+            if (this.ticketAwaitsRepairSchedule(ticket)) {
+                return 'Agendar Reparo';
+            }
+            const summary = ticket?.inventory_summary || {};
+            if (Number(summary.open_purchase_count || 0) > 0 || summary.purchase_state === 'awaiting_receipt') {
+                return 'Receber Peças';
+            }
+            return Number(summary.item_count || 0) > 0 ? 'Registrar Compra' : 'Vincular Peças ao Estoque';
+        },
+
+        ticketPartsActionIcon(ticket) {
+            const label = this.ticketPartsActionLabel(ticket);
+            if (label === 'Agendar Reparo') return 'fa-regular fa-calendar-plus';
+            if (label === 'Receber Peças' || label === 'Recebido') return 'fa-solid fa-box-open';
+            if (label === 'Vincular Peças ao Estoque') return 'fa-solid fa-boxes-stacked';
+            return 'fa-solid fa-cart-shopping';
+        },
+
+        canManageTicketParts(ticket) {
+            return Boolean(ticket) && ['Compra Peca', 'Aprovacao'].includes(ticket.status)
+                && (this.hasRole('admin') || this.hasRole('atendente'));
+        },
+
+        ticketAwaitsRepairSchedule(ticket) {
+            return Boolean(
+                this.isInventoryEnabled()
+                && ticket?.status === 'Compra Peca'
+                && ticket?.parts_status === 'Recebido'
+                && this.isAppointmentTypeEnabled('repair')
+                && !ticket?.repair_scheduled
+                && !ticket?.repair_scheduled_at
+            );
+        },
+
+        async handleTicketPartsAction(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket || !this.canManageTicketParts(ticket)) return;
+            if (this.ticketAwaitsRepairSchedule(ticket)) {
+                this.openSchedulePanel(
+                    'repair',
+                    ticket.technician_id,
+                    ticket,
+                    'inventoryReceiptRepair'
+                );
+                return;
+            }
+            if (!this.isInventoryEnabled() && ticket.parts_status === 'Comprado') {
+                await this.confirmReceived(ticket);
+                return;
+            }
+            await this.openPurchaseModal(ticket);
+        },
         async openOutcomeModal(mode, ticketOrId) {
             const resolvedTicket = this.resolveTicket(ticketOrId);
             const ticket = await this.ensureCompleteTicket(resolvedTicket);
@@ -4748,7 +5917,34 @@ function app() {
             this.selectedTicket = ticket; // Keep for UI bindings
             this.outcomeMode = mode;
             this.showTestFailureForm = false;
+            this.inventory.repairUsage = { loading: false, items: [], hasStructuredParts: false };
             this.modals.outcome = true;
+
+            if (mode === 'repair' && this.isInventoryEnabled()) {
+                this.inventory.repairUsage.loading = true;
+                try {
+                    const result = await this.supabaseFetch('rpc/get_ticket_inventory_parts', 'POST', {
+                        p_ticket_id: ticket.id
+                    });
+                    const reservations = (result?.items || []).flatMap(part =>
+                        (part.reservations || [])
+                            .filter(reservation => reservation.status === 'active' && Number(reservation.remaining_quantity) > 0)
+                            .map(reservation => ({
+                                ...reservation,
+                                requested_name: part.name,
+                                used_quantity: Number(reservation.remaining_quantity)
+                            }))
+                    );
+                    this.inventory.repairUsage = {
+                        loading: false,
+                        items: reservations,
+                        hasStructuredParts: (result?.items || []).length > 0
+                    };
+                } catch (error) {
+                    this.modals.outcome = false;
+                    this.notify('Erro ao consultar as peças reservadas: ' + error.message, 'error');
+                }
+            }
         },
 
         // == SUBFASE 3 — TERCEIRIZAÇÃO / COMPRA / LOGÍSTICA ==
@@ -5681,7 +6877,13 @@ function app() {
                 });
 
                 if (!response) return;
-                const incoming = Array.isArray(response.items) ? response.items : [];
+                const rawIncoming = Array.isArray(response.items) ? response.items : [];
+                const incoming = modal.key === 'pendingBudgets'
+                    ? await window.AIDATicketQueryService.hydrateTickets({
+                        state: this,
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    }, rawIncoming)
+                    : rawIncoming;
 
                 if (reset) {
                     modal.items = incoming;
@@ -5726,6 +6928,12 @@ function app() {
                     if (response.counts) this.homeOperationalCounts = response.counts;
                     if (response.status_counts) this.homeStatusCounts = response.status_counts;
                     this.syncHomeOverviewQueues(response.queues || {});
+                    if (this.homeOps.pendingBudgets.length) {
+                        this.homeOps.pendingBudgets = await window.AIDATicketQueryService.hydrateTickets({
+                            state: this,
+                            supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                        }, this.homeOps.pendingBudgets);
+                    }
                 }
             } catch (error) {
                 console.error('Failed to load home operational queue', error);
