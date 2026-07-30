@@ -11,6 +11,7 @@ const featureConfig = fs.readFileSync(path.join(root, 'js', 'modules', 'feature-
 const ticketActions = fs.readFileSync(path.join(root, 'js', 'modules', 'ticket-actions.js'), 'utf8');
 const queryServiceSource = fs.readFileSync(path.join(root, 'js', 'modules', 'inventory-query-service.js'), 'utf8');
 const catalogServiceSource = fs.readFileSync(path.join(root, 'js', 'modules', 'inventory-catalog-service.js'), 'utf8');
+const managementServiceSource = fs.readFileSync(path.join(root, 'js', 'modules', 'inventory-management-service.js'), 'utf8');
 const storageServiceSource = fs.readFileSync(path.join(root, 'js', 'modules', 'storage-service.js'), 'utf8');
 
 test('inventory defaults off and remains dependent on the existing parts flow', () => {
@@ -85,7 +86,7 @@ test('creation selector calls the bounded model-aware RPC without sending a work
 
 test('item form supports private image files and multiple independent storage locations', () => {
     assert.match(html, /type="file"[^>]+accept="image\/jpeg,image\/png,image\/webp"/i);
-    assert.match(html, /x-model="inventory\.itemForm\.location_ids"/);
+    assert.match(html, /setInventoryItemLocation\(location, \$event\.target\.checked\)/);
     assert.match(html, /Endereço principal \(opcional\)/);
     assert.match(catalogServiceSource, /rpc\/set_inventory_item_locations/);
     assert.match(storageServiceSource, /inventory_images\/\$\{encodedPath\}/);
@@ -93,6 +94,47 @@ test('item form supports private image files and multiple independent storage lo
     assert.match(storageServiceSource, /deleteInventoryImage/);
     assert.doesNotMatch(storageServiceSource, /inventory\/\/\_/);
     assert.match(main, /this\.inventory\.itemForm\.id = itemId/);
+});
+
+test('item location picker is searchable, grouped and renders a bounded result window', () => {
+    assert.match(html, /Buscar estante, gaveta ou endereço/);
+    assert.match(html, /Todos os organizadores/);
+    assert.match(html, /visibleInventoryItemLocations\(\)/);
+    assert.match(html, /Mostrar mais/);
+    assert.match(main, /visibleLimit:\s*24/);
+    assert.match(main, /inventoryItemLocationResults\(\)[\s\S]*groupId[\s\S]*toLocaleLowerCase\('pt-BR'\)/);
+    assert.match(main, /visibleInventoryItemLocations\(\)[\s\S]*slice\(0,\s*this\.inventory\.itemLocationPicker\.visibleLimit\)/);
+});
+
+test('reserved stock opens a paginated OS list only when requested', async () => {
+    assert.match(html, /@click="openInventoryReservations\(item\)"/);
+    assert.match(html, /OS com peça reservada/);
+    assert.match(html, /Carregar mais OS/);
+    assert.match(main, /openInventoryReservations\(item\)/);
+    assert.match(main, /openTicketFromInventoryReservation\(ticket\)/);
+
+    const context = { window: {} };
+    vm.createContext(context);
+    vm.runInContext(managementServiceSource, context);
+    let call;
+    const response = { items: [], total: 0, has_more: false, next_cursor: null };
+    const deps = {
+        supabaseFetch: async (endpoint, method, payload) => {
+            call = { endpoint, method, payload };
+            return response;
+        }
+    };
+    const result = await context.window.AIDAInventoryManagementService.loadItemReservations(
+        deps,
+        'item-id',
+        { reserved_at: '2026-07-30T12:00:00Z', ticket_id: 'ticket-id' }
+    );
+    assert.deepEqual(result, response);
+    assert.equal(call.endpoint, 'rpc/get_inventory_item_reservations_page');
+    assert.equal(call.payload.p_limit, 20);
+    assert.equal(call.payload.p_item_id, 'item-id');
+    assert.equal(Object.hasOwn(call.payload, 'p_workspace_id'), false);
+    assert.equal(Object.hasOwn(call.payload, 'workspace_id'), false);
 });
 
 test('location manager uses organizer groups and internal addresses', () => {

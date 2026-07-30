@@ -519,9 +519,11 @@ function app() {
             purchaseForm: { supplier_id: '', urgent: false, notes: '', items: [] },
             receiptForm: { purchaseId: '', supplierName: '', items: [], confirmAllocation: true },
             ticketPartsDetail: { ticketId: '', items: [], loading: false },
+            reservationViewer: { item: null, items: [], total: 0, hasMore: false, nextCursor: null, loading: false, requestId: 0 },
             budgetCosts: { ticketId: '', items: [], total: 0, missingCostCount: 0, loading: false },
             returnForm: { reservation_id: '', item_name: '', max_quantity: 0, quantity: 0, reason: '' },
             cancelPurchaseForm: { purchaseId: '', reason: '' },
+            itemLocationPicker: { open: false, search: '', groupId: '', visibleLimit: 24 },
             partRequest: { ticketId: '', stage: 'analysis', allocateNow: false, afterSubmit: null, search: '', items: [], catalog: [], hasMore: false, nextCursor: null, loading: false },
             repairUsage: { loading: false, items: [], hasStructuredParts: false }
         },
@@ -660,7 +662,7 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryLocationGroup: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryTicketPurchases: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryLocationGroup: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryTicketPurchases: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReservations: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
         bypassAnalysisCheck: false,
         bypassRepairCheck: false,
 
@@ -2234,6 +2236,49 @@ function app() {
                 || '';
         },
 
+        resetInventoryItemLocationPicker() {
+            this.inventory.itemLocationPicker = { open: false, search: '', groupId: '', visibleLimit: 24 };
+        },
+
+        inventoryItemLocationResults() {
+            const search = String(this.inventory.itemLocationPicker.search || '').trim().toLocaleLowerCase('pt-BR');
+            const groupId = this.inventory.itemLocationPicker.groupId;
+            return (this.inventory.locations || []).filter(location => {
+                if (!location.active) return false;
+                if (groupId && location.group_id !== groupId) return false;
+                if (!search) return true;
+                return this.inventoryLocationLabel(location).toLocaleLowerCase('pt-BR').includes(search);
+            });
+        },
+
+        visibleInventoryItemLocations() {
+            return this.inventoryItemLocationResults().slice(0, this.inventory.itemLocationPicker.visibleLimit);
+        },
+
+        selectedInventoryItemLocations() {
+            const selectedIds = new Set(this.inventory.itemForm.location_ids || []);
+            return (this.inventory.locations || []).filter(location => selectedIds.has(location.id));
+        },
+
+        setInventoryItemLocation(location, selected) {
+            const ids = new Set(this.inventory.itemForm.location_ids || []);
+            if (selected) ids.add(location.id);
+            else ids.delete(location.id);
+            this.inventory.itemForm.location_ids = [...ids];
+            if (!ids.has(this.inventory.itemForm.default_location_id)) {
+                this.inventory.itemForm.default_location_id = '';
+            }
+        },
+
+        removeInventoryItemLocation(locationId) {
+            const location = (this.inventory.locations || []).find(item => item.id === locationId);
+            if (location) this.setInventoryItemLocation(location, false);
+        },
+
+        resetInventoryItemLocationResults() {
+            this.inventory.itemLocationPicker.visibleLimit = 24;
+        },
+
         inventoryLocationGroupKindLabel(kind) {
             return ({ shelf: 'Estante', cabinet: 'Armário', drawer: 'Gaveteiro', room: 'Área / Sala', other: 'Outro' })[kind] || 'Outro';
         },
@@ -2685,10 +2730,71 @@ function app() {
             } catch (error) { this.notify('Erro ao arquivar item: ' + error.message, 'error'); }
         },
 
+        async openInventoryReservations(item) {
+            if (!item?.id || Number(item.reserved_quantity || 0) <= 0) return;
+            this.inventory.reservationViewer = {
+                item,
+                items: [],
+                total: 0,
+                hasMore: false,
+                nextCursor: null,
+                loading: false,
+                requestId: this.inventory.reservationViewer.requestId + 1
+            };
+            this.modals.inventoryReservations = true;
+            await this.loadInventoryReservations(true);
+        },
+
+        async loadInventoryReservations(reset = false) {
+            const viewer = this.inventory.reservationViewer;
+            if (!viewer.item?.id || viewer.loading || (!reset && !viewer.hasMore)) return;
+            viewer.loading = true;
+            const requestId = viewer.requestId;
+            try {
+                const page = await window.AIDAInventoryManagementService.loadItemReservations({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, viewer.item.id, reset ? null : viewer.nextCursor);
+                if (requestId !== this.inventory.reservationViewer.requestId) return;
+                const incoming = Array.isArray(page?.items) ? page.items : [];
+                if (reset) {
+                    viewer.items = incoming;
+                } else {
+                    const existing = new Set(viewer.items.map(ticket => ticket.id));
+                    viewer.items.push(...incoming.filter(ticket => !existing.has(ticket.id)));
+                }
+                viewer.total = Number(page?.total || 0);
+                viewer.hasMore = Boolean(page?.has_more);
+                viewer.nextCursor = page?.next_cursor || null;
+            } catch (error) {
+                this.notify('Erro ao consultar as reservas: ' + error.message, 'error');
+            } finally {
+                if (requestId === this.inventory.reservationViewer.requestId) viewer.loading = false;
+            }
+        },
+
+        async openTicketFromInventoryReservation(ticket) {
+            this.modals.inventoryReservations = false;
+            await this.viewTicketDetails({ ...ticket, _card_summary: true });
+        },
+
+        formatInventoryReservationDate(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        },
+
         async openInventoryItemModal(item = null) {
             this.inventory.itemForm = item
                 ? { ...window.AIDAInventoryCatalogService.emptyItem(), ...item }
                 : window.AIDAInventoryCatalogService.emptyItem();
+            this.resetInventoryItemLocationPicker();
             this.modals.inventoryItem = true;
             if (item?.id) {
                 try {

@@ -29,6 +29,14 @@
             });
         },
 
+        async loadItemReservations(deps, itemId, cursor = null) {
+            return await request(deps, 'get_inventory_item_reservations_page', {
+                p_item_id: itemId,
+                p_limit: 20,
+                p_cursor: cursor || null
+            });
+        },
+
         async loadMovements(deps, itemId = null, cursor = null) {
             return await request(deps, 'get_inventory_movements_page', {
                 p_item_id: itemId || null,

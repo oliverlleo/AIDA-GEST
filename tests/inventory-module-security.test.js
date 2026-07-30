@@ -19,6 +19,8 @@ const schemeManagementRollback = read('rollback_inventory_location_scheme_manage
 const locationGroups = read('inventory_location_groups.sql');
 const directReceipt = read('inventory_direct_ticket_receipt.sql');
 const receiptScheduling = read('inventory_receipt_repair_scheduling.sql');
+const reservationVisibility = read('inventory_reservation_visibility.sql');
+const reservationVisibilityRollback = read('rollback_inventory_reservation_visibility.sql');
 
 test('inventory tables are tenant-bound, protected by RLS and closed to direct Data API writes', () => {
     const tables = [
@@ -141,4 +143,20 @@ test('inventory scheduling bridge remains private and actor-bound', () => {
     assert.match(receiptScheduling, /set search_path = ''/i);
     assert.match(receiptScheduling, /revoke all on function private\.inventory_resume_ready_ticket\(uuid, uuid\)[\s\S]*from public, anon, authenticated, service_role/i);
     assert.match(receiptScheduling, /revoke all on function private\.inventory_release_ticket_after_repair_schedule\(\)[\s\S]*from public, anon, authenticated, service_role/i);
+});
+
+test('reservation visibility is actor-bound, cursor-paginated and exposes no direct table access', () => {
+    assert.match(reservationVisibility, /get_current_actor_context\(\)/i);
+    assert.match(reservationVisibility, /inventory_assert_access\(v_ctx\.workspace_id, 'manage'\)/i);
+    assert.match(reservationVisibility, /security definer[\s\S]*set search_path = ''/i);
+    assert.match(reservationVisibility, /p_cursor jsonb/i);
+    assert.match(reservationVisibility, /limit v_limit \+ 1/i);
+    assert.match(reservationVisibility, /\(rt\.reserved_at, rt\.id\) </i);
+    assert.match(reservationVisibility, /r\.workspace_id = v_ctx\.workspace_id/i);
+    assert.match(reservationVisibility, /r\.reserved_quantity > r\.consumed_quantity \+ r\.released_quantity/i);
+    assert.match(reservationVisibility, /revoke all on function public\.get_inventory_item_reservations_page/i);
+    assert.doesNotMatch(reservationVisibility, /p_workspace_id\s+uuid/i);
+    assert.doesNotMatch(reservationVisibility, /grant\s+(select|insert|update|delete)\s+on\s+public\.inventory_reservations/i);
+    assert.match(reservationVisibilityRollback, /drop function if exists public\.get_inventory_item_reservations_page/i);
+    assert.match(reservationVisibilityRollback, /drop index if exists public\.inventory_reservations_active_item_page_idx/i);
 });
