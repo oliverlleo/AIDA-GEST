@@ -2340,6 +2340,13 @@
                                                         </span>
                                                     </div>
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                <div x-show="canViewInventoryCosts() && t.status === 'Aprovacao' && t.inventory_cost_summary && Number(t.inventory_cost_summary.item_count) > 0"
+                                                     class="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-purple-100 bg-purple-50 px-2 py-1 text-[10px] text-purple-800">
+                                                    <span class="font-bold"><i class="fa-solid fa-coins mr-1"></i>Custo das peças: <span x-text="formatCurrency(t.inventory_cost_summary.total)"></span></span>
+                                                    <span x-show="Number(t.inventory_cost_summary.missing_cost_count) > 0"
+                                                          class="font-semibold text-amber-700"
+                                                          x-text="t.inventory_cost_summary.missing_cost_count + ' sem custo'"></span>
+                                                </div>
 
                                                 <!-- Dynamic sub-stage visual -->
                                                 <div class="mt-1 text-xs font-semibold"
@@ -4340,6 +4347,16 @@
 </template><div class="text-[10px] font-bold text-gray-600 truncate">
                                                         Técnico: <span class="font-normal" x-text="getEmployeeName(ticket.technician_id)"></span>
                                                     </div>
+                                                    <div x-show="canViewInventoryCosts() && ticket.status === 'Aprovacao' && ticket.inventory_cost_summary && Number(ticket.inventory_cost_summary.item_count) > 0"
+                                                         class="mt-1.5 rounded-lg border border-purple-100 bg-purple-50 px-2 py-1.5 text-[10px] text-purple-800">
+                                                        <div class="flex items-center justify-between gap-2">
+                                                            <span class="font-bold"><i class="fa-solid fa-coins mr-1"></i>Custo das peças</span>
+                                                            <span class="font-extrabold" x-text="formatCurrency(ticket.inventory_cost_summary.total)"></span>
+                                                        </div>
+                                                        <span x-show="Number(ticket.inventory_cost_summary.missing_cost_count) > 0"
+                                                              class="mt-0.5 block font-semibold text-amber-700"
+                                                              x-text="ticket.inventory_cost_summary.missing_cost_count + ' peça(s) sem histórico de custo'"></span>
+                                                    </div>
                                                 </div>
 
                                                 <!-- Quick Actions Footer -->
@@ -5527,6 +5544,13 @@
                                         </span>
                                     </div>
                                     <p class="text-xs text-gray-500 mt-1 truncate" x-text="ticket.device_model + ' · ' + getStatusLabel(ticket.status)"></p>
+                                    <div x-show="canViewInventoryCosts() && overviewQueueModal.key === 'pendingBudgets' && ticket.status === 'Aprovacao' && ticket.inventory_cost_summary && Number(ticket.inventory_cost_summary.item_count) > 0"
+                                         class="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-purple-100 bg-purple-50 px-2 py-1 text-[10px] text-purple-800">
+                                        <span class="font-bold"><i class="fa-solid fa-coins mr-1"></i>Custo das peças: <span x-text="formatCurrency(ticket.inventory_cost_summary.total)"></span></span>
+                                        <span x-show="Number(ticket.inventory_cost_summary.missing_cost_count) > 0"
+                                              class="font-semibold text-amber-700"
+                                              x-text="ticket.inventory_cost_summary.missing_cost_count + ' sem custo'"></span>
+                                    </div>
                                     <div class="flex flex-wrap items-center gap-3 mt-2 text-[10px]">
                                         <span class="inline-flex items-center gap-1 text-gray-500">
                                             <i class="fa-regular fa-clock"></i>
@@ -7091,7 +7115,42 @@
 
                         <!-- 3. Aprovação Flow -->
                         <template x-if="selectedTicket.status === 'Aprovacao'">
-                            <div class="flex space-x-3 items-center">
+                            <div class="w-full space-y-3">
+                                <div x-show="canViewInventoryCosts()" class="rounded-xl border border-purple-200 bg-purple-50 p-3">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div>
+                                            <b class="text-sm text-purple-900"><i class="fa-solid fa-coins mr-2"></i>Referência de custo das peças</b>
+                                            <p class="text-[10px] text-purple-700">Informação interna para ajudar no orçamento. Não altera o valor cobrado do cliente.</p>
+                                        </div>
+                                        <i x-show="inventory.budgetCosts.loading" class="fa-solid fa-circle-notch fa-spin text-purple-600"></i>
+                                    </div>
+                                    <div x-show="!inventory.budgetCosts.loading && inventory.budgetCosts.items.length > 0" class="mt-3 space-y-2">
+                                        <template x-for="item in inventory.budgetCosts.items" :key="item.ticket_part_item_id">
+                                            <div class="flex flex-col gap-1 rounded-lg border border-purple-100 bg-white/80 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                                <div class="min-w-0">
+                                                    <b class="block truncate text-xs text-gray-800" x-text="item.item_name"></b>
+                                                    <small class="text-[10px] text-gray-500">
+                                                        <span x-text="item.quantity"></span> ×
+                                                        <span x-text="item.unit_cost === null ? 'sem custo' : formatCurrency(item.unit_cost)"></span>
+                                                        · <span x-text="inventoryCostSourceLabel(item.source)"></span>
+                                                    </small>
+                                                </div>
+                                                <b class="text-xs text-purple-900" x-text="item.unit_cost === null ? '—' : formatCurrency(item.subtotal)"></b>
+                                            </div>
+                                        </template>
+                                        <div class="flex items-center justify-between border-t border-purple-200 pt-2 text-sm">
+                                            <span class="font-bold text-purple-900">Custo de referência</span>
+                                            <b class="text-base text-purple-900" x-text="formatCurrency(inventory.budgetCosts.total)"></b>
+                                        </div>
+                                        <p x-show="inventory.budgetCosts.missingCostCount > 0" class="text-[10px] font-semibold text-amber-700">
+                                            <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                                            <span x-text="inventory.budgetCosts.missingCostCount + ' peça(s) ainda não possuem histórico de custo.'"></span>
+                                        </p>
+                                    </div>
+                                    <p x-show="!inventory.budgetCosts.loading && inventory.budgetCosts.items.length === 0" class="mt-2 text-xs text-purple-700">Nenhuma peça vinculada a esta OS.</p>
+                                </div>
+
+                                <div class="flex flex-wrap gap-3 items-center">
                                 <!-- Send Budget Button -->
                                 <button @click="sendBudget(selectedTicket)"
                                         :disabled="!canExecuteAction(selectedTicket, 'sendBudget')"
@@ -7118,6 +7177,7 @@
                                         :class="!canExecuteAction(selectedTicket, 'denyRepair') ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'">
                                     <i class="fa-solid fa-xmark mr-1"></i> Negar
                                 </button>
+                                </div>
                             </div>
                         </template>
 
@@ -8556,10 +8616,44 @@
     <!-- Structured Purchase Modal -->
     <div x-show="modals.inventoryPurchase" x-cloak class="fixed inset-0 z-[115] flex items-center justify-center p-3 bg-black/60">
         <div @click.outside="modals.inventoryPurchase = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
-            <div class="px-5 py-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-lg text-gray-800">Montar compra de peças</h3><p class="text-xs text-gray-500">Selecione o fornecedor e somente as faltas que entrarão nesta compra.</p></div><button @click="modals.inventoryPurchase = false" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="px-5 py-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-lg text-gray-800">Montar compra de peças</h3><p class="text-xs text-gray-500">Informe o custo unitário da compra. O último custo é sugerido quando houver histórico.</p></div><button @click="modals.inventoryPurchase = false" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
             <div class="p-5 border-b bg-gray-50 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-4"><label><span class="text-xs font-bold text-gray-600 block mb-1">Fornecedor *</span><select x-model="inventory.purchaseForm.supplier_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="supplier in fornecedores" :key="supplier.id"><option :value="supplier.id" x-text="supplier.razao_social"></option></template></select></label><label class="flex items-end pb-2"><span class="flex items-center gap-2 text-sm font-bold text-red-700"><input type="checkbox" x-model="inventory.purchaseForm.urgent" class="w-5 h-5 rounded text-red-600">Compra urgente</span></label></div>
-            <div class="flex-grow overflow-y-auto divide-y divide-gray-100"><template x-for="item in inventory.purchaseForm.items" :key="item.ticket_part_item_id"><label class="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50"><input type="checkbox" x-model="item.selected" class="w-5 h-5 rounded text-brand-500"><span class="min-w-0 flex-grow"><b class="text-sm text-gray-800 block truncate" x-text="item.item_name"></b><small class="text-gray-500">OS <span x-text="item.os_number || 'sem número'"></span> · falta <b x-text="item.missing_quantity"></b></small></span><span class="w-28"><small class="text-[10px] font-bold text-gray-500 block mb-1">Comprar</small><input type="number" min="0.001" :max="item.missing_quantity" step="0.001" x-model.number="item.quantity" :disabled="!item.selected" class="w-full border rounded-lg px-2 py-2 text-sm disabled:bg-gray-100"></span></label></template></div>
-            <div class="p-5 border-t space-y-3"><input x-model="inventory.purchaseForm.notes" class="w-full border rounded-xl px-3 py-2.5 text-sm" placeholder="Observação da compra (opcional)"><div class="flex justify-end gap-2"><button @click="modals.inventoryPurchase = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="submitInventoryPurchase()" class="px-5 py-2 rounded-xl bg-purple-600 text-white font-bold text-sm"><i class="fa-solid fa-cart-check mr-2"></i>Registrar compra</button></div></div>
+            <div class="flex-grow overflow-y-auto divide-y divide-gray-100">
+                <template x-for="item in inventory.purchaseForm.items" :key="item.ticket_part_item_id">
+                    <div class="p-4 hover:bg-gray-50">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
+                            <div class="flex min-w-0 flex-grow items-start gap-3">
+                                <input type="checkbox" x-model="item.selected" class="mt-2 w-5 h-5 rounded text-brand-500">
+                                <div class="min-w-0 flex-grow">
+                                    <b class="text-sm text-gray-800 block truncate" x-text="item.item_name"></b>
+                                    <small class="text-gray-500">OS <span x-text="item.os_number || 'sem número'"></span> · falta <b x-text="item.missing_quantity"></b></small>
+                                    <small x-show="item.has_cost_history" class="mt-1 block text-[10px] font-semibold text-purple-700">
+                                        <i class="fa-solid fa-clock-rotate-left mr-1"></i>Último custo: <span x-text="formatCurrency(item.last_cost)"></span>
+                                    </small>
+                                    <small x-show="!item.has_cost_history" class="mt-1 block text-[10px] font-semibold text-amber-700">
+                                        <i class="fa-solid fa-circle-info mr-1"></i>Sem histórico de custo; informe o valor desta compra.
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="grid w-full grid-cols-2 gap-2 sm:w-56 sm:flex-shrink-0">
+                                <label><small class="text-[10px] font-bold text-gray-500 block mb-1">Comprar</small><input type="number" min="0.001" :max="item.missing_quantity" step="0.001" x-model.number="item.quantity" :disabled="!item.selected" class="w-full border rounded-lg px-2 py-2 text-sm disabled:bg-gray-100"></label>
+                                <label><small class="text-[10px] font-bold text-gray-500 block mb-1">Custo unit. *</small><input type="number" min="0" max="9999999999.9999" step="0.01" x-model="item.unit_cost" :disabled="!item.selected" class="w-full border rounded-lg px-2 py-2 text-sm disabled:bg-gray-100" placeholder="R$ 0,00"></label>
+                            </div>
+                        </div>
+                        <div x-show="item.selected && String(item.unit_cost ?? '').trim() !== ''" class="mt-2 flex justify-end text-[11px] text-gray-500">
+                            Subtotal: <b class="ml-1 text-purple-800" x-text="formatCurrency(Number(item.quantity || 0) * Number(item.unit_cost || 0))"></b>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="p-5 border-t space-y-3">
+                <div class="flex items-center justify-between rounded-xl bg-purple-50 border border-purple-100 px-3 py-2 text-sm text-purple-900">
+                    <span class="font-bold">Total previsto da compra</span>
+                    <b x-text="formatCurrency(inventory.purchaseForm.items.filter(item => item.selected).reduce((total, item) => total + (Number(item.quantity || 0) * Number(item.unit_cost || 0)), 0))"></b>
+                </div>
+                <input x-model="inventory.purchaseForm.notes" class="w-full border rounded-xl px-3 py-2.5 text-sm" placeholder="Observação da compra (opcional)">
+                <div class="flex justify-end gap-2"><button @click="modals.inventoryPurchase = false" class="px-4 py-2 rounded-xl border font-bold text-sm text-gray-600">Cancelar</button><button @click="submitInventoryPurchase()" class="px-5 py-2 rounded-xl bg-purple-600 text-white font-bold text-sm"><i class="fa-solid fa-cart-check mr-2"></i>Registrar compra</button></div>
+            </div>
         </div>
     </div>
 
@@ -8682,13 +8776,13 @@
     <script src="js/modules/recycle-bin-service.js"></script>
     <script src="js/modules/customer-service.js?v=2"></script>
     <script src="js/modules/warranty-service.js?v=1"></script>
-    <script src="js/modules/inventory-query-service.js?v=1"></script>
+    <script src="js/modules/inventory-query-service.js?v=2"></script>
     <script src="js/modules/inventory-catalog-service.js?v=2"></script>
     <script src="js/modules/inventory-actions.js?v=1"></script>
-    <script src="js/modules/inventory-management-service.js?v=2"></script>
+    <script src="js/modules/inventory-management-service.js?v=3"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=37"></script>
+    <script src="js/main.js?v=38"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"

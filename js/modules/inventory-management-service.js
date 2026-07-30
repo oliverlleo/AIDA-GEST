@@ -75,14 +75,18 @@
         },
 
         async createPurchase(deps, form) {
-            const allocations = (form.items || [])
-                .filter(item => item.selected && number(item.quantity) > 0)
-                .map(item => ({
-                    ticket_part_item_id: item.ticket_part_item_id,
-                    quantity: number(item.quantity)
-                }));
+            const selectedItems = (form.items || [])
+                .filter(item => item.selected && number(item.quantity) > 0);
             if (!form.supplier_id) throw new Error('Selecione o fornecedor.');
-            if (!allocations.length) throw new Error('Selecione ao menos uma peça pendente.');
+            if (!selectedItems.length) throw new Error('Selecione ao menos uma peça pendente.');
+            if (selectedItems.some(item => String(item.unit_cost ?? '').trim() === '' || number(item.unit_cost, -1) < 0)) {
+                throw new Error('Informe o custo unitário de cada peça selecionada.');
+            }
+            const allocations = selectedItems.map(item => ({
+                ticket_part_item_id: item.ticket_part_item_id,
+                quantity: number(item.quantity),
+                unit_cost: number(item.unit_cost)
+            }));
             return await request(deps, 'create_inventory_purchase', {
                 p_supplier_id: form.supplier_id,
                 p_allocations: allocations,
@@ -93,6 +97,12 @@
 
         async loadTicketParts(deps, ticketId) {
             return await request(deps, 'get_ticket_inventory_parts', {
+                p_ticket_id: ticketId
+            });
+        },
+
+        async loadTicketBudgetCosts(deps, ticketId) {
+            return await request(deps, 'get_ticket_inventory_budget_costs', {
                 p_ticket_id: ticketId
             });
         },

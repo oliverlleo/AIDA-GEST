@@ -41,9 +41,34 @@
                 }));
             }
             const byId = new Map(responses.flatMap(response => Array.isArray(response) ? response : []).map(row => [row.id, row.inventory_summary]));
-            return items.map(ticket => byId.has(ticket.id)
+            let hydrated = items.map(ticket => byId.has(ticket.id)
                 ? { ...ticket, inventory_summary: byId.get(ticket.id) }
                 : ticket);
+
+            const canViewCosts = deps.state.hasRole?.('admin') || deps.state.hasRole?.('atendente');
+            const budgetIds = [...new Set(
+                hydrated
+                    .filter(ticket => ticket?.status === 'Aprovacao')
+                    .map(ticket => ticket?.id)
+                    .filter(Boolean)
+            )];
+            if (!canViewCosts || !budgetIds.length) return hydrated;
+
+            const costResponses = [];
+            for (let index = 0; index < budgetIds.length; index += 100) {
+                costResponses.push(await deps.supabaseFetch('rpc/get_ticket_inventory_budget_cost_summaries', 'POST', {
+                    p_ticket_ids: budgetIds.slice(index, index + 100)
+                }));
+            }
+            const costsById = new Map(
+                costResponses
+                    .flatMap(response => Array.isArray(response) ? response : [])
+                    .map(row => [row.id, row.inventory_cost_summary])
+            );
+            hydrated = hydrated.map(ticket => costsById.has(ticket.id)
+                ? { ...ticket, inventory_cost_summary: costsById.get(ticket.id) }
+                : ticket);
+            return hydrated;
         },
         async fetchCreationCatalog(deps, deviceModel, options = {}) {
             const response = await deps.supabaseFetch('rpc/get_inventory_creation_catalog_page', 'POST', {

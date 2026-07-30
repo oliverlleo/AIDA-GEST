@@ -519,6 +519,7 @@ function app() {
             purchaseForm: { supplier_id: '', urgent: false, notes: '', items: [] },
             receiptForm: { purchaseId: '', supplierName: '', items: [], confirmAllocation: true },
             ticketPartsDetail: { ticketId: '', items: [], loading: false },
+            budgetCosts: { ticketId: '', items: [], total: 0, missingCostCount: 0, loading: false },
             returnForm: { reservation_id: '', item_name: '', max_quantity: 0, quantity: 0, reason: '' },
             cancelPurchaseForm: { purchaseId: '', reason: '' },
             partRequest: { ticketId: '', stage: 'analysis', allocateNow: false, afterSubmit: null, search: '', items: [], catalog: [], hasMore: false, nextCursor: null, loading: false },
@@ -796,6 +797,24 @@ function app() {
 
         isInventoryEnabled() {
             return window.AIDAConfigHelpers.isInventoryEnabled(this.trackerConfig);
+        },
+
+        canViewInventoryCosts() {
+            return this.isInventoryEnabled() && (this.hasRole('admin') || this.hasRole('atendente'));
+        },
+
+        formatCurrency(value) {
+            const amount = Number(value);
+            return Number.isFinite(amount)
+                ? amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                : '—';
+        },
+
+        inventoryCostSourceLabel(source) {
+            if (source === 'current_purchase') return 'Compra registrada';
+            if (source === 'last_purchase') return 'Última compra';
+            if (source === 'last_cost') return 'Último custo';
+            return 'Sem histórico';
         },
 
         isWarrantyEnabled() {
@@ -2426,7 +2445,12 @@ function app() {
             if (!pending.length) return this.notify('Esta OS não possui quantidade aguardando compra.', 'error');
             this.inventory.purchaseForm = {
                 supplier_id: '', urgent: false, notes: '',
-                items: pending.map(item => ({ ...item, selected: true, quantity: Number(item.missing_quantity) }))
+                items: pending.map(item => ({
+                    ...item,
+                    selected: true,
+                    quantity: Number(item.missing_quantity),
+                    unit_cost: item.has_cost_history ? Number(item.last_cost) : ''
+                }))
             };
             this.modals.inventoryPurchase = true;
         },
@@ -2474,6 +2498,9 @@ function app() {
                 await this.loadInventory(true);
                 await this.refreshPostMutation(true);
                 await this.fetchGlobalLogs();
+                if (this.selectedTicket && affectedTicketIds.includes(this.selectedTicket.id)) {
+                    await this.loadTicketInventoryBudgetCosts(this.selectedTicket);
+                }
             } catch (error) { this.notify('Erro ao registrar compra: ' + error.message, 'error'); }
             finally { this.loading = false; }
         },
@@ -2492,6 +2519,39 @@ function app() {
                 this.modals.inventoryTicketParts = false;
                 this.notify('Erro ao carregar peças da OS: ' + error.message, 'error');
             } finally { this.inventory.ticketPartsDetail.loading = false; }
+        },
+
+        async loadTicketInventoryBudgetCosts(ticketOrId) {
+            const ticket = this.resolveTicket(ticketOrId);
+            if (!ticket || !this.canViewInventoryCosts() || ticket.status !== 'Aprovacao') {
+                this.inventory.budgetCosts = { ticketId: '', items: [], total: 0, missingCostCount: 0, loading: false };
+                return;
+            }
+            const requestTicketId = ticket.id;
+            this.inventory.budgetCosts = {
+                ticketId: requestTicketId,
+                items: [],
+                total: 0,
+                missingCostCount: 0,
+                loading: true
+            };
+            try {
+                const result = await window.AIDAInventoryManagementService.loadTicketBudgetCosts({
+                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                }, requestTicketId);
+                if (this.inventory.budgetCosts.ticketId !== requestTicketId) return;
+                this.inventory.budgetCosts = {
+                    ticketId: requestTicketId,
+                    items: result?.items || [],
+                    total: Number(result?.total || 0),
+                    missingCostCount: Number(result?.missing_cost_count || 0),
+                    loading: false
+                };
+            } catch (error) {
+                if (this.inventory.budgetCosts.ticketId !== requestTicketId) return;
+                this.inventory.budgetCosts.loading = false;
+                this.notify('Erro ao consultar o custo das peças: ' + error.message, 'error');
+            }
         },
 
         openInventoryReturn(reservation) {
@@ -4930,6 +4990,7 @@ function app() {
             this.noteChecklistItems = [];
 
             this.modals.viewTicket = true;
+            this.loadTicketInventoryBudgetCosts(completeTicket);
         },
 
         startEditingDeadlines() {
@@ -6629,7 +6690,13 @@ function app() {
                 });
 
                 if (!response) return;
-                const incoming = Array.isArray(response.items) ? response.items : [];
+                const rawIncoming = Array.isArray(response.items) ? response.items : [];
+                const incoming = modal.key === 'pendingBudgets'
+                    ? await window.AIDATicketQueryService.hydrateTickets({
+                        state: this,
+                        supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    }, rawIncoming)
+                    : rawIncoming;
 
                 if (reset) {
                     modal.items = incoming;
@@ -6674,6 +6741,12 @@ function app() {
                     if (response.counts) this.homeOperationalCounts = response.counts;
                     if (response.status_counts) this.homeStatusCounts = response.status_counts;
                     this.syncHomeOverviewQueues(response.queues || {});
+                    if (this.homeOps.pendingBudgets.length) {
+                        this.homeOps.pendingBudgets = await window.AIDATicketQueryService.hydrateTickets({
+                            state: this,
+                            supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                        }, this.homeOps.pendingBudgets);
+                    }
                 }
             } catch (error) {
                 console.error('Failed to load home operational queue', error);
