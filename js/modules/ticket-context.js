@@ -16,13 +16,19 @@ window.AIDATicketContext = {
 
         if (!targetId) return null;
 
-        // Always try to get fresh data from the main array
+        // Enquanto o modal estiver aberto, ele possui a OS completa e recebe
+        // as mutações mais recentes. Os cards podem ser resumos e ficar
+        // momentaneamente atrás do modal durante uma atualização.
+        if (selectedTicketFallback && selectedTicketFallback.id === targetId) {
+            return selectedTicketFallback;
+        }
+
         const found = ticketsArray.find(t => t.id === targetId);
 
         // Fallbacks
         if (found) return found;
         if (typeof ticketOrId === 'object' && ticketOrId.id) return ticketOrId;
-        return selectedTicketFallback;
+        return null;
     },
 
     // Safely sets the context when opening a modal
