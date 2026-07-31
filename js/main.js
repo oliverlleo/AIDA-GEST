@@ -104,7 +104,8 @@ function app() {
             pendingTracking: 0, pendingDelivery: 0, pendingTech: 0,
             outsourcedToSend: 0, pendingOutsourced: 0, pendingPurchase: 0,
             pendingReceipt: 0, priorityTickets: 0, expiringDeliveries: 0,
-            expiredDeliveries: 0, expiringAnalysis: 0, expiredAnalysis: 0
+            expiredDeliveries: 0, expiringAnalysis: 0, expiredAnalysis: 0,
+            pendingTests: 0, unscheduledTickets: 0
         },
         overviewQueueModal: {
             open: false, key: '', title: '', total: 0, items: [],
@@ -341,7 +342,9 @@ function app() {
             pendingTracking: [],
             pendingDelivery: [],
             outsourcedToSend: [],
-            pendingOutsourced: []
+            pendingOutsourced: [],
+            pendingTests: [],
+            unscheduledTickets: []
         },
         metrics: {
              filteredTickets: [],
@@ -934,7 +937,7 @@ function app() {
                     this.fetchDeviceModels(),
                     this.fetchDefectOptions(),
                     this.fetchOutsourcedCompanies(),
-                    (this.isModuleEnabled('suppliers') || this.isInventoryEnabled()) ? this.fetchFornecedores() : Promise.resolve()
+                    this.isModuleEnabled('suppliers') ? this.fetchFornecedores() : Promise.resolve()
                 ]);
 
                 // Initial global logs load
@@ -2571,7 +2574,9 @@ function app() {
                 : this.inventory.pendingParts;
             if (!pending.length) return this.notify('Esta OS não possui quantidade aguardando compra.', 'error');
             this.inventory.purchaseForm = {
-                supplier_id: '', urgent: false, notes: '',
+                supplier_id: '', supplier_name: '',
+                supplier_registry_enabled: this.isModuleEnabled('suppliers'),
+                urgent: false, notes: '',
                 items: pending.map(item => ({
                     ...item,
                     selected: true,
@@ -5894,6 +5899,7 @@ function app() {
             this.purchaseFlow = {
                 ticketId: ticket.id,
                 supplierId: '',
+                supplierName: '',
                 items: [{ name: ticket.parts_needed || '', quantity: 1 }]
             };
             this.modals.supplierPurchase = true;
@@ -6875,6 +6881,8 @@ function app() {
                 pendingOutsourced: 'Aguardando Retorno do Terceirizado',
                 pendingPurchase: 'Aguardando Compra',
                 pendingReceipt: 'Aguardando Recebimento',
+                pendingTests: 'Aguardando Teste Final',
+                unscheduledTickets: 'Sem Agendamento',
                 priorityTickets: 'Prioridade',
                 expiringDeliveries: 'Entrega Expirando',
                 expiredDeliveries: 'Entrega Expirada',
@@ -6885,12 +6893,20 @@ function app() {
         },
 
         syncHomeOverviewQueues(queues = {}) {
-            Object.keys(this.homeOpsTotals).forEach(key => {
+            Object.keys(this.homeOpsTotals).filter(key => !['pendingTests', 'unscheduledTickets'].includes(key)).forEach(key => {
                 const queue = queues?.[key] || {};
                 this.homeOps[key] = Array.isArray(queue.items) ? queue.items : [];
                 this.homeOpsTotals[key] = Number(queue.total || 0);
             });
             this.homeOperationalItems = [];
+        },
+
+        syncHomeExtraOverviewQueues(queues = {}) {
+            ['pendingTests', 'unscheduledTickets'].forEach(key => {
+                const queue = queues?.[key] || {};
+                this.homeOps[key] = Array.isArray(queue.items) ? queue.items : [];
+                this.homeOpsTotals[key] = Number(queue.total || 0);
+            });
         },
 
         async openOverviewQueueModal(key) {
@@ -6925,7 +6941,10 @@ function app() {
             try {
                 const f = this.homeOperationalFilters;
                 const search = String(f.search || '').trim();
-                const response = await this.supabaseFetch('rpc/get_overview_queue_page', 'POST', {
+                const isExtraQueue = ['pendingTests', 'unscheduledTickets'].includes(modal.key);
+                const response = await this.supabaseFetch(isExtraQueue
+                    ? 'rpc/get_overview_extra_queue_page'
+                    : 'rpc/get_overview_queue_page', 'POST', {
                     p_queue_key: modal.key,
                     p_window: f.window,
                     p_basis: this.getEffectiveOperationalBasis(f.basis),
@@ -6974,7 +6993,8 @@ function app() {
                 this.homeOperationalLoading = true;
                 const f = this.homeOperationalFilters;
                 const search = String(f.search || '').trim();
-                const response = await this.supabaseFetch('rpc/get_operational_queue', 'POST', {
+                const [response, extraQueues] = await Promise.all([
+                    this.supabaseFetch('rpc/get_operational_queue', 'POST', {
                     p_window: f.window,
                     p_basis: this.getEffectiveOperationalBasis(f.basis),
                     p_status: f.status !== 'all' ? f.status : null,
@@ -6982,7 +7002,15 @@ function app() {
                     p_search: search || null,
                     p_limit: 0,
                     p_offset: 0
-                });
+                    }),
+                    this.supabaseFetch('rpc/get_overview_extra_queues', 'POST', {
+                        p_window: f.window,
+                        p_basis: this.getEffectiveOperationalBasis(f.basis),
+                        p_status: f.status !== 'all' ? f.status : null,
+                        p_technician_id: f.technician !== 'all' ? f.technician : null,
+                        p_search: search || null
+                    })
+                ]);
 
                 if (response) {
                     if (response.counts) this.homeOperationalCounts = response.counts;
@@ -6994,6 +7022,7 @@ function app() {
                             supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                         }, this.homeOps.pendingBudgets);
                     }
+                    this.syncHomeExtraOverviewQueues(extraQueues || {});
                 }
             } catch (error) {
                 console.error('Failed to load home operational queue', error);
