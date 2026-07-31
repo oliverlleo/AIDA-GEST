@@ -2835,7 +2835,41 @@
                                     </div>
                                 </div>
                             </div>
-</div>
+                            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div x-show="isOverviewSectionEnabled('tests') && isFinalTestEnabled()" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                    <div class="bg-amber-50 px-4 py-3 border-b border-amber-100 flex justify-between items-center">
+                                        <h4 class="font-bold text-amber-800 text-sm"><i class="fa-solid fa-flask mr-2"></i>Aguardando Teste Final</h4>
+                                        <span class="bg-amber-200 text-amber-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('pendingTests')">0</span>
+                                    </div>
+                                    <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                        <template x-for="t in homeOps.pendingTests" :key="t.id">
+                                            <div class="p-3 hover:bg-gray-50 flex justify-between items-center gap-3">
+                                                <div class="min-w-0">
+                                                    <div class="flex min-w-0 items-center justify-between gap-2"><div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div><span class="shrink-0 inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500" title="Tempo nesta etapa"><i class="fa-regular fa-clock text-[9px]"></i><span x-text="getOverviewQueueAge(t)"></span></span></div>
+                                                    <div class="text-xs text-gray-500 truncate" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
+                                                </div>
+                                                <button @click="viewTicketDetails(t)" class="shrink-0 text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded font-bold hover:bg-amber-200 transition-colors">Ver</button>
+                                            </div>
+                                        </template>
+                                        <div x-show="getHomeOpsTotal('pendingTests') > homeOps.pendingTests.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3"><span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.pendingTests.length + ' de ' + getHomeOpsTotal('pendingTests')"></span><button @click="openOverviewQueueModal('pendingTests')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">Ver mais <span x-text="getHomeOpsRemaining('pendingTests')"></span></button></div>
+                                        <div x-show="!homeOps.pendingTests.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhum teste pendente.</div>
+                                    </div>
+                                </div>
+                                <div x-show="isOverviewSectionEnabled('unscheduled') && isModuleEnabled('agenda') && (isAppointmentTypeEnabled('analysis') || isAppointmentTypeEnabled('repair'))" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                    <div class="bg-sky-50 px-4 py-3 border-b border-sky-100 flex justify-between items-center"><h4 class="font-bold text-sky-800 text-sm"><i class="fa-regular fa-calendar-xmark mr-2"></i>Sem Agendamento</h4><span class="bg-sky-200 text-sky-800 text-xs px-2 py-1 rounded-full font-bold" x-text="getHomeOpsTotal('unscheduledTickets')">0</span></div>
+                                    <div class="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                                        <template x-for="t in homeOps.unscheduledTickets" :key="t.id">
+                                            <div class="p-3 hover:bg-gray-50 flex justify-between items-center gap-3">
+                                                <div class="min-w-0"><div class="flex min-w-0 items-center justify-between gap-2"><div class="font-bold text-gray-800 text-sm truncate" x-text="t.client_name"></div><span class="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold" :class="t.unscheduled_type === 'repair' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'" x-text="t.unscheduled_type === 'repair' ? 'Reparo' : 'Análise'"></span></div><div class="text-xs text-gray-500 truncate" x-text="t.device_model + ' - OS: ' + t.os_number"></div><div class="text-[10px] text-gray-400 mt-1" x-text="getOverviewQueueAge(t)"></div></div>
+                                                <button @click="viewTicketDetails(t)" class="shrink-0 text-xs bg-sky-100 text-sky-700 px-3 py-1.5 rounded font-bold hover:bg-sky-200 transition-colors">Ver</button>
+                                            </div>
+                                        </template>
+                                        <div x-show="getHomeOpsTotal('unscheduledTickets') > homeOps.unscheduledTickets.length" class="px-3 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3"><span class="text-[11px] text-gray-500" x-text="'Mostrando ' + homeOps.unscheduledTickets.length + ' de ' + getHomeOpsTotal('unscheduledTickets')"></span><button @click="openOverviewQueueModal('unscheduledTickets')" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 hover:underline whitespace-nowrap">Ver mais <span x-text="getHomeOpsRemaining('unscheduledTickets')"></span></button></div>
+                                        <div x-show="!homeOps.unscheduledTickets.length" class="p-4 text-center text-gray-400 text-sm italic">Nenhuma OS sem agendamento.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <!-- Col 2: Alerts & Activity (1/3) -->
                         <div class="space-y-6">
                             <!-- Critical Alerts -->
@@ -7776,19 +7810,24 @@
                     <h3 class="text-lg leading-6 font-bold text-gray-900 mb-4">Registrar Compra</h3>
 
                     <div class="space-y-4">
-                        <div>
+                        <div x-show="isModuleEnabled('suppliers')">
                             <div class="flex justify-between items-center mb-1">
                                 <label class="block text-sm font-bold text-gray-700">Selecione o Fornecedor *</label>
                                 <button type="button" @click="openFornecedorModal()" class="text-xs text-brand-600 font-bold hover:text-brand-800">
                                     <i class="fa-solid fa-plus"></i> Novo
                                 </button>
                             </div>
-                            <select x-model="purchaseFlow.supplierId" required class="w-full border-gray-300 rounded-lg shadow-sm focus:border-black focus:ring-black">
+                            <select x-model="purchaseFlow.supplierId" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-black focus:ring-black">
                                 <option value="" disabled>Selecione...</option>
                                 <template x-for="f in fornecedores" :key="f.id">
                                     <option :value="f.id" x-text="f.razao_social"></option>
                                 </template>
                             </select>
+                        </div>
+                        <div x-show="!isModuleEnabled('suppliers')">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Fornecedor da compra *</label>
+                            <input x-model.trim="purchaseFlow.supplierName" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-black focus:ring-black" placeholder="Ex.: Loja de peças do centro">
+                            <p class="mt-1 text-xs text-gray-500">Cadastro de fornecedores está desligado; este nome ficará apenas no histórico desta compra.</p>
                         </div>
 
                         <div>
@@ -8698,7 +8737,11 @@
     <div x-show="modals.inventoryPurchase" x-cloak class="fixed inset-0 z-[115] flex items-center justify-center p-3 bg-black/60">
         <div @click.outside="modals.inventoryPurchase = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
             <div class="px-5 py-4 border-b flex items-center justify-between"><div><h3 class="font-bold text-lg text-gray-800">Montar compra de peças</h3><p class="text-xs text-gray-500">Informe o custo unitário da compra. O último custo é sugerido quando houver histórico.</p></div><button @click="modals.inventoryPurchase = false" class="text-gray-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
-            <div class="p-5 border-b bg-gray-50 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-4"><label><span class="text-xs font-bold text-gray-600 block mb-1">Fornecedor *</span><select x-model="inventory.purchaseForm.supplier_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="supplier in fornecedores" :key="supplier.id"><option :value="supplier.id" x-text="supplier.razao_social"></option></template></select></label><label class="flex items-end pb-2"><span class="flex items-center gap-2 text-sm font-bold text-red-700"><input type="checkbox" x-model="inventory.purchaseForm.urgent" class="w-5 h-5 rounded text-red-600">Compra urgente</span></label></div>
+            <div class="p-5 border-b bg-gray-50 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-4">
+                <label x-show="isModuleEnabled('suppliers')"><span class="text-xs font-bold text-gray-600 block mb-1">Fornecedor *</span><select x-model="inventory.purchaseForm.supplier_id" class="w-full border rounded-xl px-3 py-2.5 bg-white"><option value="">Selecione</option><template x-for="supplier in fornecedores" :key="supplier.id"><option :value="supplier.id" x-text="supplier.razao_social"></option></template></select></label>
+                <label x-show="!isModuleEnabled('suppliers')"><span class="text-xs font-bold text-gray-600 block mb-1">Fornecedor da compra *</span><input x-model.trim="inventory.purchaseForm.supplier_name" class="w-full border rounded-xl px-3 py-2.5 bg-white" placeholder="Nome do fornecedor não cadastrado"><small class="mt-1 block text-[10px] text-gray-500">O nome será salvo somente no histórico desta compra.</small></label>
+                <label class="flex items-end pb-2"><span class="flex items-center gap-2 text-sm font-bold text-red-700"><input type="checkbox" x-model="inventory.purchaseForm.urgent" class="w-5 h-5 rounded text-red-600">Compra urgente</span></label>
+            </div>
             <div class="flex-grow overflow-y-auto divide-y divide-gray-100">
                 <template x-for="item in inventory.purchaseForm.items" :key="item.ticket_part_item_id">
                     <div class="p-4 hover:bg-gray-50">
@@ -8957,7 +9000,7 @@
                     <label class="border rounded-xl p-4 flex items-center justify-between cursor-pointer"><span><b class="text-sm text-gray-800 block">Aceitar decimais</b><small class="text-xs text-gray-500">Para metros, peso e líquidos.</small></span><input type="checkbox" x-model="inventory.itemForm.allow_decimal" class="w-5 h-5 rounded text-brand-500"></label><label class="border rounded-xl p-4 flex items-center justify-between cursor-pointer"><span><b class="text-sm text-gray-800 block">Item ativo</b><small class="text-xs text-gray-500">Itens arquivados preservam todo o histórico.</small></span><input type="checkbox" x-model="inventory.itemForm.active" class="w-5 h-5 rounded text-brand-500"></label>
                 </div>
                 <details class="border border-gray-200 rounded-xl p-4"><summary class="font-bold text-sm text-gray-800 cursor-pointer"><i class="fa-solid fa-mobile-screen-button text-blue-500 mr-2"></i>Modelos compatíveis <span class="text-gray-400" x-text="`(${inventory.itemForm.model_ids.length})`"></span></summary><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 max-h-44 overflow-y-auto"><template x-for="model in deviceModels" :key="model.id"><label class="flex items-center gap-2 text-sm text-gray-700 border rounded-lg px-3 py-2 cursor-pointer"><input type="checkbox" :value="model.id" x-model="inventory.itemForm.model_ids" class="rounded text-brand-500"><span x-text="model.name"></span></label></template></div></details>
-                <details class="border border-gray-200 rounded-xl p-4"><summary class="font-bold text-sm text-gray-800 cursor-pointer"><i class="fa-solid fa-store text-purple-500 mr-2"></i>Fornecedores vinculados <span class="text-gray-400" x-text="`(${inventory.itemForm.suppliers.length})`"></span></summary><div class="mt-3 space-y-3"><template x-for="(supplier, index) in inventory.itemForm.suppliers" :key="index"><div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_130px_100px_auto] gap-2 border rounded-xl p-3"><select x-model="supplier.supplier_id" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="">Fornecedor</option><template x-for="option in fornecedores" :key="option.id"><option :value="option.id" x-text="option.razao_social"></option></template></select><input x-model="supplier.supplier_sku" class="border rounded-lg px-2 py-2 text-sm" placeholder="Cód. fornecedor"><input type="number" min="0" step="0.01" x-model.number="supplier.last_price" class="border rounded-lg px-2 py-2 text-sm" placeholder="Último preço"><button type="button" @click="removeInventorySupplierLink(index)" class="text-red-500 px-2"><i class="fa-solid fa-trash"></i></button><input x-model="supplier.purchase_url" class="md:col-span-2 border rounded-lg px-2 py-2 text-sm" placeholder="Link de compra"><input type="number" min="0" x-model.number="supplier.lead_time_days" class="border rounded-lg px-2 py-2 text-sm" placeholder="Prazo médio (dias)"><input type="number" min="0.001" step="0.001" x-model.number="supplier.minimum_order_quantity" class="border rounded-lg px-2 py-2 text-sm" placeholder="Compra mínima"><input x-model="supplier.notes" class="md:col-span-3 border rounded-lg px-2 py-2 text-sm" placeholder="Observações deste fornecedor"><label class="flex items-center gap-2 text-xs font-bold text-gray-600"><input type="checkbox" x-model="supplier.preferred" class="rounded text-brand-500">Preferencial</label></div></template><button type="button" @click="addInventorySupplierLink()" class="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-2 rounded-lg"><i class="fa-solid fa-plus mr-1"></i>Vincular fornecedor</button></div></details>
+                <details x-show="isModuleEnabled('suppliers')" class="border border-gray-200 rounded-xl p-4"><summary class="font-bold text-sm text-gray-800 cursor-pointer"><i class="fa-solid fa-store text-purple-500 mr-2"></i>Fornecedores vinculados <span class="text-gray-400" x-text="`(${inventory.itemForm.suppliers.length})`"></span></summary><div class="mt-3 space-y-3"><template x-for="(supplier, index) in inventory.itemForm.suppliers" :key="index"><div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_130px_100px_auto] gap-2 border rounded-xl p-3"><select x-model="supplier.supplier_id" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="">Fornecedor</option><template x-for="option in fornecedores" :key="option.id"><option :value="option.id" x-text="option.razao_social"></option></template></select><input x-model="supplier.supplier_sku" class="border rounded-lg px-2 py-2 text-sm" placeholder="Cód. fornecedor"><input type="number" min="0" step="0.01" x-model.number="supplier.last_price" class="border rounded-lg px-2 py-2 text-sm" placeholder="Último preço"><button type="button" @click="removeInventorySupplierLink(index)" class="text-red-500 px-2"><i class="fa-solid fa-trash"></i></button><input x-model="supplier.purchase_url" class="md:col-span-2 border rounded-lg px-2 py-2 text-sm" placeholder="Link de compra"><input type="number" min="0" x-model.number="supplier.lead_time_days" class="border rounded-lg px-2 py-2 text-sm" placeholder="Prazo médio (dias)"><input type="number" min="0.001" step="0.001" x-model.number="supplier.minimum_order_quantity" class="border rounded-lg px-2 py-2 text-sm" placeholder="Compra mínima"><input x-model="supplier.notes" class="md:col-span-3 border rounded-lg px-2 py-2 text-sm" placeholder="Observações deste fornecedor"><label class="flex items-center gap-2 text-xs font-bold text-gray-600"><input type="checkbox" x-model="supplier.preferred" class="rounded text-brand-500">Preferencial</label></div></template><button type="button" @click="addInventorySupplierLink()" class="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-2 rounded-lg"><i class="fa-solid fa-plus mr-1"></i>Vincular fornecedor</button></div></details>
                 <details class="border border-gray-200 rounded-xl p-4"><summary class="font-bold text-sm text-gray-800 cursor-pointer"><i class="fa-solid fa-code-branch text-green-500 mr-2"></i>Equivalentes e substitutas <span class="text-gray-400" x-text="`(${inventory.itemForm.relations.length})`"></span></summary><div class="mt-3 space-y-2"><template x-for="(relation, index) in inventory.itemForm.relations" :key="index"><div class="grid grid-cols-[130px_minmax(0,1fr)_auto] gap-2"><select x-model="relation.relation_type" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="equivalent">Equivalente</option><option value="substitute">Substituta</option></select><select x-model="relation.target_item_id" class="border rounded-lg px-2 py-2 text-sm bg-white"><option value="">Selecione a peça</option><template x-for="option in inventory.items.filter(i => i.id !== inventory.itemForm.id)" :key="option.id"><option :value="option.id" x-text="option.name"></option></template></select><button type="button" @click="removeInventoryRelation(index)" class="text-red-500 px-2"><i class="fa-solid fa-trash"></i></button></div></template><button type="button" @click="addInventoryRelation()" class="text-xs font-bold text-green-700 bg-green-50 px-3 py-2 rounded-lg"><i class="fa-solid fa-plus mr-1"></i>Adicionar relação</button></div></details>
                 <div x-show="inventory.itemForm.id" class="flex justify-start"><button type="button" @click="archiveInventoryItem(inventory.itemForm); modals.inventoryItem = false" class="text-red-600 text-xs font-bold px-3 py-2 rounded-lg hover:bg-red-50"><i class="fa-solid fa-box-archive mr-2"></i>Arquivar item</button></div>                <div class="flex justify-end gap-3 pt-2"><button type="button" @click="modals.inventoryItem = false" class="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm">Cancelar</button><button type="submit" :disabled="loading" class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-sm disabled:opacity-50"><i class="fa-solid fa-check mr-2"></i>Salvar item</button></div>
             </form>
@@ -8996,7 +9039,7 @@
     <script src="js/modules/ticket-context.js?v=2"></script>
     <script src="js/modules/workflow-rules.js"></script>
     <script src="js/modules/ticket-mutations.js"></script>
-    <script src="js/modules/ticket-actions.js?v=7"></script>
+    <script src="js/modules/ticket-actions.js?v=8"></script>
     <script src="js/modules/api-client.js?v=2"></script>
     <script src="js/modules/schedule-error-service.js?v=1"></script>
     <script src="js/modules/storage-service.js?v=4"></script>
@@ -9014,10 +9057,10 @@
     <script src="js/modules/inventory-query-service.js?v=2"></script>
     <script src="js/modules/inventory-catalog-service.js?v=2"></script>
     <script src="js/modules/inventory-actions.js?v=1"></script>
-    <script src="js/modules/inventory-management-service.js?v=4"></script>
+    <script src="js/modules/inventory-management-service.js?v=5"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=41"></script>
+    <script src="js/main.js?v=42"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
