@@ -2,28 +2,12 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="referrer" content="no-referrer">
     <title>Acompanhe seu Reparo | CentralOS</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            500: '#FF6B00',
-                            600: '#E65100',
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
+    <script src="js/design-config.js?v=1"></script>
     <!-- Alpine.js -->
     <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
     <!-- FontAwesome -->
@@ -31,8 +15,9 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="js/supabase-config.js"></script>
+    <link rel="stylesheet" href="css/design-system.css?v=1">
 </head>
-<body class="text-gray-900 font-sans min-h-screen flex items-center justify-center p-4 transition-colors duration-500"
+<body class="aida-ui aida-tracker text-gray-900 font-sans min-h-screen flex items-center justify-center p-4 transition-colors duration-500"
       x-data="tracker()"
       :style="`background-color: ${config.colors.background}`">
 
