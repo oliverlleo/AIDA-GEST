@@ -857,8 +857,14 @@ window.AIDATicketActions = {
     },
 
     async submitPurchase(deps) {
-        if (!deps.state.purchaseFlow.supplierId) {
+        const supplierRegistryEnabled = deps.isModuleEnabled('suppliers');
+        const manualSupplierName = String(deps.state.purchaseFlow.supplierName || '').trim();
+        if (supplierRegistryEnabled && !deps.state.purchaseFlow.supplierId) {
             alert('Selecione um fornecedor.');
+            return;
+        }
+        if (!supplierRegistryEnabled && manualSupplierName.length < 2) {
+            alert('Informe o nome do fornecedor.');
             return;
         }
         if (deps.state.purchaseFlow.items.length === 0 || deps.state.purchaseFlow.items.some(i => !i.name || i.quantity < 1)) {
@@ -867,12 +873,19 @@ window.AIDATicketActions = {
         }
 
         const ticket = deps.state.tickets.find(t => t.id === deps.state.purchaseFlow.ticketId);
-        const supplier = deps.state.fornecedores.find(f => f.id === deps.state.purchaseFlow.supplierId);
+        const supplier = supplierRegistryEnabled
+            ? deps.state.fornecedores.find(f => f.id === deps.state.purchaseFlow.supplierId)
+            : null;
+        if (supplierRegistryEnabled && !supplier) {
+            alert('Fornecedor não encontrado. Atualize a tela e tente novamente.');
+            return;
+        }
+        const supplierName = supplier?.razao_social || manualSupplierName;
         const ctx = deps.getLogContext(ticket);
 
         const purchaseData = {
-            supplier_id: supplier.id,
-            supplier_name: supplier.razao_social,
+            supplier_id: supplier?.id || null,
+            supplier_name: supplierName,
             items: deps.state.purchaseFlow.items,
             purchased_at: new Date().toISOString(),
             purchased_by: deps.state.employeeSession ? deps.state.employeeSession.employee_id : null
@@ -885,7 +898,7 @@ window.AIDATicketActions = {
 
         const actionLog = {
             action: 'Confirmou Compra',
-            details: `Compra de **${itemsStr}** do fornecedor **${supplier.razao_social || 'Desconhecido'}** para o **${ctx.device}** de **${ctx.client}** foi realizada.`
+            details: `Compra de **${itemsStr}** do fornecedor **${supplierName}** para o **${ctx.device}** de **${ctx.client}** foi realizada.`
         };
 
         const updates = {
@@ -900,7 +913,7 @@ window.AIDATicketActions = {
             deps.closeModal('supplierPurchase');
 
             // Open WhatsApp
-            if (supplier.whatsapp) {
+            if (supplier?.whatsapp) {
                 let phone = supplier.whatsapp.replace(/\D/g, '');
                 if (phone.length === 10 || phone.length === 11) {
                     phone = '55' + phone; // Add country code if not present
@@ -1059,4 +1072,3 @@ window.AIDATicketActions = {
         }
     }
 };
-

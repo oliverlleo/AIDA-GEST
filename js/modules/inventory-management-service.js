@@ -85,7 +85,10 @@
         async createPurchase(deps, form) {
             const selectedItems = (form.items || [])
                 .filter(item => item.selected && number(item.quantity) > 0);
-            if (!form.supplier_id) throw new Error('Selecione o fornecedor.');
+            const supplierRegistryEnabled = form.supplier_registry_enabled !== false;
+            const supplierName = String(form.supplier_name || '').trim();
+            if (supplierRegistryEnabled && !form.supplier_id) throw new Error('Selecione o fornecedor.');
+            if (!supplierRegistryEnabled && supplierName.length < 2) throw new Error('Informe o nome do fornecedor.');
             if (!selectedItems.length) throw new Error('Selecione ao menos uma peça pendente.');
             if (selectedItems.some(item => String(item.unit_cost ?? '').trim() === '' || number(item.unit_cost, -1) < 0)) {
                 throw new Error('Informe o custo unitário de cada peça selecionada.');
@@ -99,7 +102,8 @@
                 p_supplier_id: form.supplier_id,
                 p_allocations: allocations,
                 p_urgent: Boolean(form.urgent),
-                p_notes: String(form.notes || '').trim() || null
+                p_notes: String(form.notes || '').trim() || null,
+                p_supplier_name: supplierRegistryEnabled ? null : supplierName
             });
         },
 
