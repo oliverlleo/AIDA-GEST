@@ -35,6 +35,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="centralos-mobile-login-firstpaint.css?v=1">
 
     <style>
         [x-cloak] { display: none !important; }
@@ -48,10 +49,20 @@
 <body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
 
     <!-- VIEW: LOGIN/REGISTER (If not logged in) -->
-                <div id="login-screen" x-show="!session && !employeeSession && !registrationSuccess && view !== 'setup_required'" class="fixed inset-0 bg-white z-[10000] overflow-y-auto">
+                <div id="login-screen" x-show="!session && !employeeSession && !registrationSuccess && view !== 'setup_required'" class="centralos-login-ref fixed inset-0 bg-white z-[10000] overflow-y-auto">
                     <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-                        <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-                            <div class="text-center mb-8">
+                        <section class="centralos-login-hero" aria-hidden="true">
+                            <img class="centralos-login-logo" src="logologin.png" alt="">
+                            <div class="centralos-login-title"><h1>Bem-vindo de volta</h1><p>Acesse sua central de assistência técnica.</p></div>
+                            <div class="centralos-login-side">Tudo encontra<br>seu lugar.</div>
+                            <div class="centralos-login-metrics">
+                                <div class="centralos-login-metric"><i class="fa-solid fa-chart-simple"></i><span>Mais<br>organização</span></div>
+                                <div class="centralos-login-metric"><i class="fa-regular fa-clock"></i><span>Mais<br>produtividade</span></div>
+                                <div class="centralos-login-metric"><i class="fa-solid fa-user-group"></i><span>Mais<br>resultados</span></div>
+                            </div>
+                        </section>
+                        <div class="centralos-login-card max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+                            <div class="centralos-login-oldhead text-center mb-8">
                                 <img src="logologin.png" alt="TechAssist" class="h-[72px] mx-auto mb-4">
                                 <h2 class="text-2xl font-bold text-gray-900">Acesso ao Sistema</h2>
                             </div>
@@ -66,11 +77,15 @@
                                 <input type="text" x-model="loginForm.company_code" placeholder="Código da Empresa" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
                                 <input type="text" x-model="loginForm.username" placeholder="Usuário" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
                                 <input type="password" x-model="loginForm.password" placeholder="Senha" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
+                                <div class="centralos-login-remember">
+                                    <label><input type="checkbox"><span>Lembrar de mim</span></label>
+                                    <button type="button" class="centralos-login-forgot">Esqueci minha senha?</button>
+                                </div>
                                 <button type="submit" class="w-full bg-brand-500 text-white font-bold py-3 rounded-lg hover:bg-brand-600 transition-colors shadow-lg shadow-orange-500/30">Entrar</button>
                             </form>
 
                             <!-- Admin Form -->
-                            <form x-show="authMode === 'admin_login'" @submit.prevent="loginAdmin" class="space-y-4">
+                            <form x-cloak x-show="authMode === 'admin_login'" @submit.prevent="loginAdmin" class="space-y-4">
                                 <input type="email" x-model="adminForm.email" placeholder="E-mail Admin" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
                                 <input type="password" x-model="adminForm.password" placeholder="Senha" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
                                 <button type="submit" class="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors">Entrar Admin</button>
@@ -78,7 +93,7 @@
                             </form>
 
                             <!-- Register Form -->
-                             <form x-show="authMode === 'admin_register'" @submit.prevent="registerAdmin" class="space-y-4">
+                             <form x-cloak x-show="authMode === 'admin_register'" @submit.prevent="registerAdmin" class="space-y-4">
                                 <input type="email" x-model="registerForm.email" placeholder="Seu E-mail" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
                                 <div>
                                     <input type="password" x-model="registerForm.password" placeholder="Crie uma Senha" minlength="8" maxlength="72" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
@@ -87,6 +102,21 @@
                                 <button type="submit" class="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors">Cadastrar</button>
                                 <p class="text-center text-sm text-gray-500 mt-4 cursor-pointer hover:text-brand-500" @click="authMode = 'admin_login'">Voltar ao Login</p>
                             </form>
+                            <div class="centralos-login-extras">
+                                <div class="centralos-login-divider">OU</div>
+                                <button type="button" class="centralos-login-code"><i class="fa-solid fa-qrcode"></i><span>Entrar com código</span><b>›</b></button>
+                                <div class="centralos-login-info" aria-disabled="true">
+                                    <div class="centralos-login-finger"><i class="fa-solid fa-fingerprint"></i></div>
+                                    <div><strong>Acesso mais rápido</strong><span>Use sua biometria para entrar no CentralOS.</span></div>
+                                    <span class="centralos-login-soon">Em breve</span>
+                                </div>
+                                <div class="centralos-login-support">
+                                    <div class="centralos-login-headset"><i class="fa-solid fa-headset"></i></div>
+                                    <div><strong>Precisa de ajuda?</strong><span>Fale com o responsável pela sua assistência.</span></div>
+                                    <button type="button">Falar com suporte ›</button>
+                                </div>
+                                <p class="centralos-login-tag">Tudo encontra seu lugar.</p>
+                            </div>
                         </div>
                     </div>
                 </div>

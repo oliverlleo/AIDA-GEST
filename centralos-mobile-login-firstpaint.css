@@ -1,9 +1,3 @@
-(function () {
-  'use strict';
-  const ROOT='centralos-login-ref', STYLE='centralos-login-ref-style';
-  function css(){
-    if(document.getElementById(STYLE)) return;
-    const s=document.createElement('style'); s.id=STYLE; s.textContent=`
 .centralos-login-hero,.centralos-login-extras,.centralos-login-remember{display:none!important}
 @media(max-width:767px){
 .${ROOT}{background:radial-gradient(circle at 91% 26%,rgba(255,90,0,.23),transparent 29%),linear-gradient(135deg,#131517,#050607 52%,#111315)!important;color:#fff;overflow:auto!important}
@@ -30,35 +24,4 @@
 .centralos-login-info,.centralos-login-support{margin-top:15px;display:flex;align-items:center;gap:13px;min-height:74px;padding:13px 14px;border-radius:14px;background:linear-gradient(135deg,#f8fafc,#eef3f8);color:#111827}.centralos-login-finger,.centralos-login-headset{flex:0 0 48px;width:48px;height:48px;display:grid;place-items:center;border-radius:50%;background:#ffe6d7;color:#ff5a00;font-size:25px}.centralos-login-headset{width:40px;height:40px;flex-basis:40px;border-radius:10px;background:#fff;border:1px solid #e0e6ed;font-size:18px}.centralos-login-info strong,.centralos-login-support strong{display:block;font-size:14px}.centralos-login-info span,.centralos-login-support span{display:block;margin-top:3px;color:#758196;font-size:12px;line-height:1.35}.centralos-login-soon{margin-left:auto!important;font-size:9px!important;font-weight:800!important;text-transform:uppercase}.centralos-login-support>div:nth-child(2){flex:1;min-width:0}.centralos-login-support button{min-height:38px;padding:0 11px;border:1px solid #ff9c6d;border-radius:10px;background:#fff;color:#ff5a00;font-size:11px;font-weight:800}
 .centralos-login-tag{margin:28px 0 0;text-align:center;color:#1b2230;font-size:9px;font-weight:800;letter-spacing:.32em;text-transform:uppercase}.centralos-login-tag:after{content:'';display:block;width:39px;height:3px;margin:10px auto 0;border-radius:99px;background:#ff5a00}
 @media(max-width:390px){.centralos-login-side{display:none}.centralos-login-title{max-width:84%}.centralos-login-title h1{font-size:29px}.centralos-login-metric span{font-size:7px}.centralos-login-card{padding-left:18px!important;padding-right:18px!important}.centralos-login-support span{display:none}}
-}`; document.head.appendChild(s);
-  }
-  function hero(){const e=document.createElement('section');e.className='centralos-login-hero';e.setAttribute('aria-hidden','true');e.innerHTML=`<img class="centralos-login-logo" src="logologin.png" alt=""><div class="centralos-login-title"><h1>Bem-vindo de volta</h1><p>Acesse sua central de assistência técnica.</p></div><div class="centralos-login-side">Tudo encontra<br>seu lugar.</div><div class="centralos-login-metrics"><div class="centralos-login-metric"><i class="fa-solid fa-chart-simple"></i><span>Mais<br>organização</span></div><div class="centralos-login-metric"><i class="fa-regular fa-clock"></i><span>Mais<br>produtividade</span></div><div class="centralos-login-metric"><i class="fa-solid fa-user-group"></i><span>Mais<br>resultados</span></div></div>`;return e}
-  function remember(form){
-    if(!form)return;
-    const submit=form.querySelector('button[type=submit]');if(!submit)return;
-    let r=form.querySelector('.centralos-login-remember');
-    if(!r){r=document.createElement('div');r.className='centralos-login-remember';r.innerHTML=`<label><input type="checkbox"><span>Lembrar de mim</span></label><button type="button" class="centralos-login-forgot">Esqueci minha senha?</button>`;form.insertBefore(r,submit)}
-    if(r.dataset.bound==='1')return;r.dataset.bound='1';
-    const check=r.querySelector('input'),company=form.querySelector('input[x-model="loginForm.company_code"]'),user=form.querySelector('input[x-model="loginForm.username"]');
-    try{const v=JSON.parse(localStorage.getItem('centralos_remember_login')||'null');if(v&&v.company_code&&v.username){check.checked=true;company.value=v.company_code;user.value=v.username;company.dispatchEvent(new Event('input',{bubbles:true}));user.dispatchEvent(new Event('input',{bubbles:true}))}}catch(_){}
-    form.addEventListener('submit',()=>{try{check.checked?localStorage.setItem('centralos_remember_login',JSON.stringify({company_code:company?.value||'',username:user?.value||''})):localStorage.removeItem('centralos_remember_login')}catch(_){}});
-    r.querySelector('button')?.addEventListener('click',()=>alert('Solicite ao administrador da sua assistência a redefinição da senha.'))
-  }
-  function extras(card,form){
-    if(!card)return;
-    let e=card.querySelector('.centralos-login-extras');
-    if(!e){e=document.createElement('div');e.className='centralos-login-extras';e.innerHTML=`<div class="centralos-login-divider">OU</div><button type="button" class="centralos-login-code"><i class="fa-solid fa-qrcode"></i><span>Entrar com código</span><b>›</b></button><div class="centralos-login-info" aria-disabled="true"><div class="centralos-login-finger"><i class="fa-solid fa-fingerprint"></i></div><div><strong>Acesso mais rápido</strong><span>Use sua biometria para entrar no CentralOS.</span></div><span class="centralos-login-soon">Em breve</span></div><div class="centralos-login-support"><div class="centralos-login-headset"><i class="fa-solid fa-headset"></i></div><div><strong>Precisa de ajuda?</strong><span>Fale com o responsável pela sua assistência.</span></div><button type="button">Falar com suporte ›</button></div><p class="centralos-login-tag">Tudo encontra seu lugar.</p>`;card.appendChild(e)}
-    if(e.dataset.bound==='1')return;e.dataset.bound='1';
-    e.querySelector('.centralos-login-code')?.addEventListener('click',()=>{const b=[...card.querySelectorAll('button')].find(x=>(x.getAttribute('@click')||'').includes("authMode = 'employee'"));b?.click();setTimeout(()=>form?.querySelector('input[x-model="loginForm.company_code"]')?.focus(),40)});
-    e.querySelector('.centralos-login-support button')?.addEventListener('click',()=>alert('Para recuperar o acesso, fale com o administrador responsável pela sua assistência técnica.'))
-  }
-  function decorate(){
-    const root=[...document.querySelectorAll('div[x-show]')].find(e=>{const x=e.getAttribute('x-show')||'';return x.includes('!session')&&x.includes('!employeeSession')&&x.includes('registrationSuccess')});if(!root)return false;
-    const shell=root.firstElementChild,card=shell?.querySelector('.centralos-login-card')||shell?.lastElementChild;if(!shell||!card)return false;
-    root.classList.add(ROOT);card.classList.add('centralos-login-card');card.querySelector('.text-center.mb-8')?.classList.add('centralos-login-oldhead');
-    if(!shell.querySelector('.centralos-login-hero'))shell.insertBefore(hero(),card);
-    const form=card.querySelector('form[x-show="authMode === 'employee'"]');remember(form);extras(card,form);return true
-  }
-  function boot(){css();if(decorate())return;const o=new MutationObserver(()=>{if(decorate())o.disconnect()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),15000)}
-  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',boot,{once:true}):boot();
-})();
+}
