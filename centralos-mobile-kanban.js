@@ -207,6 +207,7 @@
         if (button) {
             button.classList.add('centralos-mobile-calendar-link');
             if (!button.dataset.centralosMobileLabel) {
+                button.dataset.centralosMobileOriginalHtml = button.innerHTML;
                 button.dataset.centralosMobileLabel = 'true';
                 const icon = button.querySelector('i');
                 button.childNodes.forEach((node) => {
@@ -227,6 +228,9 @@
             day.classList.add('centralos-mobile-calendar-day');
             const weekday = day.querySelector('.text-center span:first-child');
             if (weekday && mq.matches) {
+                if (!weekday.dataset.centralosMobileOriginalText) {
+                    weekday.dataset.centralosMobileOriginalText = weekday.textContent;
+                }
                 const cleaned = weekday.textContent.replace('.', '').trim();
                 if (weekday.textContent !== cleaned) weekday.textContent = cleaned;
             }
@@ -523,7 +527,24 @@
         });
     };
 
+    const restoreDesktopSurface = () => {
+        document.querySelectorAll('[data-centralos-mobile-original-html]').forEach((element) => {
+            element.innerHTML = element.dataset.centralosMobileOriginalHtml || '';
+            delete element.dataset.centralosMobileOriginalHtml;
+            delete element.dataset.centralosMobileLabel;
+        });
+        document.querySelectorAll('[data-centralos-mobile-original-text]').forEach((element) => {
+            element.textContent = element.dataset.centralosMobileOriginalText || element.textContent;
+            delete element.dataset.centralosMobileOriginalText;
+        });
+    };
+
     const decorate = () => {
+        if (!mq.matches) {
+            restoreDesktopSurface();
+            syncMobileVisibility();
+            return;
+        }
         document.body?.classList.add('centralos-mobile-ready');
         ensureTopAccountChevron();
         ensureActionStrip();
