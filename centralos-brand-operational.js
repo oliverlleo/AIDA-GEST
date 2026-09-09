@@ -28,6 +28,16 @@
 
     const directChildren = (element, selector) => [...element.children].filter((child) => child.matches(selector));
 
+    const applyUploadedLogo = () => {
+        const navLogo = document.querySelector('nav img[alt="CentralOS"]');
+        if (!navLogo) return;
+        const target = 'centralos-logo-nav.jpg?v=1';
+        if (!navLogo.src.includes('centralos-logo-nav.jpg')) {
+            navLogo.src = target;
+        }
+        navLogo.dataset.centralosBrandLogo = 'uploaded';
+    };
+
     const decorateSectionHeadings = (dashboard) => {
         [...dashboard.querySelectorAll('h3')].forEach((heading) => {
             const text = normalize(heading.textContent);
@@ -39,8 +49,6 @@
             const nativeIcons = directChildren(heading, 'i:not(.centralos-section-icon)');
             const injectedIcons = directChildren(heading, 'i.centralos-section-icon');
 
-            // A tela original já possui ícone nestes títulos. O complemento anterior
-            // adicionava outro no caso de "Pendências com Técnico". Mantemos somente um.
             if (nativeIcons.length) {
                 injectedIcons.forEach((icon) => icon.remove());
                 nativeIcons.forEach((icon) => {
@@ -85,6 +93,7 @@
     };
 
     const decorate = () => {
+        applyUploadedLogo();
         const dashboard = getDashboard();
         if (!dashboard) return;
         decorateSectionHeadings(dashboard);
@@ -103,6 +112,7 @@
 
     const start = () => {
         decorate();
+        window.setTimeout(decorate, 100);
         window.setTimeout(decorate, 250);
         window.setTimeout(decorate, 900);
         new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
