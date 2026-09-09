@@ -1,0 +1,641 @@
+/*
+ * Centralos Brand Complete
+ * Complemento visual da referência aprovada.
+ * Escopo: shell, sidebar, dashboard, filtros, indicadores e filas.
+ * Não altera regras, estados, eventos ou dados do sistema.
+ */
+
+body.centralos-enhanced {
+    --co-orange: #ff6500;
+    --co-orange-2: #ff7a16;
+    --co-black: #0a0c10;
+    --co-black-2: #11151a;
+    --co-black-3: #181d24;
+    --co-canvas: #f3f5f7;
+    --co-border: #e2e6eb;
+    --co-muted: #737b87;
+}
+
+/* ===== Topo ===== */
+body.centralos-enhanced nav[x-show*="session"] {
+    gap: 18px;
+    padding-inline: 20px !important;
+}
+
+body.centralos-enhanced nav[x-show*="session"] > div:first-child {
+    flex: 0 0 auto;
+}
+
+body.centralos-enhanced .centralos-top-search {
+    position: relative;
+    flex: 1 1 420px;
+    max-width: 440px;
+    min-width: 220px;
+}
+
+body.centralos-enhanced .centralos-top-search i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8c949f;
+    font-size: 13px;
+    pointer-events: none;
+}
+
+body.centralos-enhanced .centralos-top-search input {
+    width: 100%;
+    height: 38px;
+    padding: 0 14px 0 39px;
+    border: 1px solid #343a43;
+    border-radius: 10px;
+    background: #11151a;
+    color: #f7f7f8;
+    font-size: 12px;
+    outline: none;
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+body.centralos-enhanced .centralos-top-search input::placeholder {
+    color: #858d98;
+}
+
+body.centralos-enhanced .centralos-top-search input:focus {
+    background: #151a20;
+    border-color: rgba(255, 101, 0, .8);
+    box-shadow: 0 0 0 3px rgba(255, 101, 0, .11);
+}
+
+body.centralos-enhanced nav[x-show*="session"] > div:last-child {
+    gap: 12px !important;
+}
+
+body.centralos-enhanced nav[x-show*="session"] button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px !important;
+    background: #14181e;
+    border: 1px solid rgba(255,255,255,.08);
+    color: #c1c6ce;
+}
+
+body.centralos-enhanced nav[x-show*="session"] button:hover {
+    background: #1b2027;
+    border-color: rgba(255,101,0,.38);
+    color: #fff;
+}
+
+body.centralos-enhanced nav[x-show*="session"] .bg-gray-800 {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px !important;
+}
+
+body.centralos-enhanced .centralos-top-slogan {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-left: 16px;
+    margin-left: 2px;
+    border-left: 1px solid rgba(255,255,255,.12);
+    color: #f4f5f6;
+    font-size: 8px;
+    line-height: 1.2;
+    letter-spacing: .23em;
+    text-transform: uppercase;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+body.centralos-enhanced .centralos-top-slogan::after {
+    content: "";
+    width: 34px;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--co-orange);
+    box-shadow: 0 0 12px rgba(255,101,0,.35);
+}
+
+/* ===== Sidebar ===== */
+body.centralos-enhanced aside[x-show*="session"] {
+    position: relative;
+    background:
+        radial-gradient(circle at 50% 88%, rgba(255,101,0,.035), transparent 180px),
+        linear-gradient(180deg, #111419 0%, #0a0c10 100%) !important;
+}
+
+body.centralos-enhanced aside[x-show*="session"] > div:first-child {
+    padding-top: 20px !important;
+}
+
+body.centralos-enhanced aside[x-show*="session"] a {
+    min-height: 45px;
+    font-size: 13px;
+}
+
+body.centralos-enhanced aside[x-show*="session"] a i {
+    font-size: 16px !important;
+}
+
+body.centralos-enhanced aside[x-show*="session"] a.bg-brand-50 {
+    background: linear-gradient(135deg, #ff6500 0%, #ff7a16 100%) !important;
+    box-shadow: 0 10px 22px rgba(255,101,0,.22) !important;
+}
+
+body.centralos-enhanced .centralos-sidebar-promo {
+    flex: 0 0 auto;
+    margin: 0 14px 14px;
+    padding: 18px 16px 16px;
+    border: 1px solid rgba(255,101,0,.55);
+    border-radius: 18px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.008)),
+        #0d1014;
+    box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.015),
+        0 18px 34px rgba(0,0,0,.18);
+    overflow: hidden;
+}
+
+body.centralos-enhanced .centralos-sidebar-promo-mark {
+    width: 100%;
+    height: 112px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+body.centralos-enhanced .centralos-sidebar-promo-mark svg {
+    width: 142px;
+    max-width: 100%;
+    filter: drop-shadow(0 9px 18px rgba(0,0,0,.35));
+}
+
+body.centralos-enhanced .centralos-sidebar-promo-copy {
+    display: grid;
+    gap: 12px;
+    color: #f7f7f8;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.18;
+    letter-spacing: .08em;
+}
+
+body.centralos-enhanced .centralos-sidebar-promo-copy span {
+    display: block;
+}
+
+body.centralos-enhanced .centralos-sidebar-promo-line {
+    width: 58px;
+    height: 4px;
+    border-radius: 999px;
+    margin-top: 16px;
+    background: var(--co-orange);
+}
+
+body.centralos-enhanced .centralos-sidebar-brand-footer {
+    flex: 0 0 auto;
+    margin: 0 16px 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,.08);
+    color: #767e89;
+    font-size: 9px;
+    letter-spacing: .06em;
+}
+
+body.centralos-enhanced .centralos-sidebar-brand-footer strong {
+    color: #e4e7eb;
+    display: block;
+    font-size: 10px;
+    margin-bottom: 3px;
+}
+
+/* ===== Dashboard ===== */
+body.centralos-enhanced .centralos-dashboard {
+    position: relative;
+    background:
+        radial-gradient(circle at 78% 1%, rgba(255,101,0,.05), transparent 25rem),
+        var(--co-canvas) !important;
+}
+
+body.centralos-enhanced .centralos-dashboard > header {
+    align-items: center !important;
+    margin-bottom: 18px !important;
+}
+
+body.centralos-enhanced .centralos-dashboard-title {
+    display: flex;
+    align-items: baseline;
+    gap: .18em;
+    color: #0d0f13 !important;
+    font-weight: 850 !important;
+    letter-spacing: -.045em !important;
+}
+
+body.centralos-enhanced .centralos-title-accent {
+    color: var(--co-orange);
+}
+
+body.centralos-enhanced .centralos-dashboard > header p {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+body.centralos-enhanced .centralos-dashboard > header button.bg-black,
+body.centralos-enhanced .centralos-dashboard > header button[class*="bg-black"] {
+    background: linear-gradient(135deg, #ff6500 0%, #ff7410 100%) !important;
+    color: white !important;
+    border-radius: 13px !important;
+    box-shadow: 0 9px 22px rgba(255,101,0,.2) !important;
+}
+
+/* Filtro segmentado da agenda */
+body.centralos-enhanced .centralos-period-filter {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0 !important;
+    padding: 5px !important;
+    margin-bottom: 20px !important;
+    border: 1px solid #e3e6eb;
+    border-radius: 13px;
+    background: #edf0f3;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+    overflow: hidden;
+}
+
+body.centralos-enhanced .centralos-period-filter .centralos-period-button {
+    width: 100%;
+    min-height: 39px !important;
+    padding: 7px 10px !important;
+    border: 0 !important;
+    border-right: 1px solid #dfe3e8 !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: #4f5763 !important;
+    box-shadow: none !important;
+    justify-content: center;
+    font-size: 11px !important;
+    font-weight: 700;
+    transform: none !important;
+}
+
+body.centralos-enhanced .centralos-period-filter .centralos-period-button:last-child {
+    border-right: 0 !important;
+}
+
+body.centralos-enhanced .centralos-period-filter .centralos-period-button:hover {
+    background: rgba(255,255,255,.58) !important;
+    color: #11151a !important;
+}
+
+body.centralos-enhanced .centralos-period-filter .centralos-period-button.bg-brand-50 {
+    background: #151922 !important;
+    color: #fff !important;
+    border-color: #151922 !important;
+    box-shadow: 0 4px 12px rgba(18,23,30,.16) !important;
+}
+
+body.centralos-enhanced .centralos-period-filter .centralos-period-button span:last-child {
+    min-width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(255,255,255,.72) !important;
+    color: #68717d !important;
+    padding: 0 6px !important;
+}
+
+body.centralos-enhanced .centralos-period-filter .centralos-period-button.bg-brand-50 span:last-child {
+    background: #2b313b !important;
+    color: #fff !important;
+}
+
+/* Indicadores */
+body.centralos-enhanced .centralos-dashboard .grid.grid-cols-1.md\:grid-cols-4 {
+    gap: 14px !important;
+    margin-bottom: 18px !important;
+}
+
+body.centralos-enhanced .centralos-stat-card {
+    position: relative !important;
+    min-height: 116px !important;
+    padding: 18px 18px 16px !important;
+    border-radius: 15px !important;
+    border: 1px solid #e1e5ea !important;
+    box-shadow: 0 8px 20px rgba(20,27,38,.045) !important;
+    overflow: hidden;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
+}
+
+body.centralos-enhanced .centralos-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(20,27,38,.075) !important;
+}
+
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="open"] {
+    background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%) !important;
+}
+
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="analysis"] {
+    background: linear-gradient(135deg, #fff 0%, #fff5ec 100%) !important;
+    border-color: #f3ddca !important;
+}
+
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="approval"] {
+    background: linear-gradient(135deg, #fff 0%, #f1f7ff 100%) !important;
+    border-color: #dbe8fb !important;
+}
+
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="pickup"] {
+    background: linear-gradient(135deg, #fff 0%, #eefaf4 100%) !important;
+    border-color: #d7eee3 !important;
+}
+
+body.centralos-enhanced .centralos-stat-label {
+    max-width: 70%;
+    color: #46505d !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+}
+
+body.centralos-enhanced .centralos-stat-icon {
+    position: absolute;
+    right: 16px;
+    top: 15px;
+    width: 35px;
+    height: 35px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 17px;
+}
+
+body.centralos-enhanced .centralos-stat-arrow {
+    position: absolute;
+    right: 16px;
+    bottom: 15px;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: 11px;
+}
+
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="open"] .centralos-stat-icon {
+    background: #141820;
+    color: #fff;
+}
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="open"] .centralos-stat-arrow {
+    background: #edf0f3;
+    color: #5f6874;
+}
+
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="analysis"] .centralos-stat-icon {
+    background: #fff0e4;
+    color: #ff6500;
+}
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="analysis"] .centralos-stat-arrow {
+    background: #ffe4d1;
+    color: #d95100;
+}
+
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="approval"] .centralos-stat-icon {
+    background: #e4efff;
+    color: #1565d8;
+}
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="approval"] .centralos-stat-arrow {
+    background: #dfebff;
+    color: #1565d8;
+}
+
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="pickup"] .centralos-stat-icon {
+    background: #dff6ea;
+    color: #16895c;
+}
+body.centralos-enhanced .centralos-stat-card[data-centralos-tone="pickup"] .centralos-stat-arrow {
+    background: #dcf5e8;
+    color: #16895c;
+}
+
+body.centralos-enhanced .centralos-stat-card [x-text^="homeStatusCounts"] {
+    color: #11151a !important;
+    font-size: 2.35rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -.05em !important;
+    line-height: 1 !important;
+    margin-top: 10px;
+}
+
+/* Filas / cards operacionais */
+body.centralos-enhanced .centralos-queue {
+    --queue-color: #ff6500;
+    --queue-soft: #fff4eb;
+    border: 1px solid #e2e5ea !important;
+    border-top: 3px solid var(--queue-color) !important;
+    border-radius: 15px !important;
+    box-shadow: 0 8px 22px rgba(20,27,38,.05) !important;
+    background: #fff !important;
+    overflow: hidden;
+}
+
+body.centralos-enhanced .centralos-queue > div:first-child {
+    background: var(--queue-soft) !important;
+    border-bottom-color: color-mix(in srgb, var(--queue-color) 18%, #fff) !important;
+}
+
+body.centralos-enhanced .centralos-queue-title {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    color: #1a1f26 !important;
+}
+
+body.centralos-enhanced .centralos-queue-title > i {
+    display: none !important;
+}
+
+body.centralos-enhanced .centralos-queue-icon {
+    width: 25px;
+    height: 25px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--queue-color) 12%, white);
+    color: var(--queue-color);
+    flex: 0 0 auto;
+}
+
+body.centralos-enhanced .centralos-queue-budget {
+    --queue-color: #ff6500;
+    --queue-soft: #fff3e9;
+}
+body.centralos-enhanced .centralos-queue-approval {
+    --queue-color: #7247df;
+    --queue-soft: #f5f0ff;
+}
+body.centralos-enhanced .centralos-queue-logistics {
+    --queue-color: #176ad8;
+    --queue-soft: #eef5ff;
+}
+body.centralos-enhanced .centralos-queue-tracking {
+    --queue-color: #ef6a20;
+    --queue-soft: #fff4ec;
+}
+body.centralos-enhanced .centralos-queue-released {
+    --queue-color: #16895c;
+    --queue-soft: #eaf8f1;
+}
+body.centralos-enhanced .centralos-queue-attention {
+    --queue-color: #df3037;
+    --queue-soft: #fff0f1;
+}
+body.centralos-enhanced .centralos-queue-activity {
+    --queue-color: #151922;
+    --queue-soft: #f7f8fa;
+}
+
+body.centralos-enhanced .centralos-queue-attention {
+    box-shadow: 0 10px 25px rgba(201,45,53,.07) !important;
+}
+
+body.centralos-enhanced .centralos-queue .divide-y > * {
+    border-color: #edf0f3 !important;
+}
+
+body.centralos-enhanced .centralos-queue .group:hover,
+body.centralos-enhanced .centralos-queue [class*="hover:bg-gray-50"]:hover {
+    background: #fafbfc !important;
+}
+
+body.centralos-enhanced .centralos-section-heading {
+    display: flex !important;
+    align-items: center;
+    gap: 9px;
+    color: #171b21 !important;
+    font-weight: 800 !important;
+}
+
+body.centralos-enhanced .centralos-section-heading .centralos-section-icon {
+    color: var(--co-orange);
+    font-size: 17px;
+}
+
+/* Pequenos refinamentos */
+body.centralos-enhanced .centralos-dashboard .rounded-full {
+    font-variant-numeric: tabular-nums;
+}
+
+body.centralos-enhanced .centralos-dashboard .shadow-sm {
+    box-shadow: 0 7px 18px rgba(20,27,38,.045) !important;
+}
+
+body.centralos-enhanced .centralos-dashboard button {
+    transition: transform .16s ease, box-shadow .16s ease, background .16s ease, border-color .16s ease, color .16s ease;
+}
+
+/* ===== Responsividade ===== */
+@media (max-width: 1439px) {
+    body.centralos-enhanced .centralos-top-slogan {
+        display: none;
+    }
+}
+
+@media (max-width: 1179px), (max-height: 820px) {
+    body.centralos-enhanced .centralos-sidebar-promo,
+    body.centralos-enhanced .centralos-sidebar-brand-footer {
+        display: none;
+    }
+}
+
+@media (max-width: 1023px) {
+    body.centralos-enhanced .centralos-top-search {
+        display: none;
+    }
+
+    body.centralos-enhanced .centralos-dashboard .grid.grid-cols-1.md\:grid-cols-4 {
+        grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    }
+}
+
+@media (max-width: 767px) {
+    body.centralos-enhanced .centralos-dashboard {
+        padding: 12px !important;
+    }
+
+    body.centralos-enhanced .centralos-dashboard > header {
+        align-items: stretch !important;
+    }
+
+    body.centralos-enhanced .centralos-period-filter {
+        display: flex !important;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scroll-snap-type: inline proximity;
+        padding: 4px !important;
+        gap: 4px !important;
+    }
+
+    body.centralos-enhanced .centralos-period-filter .centralos-period-button {
+        flex: 0 0 126px;
+        min-width: 126px;
+        border-right: 0 !important;
+        scroll-snap-align: start;
+    }
+
+    body.centralos-enhanced .centralos-dashboard .grid.grid-cols-1.md\:grid-cols-4 {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    body.centralos-enhanced .centralos-stat-card {
+        min-height: 104px !important;
+    }
+
+    body.centralos-enhanced .centralos-stat-card [x-text^="homeStatusCounts"] {
+        font-size: 2rem !important;
+    }
+}
+
+@media (max-width: 479px) {
+    body.centralos-enhanced nav[x-show*="session"] {
+        padding-inline: 8px !important;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] button {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+
+    body.centralos-enhanced .centralos-dashboard-title {
+        font-size: 1.65rem !important;
+    }
+
+    body.centralos-enhanced .centralos-stat-card {
+        padding: 15px !important;
+    }
+
+    body.centralos-enhanced .centralos-stat-icon {
+        right: 13px;
+        top: 13px;
+    }
+
+    body.centralos-enhanced .centralos-stat-arrow {
+        right: 13px;
+        bottom: 13px;
+    }
+}
