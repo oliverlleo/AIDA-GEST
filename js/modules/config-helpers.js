@@ -111,3 +111,21 @@ window.AIDAConfigHelpers = {
     }
 };
 
+// Centralos visual brand layer — isolada da lógica de negócio e dos fluxos do sistema.
+(() => {
+    const applyCentralosBrandLayer = () => {
+        if (document.querySelector('link[data-centralos-brand]')) return;
+
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'centralos-brand.css?v=1';
+        link.dataset.centralosBrand = 'true';
+        document.head.appendChild(link);
+    };
+
+    if (document.head) {
+        applyCentralosBrandLayer();
+    } else {
+        document.addEventListener('DOMContentLoaded', applyCentralosBrandLayer, { once: true });
+    }
+})();
