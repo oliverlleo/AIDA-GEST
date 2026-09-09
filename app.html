@@ -38,51 +38,62 @@
 
     <style>
         [x-cloak] { display: none !important; }
-        /* AUTH FIRST-PAINT GATE */
-        html.boot-anon #initial-auth-loading { display: none !important; }
-        html.boot-anon:not(.auth-runtime) #app-shell { visibility: hidden; }
-        html.boot-anon:not(.auth-runtime) #login-screen {
-            visibility: visible !important;
-            display: block !important;
-        }
-        html.boot-auth #login-screen { display: none !important; }
         body { font-family: 'Inter', sans-serif; }
         /* Custom Scrollbar for Kanban */
         .kanban-col::-webkit-scrollbar { width: 4px; }
         .kanban-col::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 4px; }
         .kanban-col:hover::-webkit-scrollbar-thumb { background: #A0AEC0; }
     </style>
-    <script>
-        (() => {
-            let hasAuthHint = false;
-            try {
-                // Only a non-expired Supabase admin token is trusted synchronously.
-                // Employee sessions are server-validated asynchronously, so they start
-                // on the real login shell instead of causing loader/reload flashes.
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i) || '';
-                    if (!key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
-                    const raw = localStorage.getItem(key);
-                    if (!raw || raw === 'null' || raw === '{}') continue;
-                    try {
-                        const saved = JSON.parse(raw);
-                        const accessToken = saved?.access_token || saved?.currentSession?.access_token;
-                        const expiresAt = Number(saved?.expires_at || saved?.currentSession?.expires_at || 0);
-                        if (accessToken && expiresAt * 1000 > Date.now() + 5000) {
-                            hasAuthHint = true;
-                            break;
-                        }
-                    } catch (_) {}
-                }
-            } catch (_) {}
-            document.documentElement.classList.add(hasAuthHint ? 'boot-auth' : 'boot-anon');
-        })();
-    </script>
 </head>
 <body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
 
+    <!-- VIEW: LOGIN/REGISTER (If not logged in) -->
+                <div id="login-screen" x-show="!session && !employeeSession && !registrationSuccess && view !== 'setup_required'" class="fixed inset-0 bg-white z-[10000] overflow-y-auto">
+                    <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+                        <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+                            <div class="text-center mb-8">
+                                <img src="logologin.png" alt="TechAssist" class="h-[72px] mx-auto mb-4">
+                                <h2 class="text-2xl font-bold text-gray-900">Acesso ao Sistema</h2>
+                            </div>
+
+                            <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
+                                <button @click="authMode = 'employee'" :class="authMode === 'employee' ? 'bg-white shadow text-black' : 'text-gray-500 hover:text-gray-700'" class="flex-1 py-2 rounded-md text-sm font-bold transition-all">Funcionário</button>
+                                <button @click="authMode = 'admin_login'" :class="authMode.includes('admin') ? 'bg-white shadow text-black' : 'text-gray-500 hover:text-gray-700'" class="flex-1 py-2 rounded-md text-sm font-bold transition-all">Admin</button>
+                            </div>
+
+                            <!-- Employee Form -->
+                            <form x-show="authMode === 'employee'" @submit.prevent="loginEmployee" class="space-y-4">
+                                <input type="text" x-model="loginForm.company_code" placeholder="Código da Empresa" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
+                                <input type="text" x-model="loginForm.username" placeholder="Usuário" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
+                                <input type="password" x-model="loginForm.password" placeholder="Senha" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
+                                <button type="submit" class="w-full bg-brand-500 text-white font-bold py-3 rounded-lg hover:bg-brand-600 transition-colors shadow-lg shadow-orange-500/30">Entrar</button>
+                            </form>
+
+                            <!-- Admin Form -->
+                            <form x-show="authMode === 'admin_login'" @submit.prevent="loginAdmin" class="space-y-4">
+                                <input type="email" x-model="adminForm.email" placeholder="E-mail Admin" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
+                                <input type="password" x-model="adminForm.password" placeholder="Senha" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
+                                <button type="submit" class="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors">Entrar Admin</button>
+                                <p class="text-center text-sm text-gray-500 mt-4 cursor-pointer hover:text-brand-500" @click="authMode = 'admin_register'">Criar nova empresa</p>
+                            </form>
+
+                            <!-- Register Form -->
+                             <form x-show="authMode === 'admin_register'" @submit.prevent="registerAdmin" class="space-y-4">
+                                <input type="email" x-model="registerForm.email" placeholder="Seu E-mail" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
+                                <div>
+                                    <input type="password" x-model="registerForm.password" placeholder="Crie uma Senha" minlength="8" maxlength="72" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
+                                    <p class="mt-1.5 text-xs text-gray-500">Use no mínimo 8 caracteres, com pelo menos uma letra e um número.</p>
+                                </div>
+                                <button type="submit" class="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors">Cadastrar</button>
+                                <p class="text-center text-sm text-gray-500 mt-4 cursor-pointer hover:text-brand-500" @click="authMode = 'admin_login'">Voltar ao Login</p>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+
     <!-- Loading Overlay -->
-    <div id="initial-auth-loading" x-show="loading" class="fixed inset-0 bg-white z-[99] flex items-center justify-center bg-opacity-90 transition-opacity">
+    <div id="initial-auth-loading" x-show="loading" x-cloak class="fixed inset-0 bg-white z-[99] flex items-center justify-center bg-opacity-90 transition-opacity">
         <div class="flex flex-col items-center">
             <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-brand-500 mb-4"></div>
             <p class="text-gray-500 animate-pulse">Carregando...</p>
@@ -116,7 +127,7 @@
     </div>
 
     <!-- MAIN LAYOUT -->
-    <div id="app-shell" class="min-h-screen flex flex-col">
+    <div id="app-shell" x-cloak x-show="session || employeeSession || view === 'setup_required'" class="min-h-screen flex flex-col">
 
         <!-- Top Navbar -->
         <nav x-show="(session || employeeSession) && view !== 'setup_required'" class="bg-black text-white h-16 px-6 flex justify-between items-center shadow-md z-30" x-cloak>
@@ -5207,49 +5218,7 @@
                     </div>
                 </div>
 
-                <!-- VIEW: LOGIN/REGISTER (If not logged in) -->
-                <div id="login-screen" x-show="!session && !employeeSession && !registrationSuccess && view !== 'setup_required'" class="fixed inset-0 bg-white z-[10000] overflow-y-auto">
-                    <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-                        <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-                            <div class="text-center mb-8">
-                                <img src="logologin.png" alt="TechAssist" class="h-[72px] mx-auto mb-4">
-                                <h2 class="text-2xl font-bold text-gray-900">Acesso ao Sistema</h2>
-                            </div>
-
-                            <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
-                                <button @click="authMode = 'employee'" :class="authMode === 'employee' ? 'bg-white shadow text-black' : 'text-gray-500 hover:text-gray-700'" class="flex-1 py-2 rounded-md text-sm font-bold transition-all">Funcionário</button>
-                                <button @click="authMode = 'admin_login'" :class="authMode.includes('admin') ? 'bg-white shadow text-black' : 'text-gray-500 hover:text-gray-700'" class="flex-1 py-2 rounded-md text-sm font-bold transition-all">Admin</button>
-                            </div>
-
-                            <!-- Employee Form -->
-                            <form x-show="authMode === 'employee'" @submit.prevent="loginEmployee" class="space-y-4">
-                                <input type="text" x-model="loginForm.company_code" placeholder="Código da Empresa" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
-                                <input type="text" x-model="loginForm.username" placeholder="Usuário" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
-                                <input type="password" x-model="loginForm.password" placeholder="Senha" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" required>
-                                <button type="submit" class="w-full bg-brand-500 text-white font-bold py-3 rounded-lg hover:bg-brand-600 transition-colors shadow-lg shadow-orange-500/30">Entrar</button>
-                            </form>
-
-                            <!-- Admin Form -->
-                            <form x-show="authMode === 'admin_login'" @submit.prevent="loginAdmin" class="space-y-4">
-                                <input type="email" x-model="adminForm.email" placeholder="E-mail Admin" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
-                                <input type="password" x-model="adminForm.password" placeholder="Senha" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
-                                <button type="submit" class="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors">Entrar Admin</button>
-                                <p class="text-center text-sm text-gray-500 mt-4 cursor-pointer hover:text-brand-500" @click="authMode = 'admin_register'">Criar nova empresa</p>
-                            </form>
-
-                            <!-- Register Form -->
-                             <form x-show="authMode === 'admin_register'" @submit.prevent="registerAdmin" class="space-y-4">
-                                <input type="email" x-model="registerForm.email" placeholder="Seu E-mail" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
-                                <div>
-                                    <input type="password" x-model="registerForm.password" placeholder="Crie uma Senha" minlength="8" maxlength="72" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black outline-none transition-all" required>
-                                    <p class="mt-1.5 text-xs text-gray-500">Use no mínimo 8 caracteres, com pelo menos uma letra e um número.</p>
-                                </div>
-                                <button type="submit" class="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors">Cadastrar</button>
-                                <p class="text-center text-sm text-gray-500 mt-4 cursor-pointer hover:text-brand-500" @click="authMode = 'admin_login'">Voltar ao Login</p>
-                            </form>
-                        </div>
-                    </div>
-                </div>
+                
 
                 <!-- Setup Required Screen -->
                 <div x-show="view === 'setup_required'" class="absolute inset-0 bg-white z-50 flex items-center justify-center" x-cloak>

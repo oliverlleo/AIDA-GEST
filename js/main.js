@@ -55,7 +55,7 @@ window.formatLogDetails = function(text) {
 function app() {
     return {
         // State
-        loading: true,
+        loading: false,
         error: null,
         session: null,
         employeeSession: null,
@@ -1051,7 +1051,8 @@ function app() {
             }, {});
 
             console.log("App initializing...");
-            this.loading = true;
+            // Auth bootstrap is silent: the real login is already the first paint.
+            this.loading = false;
 
             const sessionNotice = sessionStorage.getItem('techassist_session_notice');
             if (sessionNotice) {
@@ -1161,10 +1162,6 @@ function app() {
             } catch (err) {
                 console.error("Init Error:", err);
             } finally {
-                const root = document.documentElement;
-                root.classList.remove('boot-auth', 'boot-anon');
-                root.classList.add((this.session || this.employeeSession) ? 'boot-auth' : 'boot-anon');
-                root.classList.add('auth-runtime');
                 this.loading = false;
                 this.initInFlight = false;
             }
