@@ -1,0 +1,113 @@
+name: One-time stream multi random glow
+
+on:
+  push:
+    branches:
+      - design/centralos-brand-responsive-v2
+    paths:
+      - .github/workflows/one-time-stream-multi-random-glow.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: design/centralos-brand-responsive-v2
+          fetch-depth: 0
+
+      - name: Update random orange glow behavior
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('landing.html')
+          s = p.read_text(encoding='utf-8')
+
+          pattern = re.compile(r'<script>\s*/\* Randomly lights some moving cards orange\. The marquee animation itself is untouched\. \*/.*?</script>', re.S)
+
+          replacement = r'''<script>
+/* Randomly lights 1, 2 or 3 moving cards orange without changing marquee motion. */
+(()=>{
+  const section=document.querySelector('.stream');
+  const cards=[...document.querySelectorAll('.stream-item')];
+  if(!section||!cards.length||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+
+  let active=false;
+  let cycleTimer=0;
+  const lit=new Set();
+
+  const clearAll=()=>{
+    lit.forEach(card=>card.classList.remove('is-orange-lit'));
+    lit.clear();
+  };
+
+  const chooseCount=()=>{
+    const max=innerWidth<700?2:3;
+    return 1+Math.floor(Math.random()*max);
+  };
+
+  const runCycle=()=>{
+    if(!active){cycleTimer=0;return;}
+
+    clearAll();
+
+    const pool=[...cards];
+    const count=Math.min(chooseCount(),pool.length);
+
+    for(let i=0;i<count;i++){
+      const idx=Math.floor(Math.random()*pool.length);
+      const card=pool.splice(idx,1)[0];
+      card.classList.add('is-orange-lit');
+      lit.add(card);
+    }
+
+    const visibleFor=950+Math.random()*1650;
+    cycleTimer=setTimeout(()=>{
+      clearAll();
+      const darkGap=220+Math.random()*700;
+      cycleTimer=setTimeout(runCycle,darkGap);
+    },visibleFor);
+  };
+
+  const io=new IntersectionObserver(entries=>{
+    const nowActive=entries.some(entry=>entry.isIntersecting);
+    if(nowActive===active)return;
+    active=nowActive;
+
+    if(active){
+      if(cycleTimer)clearTimeout(cycleTimer);
+      cycleTimer=0;
+      runCycle();
+    }else{
+      if(cycleTimer)clearTimeout(cycleTimer);
+      cycleTimer=0;
+      clearAll();
+    }
+  },{rootMargin:'15% 0px 15% 0px',threshold:.01});
+
+  io.observe(section);
+})();
+</script>'''
+
+          new_s, count = pattern.subn(replacement, s, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected 1 random-glow script, found {count}')
+
+          p.write_text(new_s, encoding='utf-8')
+          PY
+
+      - name: Commit landing update and remove one-time workflow
+        shell: bash
+        run: |
+          rm .github/workflows/one-time-stream-multi-random-glow.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add landing.html .github/workflows/one-time-stream-multi-random-glow.yml
+          git commit -m "fix: vary orange highlights between one two and three cards"
+          git push origin HEAD:design/centralos-brand-responsive-v2
