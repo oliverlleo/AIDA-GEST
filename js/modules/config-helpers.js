@@ -138,6 +138,14 @@ window.AIDAConfigHelpers = {
             document.head.appendChild(operationalLink);
         }
 
+        if (!document.querySelector('link[data-centralos-mobile-login-contrast]')) {
+            const mobileLoginContrast = document.createElement('link');
+            mobileLoginContrast.rel = 'stylesheet';
+            mobileLoginContrast.href = 'centralos-mobile-login-contrast.css?v=1';
+            mobileLoginContrast.dataset.centralosMobileLoginContrast = 'true';
+            document.head.appendChild(mobileLoginContrast);
+        }
+
         if (!document.querySelector('script[data-centralos-brand-complete]')) {
             const completeScript = document.createElement('script');
             completeScript.src = 'centralos-brand-complete.js?v=2';
