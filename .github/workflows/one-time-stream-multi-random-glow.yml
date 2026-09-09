@@ -22,16 +22,9 @@ jobs:
       - name: Update random orange glow behavior
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
+          python -c "import base64;exec(base64.b64decode('CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKCnAgPSBQYXRoKCJsYW5kaW5nLmh0bWwiKQpzID0gcC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKCnBhdHRlcm4gPSByZS5jb21waWxlKHInPHNjcmlwdD5ccyovXCogUmFuZG9tbHkgbGlnaHRzIHNvbWUgbW92aW5nIGNhcmRzIG9yYW5nZVwuIFRoZSBtYXJxdWVlIGFuaW1hdGlvbiBpdHNlbGYgaXMgdW50b3VjaGVkXC4gXCovLio/PC9zY3JpcHQ+Jywgc mUuUykK
 
-          p = Path('landing.html')
-          s = p.read_text(encoding='utf-8')
-
-          pattern = re.compile(r'<script>\s*/\* Randomly lights some moving cards orange\. The marquee animation itself is untouched\. \*/.*?</script>', re.S)
-
-          replacement = r'''<script>
+replacement = """<script>
 /* Randomly lights 1, 2 or 3 moving cards orange without changing marquee motion. */
 (()=>{
   const section=document.querySelector('.stream');
@@ -93,14 +86,14 @@ jobs:
 
   io.observe(section);
 })();
-</script>'''
+</script>"""
 
-          new_s, count = pattern.subn(replacement, s, count=1)
-          if count != 1:
-              raise SystemExit(f'Expected 1 random-glow script, found {count}')
+new_s, count = pattern.subn(replacement, s, count=1)
+if count != 1:
+    raise SystemExit(f"Expected 1 random-glow script, found {count}")
 
-          p.write_text(new_s, encoding='utf-8')
-          PY
+p.write_text(new_s, encoding="utf-8")
+').decode())"
 
       - name: Commit landing update and remove one-time workflow
         shell: bash
