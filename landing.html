@@ -41,6 +41,143 @@ footer{background:#080a0d;padding:45px 0;color:#747e89}.foot{display:flex;justif
 @media(max-width:960px){.nav-mid{display:none}.hero-grid,.headrow,.roles-grid,.faq-grid{grid-template-columns:1fr}.command{height:500px}.hero{padding-top:110px}.hero h1{font-size:clamp(50px,12vw,82px)}.headrow .lead{justify-self:start}.product-grid{grid-template-columns:1fr}.module-list{display:grid;grid-template-columns:repeat(3,1fr)}.module-btn{min-height:64px}.product-screen{min-height:600px}.orbit{margin-top:50px}.faq .title{position:static}.faq-grid{gap:45px}}
 @media(max-width:700px){.wrap{width:min(100% - 28px,1240px)}.nav{height:58px;top:10px}.nav img{height:36px}.hero{min-height:auto;padding:105px 0 55px}.hero-grid{gap:5px}.command{height:430px;margin-top:25px}.os-window{inset:4% -12% 5% 2%;transform:rotateY(-8deg) rotateX(4deg) scale(.88);transform-origin:left center}.float{display:none}.signal{height:62px}.section{padding:90px 0}.title{font-size:clamp(38px,12vw,58px)}.compare{height:580px}.compare-base,.compare-clean{padding:25px}.mess{width:145px;padding:12px}.m4{display:none}.clean-ui{right:3%;width:52%}.journey-head{top:10vh}.route{transform:translateY(-50%) scaleX(1.25)}.stage-dot b,.stage-dot small{display:none}.ticket-runner{width:190px}.product-grid{margin-top:36px}.module-list{grid-template-columns:1fr 1fr}.module-btn{grid-template-columns:32px 1fr;padding:0 10px}.module-btn em{display:none}.product-screen{min-height:570px;padding:10px}.screen-area{padding:14px}.demo-view{inset:14px}.ui-grid{grid-template-columns:1fr 1fr}.roles-grid{gap:20px}.person{width:120px}.stream{overflow:hidden}.map{height:760px}.map-node{width:150px}.mn1{left:4%;top:7%}.mn2{right:4%;top:24%}.mn3{left:4%;bottom:20%}.mn4{right:4%;bottom:6%}.mn5{width:190px}.cta{padding:70px 0}.cta-box{padding:35px 24px;min-height:570px}.cta h2{font-size:clamp(42px,12vw,62px)}.foot{flex-direction:column;align-items:flex-start}.cursor{display:none}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}.reveal{opacity:1;transform:none}}
+
+/* selective dark-section parallax depth */
+.problem,.roles,.system-map{
+  position:relative;
+  isolation:isolate;
+  --parallax-y:0px;
+  --parallax-y-rev:0px;
+  --parallax-x:0px;
+}
+.problem>.wrap,.roles>.wrap,.system-map>.wrap{
+  position:relative;
+  z-index:2;
+}
+
+/* 1) PROBLEMA — usa a textura arquitetônica da marca, bem discreta */
+.problem::before{
+  content:"";
+  position:absolute;
+  z-index:0;
+  width:min(760px,58vw);
+  height:118%;
+  right:-7vw;
+  top:-9%;
+  pointer-events:none;
+  opacity:.16;
+  background:
+    linear-gradient(90deg,rgba(8,10,13,0) 0%,rgba(8,10,13,.05) 34%,rgba(8,10,13,.28) 100%),
+    url('backgorundlogin.png') 66% 50%/cover no-repeat;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.45) 22%,#000 55%,#000 100%);
+  mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.45) 22%,#000 55%,#000 100%);
+  transform:translate3d(var(--parallax-x),var(--parallax-y),0) scale(1.07);
+  will-change:transform;
+}
+.problem::after{
+  content:"";
+  position:absolute;
+  z-index:1;
+  width:520px;
+  height:520px;
+  right:-180px;
+  top:12%;
+  border-radius:50%;
+  pointer-events:none;
+  background:radial-gradient(circle,rgba(255,91,0,.12) 0%,rgba(255,91,0,.045) 31%,transparent 69%);
+  filter:blur(8px);
+  transform:translate3d(calc(var(--parallax-x) * -.45),var(--parallax-y-rev),0);
+  will-change:transform;
+}
+
+/* 2) EQUIPE — mantém o foco na esfera, mas dá profundidade ao vazio */
+.roles::before{
+  content:"";
+  position:absolute;
+  inset:-14% -8%;
+  z-index:0;
+  pointer-events:none;
+  opacity:.38;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px),
+    radial-gradient(circle at 73% 46%,rgba(255,91,0,.11),transparent 26%);
+  background-size:72px 72px,72px 72px,100% 100%;
+  -webkit-mask-image:radial-gradient(circle at 72% 48%,#000 0%,rgba(0,0,0,.75) 34%,transparent 72%);
+  mask-image:radial-gradient(circle at 72% 48%,#000 0%,rgba(0,0,0,.75) 34%,transparent 72%);
+  transform:translate3d(calc(var(--parallax-x) * .35),var(--parallax-y-rev),0) scale(1.04);
+  will-change:transform;
+}
+.roles::after{
+  content:"";
+  position:absolute;
+  z-index:0;
+  width:min(720px,58vw);
+  aspect-ratio:1;
+  right:-17vw;
+  top:3%;
+  border:1px solid rgba(255,91,0,.11);
+  border-radius:50%;
+  pointer-events:none;
+  box-shadow:
+    0 0 0 76px rgba(255,255,255,.012),
+    0 0 0 150px rgba(255,91,0,.018);
+  transform:translate3d(calc(var(--parallax-x) * -.6),var(--parallax-y),0);
+  will-change:transform;
+}
+
+/* 3) MAPA — um campo técnico discreto; sem repetir a mesma imagem */
+.system-map::before{
+  content:"";
+  position:absolute;
+  z-index:0;
+  width:760px;
+  height:760px;
+  left:-300px;
+  top:5%;
+  border-radius:50%;
+  pointer-events:none;
+  opacity:.75;
+  background:
+    repeating-radial-gradient(circle at center,rgba(255,255,255,.038) 0 1px,transparent 1px 54px),
+    conic-gradient(from 120deg,transparent 0 18%,rgba(255,91,0,.075) 24%,transparent 31% 68%,rgba(255,91,0,.045) 74%,transparent 82%);
+  -webkit-mask-image:radial-gradient(circle,#000 0%,rgba(0,0,0,.65) 48%,transparent 73%);
+  mask-image:radial-gradient(circle,#000 0%,rgba(0,0,0,.65) 48%,transparent 73%);
+  transform:translate3d(calc(var(--parallax-x) * -.25),var(--parallax-y),0) rotate(-7deg);
+  will-change:transform;
+}
+.system-map::after{
+  content:"CENTRAL / OS";
+  position:absolute;
+  z-index:0;
+  right:-.04em;
+  bottom:1.5%;
+  pointer-events:none;
+  font:900 clamp(86px,15vw,245px)/.75 Manrope,sans-serif;
+  letter-spacing:-.075em;
+  color:rgba(255,255,255,.018);
+  white-space:nowrap;
+  transform:translate3d(calc(var(--parallax-x) * .2),var(--parallax-y-rev),0);
+  will-change:transform;
+}
+
+@media(max-width:767px){
+  .problem::before{width:118vw;right:-62vw;opacity:.10}
+  .problem::after{width:360px;height:360px;right:-220px;opacity:.7}
+  .roles::before{opacity:.24;background-size:54px 54px,54px 54px,100% 100%}
+  .roles::after{width:110vw;right:-72vw;opacity:.55}
+  .system-map::before{width:520px;height:520px;left:-330px;opacity:.42}
+  .system-map::after{font-size:28vw;opacity:.65}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .problem,.roles,.system-map{
+    --parallax-y:0px!important;
+    --parallax-y-rev:0px!important;
+    --parallax-x:0px!important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -105,5 +242,47 @@ gsap.from('.map-node:not(.mn5)',{x:(i,el)=>{const r=el.getBoundingClientRect();r
 }
 })();
 </script>
+
+<script>
+/* selective dark-section parallax: only three intentionally sparse sections */
+(()=>{
+  const sections=[...document.querySelectorAll('.problem,.roles,.system-map')];
+  if(!sections.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  let raf=0;
+  const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+
+  const paint=()=>{
+    const vh=innerHeight || 1;
+    sections.forEach((el,index)=>{
+      const r=el.getBoundingClientRect();
+      const center=r.top+r.height*.5;
+      const normalized=clamp((center-vh*.5)/(vh+r.height),-1,1);
+      const strength=index===0?64:index===1?42:54;
+      const y=-normalized*strength;
+      el.style.setProperty('--parallax-y',`${y.toFixed(2)}px`);
+      el.style.setProperty('--parallax-y-rev',`${(-y*.58).toFixed(2)}px`);
+    });
+    raf=0;
+  };
+
+  const requestPaint=()=>{ if(!raf) raf=requestAnimationFrame(paint); };
+  addEventListener('scroll',requestPaint,{passive:true});
+  addEventListener('resize',requestPaint,{passive:true});
+
+  sections.forEach(el=>{
+    el.addEventListener('pointermove',e=>{
+      if(innerWidth<900) return;
+      const r=el.getBoundingClientRect();
+      const x=clamp((e.clientX-r.left)/r.width-.5,-.5,.5)*22;
+      el.style.setProperty('--parallax-x',`${x.toFixed(2)}px`);
+    },{passive:true});
+    el.addEventListener('pointerleave',()=>el.style.setProperty('--parallax-x','0px'),{passive:true});
+  });
+
+  paint();
+})();
+</script>
+
 </body>
 </html>
