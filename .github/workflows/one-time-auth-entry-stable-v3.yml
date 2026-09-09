@@ -1,0 +1,26 @@
+name: One-time stable auth entry v3
+on:
+  push:
+    branches:
+      - fix/github-pages-landing-entry
+    paths:
+      - .github/workflows/one-time-auth-entry-stable-v3.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/github-pages-landing-entry
+          fetch-depth: 0
+      - name: Apply patch
+        run: python scripts/auth_entry_patch_v3.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: show login directly with no intermediate auth screens"
+          git push origin HEAD:fix/github-pages-landing-entry
