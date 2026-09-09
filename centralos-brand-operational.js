@@ -18,21 +18,16 @@
     ];
 
     const mobileQuery = window.matchMedia('(max-width: 767px)');
+    const actionOrigins = new WeakMap();
+    let activeMobileActionKey = '';
+    let activeMobileActionNodes = [];
 
     const normalize = (value) => String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
+        .replace(/\s+/g, ' ')
         .trim();
-
-    const getDashboard = () => [...document.querySelectorAll('main [x-show]')].find((el) => {
-        const expr = el.getAttribute('x-show') || '';
-        return expr.includes("view === 'dashboard'");
-    }) || null;
-
-    const getSessionNav = () => [...document.querySelectorAll('nav[x-show]')].find((el) =>
-        (el.getAttribute('x-show') || '').includes('session')
-    ) || null;
 
     const getCurrentView = () => {
         try {
@@ -42,42 +37,126 @@
         }
     };
 
-    const isDashboardActive = (dashboard) => {
-        const view = getCurrentView();
-        if (view) return view === 'dashboard';
-        return !!dashboard && window.getComputedStyle(dashboard).display !== 'none';
-    };
+    const getViewRoot = (view) => [...document.querySelectorAll('main [x-show]')].find((el) => {
+        const expr = el.getAttribute('x-show') || '';
+        return expr.includes(`view === '${view}'`);
+    }) || null;
+
+    const getDashboard = () => getViewRoot('dashboard');
+
+    const getSessionNav = () => [...document.querySelectorAll('nav[x-show]')].find((el) =>
+        (el.getAttribute('x-show') || '').includes('session')
+    ) || null;
 
     const directChildren = (element, selector) => [...element.children].filter((child) => child.matches(selector));
 
-    const getClickExpression = (element) => element?.getAttribute('@click') || element?.getAttribute('x-on:click') || '';
+    const getClickExpression = (element) =>
+        element?.getAttribute('@click') ||
+        element?.getAttribute('x-on:click') ||
+        element?.getAttribute('@click.prevent') ||
+        element?.getAttribute('x-on:click.prevent') ||
+        '';
 
     const findDirectChildContainingClick = (root, needle) => [...(root?.children || [])].find((child) =>
         [...child.querySelectorAll('button')].some((button) => getClickExpression(button).includes(needle))
     ) || null;
 
-    const findDashboardFilter = (header) => findDirectChildContainingClick(header, 'applyHomeOperationalWindow(');
+    const findDashboardFilter = (header) =>
+        findDirectChildContainingClick(header, 'applyHomeOperationalWindow(');
 
-    const ensureHomeMobileActionZone = () => {
-        let zone = document.querySelector('.centralos-home-mobile-action-zone');
+    const findDashboardAction = (header) => {
+        const inHeader = findDirectChildContainingClick(header, 'openNewTicketModal()');
+        if (inHeader) return inHeader;
+
+        const zone = document.querySelector('.centralos-mobile-view-action-zone');
+        return findDirectChildContainingClick(zone, 'openNewTicketModal()');
+    };
+
+    const findButtonByExactText = (root, label) => {
+        const wanted = normalize(label);
+        return [...(root?.querySelectorAll('button') || [])].find((button) =>
+            normalize(button.textContent) === wanted
+        ) || null;
+    };
+
+    const ensureMobileActionZone = () => {
+        let zone = document.querySelector('.centralos-mobile-view-action-zone');
         if (zone) return zone;
 
         const nav = getSessionNav();
         if (!nav) return null;
 
         zone = document.createElement('div');
-        zone.className = 'centralos-home-mobile-action-zone';
-        zone.setAttribute('aria-label', 'Ações da tela Início');
+        zone.className = 'centralos-mobile-view-action-zone';
+        zone.setAttribute('aria-label', 'Ações da tela atual');
         nav.insertAdjacentElement('afterend', zone);
         return zone;
     };
 
-    const findDashboardAction = (header) => {
-        const inHeader = findDirectChildContainingClick(header, 'openNewTicketModal()');
-        if (inHeader) return inHeader;
+    const rememberOrigin = (node) => {
+        if (!node || actionOrigins.has(node)) return;
+        actionOrigins.set(node, {
+            parent: node.parentNode,
+            nextSibling: node.nextSibling,
+            formAttribute: node.tagName === 'BUTTON' ? node.getAttribute('form') : null
+        });
+    };
 
-        const zone = document.querySelector('.centralos-home-mobile-action-zone');
-        return findDirectChildContainingClick(zone, 'openNewTicketModal()');
+    const preserveSubmitButtonForm = (button) => {
+        if (!button || button.tagName !== 'BUTTON') return;
+        const type = normalize(button.getAttribute('type') || 'submit');
+        if (type !== 'submit') return;
+
+        const form = button.closest('form');
+        if (!form) return;
+
+        if (!form.id) {
+            form.id = `centralos-mobile-form-${Math.random().toString(36).slice(2, 10)}`;
+            form.dataset.centralosGeneratedId = 'true';
+        }
+        button.setAttribute('form', form.id);
+    };
+
+    const restoreNode = (node) => {
+        const origin = actionOrigins.get(node);
+        if (!node || !origin?.parent?.isConnected) return;
+
+        if (origin.nextSibling && origin.nextSibling.parentNode === origin.parent) {
+            origin.parent.insertBefore(node, origin.nextSibling);
+        } else {
+            origin.parent.appendChild(node);
+        }
+
+        if (node.tagName === 'BUTTON') {
+            if (origin.formAttribute === null) node.removeAttribute('form');
+            else node.setAttribute('form', origin.formAttribute);
+        }
+    };
+
+    const clearMobileActionClasses = (node) => {
+        if (!node) return;
+        node.classList.remove(
+            'centralos-mobile-action-button',
+            'centralos-mobile-action-primary',
+            'centralos-mobile-action-secondary',
+            'centralos-mobile-home-split'
+        );
+    };
+
+    const restoreActiveMobileActions = () => {
+        activeMobileActionNodes.forEach((node) => {
+            clearMobileActionClasses(node);
+            restoreNode(node);
+        });
+        activeMobileActionNodes = [];
+        activeMobileActionKey = '';
+
+        const zone = document.querySelector('.centralos-mobile-view-action-zone');
+        if (zone) {
+            zone.removeAttribute('data-visible');
+            zone.removeAttribute('data-layout');
+            zone.removeAttribute('data-view');
+        }
     };
 
     const ensureLayoutFixStyles = () => {
@@ -87,15 +166,16 @@
             'centralos-layout-fixes-v4',
             'centralos-layout-fixes-v5',
             'centralos-layout-fixes-v6',
-            'centralos-layout-fixes-v7'
+            'centralos-layout-fixes-v7',
+            'centralos-layout-fixes-v8'
         ].forEach((id) => document.getElementById(id)?.remove());
 
-        if (document.getElementById('centralos-layout-fixes-v8')) return;
+        if (document.getElementById('centralos-layout-fixes-v9')) return;
 
         const style = document.createElement('style');
-        style.id = 'centralos-layout-fixes-v8';
+        style.id = 'centralos-layout-fixes-v9';
         style.textContent = `
-            .centralos-home-mobile-action-zone {
+            .centralos-mobile-view-action-zone {
                 display: none;
             }
 
@@ -133,21 +213,63 @@
             }
 
             @media (max-width: 767px) {
-                /*
-                 * Faixa exclusiva da tela Início.
-                 * Não usa, não clona e não depende da faixa da aba Chamados.
-                 * O elemento movido para cá é o split action ORIGINAL da Início.
-                 */
-                .centralos-home-mobile-action-zone[data-visible] {
-                    display: block !important;
+                .centralos-mobile-view-action-zone[data-visible] {
+                    display: grid !important;
                     position: relative;
+                    grid-template-columns: minmax(0, 1fr);
+                    gap: 8px;
                     width: 100%;
                     background: #0b0e12;
                     padding: 0 14px 12px;
                     z-index: 55;
                 }
 
-                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action {
+                .centralos-mobile-view-action-zone[data-layout="pair"] {
+                    grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+                }
+
+                .centralos-mobile-view-action-zone > .centralos-mobile-action-button {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    height: 50px !important;
+                    min-height: 50px !important;
+                    margin: 0 !important;
+                    padding: 0 16px !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 10px !important;
+                    border-radius: 12px !important;
+                    font-size: 15px !important;
+                    font-weight: 800 !important;
+                    line-height: 1 !important;
+                    box-shadow: none !important;
+                    white-space: nowrap !important;
+                }
+
+                .centralos-mobile-view-action-zone > .centralos-mobile-action-button[style*="display: none"] {
+                    display: none !important;
+                }
+
+                .centralos-mobile-view-action-zone > .centralos-mobile-action-primary {
+                    border: 1px solid #ff6500 !important;
+                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
+                    color: #fff !important;
+                    box-shadow: 0 10px 24px rgba(255,101,0,.18) !important;
+                }
+
+                .centralos-mobile-view-action-zone > .centralos-mobile-action-secondary {
+                    border: 1px solid #343b45 !important;
+                    background: #171b21 !important;
+                    color: #fff !important;
+                }
+
+                .centralos-mobile-view-action-zone > .centralos-mobile-action-button i {
+                    margin-right: 0 !important;
+                }
+
+                /* Início: usa o split action ORIGINAL (Abrir Chamado + seta/garantia). */
+                .centralos-mobile-view-action-zone > .centralos-dashboard-open-action {
                     display: grid !important;
                     grid-template-columns: minmax(0, 1fr) 50px !important;
                     align-items: stretch !important;
@@ -161,7 +283,7 @@
                     box-shadow: 0 10px 24px rgba(255,101,0,.18) !important;
                 }
 
-                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-primary {
+                .centralos-mobile-view-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-primary {
                     grid-column: 1 !important;
                     width: 100% !important;
                     min-width: 0 !important;
@@ -186,12 +308,12 @@
                     flex: none !important;
                 }
 
-                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-primary i {
+                .centralos-mobile-view-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-primary i {
                     margin-right: 0 !important;
                     font-size: 19px !important;
                 }
 
-                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-more:not([style*="display: none"]) {
+                .centralos-mobile-view-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-more:not([style*="display: none"]) {
                     grid-column: 2 !important;
                     width: 50px !important;
                     min-width: 50px !important;
@@ -213,30 +335,29 @@
                     flex: none !important;
                 }
 
-                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-more[style*="display: none"] {
+                .centralos-mobile-view-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-more[style*="display: none"] {
                     display: none !important;
                 }
 
-                .centralos-home-mobile-action-zone .centralos-dashboard-open-more > i {
+                .centralos-mobile-view-action-zone .centralos-dashboard-open-more > i {
                     transform: rotate(-90deg) !important;
                     transform-origin: center !important;
                 }
 
-                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) {
+                .centralos-mobile-view-action-zone > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) {
                     grid-template-columns: 1fr !important;
                 }
 
-                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) > .centralos-dashboard-open-primary {
+                .centralos-mobile-view-action-zone > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) > .centralos-dashboard-open-primary {
                     border-radius: 12px !important;
                 }
 
-                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-menu {
+                .centralos-mobile-view-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-menu {
                     right: 0 !important;
                     top: calc(100% + 8px) !important;
                     z-index: 100 !important;
                 }
 
-                /* A Início volta a começar abaixo da faixa preta, sem o botão preso no header branco. */
                 body.centralos-enhanced .centralos-dashboard > header {
                     display: flex !important;
                     flex-direction: column !important;
@@ -342,14 +463,14 @@
         }
     };
 
-    const configureDashboardAction = (dashboard) => {
-        dashboard.classList.add('centralos-dashboard');
+    const prepareDashboardAction = (dashboard) => {
+        dashboard?.classList.add('centralos-dashboard');
 
-        const header = dashboard.querySelector(':scope > header');
-        if (!header) return;
+        const header = dashboard?.querySelector(':scope > header');
+        if (!header) return null;
 
         const action = findDashboardAction(header);
-        if (!action) return;
+        if (!action) return null;
 
         const primaryButton = [...action.children].find((child) =>
             child.tagName === 'BUTTON' && getClickExpression(child).includes('openNewTicketModal()')
@@ -361,7 +482,7 @@
             (child.getAttribute?.('x-show') || '').includes('newTicketMenuOpen')
         ) || null;
 
-        if (!primaryButton) return;
+        if (!primaryButton) return null;
 
         action.classList.add('centralos-dashboard-open-action');
         primaryButton.classList.add('centralos-dashboard-open-primary');
@@ -371,32 +492,144 @@
         const filter = findDashboardFilter(header);
         if (filter) filter.classList.add('centralos-dashboard-filter-shell');
 
-        const dashboardActive = isDashboardActive(dashboard);
-        const useMobileZone = mobileQuery.matches && dashboardActive;
-        const zone = ensureHomeMobileActionZone();
+        return { action, header, filter };
+    };
 
-        if (useMobileZone && zone) {
-            /*
-             * Move o componente ORIGINAL da Início para a faixa preta abaixo do topo.
-             * Não existe segundo botão e não existe ponte com a aba Chamados.
-             */
-            if (action.parentElement !== zone) zone.appendChild(action);
-            zone.setAttribute('data-visible', '');
-        } else {
-            zone?.removeAttribute('data-visible');
+    const getDesiredMobileActions = () => {
+        const view = getCurrentView();
 
-            /* Ao sair da Início mobile ou voltar ao desktop, devolve o original ao header. */
-            if (action.parentElement !== header) {
-                if (filter) filter.insertAdjacentElement('afterend', action);
-                else header.appendChild(action);
-            } else if (filter && filter.nextElementSibling !== action) {
-                filter.insertAdjacentElement('afterend', action);
-            }
+        if (view === 'dashboard') {
+            const dashboard = getDashboard();
+            const prepared = prepareDashboardAction(dashboard);
+            if (!prepared?.action) return null;
+            return {
+                key: 'dashboard',
+                view,
+                layout: 'single',
+                nodes: [{ node: prepared.action, role: 'home' }]
+            };
         }
+
+        if (view === 'customers') {
+            const root = getViewRoot('customers');
+            const button = findButtonByExactText(root, 'Novo cliente');
+            if (!button) return null;
+            return {
+                key: 'customers:new-client',
+                view,
+                layout: 'single',
+                nodes: [{ node: button, role: 'primary' }]
+            };
+        }
+
+        if (view === 'management_settings') {
+            const root = getViewRoot('management_settings');
+            const button = findButtonByExactText(root, 'Salvar alterações');
+            if (!button) return null;
+            return {
+                key: 'management-settings:save',
+                view,
+                layout: 'single',
+                nodes: [{ node: button, role: 'primary' }]
+            };
+        }
+
+        if (view === 'tracker_settings') {
+            const root = getViewRoot('tracker_settings');
+            const reset = findButtonByExactText(root, 'Redefinir');
+            const save = findButtonByExactText(root, 'Salvar alterações');
+            const nodes = [
+                reset ? { node: reset, role: 'secondary' } : null,
+                save ? { node: save, role: 'primary' } : null
+            ].filter(Boolean);
+
+            if (!nodes.length) return null;
+            return {
+                key: `tracker-settings:${nodes.map((item) => item.role).join('+')}`,
+                view,
+                layout: nodes.length > 1 ? 'pair' : 'single',
+                nodes
+            };
+        }
+
+        return null;
+    };
+
+    const applyMobileViewActions = () => {
+        const dashboard = getDashboard();
+        const preparedDashboard = prepareDashboardAction(dashboard);
+
+        if (!mobileQuery.matches) {
+            if (activeMobileActionNodes.length) restoreActiveMobileActions();
+
+            if (preparedDashboard?.action && preparedDashboard.action.parentElement !== preparedDashboard.header) {
+                if (preparedDashboard.filter) {
+                    preparedDashboard.filter.insertAdjacentElement('afterend', preparedDashboard.action);
+                } else {
+                    preparedDashboard.header.appendChild(preparedDashboard.action);
+                }
+            } else if (
+                preparedDashboard?.action &&
+                preparedDashboard.filter &&
+                preparedDashboard.filter.nextElementSibling !== preparedDashboard.action
+            ) {
+                preparedDashboard.filter.insertAdjacentElement('afterend', preparedDashboard.action);
+            }
+            return;
+        }
+
+        const desired = getDesiredMobileActions();
+        const zone = ensureMobileActionZone();
+
+        if (!desired || !zone) {
+            if (activeMobileActionNodes.length) restoreActiveMobileActions();
+            return;
+        }
+
+        const desiredNodes = desired.nodes.map((item) => item.node);
+        const alreadyApplied =
+            activeMobileActionKey === desired.key &&
+            activeMobileActionNodes.length === desiredNodes.length &&
+            activeMobileActionNodes.every((node, index) =>
+                node === desiredNodes[index] && node.parentElement === zone
+            );
+
+        if (alreadyApplied) {
+            zone.setAttribute('data-visible', '');
+            zone.dataset.layout = desired.layout;
+            zone.dataset.view = desired.view;
+            return;
+        }
+
+        if (activeMobileActionNodes.length) restoreActiveMobileActions();
+
+        desired.nodes.forEach(({ node, role }) => {
+            rememberOrigin(node);
+
+            if (node.tagName === 'BUTTON') {
+                preserveSubmitButtonForm(node);
+                node.classList.add('centralos-mobile-action-button');
+                node.classList.add(
+                    role === 'secondary'
+                        ? 'centralos-mobile-action-secondary'
+                        : 'centralos-mobile-action-primary'
+                );
+            } else if (role === 'home') {
+                node.classList.add('centralos-mobile-home-split');
+            }
+
+            zone.appendChild(node);
+        });
+
+        activeMobileActionNodes = desiredNodes;
+        activeMobileActionKey = desired.key;
+        zone.setAttribute('data-visible', '');
+        zone.dataset.layout = desired.layout;
+        zone.dataset.view = desired.view;
     };
 
     const decorateSectionHeadings = (dashboard) => {
-        [...dashboard.querySelectorAll('h3')].forEach((heading) => {
+        [...(dashboard?.querySelectorAll('h3') || [])].forEach((heading) => {
             const text = normalize(heading.textContent);
             const def = SECTION_DEFINITIONS.find((item) => text.includes(normalize(item.match)));
             if (!def) return;
@@ -427,7 +660,7 @@
     };
 
     const decorateOperationalCards = (dashboard) => {
-        [...dashboard.querySelectorAll('h4')].forEach((heading) => {
+        [...(dashboard?.querySelectorAll('h4') || [])].forEach((heading) => {
             const text = normalize(heading.textContent);
             const def = CARD_DEFINITIONS.find((item) => text.includes(normalize(item.match)));
             if (!def) return;
@@ -454,11 +687,13 @@
         applyUploadedLogo();
 
         const dashboard = getDashboard();
-        if (!dashboard) return;
+        if (dashboard) {
+            prepareDashboardAction(dashboard);
+            decorateSectionHeadings(dashboard);
+            decorateOperationalCards(dashboard);
+        }
 
-        configureDashboardAction(dashboard);
-        decorateSectionHeadings(dashboard);
-        decorateOperationalCards(dashboard);
+        applyMobileViewActions();
     };
 
     let scheduled = false;
@@ -472,14 +707,21 @@
     };
 
     const start = () => {
+        document.querySelector('.centralos-home-mobile-action-zone')?.remove();
         ensureLayoutFixStyles();
         decorate();
+
         window.setTimeout(decorate, 100);
         window.setTimeout(decorate, 250);
         window.setTimeout(decorate, 900);
+
         document.addEventListener('click', () => window.setTimeout(decorate, 0), { passive: true });
         mobileQuery.addEventListener?.('change', decorate);
-        new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+
+        new MutationObserver(schedule).observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     };
 
     if (document.readyState === 'loading') {
