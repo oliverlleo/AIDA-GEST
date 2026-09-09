@@ -152,6 +152,22 @@ window.AIDAConfigHelpers = {
             document.head.appendChild(operationalScript);
         }
 
+        // Camada mobile isolada: só atua até 767px e reaproveita as ações existentes.
+        if (!document.querySelector('link[data-centralos-mobile-kanban]')) {
+            const mobileLink = document.createElement('link');
+            mobileLink.rel = 'stylesheet';
+            mobileLink.href = 'centralos-mobile-kanban.css?v=1';
+            mobileLink.dataset.centralosMobileKanban = 'true';
+            document.head.appendChild(mobileLink);
+        }
+
+        if (!document.querySelector('script[data-centralos-mobile-kanban]')) {
+            const mobileScript = document.createElement('script');
+            mobileScript.src = 'centralos-mobile-kanban.js?v=1';
+            mobileScript.dataset.centralosMobileKanban = 'true';
+            document.head.appendChild(mobileScript);
+        }
+
         // Wordmark vetorial aplicado apenas à imagem visual do topo.
         // O arquivo logo.png original permanece intacto no repositório.
         const navLogo = document.querySelector('nav img[alt="CentralOS"]');
