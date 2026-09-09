@@ -15,8 +15,6 @@
         { match: 'pendências com fornecedor', icon: 'fa-truck-fast' }
     ];
 
-    const mobileQuery = window.matchMedia('(max-width: 767px)');
-
     const normalize = (value) => String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -26,11 +24,6 @@
     const getDashboard = () => [...document.querySelectorAll('main [x-show]')].find((el) => {
         const expr = el.getAttribute('x-show') || '';
         return expr.includes("view === 'dashboard'");
-    }) || null;
-
-    const getSessionNav = () => [...document.querySelectorAll('nav[x-show]')].find((el) => {
-        const expr = el.getAttribute('x-show') || '';
-        return expr.includes('session');
     }) || null;
 
     const getCurrentView = () => {
@@ -51,16 +44,13 @@
 
     const ensureLayoutFixStyles = () => {
         document.getElementById('centralos-layout-fixes-v2')?.remove();
-        if (document.getElementById('centralos-layout-fixes-v3')) return;
+        document.getElementById('centralos-layout-fixes-v3')?.remove();
+        if (document.getElementById('centralos-layout-fixes-v4')) return;
 
         const style = document.createElement('style');
-        style.id = 'centralos-layout-fixes-v3';
+        style.id = 'centralos-layout-fixes-v4';
         style.textContent = `
-            .centralos-dashboard-mobile-action-strip {
-                display: none;
-            }
-
-            /* Desktop: mantém título, filtros e ação na mesma linha */
+            /* Desktop: título, filtros e ação na mesma linha e alinhados. */
             @media (min-width: 768px) {
                 body.centralos-enhanced .centralos-dashboard > header {
                     display: grid !important;
@@ -88,32 +78,36 @@
                 }
             }
 
-            /* Mobile: faixa no mesmo lugar do Novo Chamado da aba Chamados */
+            /* Mobile da Início: usa SOMENTE o Abrir Chamado original.
+               Ele fica dentro da Início, acima dos filtros, com o mesmo padrão da aba Chamados. */
             @media (max-width: 767px) {
-                .centralos-dashboard-mobile-action-strip[data-visible] {
-                    display: block !important;
-                    position: relative;
-                    width: 100%;
-                    padding: 0 14px 12px;
-                    background: #0b0e12;
-                    z-index: 55;
-                }
-
-                .centralos-dashboard-mobile-action-strip > .aida-split-action {
-                    width: 100% !important;
-                    margin: 0 !important;
+                body.centralos-dashboard-active .centralos-mobile-action-strip {
+                    display: none !important;
                 }
 
                 body.centralos-enhanced .centralos-dashboard > header {
-                    display: block !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: stretch !important;
                     margin-bottom: 14px !important;
                 }
 
+                body.centralos-enhanced .centralos-dashboard > header > div:first-child {
+                    order: 1 !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action {
+                    order: 2 !important;
+                    width: 100% !important;
+                    margin: 14px 0 0 !important;
+                }
+
                 body.centralos-enhanced .centralos-dashboard > header > .aida-operational-filter {
+                    order: 3 !important;
                     display: block !important;
                     width: 100% !important;
                     min-width: 0 !important;
-                    margin-top: 16px !important;
+                    margin-top: 14px !important;
                     padding: 0 !important;
                     overflow: hidden !important;
                 }
@@ -206,55 +200,28 @@
         }
     };
 
-    const ensureDashboardMobileActionStrip = () => {
-        let strip = document.querySelector('.centralos-dashboard-mobile-action-strip');
-        if (strip) return strip;
-
-        const nav = getSessionNav();
-        if (!nav) return null;
-
-        strip = document.createElement('div');
-        strip.className = 'centralos-dashboard-mobile-action-strip';
-        strip.setAttribute('aria-label', 'Abrir chamado');
-        nav.insertAdjacentElement('afterend', strip);
-        return strip;
-    };
-
-    const syncDashboardMobileAction = (dashboard) => {
+    const configureDashboardAction = (dashboard) => {
         const header = dashboard?.querySelector(':scope > header');
         if (!header) return;
 
-        let action = header.querySelector(':scope > .aida-split-action')
-            || document.querySelector('.centralos-dashboard-mobile-action-strip > .aida-split-action');
+        /* Limpa a implementação errada anterior, caso ainda exista no DOM atual. */
+        const legacyStrip = document.querySelector('.centralos-dashboard-mobile-action-strip');
+        const legacyAction = legacyStrip?.querySelector(':scope > .aida-split-action');
+        if (legacyAction && legacyAction.parentElement !== header) {
+            header.appendChild(legacyAction);
+        }
+        legacyStrip?.remove();
+        header.querySelectorAll(':scope > .centralos-dashboard-action-anchor').forEach((el) => el.remove());
+
+        const action = header.querySelector(':scope > .aida-split-action');
         if (!action) return;
 
-        let anchor = header.querySelector(':scope > .centralos-dashboard-action-anchor');
-        if (!anchor) {
-            anchor = document.createElement('span');
-            anchor.className = 'centralos-dashboard-action-anchor';
-            anchor.hidden = true;
-            if (action.parentElement === header) header.insertBefore(anchor, action);
-            else header.appendChild(anchor);
-        }
-
-        const strip = ensureDashboardMobileActionStrip();
-        if (!strip) return;
-
-        const mainButton = action.querySelector(':scope > button:first-of-type');
-        const moreButton = action.querySelector(':scope > button:nth-of-type(2)');
+        /* Reutiliza exatamente o botão original; só aplica as classes visuais do Chamados mobile. */
         action.classList.add('centralos-mobile-action-inner');
-        mainButton?.classList.add('centralos-mobile-new-ticket');
-        moreButton?.classList.add('centralos-mobile-new-ticket-more');
+        action.querySelector(':scope > button:first-of-type')?.classList.add('centralos-mobile-new-ticket');
+        action.querySelector(':scope > button:nth-of-type(2)')?.classList.add('centralos-mobile-new-ticket-more');
 
-        const shouldUseTopStrip = mobileQuery.matches && isDashboardActive(dashboard);
-
-        if (shouldUseTopStrip) {
-            if (action.parentElement !== strip) strip.appendChild(action);
-            strip.setAttribute('data-visible', '');
-        } else {
-            if (action.parentElement === strip) anchor.insertAdjacentElement('afterend', action);
-            strip.removeAttribute('data-visible');
-        }
+        document.body.classList.toggle('centralos-dashboard-active', isDashboardActive(dashboard));
     };
 
     const decorateSectionHeadings = (dashboard) => {
@@ -315,8 +282,11 @@
         ensureLayoutFixStyles();
         applyUploadedLogo();
         const dashboard = getDashboard();
-        if (!dashboard) return;
-        syncDashboardMobileAction(dashboard);
+        if (!dashboard) {
+            document.body.classList.remove('centralos-dashboard-active');
+            return;
+        }
+        configureDashboardAction(dashboard);
         decorateSectionHeadings(dashboard);
         decorateOperationalCards(dashboard);
     };
@@ -338,7 +308,6 @@
         window.setTimeout(decorate, 250);
         window.setTimeout(decorate, 900);
         document.addEventListener('click', () => window.setTimeout(decorate, 0), { passive: true });
-        mobileQuery.addEventListener?.('change', decorate);
         new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
     };
 
