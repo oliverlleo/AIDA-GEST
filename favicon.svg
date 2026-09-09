@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CentralOS favicon">
+  <rect width="512" height="512" fill="#000000"/>
+
+  <!-- White C mark -->
+  <path
+    d="M 330 115
+       H 238
+       C 160 115 105 170 105 256
+       C 105 342 160 397 238 397
+       H 330"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="62"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Orange bars -->
+  <rect x="236" y="166" width="170" height="46" rx="23" fill="#FF5A00"/>
+  <rect x="208" y="233" width="170" height="46" rx="23" fill="#FF5A00"/>
+  <rect x="236" y="300" width="170" height="46" rx="23" fill="#FF5A00"/>
+</svg>

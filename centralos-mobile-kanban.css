@@ -1,0 +1,923 @@
+/*
+ * Centralos — Mobile Kanban
+ * Escopo estrito para <= 767px. A versão desktop não é alterada por este arquivo.
+ * Replica a referência mobile mantendo os elementos e ações do sistema original.
+ */
+
+.centralos-mobile-only { display: none !important; }
+
+@media (max-width: 767px) {
+    :root {
+        --co-mobile-orange: #ff6500;
+        --co-mobile-orange-2: #ff7410;
+        --co-mobile-black: #0a0c10;
+        --co-mobile-canvas: #f4f5f7;
+        --co-mobile-border: #e1e5ea;
+        --co-mobile-text: #11151a;
+        --co-mobile-muted: #7b8490;
+    }
+
+    html, body {
+        min-width: 0 !important;
+        overflow-x: hidden !important;
+    }
+
+    body.centralos-mobile-session-active {
+        padding-bottom: 76px;
+        background: var(--co-mobile-black) !important;
+    }
+
+    .centralos-mobile-only { display: initial !important; }
+
+    /* ===== Shell mobile ===== */
+    body.centralos-enhanced nav[x-show*="session"] {
+        height: 78px !important;
+        min-height: 78px !important;
+        padding: 10px 14px 8px !important;
+        gap: 8px !important;
+        background: linear-gradient(180deg, #090b0e 0%, #0b0e12 100%) !important;
+        box-shadow: none !important;
+        border-bottom: 0 !important;
+        z-index: 60 !important;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] > div:first-child {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] img[alt="CentralOS"] {
+        width: min(210px, 57vw) !important;
+        height: 50px !important;
+        object-fit: contain !important;
+        object-position: left center !important;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] > div:last-child {
+        gap: 8px !important;
+        flex: 0 0 auto;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] > div:last-child > .flex.items-center.space-x-3 {
+        order: 2;
+        gap: 0 !important;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] > div:last-child > button[title="Notas Gerais"],
+    body.centralos-enhanced nav[x-show*="session"] > div:last-child > button[title="Sair"] {
+        display: none !important;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] > div:last-child > button:not([title]) {
+        order: 1;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] button,
+    body.centralos-enhanced nav[x-show*="session"] .bg-gray-800 {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        min-height: 42px !important;
+        border-radius: 999px !important;
+        background: #171b21 !important;
+        border: 1px solid rgba(255,255,255,.1) !important;
+    }
+
+    body.centralos-enhanced nav[x-show*="session"] .bg-gray-800 {
+        font-size: 16px !important;
+        color: var(--co-mobile-orange) !important;
+    }
+
+    .centralos-mobile-account-chevron {
+        order: 3 !important;
+        display: inline-flex !important;
+        width: 26px !important;
+        min-width: 26px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        border: 0 !important;
+        background: transparent !important;
+        color: #f3f4f6 !important;
+        font-size: 13px !important;
+    }
+
+    body.centralos-enhanced .centralos-top-search,
+    body.centralos-enhanced .centralos-top-slogan {
+        display: none !important;
+    }
+
+    body.centralos-enhanced aside[x-show*="session"] {
+        display: none !important;
+    }
+
+    body.centralos-mobile-session-active main {
+        width: 100% !important;
+        min-width: 0 !important;
+        overflow: visible !important;
+        background: var(--co-mobile-canvas) !important;
+    }
+
+    /* ===== Faixa Novo Chamado ===== */
+    .centralos-mobile-action-strip {
+        display: none !important;
+        position: relative;
+        background: #0b0e12;
+        padding: 0 14px 12px;
+        z-index: 55;
+    }
+
+    .centralos-mobile-action-strip[data-visible] {
+        display: block !important;
+    }
+
+    .centralos-mobile-action-inner {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 50px;
+        overflow: hidden;
+        border-radius: 12px;
+        box-shadow: 0 10px 24px rgba(255,101,0,.18);
+    }
+
+    .centralos-mobile-new-ticket,
+    .centralos-mobile-new-ticket-more {
+        height: 50px;
+        border: 0;
+        background: linear-gradient(90deg, var(--co-mobile-orange) 0%, #ff5a00 100%);
+        color: #fff;
+        font-weight: 800;
+    }
+
+    .centralos-mobile-new-ticket {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        font-size: 17px;
+        letter-spacing: -.01em;
+    }
+
+    .centralos-mobile-new-ticket i { font-size: 19px; }
+
+    .centralos-mobile-new-ticket-more {
+        border-left: 1px solid rgba(255,255,255,.26);
+        font-size: 15px;
+    }
+
+    .centralos-mobile-new-ticket-menu {
+        position: absolute;
+        right: 14px;
+        top: calc(100% - 4px);
+        width: min(290px, calc(100vw - 28px));
+        padding: 7px;
+        border-radius: 13px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 20px 42px rgba(0,0,0,.2);
+        z-index: 90;
+    }
+
+    .centralos-mobile-new-ticket-menu[hidden] { display: none !important; }
+
+    .centralos-mobile-new-ticket-menu button {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        border: 0;
+        border-radius: 10px;
+        background: #fff;
+        text-align: left;
+    }
+
+    .centralos-mobile-new-ticket-menu strong,
+    .centralos-mobile-new-ticket-menu small { display: block; }
+    .centralos-mobile-new-ticket-menu strong { color: #1b2027; font-size: 13px; }
+    .centralos-mobile-new-ticket-menu small { color: #7b8490; margin-top: 2px; font-size: 11px; }
+    .centralos-mobile-menu-icon {
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        background: #f1eaff;
+        color: #7448df;
+        flex: 0 0 auto;
+    }
+
+    /* ===== Kanban raiz ===== */
+    body.centralos-mobile-kanban-active main {
+        background: #0b0e12 !important;
+    }
+
+    body.centralos-mobile-kanban-active .centralos-mobile-kanban {
+        height: auto !important;
+        min-height: calc(100dvh - 128px) !important;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        background: var(--co-mobile-canvas) !important;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .centralos-mobile-kanban > div:first-child {
+        margin: 0 !important;
+        padding: 16px 14px 12px !important;
+        border: 0 !important;
+        border-radius: 16px 16px 0 0 !important;
+        background: #fff !important;
+        box-shadow: none !important;
+        gap: 12px !important;
+    }
+
+    .centralos-mobile-kanban > div:first-child > div:first-child {
+        display: grid !important;
+        grid-template-columns: 1fr;
+        align-items: stretch !important;
+        gap: 0 !important;
+    }
+
+    .centralos-mobile-kanban-title {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        margin: 0 !important;
+        color: var(--co-mobile-text) !important;
+        font-size: 23px !important;
+        line-height: 1.05 !important;
+        font-weight: 850 !important;
+        letter-spacing: -.035em !important;
+    }
+
+    .centralos-mobile-kanban-title-icon {
+        width: 36px !important;
+        height: 36px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 !important;
+        border-radius: 6px !important;
+        background: var(--co-mobile-orange) !important;
+        color: #fff !important;
+        font-size: 17px !important;
+        box-shadow: 0 5px 12px rgba(255,101,0,.2);
+    }
+
+    .centralos-mobile-kanban-subtitle {
+        display: block !important;
+        margin: 5px 0 14px 46px !important;
+        color: #818995 !important;
+        font-size: 12.5px !important;
+        line-height: 1.25 !important;
+        font-weight: 500 !important;
+    }
+
+    /* ===== Busca e filtro ===== */
+    .centralos-mobile-kanban-controls {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 48px !important;
+        gap: 9px !important;
+        align-items: center !important;
+    }
+
+    .centralos-mobile-search-box {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .centralos-mobile-search-box input {
+        width: 100% !important;
+        height: 48px !important;
+        padding-left: 42px !important;
+        padding-right: 12px !important;
+        border: 1px solid #dfe3e8 !important;
+        border-radius: 11px !important;
+        background: #fafbfc !important;
+        color: #2a3038 !important;
+        font-size: 13px !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.75) !important;
+    }
+
+    .centralos-mobile-search-box > i {
+        left: 14px !important;
+        color: #687482 !important;
+        font-size: 18px !important;
+    }
+
+    .centralos-mobile-filter-toggle {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        border-radius: 11px !important;
+        border: 1px solid #dfe3e8 !important;
+        background: #fafbfc !important;
+        color: #1f2937 !important;
+        font-size: 17px !important;
+        box-shadow: none !important;
+    }
+
+    .centralos-mobile-native-new-ticket { display: none !important; }
+
+    .centralos-mobile-extra-filter-control {
+        display: none !important;
+        grid-column: 1 / -1;
+        min-height: 38px !important;
+        border-radius: 10px !important;
+        font-size: 11px !important;
+    }
+
+    .centralos-mobile-filters-open .centralos-mobile-extra-filter-control {
+        display: inline-flex !important;
+    }
+
+    /* ===== Chips operacionais ===== */
+    .centralos-mobile-operational-filter {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+    }
+
+    .centralos-mobile-window-row {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 0 !important;
+    }
+
+    .centralos-mobile-window-row > span:first-child { display: none !important; }
+
+    .centralos-mobile-window-row > button {
+        min-height: 37px !important;
+        padding: 7px 13px !important;
+        border-radius: 999px !important;
+        border: 1px solid #dfe3e8 !important;
+        background: #fff !important;
+        color: #68717d !important;
+        font-size: 12px !important;
+        font-weight: 650 !important;
+        box-shadow: none !important;
+        white-space: nowrap;
+        order: 10;
+    }
+
+    .centralos-mobile-window-row > button:nth-of-type(6) { order: 1; }
+    .centralos-mobile-window-row > button:nth-of-type(1) { order: 2; }
+    .centralos-mobile-window-row > button:nth-of-type(2) { order: 3; }
+    .centralos-mobile-window-row > button:nth-of-type(3) { order: 4; }
+    .centralos-mobile-window-row > button:nth-of-type(4) { order: 5; }
+    .centralos-mobile-window-row > button:nth-of-type(5) { order: 6; }
+
+    .centralos-mobile-window-row > button.bg-brand-500,
+    .centralos-mobile-window-row > button.bg-red-500,
+    .centralos-mobile-window-row > button.bg-gray-600,
+    .centralos-mobile-window-row > button.bg-black {
+        background: linear-gradient(135deg, var(--co-mobile-orange), var(--co-mobile-orange-2)) !important;
+        border-color: var(--co-mobile-orange) !important;
+        color: #fff !important;
+        box-shadow: 0 5px 12px rgba(255,101,0,.16) !important;
+    }
+
+    .centralos-mobile-window-row > button > span {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        min-width: 21px;
+        height: 21px;
+        padding: 0 6px;
+        margin-left: 5px !important;
+        border-radius: 999px;
+        background: #f1f3f5;
+        color: #6e7681 !important;
+        font-weight: 800 !important;
+    }
+
+    .centralos-mobile-window-row > button.bg-brand-500 > span,
+    .centralos-mobile-window-row > button.bg-red-500 > span,
+    .centralos-mobile-window-row > button.bg-gray-600 > span,
+    .centralos-mobile-window-row > button.bg-black > span {
+        background: rgba(255,255,255,.2) !important;
+        color: #fff !important;
+    }
+
+    .centralos-mobile-basis-row {
+        display: none !important;
+        margin-top: 10px !important;
+        padding: 10px 0 0 !important;
+        border-left: 0 !important;
+        border-top: 1px solid #edf0f3 !important;
+    }
+
+    .centralos-mobile-filters-open .centralos-mobile-basis-row {
+        display: flex !important;
+    }
+
+    .centralos-mobile-basis-row select {
+        flex: 1 1 auto;
+        min-height: 40px;
+        padding: 0 10px !important;
+        border: 1px solid #dfe3e8 !important;
+        border-radius: 10px !important;
+        background: #fafbfc !important;
+    }
+
+    /* ===== Cronograma ===== */
+    .centralos-mobile-calendar-wrap {
+        padding: 10px 10px 4px !important;
+        background: var(--co-mobile-canvas) !important;
+    }
+
+    .centralos-mobile-calendar-card {
+        padding: 11px 10px 12px !important;
+        border-radius: 13px !important;
+        border: 1px solid #dfe3e8 !important;
+        box-shadow: 0 4px 12px rgba(18,24,33,.035) !important;
+    }
+
+    .centralos-mobile-calendar-title {
+        color: #171b21 !important;
+        font-size: 15px !important;
+        font-weight: 800 !important;
+        letter-spacing: -.01em !important;
+        text-transform: none !important;
+    }
+
+    .centralos-mobile-calendar-title i {
+        color: var(--co-mobile-orange) !important;
+        font-size: 15px !important;
+    }
+
+    .centralos-mobile-calendar-link {
+        color: var(--co-mobile-orange) !important;
+        font-size: 11px !important;
+        text-transform: none !important;
+        gap: 4px;
+    }
+
+    .centralos-mobile-calendar-card .grid.grid-cols-7 {
+        gap: 5px !important;
+    }
+
+    .centralos-mobile-calendar-day {
+        min-height: 55px !important;
+        padding: 7px 2px !important;
+        border-radius: 8px !important;
+        background: #fafbfc !important;
+        border-color: #e6e9ed !important;
+    }
+
+    .centralos-mobile-calendar-day.bg-orange-50 {
+        background: #fff4e9 !important;
+        border-color: #ffd9bd !important;
+    }
+
+    .centralos-mobile-calendar-day > .text-center { margin-bottom: 0 !important; }
+    .centralos-mobile-calendar-day > .space-y-1 { display: none !important; }
+    .centralos-mobile-calendar-day span:first-child {
+        color: #747e8a !important;
+        font-size: 8.5px !important;
+        line-height: 1 !important;
+    }
+    .centralos-mobile-calendar-day span:nth-child(2) {
+        margin-top: 4px;
+        color: #20262d !important;
+        font-size: 13px !important;
+        line-height: 1 !important;
+    }
+
+    /* ===== Kanban em acordeão vertical ===== */
+    .centralos-mobile-top-scrollbar { display: none !important; }
+
+    .centralos-mobile-kanban-scroll {
+        height: auto !important;
+        flex: 0 0 auto !important;
+        overflow: visible !important;
+        padding: 6px 10px 96px !important;
+    }
+
+    .centralos-mobile-columns {
+        display: flex !important;
+        flex-direction: column !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        gap: 9px !important;
+        padding: 0 !important;
+    }
+
+    .centralos-mobile-columns > * + * { margin-left: 0 !important; }
+
+    .centralos-mobile-column {
+        --mobile-tone: #64748b;
+        --mobile-soft: #f4f6f8;
+        width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        border: 1px solid color-mix(in srgb, var(--mobile-tone) 28%, #e5e7eb) !important;
+        border-top: 3px solid var(--mobile-tone) !important;
+        border-radius: 12px !important;
+        background: #fff !important;
+        box-shadow: 0 4px 13px rgba(15,23,42,.035) !important;
+        overflow: hidden !important;
+    }
+
+    .centralos-mobile-column[data-centralos-mobile-tone="open"] { --mobile-tone: #64748b; --mobile-soft: #f2f5f8; }
+    .centralos-mobile-column[data-centralos-mobile-tone="outsourced"] { --mobile-tone: #8b4de8; --mobile-soft: #f5efff; }
+    .centralos-mobile-column[data-centralos-mobile-tone="analysis"] { --mobile-tone: #ff8a28; --mobile-soft: #fff2e7; }
+    .centralos-mobile-column[data-centralos-mobile-tone="approval"] { --mobile-tone: #2491f2; --mobile-soft: #eaf5ff; }
+    .centralos-mobile-column[data-centralos-mobile-tone="released"] { --mobile-tone: #2dbd78; --mobile-soft: #eaf9f1; }
+    .centralos-mobile-column[data-centralos-mobile-tone="purchase"] { --mobile-tone: #d9a21b; --mobile-soft: #fff8dc; }
+    .centralos-mobile-column[data-centralos-mobile-tone="repair"] { --mobile-tone: #f06a26; --mobile-soft: #fff1e9; }
+    .centralos-mobile-column[data-centralos-mobile-tone="test"] { --mobile-tone: #5665db; --mobile-soft: #eef0ff; }
+    .centralos-mobile-column[data-centralos-mobile-tone="finished"] { --mobile-tone: #6b7280; --mobile-soft: #f2f3f5; }
+
+    .centralos-mobile-column-header {
+        position: relative !important;
+        min-height: 55px !important;
+        display: grid !important;
+        grid-template-columns: 38px minmax(0,1fr) auto auto !important;
+        align-items: center !important;
+        gap: 9px !important;
+        padding: 9px 11px !important;
+        border: 0 !important;
+        border-bottom: 0 !important;
+        border-radius: 0 !important;
+        background: linear-gradient(90deg, var(--mobile-soft), color-mix(in srgb, var(--mobile-soft) 82%, white)) !important;
+        cursor: pointer;
+    }
+
+    .centralos-mobile-count {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.82);
+        color: #111827;
+        border: 1px solid color-mix(in srgb, var(--mobile-tone) 16%, #e5e7eb);
+        font-size: 14px;
+        font-weight: 850;
+        box-shadow: 0 3px 8px rgba(15,23,42,.04);
+    }
+
+    .centralos-mobile-column-header h3 {
+        grid-column: 2;
+        color: #151922 !important;
+        font-size: 16px !important;
+        font-weight: 800 !important;
+        letter-spacing: -.02em !important;
+        text-transform: none !important;
+    }
+
+    .centralos-mobile-column-header > div.flex.items-center.gap-2 {
+        grid-column: 3;
+        gap: 6px !important;
+    }
+
+    .centralos-mobile-native-count { display: none !important; }
+
+    .centralos-mobile-column-header > div.flex.items-center.gap-2 > button {
+        width: 30px !important;
+        height: 30px !important;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: rgba(255,255,255,.64);
+        color: color-mix(in srgb, var(--mobile-tone) 72%, #4b5563) !important;
+    }
+
+    .centralos-mobile-column-chevron {
+        grid-column: 4;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        color: #111827;
+        font-size: 15px;
+        transition: transform .18s ease;
+    }
+
+    .centralos-mobile-column.centralos-mobile-expanded .centralos-mobile-column-chevron {
+        transform: rotate(180deg);
+    }
+
+    .centralos-mobile-column-cards {
+        display: none !important;
+        max-height: none !important;
+        overflow: visible !important;
+        padding: 9px !important;
+        background: #fff !important;
+        gap: 9px !important;
+    }
+
+    .centralos-mobile-column.centralos-mobile-expanded .centralos-mobile-column-cards {
+        display: block !important;
+    }
+
+    .centralos-mobile-column.centralos-mobile-expanded .centralos-mobile-column-cards > * + * {
+        margin-top: 9px !important;
+    }
+
+    /* ===== Cartões de chamado compactos ===== */
+    .centralos-mobile-ticket-card {
+        padding: 12px !important;
+        border: 1px solid #e3e6ea !important;
+        border-left-width: 1px !important;
+        border-radius: 11px !important;
+        background: #fff !important;
+        box-shadow: 0 3px 10px rgba(15,23,42,.035) !important;
+    }
+
+    .centralos-mobile-native-meta { display: none !important; }
+
+    .centralos-mobile-card-summary {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+        gap: 11px;
+        align-items: stretch;
+    }
+
+    .centralos-mobile-card-left,
+    .centralos-mobile-card-right {
+        min-width: 0;
+    }
+
+    .centralos-mobile-card-right {
+        padding-left: 11px;
+        border-left: 1px solid #edf0f3;
+    }
+
+    .centralos-mobile-card-badges {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 7px;
+    }
+
+    .centralos-mobile-priority-badge {
+        display: inline-flex !important;
+        padding: 4px 8px !important;
+        border-radius: 5px !important;
+        font-size: 9px !important;
+        line-height: 1 !important;
+        font-weight: 850 !important;
+    }
+
+    .centralos-mobile-os {
+        color: #8b93a0;
+        font-size: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: nowrap;
+    }
+
+    .centralos-mobile-device {
+        display: block;
+        color: #171b21;
+        font-size: 15px;
+        line-height: 1.15;
+        font-weight: 850;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .centralos-mobile-client {
+        display: block;
+        margin-top: 4px;
+        color: #737d89;
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .centralos-mobile-deadline,
+    .centralos-mobile-technician {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        column-gap: 5px;
+        color: #7d8793;
+        font-size: 10px;
+        line-height: 1.25;
+    }
+
+    .centralos-mobile-deadline i {
+        grid-row: 1 / 3;
+        padding-top: 1px;
+        color: #75869a;
+    }
+
+    .centralos-mobile-deadline strong,
+    .centralos-mobile-technician strong {
+        grid-column: 2;
+        color: #717b87;
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    .centralos-mobile-technician {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .centralos-mobile-actions {
+        margin-top: 10px !important;
+        padding-top: 0 !important;
+        border-top: 0 !important;
+        gap: 7px !important;
+    }
+
+    .centralos-mobile-actions button {
+        min-height: 39px !important;
+        border-radius: 7px !important;
+        font-size: 11px !important;
+        font-weight: 800 !important;
+    }
+
+    .centralos-mobile-actions button.bg-blue-50 {
+        background: #eaf4ff !important;
+        color: #176bc0 !important;
+    }
+
+    /* ===== Bottom navigation ===== */
+    .centralos-mobile-bottom-nav {
+        display: none !important;
+        position: fixed !important;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 100;
+        height: 76px;
+        grid-template-columns: repeat(4, 1fr);
+        padding: 8px 8px max(7px, env(safe-area-inset-bottom));
+        border-radius: 18px 18px 0 0;
+        background: rgba(8,11,14,.98);
+        border-top: 1px solid rgba(255,255,255,.08);
+        box-shadow: 0 -10px 30px rgba(0,0,0,.2);
+        backdrop-filter: blur(18px);
+    }
+
+    .centralos-mobile-bottom-nav[data-visible] {
+        display: grid !important;
+    }
+
+    .centralos-mobile-bottom-nav button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        border: 0;
+        background: transparent;
+        color: #f4f5f6;
+        font-size: 10px;
+        font-weight: 650;
+    }
+
+    .centralos-mobile-bottom-nav button i {
+        font-size: 20px;
+        line-height: 1;
+    }
+
+    .centralos-mobile-bottom-nav button.is-active {
+        color: var(--co-mobile-orange);
+    }
+
+    /* ===== Mais ===== */
+    .centralos-mobile-more-sheet {
+        position: fixed !important;
+        inset: 0;
+        z-index: 140;
+        display: block !important;
+    }
+
+    .centralos-mobile-more-sheet[hidden] { display: none !important; }
+
+    .centralos-mobile-more-backdrop {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: rgba(0,0,0,.5);
+        backdrop-filter: blur(2px);
+    }
+
+    .centralos-mobile-more-panel {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        max-height: min(78dvh, 680px);
+        overflow: hidden;
+        padding: 7px 10px 14px;
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: 0 24px 60px rgba(0,0,0,.28);
+    }
+
+    .centralos-mobile-more-handle {
+        width: 42px;
+        height: 4px;
+        margin: 2px auto 8px;
+        border-radius: 999px;
+        background: #d7dbe0;
+    }
+
+    .centralos-mobile-more-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 5px 10px;
+    }
+
+    .centralos-mobile-more-heading strong {
+        font-size: 19px;
+        color: #161a20;
+    }
+
+    .centralos-mobile-more-heading button {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 999px;
+        background: #f1f3f5;
+        color: #4b5563;
+    }
+
+    .centralos-mobile-more-items {
+        max-height: calc(min(78dvh, 680px) - 70px);
+        overflow-y: auto;
+        display: grid;
+        gap: 4px;
+    }
+
+    .centralos-mobile-more-item {
+        width: 100%;
+        min-height: 50px;
+        display: grid;
+        grid-template-columns: 34px 1fr 20px;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 11px;
+        background: #fff;
+        color: #303741;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 650;
+    }
+
+    .centralos-mobile-more-item > i:first-child {
+        color: #697380;
+        font-size: 15px;
+        text-align: center;
+    }
+
+    .centralos-mobile-more-arrow {
+        color: #b1b7bf;
+        font-size: 10px;
+    }
+
+    .centralos-mobile-more-item-danger,
+    .centralos-mobile-more-item-danger > i:first-child { color: #dc2626 !important; }
+
+    body.centralos-mobile-sheet-open { overflow: hidden !important; }
+}
+
+@media (max-width: 390px) {
+    body.centralos-enhanced nav[x-show*="session"] img[alt="CentralOS"] {
+        width: min(185px, 53vw) !important;
+    }
+
+    .centralos-mobile-window-row > button {
+        padding-inline: 11px !important;
+        font-size: 11.5px !important;
+    }
+
+    .centralos-mobile-card-summary {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .centralos-mobile-card-right {
+        padding: 8px 0 0;
+        border-left: 0;
+        border-top: 1px solid #edf0f3;
+    }
+}
