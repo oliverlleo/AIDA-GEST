@@ -114,13 +114,33 @@ window.AIDAConfigHelpers = {
 // Centralos visual brand layer — isolada da lógica de negócio e dos fluxos do sistema.
 (() => {
     const applyCentralosBrandLayer = () => {
-        if (document.querySelector('link[data-centralos-brand]')) return;
+        if (!document.querySelector('link[data-centralos-brand]')) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'centralos-brand.css?v=1';
+            link.dataset.centralosBrand = 'true';
+            document.head.appendChild(link);
+        }
 
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'centralos-brand.css?v=1';
-        link.dataset.centralosBrand = 'true';
-        document.head.appendChild(link);
+        // Wordmark vetorial aplicado apenas à imagem visual do topo.
+        // O arquivo logo.png original permanece intacto no repositório.
+        const navLogo = document.querySelector('nav img[alt="CentralOS"]');
+        if (navLogo && !navLogo.dataset.centralosBrandLogo) {
+            const svg = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 112">
+                    <g transform="translate(4 9)">
+                        <path fill="#f7f7f7" d="M82 1C41 1 10 22 10 48s31 47 72 47h24V73H82c-25 0-43-10-43-25 0-14 18-25 43-25h24V1H82z"/>
+                        <rect x="67" y="24" width="56" height="14" rx="7" fill="#ff6500"/>
+                        <rect x="55" y="43" width="68" height="14" rx="7" fill="#ff6500"/>
+                        <rect x="67" y="62" width="56" height="14" rx="7" fill="#ff6500"/>
+                    </g>
+                    <text x="142" y="69" fill="#f7f7f7" font-family="Inter,Arial,sans-serif" font-size="58" font-weight="800" letter-spacing="-2.5">Central</text>
+                    <text x="380" y="69" fill="#ff6500" font-family="Inter,Arial,sans-serif" font-size="58" font-weight="800" letter-spacing="-2.5">os</text>
+                    <text x="146" y="91" fill="#bfc3ca" font-family="Inter,Arial,sans-serif" font-size="9" font-weight="600" letter-spacing="4.1">SUA ASSISTÊNCIA TÉCNICA EM ORDEM</text>
+                </svg>`;
+            navLogo.src = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+            navLogo.dataset.centralosBrandLogo = 'true';
+        }
     };
 
     if (document.head) {
