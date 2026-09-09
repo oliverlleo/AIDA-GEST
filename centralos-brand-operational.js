@@ -62,26 +62,92 @@
                 }
             }
 
-            /* Dashboard mobile: usa a mesma faixa Novo Chamado da aba Chamados */
+            /* Dashboard mobile: reutiliza o Abrir Chamado que já existe */
             @media (max-width: 767px) {
-                body.centralos-mobile-session-active:has(.centralos-dashboard:not([style*="display: none"])) .centralos-mobile-action-strip {
-                    display: block !important;
-                }
-
                 body.centralos-enhanced .centralos-dashboard > header {
-                    display: block !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: stretch !important;
                     margin-bottom: 14px !important;
                 }
 
+                body.centralos-enhanced .centralos-dashboard > header > div:first-child {
+                    order: 1 !important;
+                }
+
                 body.centralos-enhanced .centralos-dashboard > header > .aida-split-action {
-                    display: none !important;
+                    order: 2 !important;
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) 50px !important;
+                    width: 100% !important;
+                    margin: 14px 0 0 !important;
+                    border-radius: 12px !important;
+                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
+                    box-shadow: 0 10px 24px rgba(255,101,0,.18) !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > button:first-of-type {
+                    width: 100% !important;
+                    height: 50px !important;
+                    min-height: 50px !important;
+                    padding: 0 18px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 14px !important;
+                    border: 0 !important;
+                    border-radius: 12px 0 0 12px !important;
+                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
+                    color: #fff !important;
+                    font-size: 17px !important;
+                    font-weight: 800 !important;
+                    letter-spacing: -.01em !important;
+                    box-shadow: none !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > button:first-of-type i {
+                    margin-right: 0 !important;
+                    font-size: 19px !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > button:nth-of-type(2) {
+                    width: 50px !important;
+                    min-width: 50px !important;
+                    height: 50px !important;
+                    min-height: 50px !important;
+                    padding: 0 !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    border: 0 !important;
+                    border-left: 1px solid rgba(255,255,255,.26) !important;
+                    border-radius: 0 12px 12px 0 !important;
+                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
+                    color: #fff !important;
+                    font-size: 15px !important;
+                    box-shadow: none !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action:has(> button:nth-of-type(2)[style*="display: none"]) {
+                    grid-template-columns: 1fr !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action:has(> button:nth-of-type(2)[style*="display: none"]) > button:first-of-type {
+                    border-radius: 12px !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > div[x-show*="newTicketMenuOpen"] {
+                    right: 0 !important;
+                    top: calc(100% + 8px) !important;
+                    z-index: 90 !important;
                 }
 
                 body.centralos-enhanced .centralos-dashboard > header > .aida-operational-filter {
+                    order: 3 !important;
                     display: block !important;
                     width: 100% !important;
                     min-width: 0 !important;
-                    margin-top: 16px !important;
+                    margin-top: 14px !important;
                     padding: 0 !important;
                     overflow: hidden !important;
                 }
