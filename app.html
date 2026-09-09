@@ -56,18 +56,23 @@
         (() => {
             let hasAuthHint = false;
             try {
-                hasAuthHint = !!localStorage.getItem('techassist_employee');
-                if (!hasAuthHint) {
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i) || '';
-                        if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                            const raw = localStorage.getItem(key);
-                            if (raw && raw !== 'null' && raw !== '{}') {
-                                hasAuthHint = true;
-                                break;
-                            }
+                // Only a non-expired Supabase admin token is trusted synchronously.
+                // Employee sessions are server-validated asynchronously, so they start
+                // on the real login shell instead of causing loader/reload flashes.
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i) || '';
+                    if (!key.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+                    const raw = localStorage.getItem(key);
+                    if (!raw || raw === 'null' || raw === '{}') continue;
+                    try {
+                        const saved = JSON.parse(raw);
+                        const accessToken = saved?.access_token || saved?.currentSession?.access_token;
+                        const expiresAt = Number(saved?.expires_at || saved?.currentSession?.expires_at || 0);
+                        if (accessToken && expiresAt * 1000 > Date.now() + 5000) {
+                            hasAuthHint = true;
+                            break;
                         }
-                    }
+                    } catch (_) {}
                 }
             } catch (_) {}
             document.documentElement.classList.add(hasAuthHint ? 'boot-auth' : 'boot-anon');

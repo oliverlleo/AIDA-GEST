@@ -1087,8 +1087,7 @@ function app() {
                                 });
 
                                 if (!freshSession) {
-                                    this.logout();
-                                    return;
+                                    throw new Error('STORED_EMPLOYEE_SESSION_INVALID');
                                 }
                                 this.employeeSessionLastValidatedAt = Date.now();
 
@@ -1101,10 +1100,8 @@ function app() {
                                 // Update Storage with trusted data
                                 localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
                             } else {
-                                // Legacy session without token
-                                console.warn("Legacy session detected. Logging out.");
-                                this.logout();
-                                return;
+                                // Legacy local session: clear it silently. Never reload during boot.
+                                throw new Error('STORED_EMPLOYEE_SESSION_LEGACY');
                             }
 
                             this.user = this.employeeSession;
@@ -1144,8 +1141,13 @@ function app() {
                                 this.view = 'tech_orders';
                             }
                         } catch (e) {
-                            console.error("Session restore error:", e);
+                            const restoreCode = String(e?.message || '');
+                            if (!restoreCode.startsWith('STORED_EMPLOYEE_SESSION_')) {
+                                console.error("Session restore error:", e);
+                            }
                             localStorage.removeItem('techassist_employee');
+                            this.employeeSession = null;
+                            this.user = null;
                         }
                     }
                 }

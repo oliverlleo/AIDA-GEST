@@ -197,8 +197,13 @@ window.AIDAAuthSessionService = {
         _applyContext(window.AIDATicketContext.clearContext());
 
         state.view = 'dashboard';
+        state.registrationSuccess = false;
         setLoading(false);
-        window.location.reload();
+
+        // Keep the same document. The login view becomes the visible shell immediately.
+        const root = document.documentElement;
+        root.classList.remove('boot-auth');
+        root.classList.add('boot-anon', 'auth-runtime');
     },
 
     async validateSessionToken(deps) {
