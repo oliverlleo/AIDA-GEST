@@ -1,0 +1,22 @@
+/* Mobile login contrast fix: keep hero copy/icons readable over dark background. */
+@media (max-width: 767px) {
+  .centralos-login-hero,
+  .centralos-login-title,
+  .centralos-login-title h1,
+  .centralos-login-title p,
+  .centralos-login-side,
+  .centralos-login-metrics,
+  .centralos-login-metric,
+  .centralos-login-metric span,
+  .centralos-login-metric i {
+    color: #fff !important;
+  }
+
+  .centralos-login-title p {
+    color: #f1f3f5 !important;
+  }
+
+  .centralos-login-metric:first-child i {
+    color: #ff5a00 !important;
+  }
+}
