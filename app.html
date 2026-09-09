@@ -38,17 +38,46 @@
 
     <style>
         [x-cloak] { display: none !important; }
+        /* AUTH FIRST-PAINT GATE */
+        html.boot-anon #initial-auth-loading { display: none !important; }
+        html.boot-anon:not(.auth-runtime) #app-shell { visibility: hidden; }
+        html.boot-anon:not(.auth-runtime) #login-screen {
+            visibility: visible !important;
+            display: block !important;
+        }
+        html.boot-auth #login-screen { display: none !important; }
         body { font-family: 'Inter', sans-serif; }
         /* Custom Scrollbar for Kanban */
         .kanban-col::-webkit-scrollbar { width: 4px; }
         .kanban-col::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 4px; }
         .kanban-col:hover::-webkit-scrollbar-thumb { background: #A0AEC0; }
     </style>
+    <script>
+        (() => {
+            let hasAuthHint = false;
+            try {
+                hasAuthHint = !!localStorage.getItem('techassist_employee');
+                if (!hasAuthHint) {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i) || '';
+                        if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                            const raw = localStorage.getItem(key);
+                            if (raw && raw !== 'null' && raw !== '{}') {
+                                hasAuthHint = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (_) {}
+            document.documentElement.classList.add(hasAuthHint ? 'boot-auth' : 'boot-anon');
+        })();
+    </script>
 </head>
 <body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
 
     <!-- Loading Overlay -->
-    <div x-show="loading" class="fixed inset-0 bg-white z-[99] flex items-center justify-center bg-opacity-90 transition-opacity" x-transition.opacity>
+    <div id="initial-auth-loading" x-show="loading" class="fixed inset-0 bg-white z-[99] flex items-center justify-center bg-opacity-90 transition-opacity">
         <div class="flex flex-col items-center">
             <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-brand-500 mb-4"></div>
             <p class="text-gray-500 animate-pulse">Carregando...</p>
@@ -82,7 +111,7 @@
     </div>
 
     <!-- MAIN LAYOUT -->
-    <div class="min-h-screen flex flex-col">
+    <div id="app-shell" class="min-h-screen flex flex-col">
 
         <!-- Top Navbar -->
         <nav x-show="(session || employeeSession) && view !== 'setup_required'" class="bg-black text-white h-16 px-6 flex justify-between items-center shadow-md z-30" x-cloak>
@@ -5174,7 +5203,7 @@
                 </div>
 
                 <!-- VIEW: LOGIN/REGISTER (If not logged in) -->
-                <div x-show="!session && !employeeSession && !registrationSuccess && view !== 'setup_required'" class="fixed inset-0 bg-white z-[10000] overflow-y-auto">
+                <div id="login-screen" x-show="!session && !employeeSession && !registrationSuccess && view !== 'setup_required'" class="fixed inset-0 bg-white z-[10000] overflow-y-auto">
                     <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4">
                         <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
                             <div class="text-center mb-8">

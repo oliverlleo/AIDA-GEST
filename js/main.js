@@ -1159,8 +1159,10 @@ function app() {
             } catch (err) {
                 console.error("Init Error:", err);
             } finally {
-                // Hard visual gate: the static app shell stays physically covered until
-                // the initial Supabase/employee-session check is fully resolved.
+                const root = document.documentElement;
+                root.classList.remove('boot-auth', 'boot-anon');
+                root.classList.add((this.session || this.employeeSession) ? 'boot-auth' : 'boot-anon');
+                root.classList.add('auth-runtime');
                 this.loading = false;
                 this.initInFlight = false;
             }
