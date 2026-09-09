@@ -44,18 +44,29 @@
 
     const directChildren = (element, selector) => [...element.children].filter((child) => child.matches(selector));
 
+    const getClickExpression = (element) => element?.getAttribute('@click') || element?.getAttribute('x-on:click') || '';
+
+    const findDirectChildContainingClick = (header, needle) => [...header.children].find((child) =>
+        [...child.querySelectorAll('button')].some((button) => getClickExpression(button).includes(needle))
+    ) || null;
+
+    const findDashboardAction = (header) => findDirectChildContainingClick(header, 'openNewTicketModal()');
+
+    const findDashboardFilter = (header) => findDirectChildContainingClick(header, 'applyHomeOperationalWindow(');
+
     const ensureLayoutFixStyles = () => {
         [
             'centralos-layout-fixes-v2',
             'centralos-layout-fixes-v3',
             'centralos-layout-fixes-v4',
-            'centralos-layout-fixes-v5'
+            'centralos-layout-fixes-v5',
+            'centralos-layout-fixes-v6'
         ].forEach((id) => document.getElementById(id)?.remove());
 
-        if (document.getElementById('centralos-layout-fixes-v6')) return;
+        if (document.getElementById('centralos-layout-fixes-v7')) return;
 
         const style = document.createElement('style');
-        style.id = 'centralos-layout-fixes-v6';
+        style.id = 'centralos-layout-fixes-v7';
         style.textContent = `
             @media (min-width: 768px) {
                 body.centralos-enhanced .centralos-dashboard > header {
@@ -67,7 +78,7 @@
                     flex-wrap: nowrap !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .aida-operational-filter {
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-filter-shell {
                     width: 100% !important;
                     min-width: 0 !important;
                     padding-left: 0 !important;
@@ -84,16 +95,14 @@
                     width: auto !important;
                     margin: 0 !important;
                 }
+
+                body.centralos-enhanced .centralos-dashboard-open-more > i {
+                    transform: none !important;
+                }
             }
 
             @media (max-width: 767px) {
-                /* A faixa criada exclusivamente para Chamados nunca aparece na Início. */
-                body.centralos-dashboard-active .centralos-mobile-action-strip,
-                body.centralos-dashboard-active .centralos-dashboard-mobile-action-strip {
-                    display: none !important;
-                }
-
-                /* Estrutura real da Início: título -> Abrir Chamado original -> filtros. */
+                /* Início mobile: título -> Abrir Chamado original -> filtros. */
                 body.centralos-enhanced .centralos-dashboard > header {
                     display: flex !important;
                     flex-direction: column !important;
@@ -102,6 +111,7 @@
                     margin-bottom: 14px !important;
                 }
 
+                /* É o botão original da Início, apenas apresentado no mesmo padrão visual da referência. */
                 body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action {
                     display: grid !important;
                     grid-template-columns: minmax(0, 1fr) 50px !important;
@@ -116,7 +126,7 @@
                     box-shadow: 0 10px 24px rgba(255,101,0,.18) !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > button:first-of-type {
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-primary {
                     grid-column: 1 !important;
                     width: 100% !important;
                     min-width: 0 !important;
@@ -141,12 +151,12 @@
                     flex: none !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > button:first-of-type i {
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-primary i {
                     margin-right: 0 !important;
                     font-size: 19px !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > button:nth-of-type(2) {
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-more:not([style*="display: none"]) {
                     grid-column: 2 !important;
                     width: 50px !important;
                     min-width: 50px !important;
@@ -168,21 +178,30 @@
                     flex: none !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action:has(> button:nth-of-type(2)[style*="display: none"]) {
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-more[style*="display: none"] {
+                    display: none !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard-open-more > i {
+                    transform: rotate(-90deg) !important;
+                    transform-origin: center !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) {
                     grid-template-columns: 1fr !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action:has(> button:nth-of-type(2)[style*="display: none"]) > button:first-of-type {
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) > .centralos-dashboard-open-primary {
                     border-radius: 12px !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > div[x-show*="newTicketMenuOpen"] {
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-menu {
                     right: 0 !important;
                     top: calc(100% + 8px) !important;
                     z-index: 100 !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .aida-operational-filter {
+                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-filter-shell {
                     display: block !important;
                     width: 100% !important;
                     min-width: 0 !important;
@@ -285,47 +304,44 @@
         const header = dashboard.querySelector(':scope > header');
         if (!header) return;
 
-        /* Limpa qualquer estrutura criada pelas tentativas anteriores. */
-        const legacyStrip = document.querySelector('.centralos-dashboard-mobile-action-strip');
-        const legacyAction = legacyStrip?.querySelector('.aida-split-action');
-        if (legacyAction && !header.querySelector(':scope > .aida-split-action')) {
-            header.appendChild(legacyAction);
-        }
-        legacyStrip?.remove();
-        header.querySelectorAll(':scope > .centralos-dashboard-action-anchor').forEach((el) => el.remove());
-
-        const sharedStrip = document.querySelector('.centralos-mobile-action-strip');
-        let action = header.querySelector(':scope > .aida-split-action');
-        if (!action) {
-            action = sharedStrip?.querySelector(':scope > .centralos-dashboard-open-action') || null;
-            if (action) header.appendChild(action);
-        }
+        /*
+         * Usa exclusivamente o split action original da Início:
+         * - botão openNewTicketModal()
+         * - seta newTicketMenuOpen que abre o retorno em garantia.
+         * Nenhum botão/strip da aba Chamados é consultado, movido ou clonado.
+         */
+        const action = findDashboardAction(header);
         if (!action) return;
 
-        /* Não reutiliza classes/estrutura do Chamados: apenas reproduz o visual com seletores próprios. */
-        action.classList.remove('centralos-mobile-action-inner');
+        const primaryButton = [...action.children].find((child) =>
+            child.tagName === 'BUTTON' && getClickExpression(child).includes('openNewTicketModal()')
+        ) || null;
+        const moreButton = [...action.children].find((child) =>
+            child.tagName === 'BUTTON' && getClickExpression(child).includes('newTicketMenuOpen')
+        ) || null;
+        const warrantyMenu = [...action.children].find((child) =>
+            (child.getAttribute?.('x-show') || '').includes('newTicketMenuOpen')
+        ) || null;
+
+        if (!primaryButton) return;
+
         action.classList.add('centralos-dashboard-open-action');
-        action.querySelector(':scope > button:first-of-type')?.classList.remove('centralos-mobile-new-ticket');
-        action.querySelector(':scope > button:nth-of-type(2)')?.classList.remove('centralos-mobile-new-ticket-more');
+        primaryButton.classList.add('centralos-dashboard-open-primary');
+        moreButton?.classList.add('centralos-dashboard-open-more');
+        warrantyMenu?.classList.add('centralos-dashboard-open-menu');
 
-        const filter = header.querySelector(':scope > .aida-operational-filter');
+        const filter = findDashboardFilter(header);
+        if (filter) filter.classList.add('centralos-dashboard-filter-shell');
+
         const dashboardActive = isDashboardActive(dashboard);
-        document.body.classList.toggle('centralos-dashboard-active', dashboardActive);
-
-        if (dashboardActive) sharedStrip?.removeAttribute('data-visible');
-
         if (mobileQuery.matches && dashboardActive) {
-            /* Movimento físico, não CSS order: título -> botão original -> filtro. */
-            if (action.parentElement !== header) header.appendChild(action);
+            /* Movimento físico do elemento original: título -> Abrir Chamado -> filtros. */
             if (filter && action.nextElementSibling !== filter) {
                 header.insertBefore(action, filter);
             }
-        } else {
-            /* Desktop volta à ordem original: título -> filtro -> ação. */
-            if (action.parentElement !== header) header.appendChild(action);
-            if (filter && filter.nextElementSibling !== action) {
-                filter.insertAdjacentElement('afterend', action);
-            }
+        } else if (filter && filter.nextElementSibling !== action) {
+            /* Desktop preserva a ordem original: título -> filtros -> Abrir Chamado. */
+            filter.insertAdjacentElement('afterend', action);
         }
     };
 
@@ -388,10 +404,7 @@
         applyUploadedLogo();
 
         const dashboard = getDashboard();
-        if (!dashboard) {
-            document.body.classList.remove('centralos-dashboard-active');
-            return;
-        }
+        if (!dashboard) return;
 
         configureDashboardAction(dashboard);
         decorateSectionHeadings(dashboard);
