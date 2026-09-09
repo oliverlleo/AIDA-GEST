@@ -7,8 +7,8 @@
 .centralos-login-hero,.centralos-login-extras,.centralos-login-remember{display:none!important}
 @media(max-width:767px){
 .${ROOT}{background:radial-gradient(circle at 91% 26%,rgba(255,90,0,.23),transparent 29%),linear-gradient(135deg,#131517,#050607 52%,#111315)!important;color:#fff;overflow:auto!important}
-.${ROOT}>div{min-height:100svh!important;padding:0!important;display:flex!important;flex-direction:column!important;justify-content:flex-start!important;background:transparent!important}
-.centralos-login-hero{display:block!important;position:relative;min-height:382px;padding:max(28px,env(safe-area-inset-top)) 22px 38px;overflow:hidden;isolation:isolate;background:#07090b url('backgorundlogin.png?v=1') center top/cover no-repeat!important}
+.${ROOT}>div{min-height:100svh!important;padding:0!important;display:flex!important;flex-direction:column!important;justify-content:flex-start!important;align-items:stretch!important;background:transparent!important}
+.centralos-login-hero{display:block!important;position:relative;width:100%!important;align-self:stretch!important;min-height:382px;padding:max(28px,env(safe-area-inset-top)) 22px 38px;overflow:hidden;isolation:isolate;background:#07090b url('backgorundlogin.png?v=1') center top/cover no-repeat!important}
 .centralos-login-hero:before{content:none!important}
 .centralos-login-logo{width:min(75vw,345px);height:68px;object-fit:contain;object-position:left center;position:relative;z-index:3;filter:drop-shadow(0 10px 20px #0008)}
 .centralos-login-mark{display:none!important}
