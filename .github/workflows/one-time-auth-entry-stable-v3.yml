@@ -5,6 +5,7 @@ on:
       - fix/github-pages-landing-entry
     paths:
       - .github/workflows/one-time-auth-entry-stable-v3.yml
+      - scripts/auth_entry_patch_v3.py
 permissions:
   contents: write
 jobs:
