@@ -122,6 +122,21 @@ window.AIDAConfigHelpers = {
             document.head.appendChild(link);
         }
 
+        if (!document.querySelector('link[data-centralos-brand-complete]')) {
+            const completeLink = document.createElement('link');
+            completeLink.rel = 'stylesheet';
+            completeLink.href = 'centralos-brand-complete.css?v=2';
+            completeLink.dataset.centralosBrandComplete = 'true';
+            document.head.appendChild(completeLink);
+        }
+
+        if (!document.querySelector('script[data-centralos-brand-complete]')) {
+            const completeScript = document.createElement('script');
+            completeScript.src = 'centralos-brand-complete.js?v=2';
+            completeScript.dataset.centralosBrandComplete = 'true';
+            document.head.appendChild(completeScript);
+        }
+
         // Wordmark vetorial aplicado apenas à imagem visual do topo.
         // O arquivo logo.png original permanece intacto no repositório.
         const navLogo = document.querySelector('nav img[alt="CentralOS"]');
