@@ -1,0 +1,46 @@
+name: One-time sphere asset fix
+
+on:
+  push:
+    branches:
+      - design/centralos-brand-responsive-v2
+    paths:
+      - .github/workflows/one-time-sphere-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: design/centralos-brand-responsive-v2
+          fetch-depth: 0
+      - name: Replace generated sphere with esferalogo asset
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('landing.html')
+          s = p.read_text(encoding='utf-8')
+          old_html = '<div class="core"><img src="favicon.svg" alt=""></div>'
+          new_html = '<div class="core"><img src="esferalogo.png" alt="CentralOS"></div>'
+          if old_html not in s:
+              raise SystemExit('Core sphere markup not found')
+          s = s.replace(old_html, new_html, 1)
+          old_css = '.core{position:absolute;inset:36%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff9b62,var(--o) 32%,#1b0d06 68%,#090b0e);box-shadow:0 0 90px rgba(255,91,0,.18);display:grid;place-items:center}.core img{width:60%}'
+          new_css = '.core{position:absolute;inset:36%;display:grid;place-items:center}.core img{width:100%;height:100%;object-fit:contain;display:block}'
+          if old_css not in s:
+              raise SystemExit('Core sphere CSS not found')
+          s = s.replace(old_css, new_css, 1)
+          p.write_text(s, encoding='utf-8')
+      - name: Commit fix and remove one-time workflow
+        shell: bash
+        run: |
+          rm .github/workflows/one-time-sphere-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add landing.html .github/workflows/one-time-sphere-fix.yml
+          git commit -m "fix: use esferalogo image in landing orbit"
+          git push origin HEAD:design/centralos-brand-responsive-v2
