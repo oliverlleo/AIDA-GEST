@@ -141,7 +141,7 @@ window.AIDAConfigHelpers = {
         if (!document.querySelector('link[data-centralos-mobile-login-contrast]')) {
             const mobileLoginContrast = document.createElement('link');
             mobileLoginContrast.rel = 'stylesheet';
-            mobileLoginContrast.href = 'centralos-mobile-login-contrast.css?v=1';
+            mobileLoginContrast.href = 'centralos-mobile-login-contrast.css?v=2';
             mobileLoginContrast.dataset.centralosMobileLoginContrast = 'true';
             document.head.appendChild(mobileLoginContrast);
         }
