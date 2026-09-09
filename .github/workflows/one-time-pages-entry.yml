@@ -1,0 +1,61 @@
+name: One-time Pages entry fix
+
+on:
+  push:
+    branches:
+      - fix/github-pages-landing-entry
+    paths:
+      - .github/workflows/one-time-pages-entry.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/github-pages-landing-entry
+          fetch-depth: 0
+
+      - name: Make landing the real Pages entrypoint
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          index = Path('index.html')
+          landing = Path('landing.html')
+          app = Path('app.html')
+
+          if not index.exists() or not landing.exists():
+              raise SystemExit('index.html or landing.html missing')
+
+          # Preserve the current application/login page as a real file.
+          app.write_text(index.read_text(encoding='utf-8'), encoding='utf-8')
+
+          # Make the landing page the actual document served at /AIDA-GEST/.
+          landing_html = landing.read_text(encoding='utf-8')
+          landing_html = landing_html.replace('href="index.html"', 'href="app.html"')
+          landing_html = landing_html.replace("href='index.html'", "href='app.html'")
+          landing.write_text(landing_html, encoding='utf-8')
+          index.write_text(landing_html, encoding='utf-8')
+
+          # Verify the root document is really the landing, not a redirect wrapper.
+          root = index.read_text(encoding='utf-8')
+          assert '<meta http-equiv="refresh"' not in root.lower()
+          assert 'CentralOS — Tudo encontra seu lugar' in root
+          assert 'href="app.html"' in root or "href='app.html'" in root
+          assert 'CentralOS - Gestão Inteligente' in app.read_text(encoding='utf-8')
+          PY
+
+      - name: Commit clean entrypoint structure
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/one-time-pages-entry.yml
+          git add index.html landing.html app.html .github/workflows/one-time-pages-entry.yml
+          git commit -m "fix: serve landing as GitHub Pages root without redirect"
+          git push origin HEAD:fix/github-pages-landing-entry
