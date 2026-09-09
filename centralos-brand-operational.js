@@ -29,13 +29,15 @@
         .replace(/\s+/g, ' ')
         .trim();
 
-    const getCurrentView = () => {
+    const getAppState = () => {
         try {
-            return window.Alpine?.$data?.(document.body)?.view || '';
+            return window.Alpine?.$data?.(document.body) || null;
         } catch (_) {
-            return '';
+            return null;
         }
     };
+
+    const getCurrentView = () => getAppState()?.view || '';
 
     const getViewRoot = (view) => [...document.querySelectorAll('main [x-show]')].find((el) => {
         const expr = el.getAttribute('x-show') || '';
@@ -47,6 +49,11 @@
     const getSessionNav = () => [...document.querySelectorAll('nav[x-show]')].find((el) =>
         (el.getAttribute('x-show') || '').includes('session')
     ) || null;
+
+    const hasActiveSession = () => {
+        const state = getAppState();
+        return !!state && !!(state.session || state.employeeSession) && state.view !== 'setup_required';
+    };
 
     const directChildren = (element, selector) => [...element.children].filter((child) => child.matches(selector));
 
@@ -80,6 +87,8 @@
     };
 
     const ensureMobileActionZone = () => {
+        if (!hasActiveSession()) return null;
+
         let zone = document.querySelector('.centralos-mobile-view-action-zone');
         if (zone) return zone;
 
@@ -268,7 +277,6 @@
                     margin-right: 0 !important;
                 }
 
-                /* Início: usa o split action ORIGINAL (Abrir Chamado + seta/garantia). */
                 .centralos-mobile-view-action-zone > .centralos-dashboard-open-action {
                     display: grid !important;
                     grid-template-columns: minmax(0, 1fr) 50px !important;
@@ -496,6 +504,8 @@
     };
 
     const getDesiredMobileActions = () => {
+        if (!hasActiveSession()) return null;
+
         const view = getCurrentView();
 
         if (view === 'dashboard') {
@@ -558,6 +568,13 @@
     const applyMobileViewActions = () => {
         const dashboard = getDashboard();
         const preparedDashboard = prepareDashboardAction(dashboard);
+
+        if (!hasActiveSession()) {
+            if (activeMobileActionNodes.length) restoreActiveMobileActions();
+            const zone = document.querySelector('.centralos-mobile-view-action-zone');
+            zone?.removeAttribute('data-visible');
+            return;
+        }
 
         if (!mobileQuery.matches) {
             if (activeMobileActionNodes.length) restoreActiveMobileActions();
