@@ -1,4 +1,6 @@
 (() => {
+    'use strict';
+
     const CARD_DEFINITIONS = [
         { match: 'aguardando início', cls: 'centralos-queue-tech', icon: 'fa-user-gear' },
         { match: 'pendente envio', cls: 'centralos-queue-outsourced-send', icon: 'fa-paper-plane' },
@@ -28,6 +30,10 @@
         return expr.includes("view === 'dashboard'");
     }) || null;
 
+    const getSessionNav = () => [...document.querySelectorAll('nav[x-show]')].find((el) =>
+        (el.getAttribute('x-show') || '').includes('session')
+    ) || null;
+
     const getCurrentView = () => {
         try {
             return window.Alpine?.$data?.(document.body)?.view || '';
@@ -46,13 +52,33 @@
 
     const getClickExpression = (element) => element?.getAttribute('@click') || element?.getAttribute('x-on:click') || '';
 
-    const findDirectChildContainingClick = (header, needle) => [...header.children].find((child) =>
+    const findDirectChildContainingClick = (root, needle) => [...(root?.children || [])].find((child) =>
         [...child.querySelectorAll('button')].some((button) => getClickExpression(button).includes(needle))
     ) || null;
 
-    const findDashboardAction = (header) => findDirectChildContainingClick(header, 'openNewTicketModal()');
-
     const findDashboardFilter = (header) => findDirectChildContainingClick(header, 'applyHomeOperationalWindow(');
+
+    const ensureHomeMobileActionZone = () => {
+        let zone = document.querySelector('.centralos-home-mobile-action-zone');
+        if (zone) return zone;
+
+        const nav = getSessionNav();
+        if (!nav) return null;
+
+        zone = document.createElement('div');
+        zone.className = 'centralos-home-mobile-action-zone';
+        zone.setAttribute('aria-label', 'Ações da tela Início');
+        nav.insertAdjacentElement('afterend', zone);
+        return zone;
+    };
+
+    const findDashboardAction = (header) => {
+        const inHeader = findDirectChildContainingClick(header, 'openNewTicketModal()');
+        if (inHeader) return inHeader;
+
+        const zone = document.querySelector('.centralos-home-mobile-action-zone');
+        return findDirectChildContainingClick(zone, 'openNewTicketModal()');
+    };
 
     const ensureLayoutFixStyles = () => {
         [
@@ -60,14 +86,19 @@
             'centralos-layout-fixes-v3',
             'centralos-layout-fixes-v4',
             'centralos-layout-fixes-v5',
-            'centralos-layout-fixes-v6'
+            'centralos-layout-fixes-v6',
+            'centralos-layout-fixes-v7'
         ].forEach((id) => document.getElementById(id)?.remove());
 
-        if (document.getElementById('centralos-layout-fixes-v7')) return;
+        if (document.getElementById('centralos-layout-fixes-v8')) return;
 
         const style = document.createElement('style');
-        style.id = 'centralos-layout-fixes-v7';
+        style.id = 'centralos-layout-fixes-v8';
         style.textContent = `
+            .centralos-home-mobile-action-zone {
+                display: none;
+            }
+
             @media (min-width: 768px) {
                 body.centralos-enhanced .centralos-dashboard > header {
                     display: grid !important;
@@ -102,31 +133,35 @@
             }
 
             @media (max-width: 767px) {
-                /* Início mobile: título -> Abrir Chamado original -> filtros. */
-                body.centralos-enhanced .centralos-dashboard > header {
-                    display: flex !important;
-                    flex-direction: column !important;
-                    align-items: stretch !important;
-                    width: 100% !important;
-                    margin-bottom: 14px !important;
+                /*
+                 * Faixa exclusiva da tela Início.
+                 * Não usa, não clona e não depende da faixa da aba Chamados.
+                 * O elemento movido para cá é o split action ORIGINAL da Início.
+                 */
+                .centralos-home-mobile-action-zone[data-visible] {
+                    display: block !important;
+                    position: relative;
+                    width: 100%;
+                    background: #0b0e12;
+                    padding: 0 14px 12px;
+                    z-index: 55;
                 }
 
-                /* É o botão original da Início, apenas apresentado no mesmo padrão visual da referência. */
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action {
+                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action {
                     display: grid !important;
                     grid-template-columns: minmax(0, 1fr) 50px !important;
                     align-items: stretch !important;
                     width: 100% !important;
                     min-width: 0 !important;
                     max-width: 100% !important;
-                    margin: 14px 0 0 !important;
+                    margin: 0 !important;
                     padding: 0 !important;
                     overflow: visible !important;
                     border-radius: 12px !important;
                     box-shadow: 0 10px 24px rgba(255,101,0,.18) !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-primary {
+                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-primary {
                     grid-column: 1 !important;
                     width: 100% !important;
                     min-width: 0 !important;
@@ -151,12 +186,12 @@
                     flex: none !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-primary i {
+                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-primary i {
                     margin-right: 0 !important;
                     font-size: 19px !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-more:not([style*="display: none"]) {
+                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-more:not([style*="display: none"]) {
                     grid-column: 2 !important;
                     width: 50px !important;
                     min-width: 50px !important;
@@ -178,27 +213,36 @@
                     flex: none !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-more[style*="display: none"] {
+                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-more[style*="display: none"] {
                     display: none !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard-open-more > i {
+                .centralos-home-mobile-action-zone .centralos-dashboard-open-more > i {
                     transform: rotate(-90deg) !important;
                     transform-origin: center !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) {
+                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) {
                     grid-template-columns: 1fr !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) > .centralos-dashboard-open-primary {
+                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action:has(> .centralos-dashboard-open-more[style*="display: none"]) > .centralos-dashboard-open-primary {
                     border-radius: 12px !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-open-action > .centralos-dashboard-open-menu {
+                .centralos-home-mobile-action-zone > .centralos-dashboard-open-action > .centralos-dashboard-open-menu {
                     right: 0 !important;
                     top: calc(100% + 8px) !important;
                     z-index: 100 !important;
+                }
+
+                /* A Início volta a começar abaixo da faixa preta, sem o botão preso no header branco. */
+                body.centralos-enhanced .centralos-dashboard > header {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: stretch !important;
+                    width: 100% !important;
+                    margin-bottom: 14px !important;
                 }
 
                 body.centralos-enhanced .centralos-dashboard > header > .centralos-dashboard-filter-shell {
@@ -304,12 +348,6 @@
         const header = dashboard.querySelector(':scope > header');
         if (!header) return;
 
-        /*
-         * Usa exclusivamente o split action original da Início:
-         * - botão openNewTicketModal()
-         * - seta newTicketMenuOpen que abre o retorno em garantia.
-         * Nenhum botão/strip da aba Chamados é consultado, movido ou clonado.
-         */
         const action = findDashboardAction(header);
         if (!action) return;
 
@@ -334,14 +372,26 @@
         if (filter) filter.classList.add('centralos-dashboard-filter-shell');
 
         const dashboardActive = isDashboardActive(dashboard);
-        if (mobileQuery.matches && dashboardActive) {
-            /* Movimento físico do elemento original: título -> Abrir Chamado -> filtros. */
-            if (filter && action.nextElementSibling !== filter) {
-                header.insertBefore(action, filter);
+        const useMobileZone = mobileQuery.matches && dashboardActive;
+        const zone = ensureHomeMobileActionZone();
+
+        if (useMobileZone && zone) {
+            /*
+             * Move o componente ORIGINAL da Início para a faixa preta abaixo do topo.
+             * Não existe segundo botão e não existe ponte com a aba Chamados.
+             */
+            if (action.parentElement !== zone) zone.appendChild(action);
+            zone.setAttribute('data-visible', '');
+        } else {
+            zone?.removeAttribute('data-visible');
+
+            /* Ao sair da Início mobile ou voltar ao desktop, devolve o original ao header. */
+            if (action.parentElement !== header) {
+                if (filter) filter.insertAdjacentElement('afterend', action);
+                else header.appendChild(action);
+            } else if (filter && filter.nextElementSibling !== action) {
+                filter.insertAdjacentElement('afterend', action);
             }
-        } else if (filter && filter.nextElementSibling !== action) {
-            /* Desktop preserva a ordem original: título -> filtros -> Abrir Chamado. */
-            filter.insertAdjacentElement('afterend', action);
         }
     };
 
