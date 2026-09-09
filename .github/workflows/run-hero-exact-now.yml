@@ -1,0 +1,30 @@
+name: Run exact hero reference patch
+on:
+  push:
+    branches:
+      - design/centralos-brand-responsive-v2
+    paths:
+      - .github/workflows/run-hero-exact-now.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: design/centralos-brand-responsive-v2
+          fetch-depth: 0
+      - name: Apply patch
+        run: python scripts/one_time_hero_parallax_exact.py
+      - name: Commit result
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/run-hero-exact-now.yml
+          rm -f .github/workflows/one-time-hero-parallax-reference-exact.yml
+          rm -f scripts/one_time_hero_parallax_exact.py
+          git add landing.html .github/workflows scripts
+          git commit -m "style: match hero parallax to generated CentralOS reference"
+          git push origin HEAD:design/centralos-brand-responsive-v2
