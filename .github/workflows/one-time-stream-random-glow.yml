@@ -1,6 +1,6 @@
 name: One-time stream random glow
 
-on:
+"on":
   push:
     branches:
       - design/centralos-brand-responsive-v2
