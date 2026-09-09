@@ -1,0 +1,142 @@
+name: One-time stream random glow
+
+on:
+  push:
+    branches:
+      - design/centralos-brand-responsive-v2
+    paths:
+      - .github/workflows/one-time-stream-random-glow.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: design/centralos-brand-responsive-v2
+          fetch-depth: 0
+
+      - name: Add random orange glow without changing marquee motion
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('landing.html')
+          s = p.read_text(encoding='utf-8')
+
+          marker = '/* random orange pulse for moving feature cards */'
+          if marker in s:
+              raise SystemExit('Random stream glow already present')
+
+          css = r'''
+/* random orange pulse for moving feature cards */
+.stream-item{
+  position:relative;
+  overflow:hidden;
+  transition:
+    border-color .42s ease,
+    background .42s ease,
+    box-shadow .42s ease;
+}
+.stream-item::after{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  pointer-events:none;
+  opacity:0;
+  background:
+    radial-gradient(circle at 18% 30%,rgba(255,139,70,.26),transparent 34%),
+    linear-gradient(105deg,transparent 14%,rgba(255,91,0,.20) 48%,transparent 79%);
+  transition:opacity .45s ease;
+}
+.stream-item.is-orange-lit{
+  border-color:rgba(255,91,0,.82);
+  background:
+    linear-gradient(120deg,rgba(255,91,0,.17),rgba(16,20,25,.96) 52%,rgba(255,91,0,.07));
+  box-shadow:
+    0 0 0 1px rgba(255,91,0,.10) inset,
+    0 0 24px rgba(255,91,0,.18),
+    0 12px 32px rgba(0,0,0,.24);
+}
+.stream-item.is-orange-lit::after{opacity:1}
+.stream-item.is-orange-lit b{
+  color:#ff9257;
+  text-shadow:0 0 14px rgba(255,91,0,.24);
+}
+.stream-item.is-orange-lit small{color:#a98b7c}
+
+@media(max-width:700px){
+  .stream-item.is-orange-lit{
+    box-shadow:0 0 18px rgba(255,91,0,.14);
+  }
+}
+'''
+
+          s = s.replace('</style>', css + '\n</style>', 1)
+
+          js = r'''
+<script>
+/* Randomly lights some moving cards orange. The marquee animation itself is untouched. */
+(()=>{
+  const section=document.querySelector('.stream');
+  const cards=[...document.querySelectorAll('.stream-item')];
+  if(!section || !cards.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  let active=false;
+  let timer=0;
+  const lit=new Set();
+
+  const clearCard=(card)=>{
+    card.classList.remove('is-orange-lit');
+    lit.delete(card);
+  };
+
+  const lightRandom=()=>{
+    if(!active){timer=0;return;}
+
+    const available=cards.filter(card=>!lit.has(card));
+    if(available.length){
+      const card=available[Math.floor(Math.random()*available.length)];
+      card.classList.add('is-orange-lit');
+      lit.add(card);
+
+      const life=900+Math.random()*1700;
+      setTimeout(()=>clearCard(card),life);
+    }
+
+    const maxLit=innerWidth<700?2:3;
+    while(lit.size>maxLit){
+      const first=lit.values().next().value;
+      clearCard(first);
+    }
+
+    const wait=520+Math.random()*920;
+    timer=setTimeout(lightRandom,wait);
+  };
+
+  const io=new IntersectionObserver(entries=>{
+    active=entries.some(entry=>entry.isIntersecting);
+    if(active && !timer) lightRandom();
+    if(!active && timer){clearTimeout(timer);timer=0;}
+  },{rootMargin:'15% 0px 15% 0px',threshold:.01});
+
+  io.observe(section);
+})();
+</script>
+'''
+
+          s = s.replace('</body>', js + '\n</body>', 1)
+          p.write_text(s, encoding='utf-8')
+
+      - name: Commit landing update and remove one-time workflow
+        shell: bash
+        run: |
+          rm .github/workflows/one-time-stream-random-glow.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add landing.html .github/workflows/one-time-stream-random-glow.yml
+          git commit -m "style: add random orange highlights to moving feature cards"
+          git push origin HEAD:design/centralos-brand-responsive-v2
