@@ -1,0 +1,174 @@
+/*
+ * CentralOS — Minha Bancada mobile
+ * Escopo estrito para <= 767px.
+ * Ajusta apenas a composicao do cabecalho, busca e filtro da bancada.
+ * Nao altera autenticacao, dados, eventos ou regras de negocio.
+ */
+
+@media (max-width: 767px) {
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] {
+        min-width: 0 !important;
+        padding: 18px 14px 28px !important;
+        overflow-x: hidden !important;
+        background:
+            radial-gradient(circle at 88% 0%, rgba(255, 101, 0, .055), transparent 15rem),
+            #f4f5f7 !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 {
+        width: 100% !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        align-items: stretch !important;
+        gap: 14px !important;
+        margin-bottom: 18px !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > h2 {
+        width: 100% !important;
+        min-width: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        margin: 0 !important;
+        color: #171c24 !important;
+        font-size: 26px !important;
+        line-height: 1.05 !important;
+        font-weight: 850 !important;
+        letter-spacing: -.035em !important;
+        white-space: nowrap !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > h2 > i {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 !important;
+        border-radius: 12px !important;
+        background: linear-gradient(135deg, #fff2e8 0%, #ffe6d5 100%) !important;
+        color: #ff6500 !important;
+        font-size: 17px !important;
+        box-shadow: inset 0 0 0 1px rgba(255,101,0,.12) !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > div:last-child {
+        width: 100% !important;
+        min-width: 0 !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 9px !important;
+        align-items: stretch !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > div:last-child > .relative {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] input[x-model="searchQuery"] {
+        width: 100% !important;
+        min-width: 0 !important;
+        height: 49px !important;
+        padding: 0 15px 0 43px !important;
+        border: 1px solid #d9dee5 !important;
+        border-radius: 13px !important;
+        background: #fff !important;
+        color: #202630 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        outline: 0 !important;
+        box-shadow: 0 5px 14px rgba(24,31,42,.035), inset 0 1px 0 rgba(255,255,255,.9) !important;
+        transition: border-color .18s ease, box-shadow .18s ease, background .18s ease !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] input[x-model="searchQuery"]::placeholder {
+        color: #98a1ad !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] input[x-model="searchQuery"]:focus {
+        border-color: rgba(255,101,0,.78) !important;
+        background: #fff !important;
+        box-shadow: 0 0 0 3px rgba(255,101,0,.11), 0 7px 17px rgba(24,31,42,.045) !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > div:last-child > .relative > i {
+        left: 15px !important;
+        color: #7e8895 !important;
+        font-size: 17px !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > div:last-child > div[x-show*="hasRole('admin')"] {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > div:last-child > div[x-show*="hasRole('admin')"] > .flex {
+        width: 100% !important;
+        min-width: 0 !important;
+        height: 49px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 9px !important;
+        padding: 0 13px !important;
+        border: 1px solid #d9dee5 !important;
+        border-radius: 13px !important;
+        background: #fff !important;
+        box-shadow: 0 5px 14px rgba(24,31,42,.035) !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > div:last-child > div[x-show*="hasRole('admin')"] > .flex > i {
+        flex: 0 0 auto !important;
+        color: #ff6500 !important;
+        font-size: 13px !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] select[x-model="adminDashboardFilters.technician"] {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        height: 45px !important;
+        padding: 0 24px 0 0 !important;
+        overflow: hidden !important;
+        border: 0 !important;
+        background-color: transparent !important;
+        color: #313845 !important;
+        font-size: 13px !important;
+        font-weight: 750 !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+    }
+
+    body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > div:last-child > div[x-show*="hasRole('admin')"] > .flex span {
+        min-width: 0 !important;
+        overflow: hidden !important;
+        color: #313845 !important;
+        font-size: 13px !important;
+        font-weight: 750 !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
+    @media (min-width: 560px) {
+        body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > div:last-child {
+            grid-template-columns: minmax(0, 1fr) minmax(190px, 225px) !important;
+        }
+    }
+
+    @media (max-width: 390px) {
+        body.centralos-enhanced [x-show="view === 'tech_orders'"] {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+        }
+
+        body.centralos-enhanced [x-show="view === 'tech_orders'"] > .flex.justify-between.items-center.mb-6 > h2 {
+            font-size: 24px !important;
+        }
+    }
+}
