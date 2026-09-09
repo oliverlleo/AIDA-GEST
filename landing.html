@@ -329,48 +329,63 @@ gsap.from('.map-node:not(.mn5)',{x:(i,el)=>{const r=el.getBoundingClientRect();r
 
 
 <script>
-/* Randomly lights some moving cards orange. The marquee animation itself is untouched. */
+/* Randomly lights 1, 2 or 3 moving cards orange without changing marquee motion. */
 (()=>{
   const section=document.querySelector('.stream');
   const cards=[...document.querySelectorAll('.stream-item')];
-  if(!section || !cards.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if(!section||!cards.length||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
 
   let active=false;
-  let timer=0;
+  let cycleTimer=0;
   const lit=new Set();
 
-  const clearCard=(card)=>{
-    card.classList.remove('is-orange-lit');
-    lit.delete(card);
+  const clearAll=()=>{
+    lit.forEach(card=>card.classList.remove('is-orange-lit'));
+    lit.clear();
   };
 
-  const lightRandom=()=>{
-    if(!active){timer=0;return;}
+  const chooseCount=()=>{
+    const max=innerWidth<700?2:3;
+    return 1+Math.floor(Math.random()*max);
+  };
 
-    const available=cards.filter(card=>!lit.has(card));
-    if(available.length){
-      const card=available[Math.floor(Math.random()*available.length)];
+  const runCycle=()=>{
+    if(!active){cycleTimer=0;return;}
+
+    clearAll();
+
+    const pool=[...cards];
+    const count=Math.min(chooseCount(),pool.length);
+
+    for(let i=0;i<count;i++){
+      const idx=Math.floor(Math.random()*pool.length);
+      const card=pool.splice(idx,1)[0];
       card.classList.add('is-orange-lit');
       lit.add(card);
-
-      const life=900+Math.random()*1700;
-      setTimeout(()=>clearCard(card),life);
     }
 
-    const maxLit=innerWidth<700?2:3;
-    while(lit.size>maxLit){
-      const first=lit.values().next().value;
-      clearCard(first);
-    }
-
-    const wait=520+Math.random()*920;
-    timer=setTimeout(lightRandom,wait);
+    const visibleFor=950+Math.random()*1650;
+    cycleTimer=setTimeout(()=>{
+      clearAll();
+      const darkGap=220+Math.random()*700;
+      cycleTimer=setTimeout(runCycle,darkGap);
+    },visibleFor);
   };
 
   const io=new IntersectionObserver(entries=>{
-    active=entries.some(entry=>entry.isIntersecting);
-    if(active && !timer) lightRandom();
-    if(!active && timer){clearTimeout(timer);timer=0;}
+    const nowActive=entries.some(entry=>entry.isIntersecting);
+    if(nowActive===active)return;
+    active=nowActive;
+
+    if(active){
+      if(cycleTimer)clearTimeout(cycleTimer);
+      cycleTimer=0;
+      runCycle();
+    }else{
+      if(cycleTimer)clearTimeout(cycleTimer);
+      cycleTimer=0;
+      clearAll();
+    }
   },{rootMargin:'15% 0px 15% 0px',threshold:.01});
 
   io.observe(section);
