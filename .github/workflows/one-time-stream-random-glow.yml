@@ -1,6 +1,6 @@
 name: One-time stream random glow
 
-"on":
+on:
   push:
     branches:
       - design/centralos-brand-responsive-v2
@@ -20,116 +20,25 @@ jobs:
           fetch-depth: 0
 
       - name: Add random orange glow without changing marquee motion
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
+          import base64
 
-          p = Path('landing.html')
-          s = p.read_text(encoding='utf-8')
-
-          marker = '/* random orange pulse for moving feature cards */'
+          p=Path('landing.html')
+          s=p.read_text(encoding='utf-8')
+          marker='/* random orange pulse for moving feature cards */'
           if marker in s:
               raise SystemExit('Random stream glow already present')
 
-          css = r'''
-/* random orange pulse for moving feature cards */
-.stream-item{
-  position:relative;
-  overflow:hidden;
-  transition:
-    border-color .42s ease,
-    background .42s ease,
-    box-shadow .42s ease;
-}
-.stream-item::after{
-  content:"";
-  position:absolute;
-  inset:-2px;
-  pointer-events:none;
-  opacity:0;
-  background:
-    radial-gradient(circle at 18% 30%,rgba(255,139,70,.26),transparent 34%),
-    linear-gradient(105deg,transparent 14%,rgba(255,91,0,.20) 48%,transparent 79%);
-  transition:opacity .45s ease;
-}
-.stream-item.is-orange-lit{
-  border-color:rgba(255,91,0,.82);
-  background:
-    linear-gradient(120deg,rgba(255,91,0,.17),rgba(16,20,25,.96) 52%,rgba(255,91,0,.07));
-  box-shadow:
-    0 0 0 1px rgba(255,91,0,.10) inset,
-    0 0 24px rgba(255,91,0,.18),
-    0 12px 32px rgba(0,0,0,.24);
-}
-.stream-item.is-orange-lit::after{opacity:1}
-.stream-item.is-orange-lit b{
-  color:#ff9257;
-  text-shadow:0 0 14px rgba(255,91,0,.24);
-}
-.stream-item.is-orange-lit small{color:#a98b7c}
+          css=base64.b64decode('Ci8qIHJhbmRvbSBvcmFuZ2UgcHVsc2UgZm9yIG1vdmluZyBmZWF0dXJlIGNhcmRzICovCi5zdHJlYW0taXRlbXsKICBwb3NpdGlvbjpyZWxhdGl2ZTsKICBvdmVyZmxvdzpoaWRkZW47CiAgdHJhbnNpdGlvbjoKICAgIGJvcmRlci1jb2xvciAuNDJzIGVhc2UsCiAgICBiYWNrZ3JvdW5kIC40MnMgZWFzZSwKICAgIGJveC1zaGFkb3cgLjQycyBlYXNlOwp9Ci5zdHJlYW0taXRlbTo6YWZ0ZXJ7CiAgY29udGVudDoiIjsKICBwb3NpdGlvbjphYnNvbHV0ZTsKICBpbnNldDotMnB4OwogIHBvaW50ZXItZXZlbnRzOm5vbmU7CiAgb3BhY2l0eTowOwogIGJhY2tncm91bmQ6CiAgICByYWRpYWwtZ3JhZGllbnQoY2lyY2xlIGF0IDE4JSAzMCUscmdiYSgyNTUsMTM5LDcwLC4yNiksdHJhbnNwYXJlbnQgMzQlKSwKICAgIGxpbmVhci1ncmFkaWVudCgxMDVkZWcsdHJhbnNwYXJlbnQgMTQlLHJnYmEoMjU1LDkxLDAsLjIwKSA0OCUsdHJhbnNwYXJlbnQgNzklKTsKICB0cmFuc2l0aW9uOm9wYWNpdHkgLjQ1cyBlYXNlOwp9Ci5zdHJlYW0taXRlbS5pcy1vcmFuZ2UtbGl0ewogIGJvcmRlci1jb2xvcjpyZ2JhKDI1NSw5MSwwLC44Mik7CiAgYmFja2dyb3VuZDoKICAgIGxpbmVhci1ncmFkaWVudCgxMjBkZWcscmdiYSgyNTUsOTEsMCwuMTcpLHJnYmEoMTYsMjAsMjUsLjk2KSA1MiUscmdiYSgyNTUsOTEsMCwuMDcpKTsKICBib3gtc2hhZG93OgogICAgMCAwIDAgMXB4IHJnYmEoMjU1LDkxLDAsLjEwKSBpbnNldCwKICAgIDAgMCAyNHB4IHJnYmEoMjU1LDkxLDAsLjE4KSwKICAgIDAgMTJweCAzMnB4IHJnYmEoMCwwLDAsLjI0KTsKfQouc3RyZWFtLWl0ZW0uaXMtb3JhbmdlLWxpdDo6YWZ0ZXJ7b3BhY2l0eToxfQouc3RyZWFtLWl0ZW0uaXMtb3JhbmdlLWxpdCBiewogIGNvbG9yOiNmZjkyNTc7CiAgdGV4dC1zaGFkb3c6MCAwIDE0cHggcmdiYSgyNTUsOTEsMCwuMjQpOwp9Ci5zdHJlYW0taXRlbS5pcy1vcmFuZ2UtbGl0IHNtYWxse2NvbG9yOiNhOThiN2N9CgpAbWVkaWEobWF4LXdpZHRoOjcwMHB4KXsKICAuc3RyZWFtLWl0ZW0uaXMtb3JhbmdlLWxpdHsKICAgIGJveC1zaGFkb3c6MCAwIDE4cHggcmdiYSgyNTUsOTEsMCwuMTQpOwogIH0KfQo=').decode('utf-8')
+          js=base64.b64decode('CjxzY3JpcHQ+Ci8qIFJhbmRvbWx5IGxpZ2h0cyBzb21lIG1vdmluZyBjYXJkcyBvcmFuZ2UuIFRoZSBtYXJxdWVlIGFuaW1hdGlvbiBpdHNlbGYgaXMgdW50b3VjaGVkLiAqLwooKCk9PnsKICBjb25zdCBzZWN0aW9uPWRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoJy5zdHJlYW0nKTsKICBjb25zdCBjYXJkcz1bLi4uZG9jdW1lbnQucXVlcnlTZWxlY3RvckFsbCgnLnN0cmVhbS1pdGVtJyldOwogIGlmKCFzZWN0aW9uIHx8ICFjYXJkcy5sZW5ndGggfHwgbWF0Y2hNZWRpYSgnKHByZWZlcnMtcmVkdWNlZC1tb3Rpb246IHJlZHVjZSknKS5tYXRjaGVzKSByZXR1cm47CgogIGxldCBhY3RpdmU9ZmFsc2U7CiAgbGV0IHRpbWVyPTA7CiAgY29uc3QgbGl0PW5ldyBTZXQoKTsKCiAgY29uc3QgY2xlYXJDYXJkPShjYXJkKT0+ewogICAgY2FyZC5jbGFzc0xpc3QucmVtb3ZlKCdpcy1vcmFuZ2UtbGl0Jyk7CiAgICBsaXQuZGVsZXRlKGNhcmQpOwogIH07CgogIGNvbnN0IGxpZ2h0UmFuZG9tPSgpPT57CiAgICBpZighYWN0aXZlKXt0aW1lcj0wO3JldHVybjt9CgogICAgY29uc3QgYXZhaWxhYmxlPWNhcmRzLmZpbHRlcihjYXJkPT4hbGl0LmhhcyhjYXJkKSk7CiAgICBpZihhdmFpbGFibGUubGVuZ3RoKXsKICAgICAgY29uc3QgY2FyZD1hdmFpbGFibGVbTWF0aC5mbG9vcihNYXRoLnJhbmRvbSgpKmF2YWlsYWJsZS5sZW5ndGgpXTsKICAgICAgY2FyZC5jbGFzc0xpc3QuYWRkKCdpcy1vcmFuZ2UtbGl0Jyk7CiAgICAgIGxpdC5hZGQoY2FyZCk7CgogICAgICBjb25zdCBsaWZlPTkwMCtNYXRoLnJhbmRvbSgpKjE3MDA7CiAgICAgIHNldFRpbWVvdXQoKCk9PmNsZWFyQ2FyZChjYXJkKSxsaWZlKTsKICAgIH0KCiAgICBjb25zdCBtYXhMaXQ9aW5uZXJXaWR0aDw3MDA/MjozOwogICAgd2hpbGUobGl0LnNpemU+bWF4TGl0KXsKICAgICAgY29uc3QgZmlyc3Q9bGl0LnZhbHVlcygpLm5leHQoKS52YWx1ZTsKICAgICAgY2xlYXJDYXJkKGZpcnN0KTsKICAgIH0KCiAgICBjb25zdCB3YWl0PTUyMCtNYXRoLnJhbmRvbSgpKjkyMDsKICAgIHRpbWVyPXNldFRpbWVvdXQobGlnaHRSYW5kb20sd2FpdCk7CiAgfTsKCiAgY29uc3QgaW89bmV3IEludGVyc2VjdGlvbk9ic2VydmVyKGVudHJpZXM9PnsKICAgIGFjdGl2ZT1lbnRyaWVzLnNvbWUoZW50cnk9PmVudHJ5LmlzSW50ZXJzZWN0aW5nKTsKICAgIGlmKGFjdGl2ZSAmJiAhdGltZXIpIGxpZ2h0UmFuZG9tKCk7CiAgICBpZighYWN0aXZlICYmIHRpbWVyKXtjbGVhclRpbWVvdXQodGltZXIpO3RpbWVyPTA7fQogIH0se3Jvb3RNYXJnaW46JzE1JSAwcHggMTUlIDBweCcsdGhyZXNob2xkOi4wMX0pOwoKICBpby5vYnNlcnZlKHNlY3Rpb24pOwp9KSgpOwo8L3NjcmlwdD4K').decode('utf-8')
 
-@media(max-width:700px){
-  .stream-item.is-orange-lit{
-    box-shadow:0 0 18px rgba(255,91,0,.14);
-  }
-}
-'''
-
-          s = s.replace('</style>', css + '\n</style>', 1)
-
-          js = r'''
-<script>
-/* Randomly lights some moving cards orange. The marquee animation itself is untouched. */
-(()=>{
-  const section=document.querySelector('.stream');
-  const cards=[...document.querySelectorAll('.stream-item')];
-  if(!section || !cards.length || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-  let active=false;
-  let timer=0;
-  const lit=new Set();
-
-  const clearCard=(card)=>{
-    card.classList.remove('is-orange-lit');
-    lit.delete(card);
-  };
-
-  const lightRandom=()=>{
-    if(!active){timer=0;return;}
-
-    const available=cards.filter(card=>!lit.has(card));
-    if(available.length){
-      const card=available[Math.floor(Math.random()*available.length)];
-      card.classList.add('is-orange-lit');
-      lit.add(card);
-
-      const life=900+Math.random()*1700;
-      setTimeout(()=>clearCard(card),life);
-    }
-
-    const maxLit=innerWidth<700?2:3;
-    while(lit.size>maxLit){
-      const first=lit.values().next().value;
-      clearCard(first);
-    }
-
-    const wait=520+Math.random()*920;
-    timer=setTimeout(lightRandom,wait);
-  };
-
-  const io=new IntersectionObserver(entries=>{
-    active=entries.some(entry=>entry.isIntersecting);
-    if(active && !timer) lightRandom();
-    if(!active && timer){clearTimeout(timer);timer=0;}
-  },{rootMargin:'15% 0px 15% 0px',threshold:.01});
-
-  io.observe(section);
-})();
-</script>
-'''
-
-          s = s.replace('</body>', js + '\n</body>', 1)
-          p.write_text(s, encoding='utf-8')
+          s=s.replace('</style>',css+'\n</style>',1)
+          s=s.replace('</body>',js+'\n</body>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
 
       - name: Commit landing update and remove one-time workflow
         shell: bash
