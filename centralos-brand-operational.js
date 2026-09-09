@@ -81,7 +81,6 @@
             }
 
             @media (max-width: 767px) {
-                /* Na Início a faixa já existente de Chamados é reutilizada. Nunca mostra os botões clonados dela. */
                 body.centralos-dashboard-active .centralos-mobile-action-strip {
                     display: block !important;
                 }
@@ -91,7 +90,6 @@
                     display: none !important;
                 }
 
-                /* O próprio Abrir Chamado original ocupa exatamente a faixa do Novo Chamado. */
                 body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-dashboard-open-action {
                     display: grid !important;
                     grid-template-columns: minmax(0, 1fr) 50px !important;
@@ -140,6 +138,7 @@
                     min-height: 50px !important;
                     margin: 0 !important;
                     padding: 0 !important;
+                    display: flex;
                     align-items: center !important;
                     justify-content: center !important;
                     border: 0 !important;
@@ -165,7 +164,6 @@
                     z-index: 100 !important;
                 }
 
-                /* Sem o botão dentro do header, a Início começa no título e depois mostra os filtros. */
                 body.centralos-enhanced .centralos-dashboard > header {
                     display: block !important;
                     margin-bottom: 14px !important;
@@ -288,7 +286,6 @@
         const header = dashboard?.querySelector(':scope > header');
         if (!header) return;
 
-        /* Remove a faixa extra criada nas tentativas anteriores, caso exista numa sessão já aberta. */
         const legacyStrip = document.querySelector('.centralos-dashboard-mobile-action-strip');
         const legacyAction = legacyStrip?.querySelector('.aida-split-action');
         if (legacyAction && !header.querySelector(':scope > .aida-split-action')) header.appendChild(legacyAction);
@@ -307,12 +304,10 @@
 
         if (useMobileStrip) {
             if (action.parentElement !== strip) strip.appendChild(action);
+            if (!strip.hasAttribute('data-visible')) strip.setAttribute('data-visible', '');
         } else if (action.parentElement !== header) {
             anchor.insertAdjacentElement('afterend', action);
         }
-
-        /* Se a aba Chamados remover data-visible, o CSS da Início ainda mantém esta mesma faixa visível. */
-        if (useMobileStrip) strip.setAttribute('data-visible', '');
     };
 
     const decorateSectionHeadings = (dashboard) => {
