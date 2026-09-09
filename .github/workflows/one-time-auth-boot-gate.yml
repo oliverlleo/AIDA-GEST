@@ -1,0 +1,40 @@
+name: One-time auth boot gate fix
+on:
+  push:
+    branches:
+      - fix/github-pages-landing-entry
+    paths:
+      - .github/workflows/one-time-auth-boot-gate.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/github-pages-landing-entry
+          fetch-depth: 0
+      - name: Prevent unauthenticated system flash
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('js/main.js')
+          s = p.read_text(encoding='utf-8')
+          old = "function app() {\n    return {\n        // State\n        loading: false,"
+          new = "function app() {\n    return {\n        // State\n        loading: true,"
+          if old not in s:
+              raise SystemExit('Expected app loading state not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/one-time-auth-boot-gate.yml
+          git add js/main.js .github/workflows/one-time-auth-boot-gate.yml
+          git commit -m "fix: keep app covered until auth state is resolved"
+          git push origin HEAD:fix/github-pages-landing-entry
