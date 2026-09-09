@@ -75,6 +75,8 @@ main = Path('js/main.js')
 js = main.read_text(encoding='utf-8')
 if "classList.add('auth-runtime')" not in js:
     finally_old = """            } finally {
+                // Hard visual gate: the static app shell stays physically covered until
+                // the initial Supabase/employee-session check is fully resolved.
                 this.loading = false;
                 this.initInFlight = false;
             }"""
