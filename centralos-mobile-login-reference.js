@@ -57,7 +57,7 @@
     const shell=root.firstElementChild,card=shell?.querySelector('.centralos-login-card')||shell?.lastElementChild;if(!shell||!card)return false;
     root.classList.add(ROOT);card.classList.add('centralos-login-card');card.querySelector('.text-center.mb-8')?.classList.add('centralos-login-oldhead');
     if(!shell.querySelector('.centralos-login-hero'))shell.insertBefore(hero(),card);
-    const form=card.querySelector('form[x-show="authMode === 'employee'"]');remember(form);extras(card,form);return true
+    const form=card.querySelector("form[x-show=\"authMode === \'employee\'\"]");remember(form);extras(card,form);return true
   }
   function boot(){css();if(decorate())return;const o=new MutationObserver(()=>{if(decorate())o.disconnect()});o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(()=>o.disconnect(),15000)}
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',boot,{once:true}):boot();
