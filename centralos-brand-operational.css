@@ -146,22 +146,29 @@ body.centralos-enhanced .centralos-queue--extended .rounded-full {
         font-size: 12px;
     }
 
-    /* O botão da Início reutiliza as classes do botão mobile da aba Chamados,
-       mas o menu de garantia continua sendo o menu original da Início. */
-    .centralos-dashboard-mobile-action-strip > .aida-split-action.centralos-mobile-action-inner {
+    /* Início mobile: o próprio Abrir Chamado original usa o padrão visual do Chamados. */
+    body.centralos-enhanced .centralos-dashboard > header > .aida-split-action.centralos-mobile-action-inner {
         overflow: visible !important;
         border-radius: 12px !important;
     }
 
-    .centralos-dashboard-mobile-action-strip > .aida-split-action > button:first-of-type {
+    body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > button:first-of-type {
         border-radius: 12px 0 0 12px !important;
     }
 
-    .centralos-dashboard-mobile-action-strip > .aida-split-action > button:nth-of-type(2) {
+    body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > button:nth-of-type(2) {
         border-radius: 0 12px 12px 0 !important;
     }
 
-    .centralos-dashboard-mobile-action-strip > .aida-split-action > div[x-show*="newTicketMenuOpen"] {
+    body.centralos-enhanced .centralos-dashboard > header > .aida-split-action:has(> button:nth-of-type(2)[style*="display: none"]) {
+        grid-template-columns: 1fr !important;
+    }
+
+    body.centralos-enhanced .centralos-dashboard > header > .aida-split-action:has(> button:nth-of-type(2)[style*="display: none"]) > button:first-of-type {
+        border-radius: 12px !important;
+    }
+
+    body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > div[x-show*="newTicketMenuOpen"] {
         right: 0 !important;
         top: calc(100% + 8px) !important;
         z-index: 100 !important;
