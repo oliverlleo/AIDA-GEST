@@ -6,7 +6,12 @@ Data: 8 de setembro de 2026
 
 ## Implementação
 
-As páginas `index.html` e `acompanhar.html` passam a compartilhar a paleta e a tipografia de `js/design-config.js` e os componentes visuais de `css/design-system.css`. A referência é a hierarquia e o uso moderado de materiais da [Apple](https://developer.apple.com/design/human-interface-guidelines/materials), mantendo a identidade laranja do CentralOS e as cores dos estados operacionais.
+As páginas `index.html` e `acompanhar.html` passam a compartilhar a paleta e a tipografia de `js/design-config.js` e os componentes visuais de `css/design-system.css`. A referência é a hierarquia e o uso moderado de materiais da [Apple](https://developer.apple.com/design/human-interface-guidelines/materials). O laranja original `#FF6B00` / `#E65100`, os cinzas do sistema e as cores dos estados operacionais são preservados, com contraste entre navegação, ações e conteúdo.
+
+- Cabeçalho da visão geral com ação principal integrada e filtros em uma faixa própria; seleção visível e rolagem horizontal no celular.
+- Indicadores com ícones, cores de etapa e números em destaque; quatro colunas no desktop e duas no celular.
+- Cabeçalhos de seção, filas e colunas do Kanban com acentos de cor; botões e cartões mantêm formatos diferentes conforme a função.
+- Tela de acesso com composição de marca e formulário lado a lado no desktop, priorizando o formulário no celular.
 
 - Navegação lateral no desktop e faixa horizontal com nomes das seções em celulares e tablets. A faixa permite rolar até todas as opções autorizadas.
 - Superfícies, botões, formulários, seletores, abas, tabelas, notificações, painéis laterais e modais compartilham os mesmos padrões de apresentação.
@@ -22,7 +27,7 @@ Os 134 testes existentes passaram antes e depois da alteração. A comparação 
 
 O teste `tests/design-responsive.cjs` usa um servidor local isolado, substitui a inicialização somente na resposta de teste e usa dados sintéticos. Ele não autentica nem grava no serviço real. A aplicação distribuída não contém essa substituição.
 
-A rodada de referência passou em **229 verificações de estados/telas**, sem transbordamento horizontal não rolável detectado e sem erros de JavaScript:
+A rodada de referência passou em **233 verificações de estados/telas**, sem transbordamento horizontal não rolável detectado e sem erros de JavaScript:
 
 - Larguras de 320, 390, 768 e 1440 px; janela curta de 844 × 390 px.
 - Seções disponíveis para o administrador, modais declarados no estado, notas, compartilhamento, fila da visão geral e painel de agendamento.

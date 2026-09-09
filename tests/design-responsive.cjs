@@ -23,6 +23,8 @@ app = function () {
         this.trackerConfig.modules.inventory = true;
         this.trackerConfig.customization.modules = true;
         this.trackerConfig.test_flow = 'tester';
+        Object.assign(this.homeStatusCounts,{open:12,analysis:8,approval:3,pickup:5});
+        Object.assign(this.homeOperationalCounts,{today:9,today_tomorrow:14,next_7_days:23,overdue:2,no_deadline:3,all:28});
         this.selectedTicket = {
             id: 'visual-ticket', os_number: 2048, device_model: 'iPhone 15 Pro', client_name: 'Ana Oliveira',
             status: 'Aberto', priority: 'Normal', created_at: new Date().toISOString(),
@@ -166,6 +168,12 @@ async function audit(page, label) {
         await page.getByRole('button',{name:'Admin',exact:true}).click();
         await page.getByRole('textbox',{name:'E-mail Admin'}).fill('visual@example.invalid');
         await audit(page,'390:login-admin');
+        for (const width of [1440,768,390,320]) {
+            await page.setViewportSize({width,height:width>=768?1000:844});
+            await audit(page,`${width}:login-composition`);
+            await page.screenshot({path:path.join(out,`${width}-login.png`)});
+        }
+        await page.setViewportSize({width:390,height:844});
         await page.getByRole('textbox',{name:'E-mail Admin'}).focus();
         await page.keyboard.press('Tab');
         assert.equal(await page.evaluate(()=>getComputedStyle(document.activeElement).outlineStyle),'solid');
