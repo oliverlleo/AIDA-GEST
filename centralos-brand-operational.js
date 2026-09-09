@@ -28,6 +28,135 @@
 
     const directChildren = (element, selector) => [...element.children].filter((child) => child.matches(selector));
 
+    const ensureLayoutFixStyles = () => {
+        if (document.getElementById('centralos-layout-fixes-v2')) return;
+
+        const style = document.createElement('style');
+        style.id = 'centralos-layout-fixes-v2';
+        style.textContent = `
+            /* Dashboard: filtros e ação alinhados no desktop */
+            @media (min-width: 768px) {
+                body.centralos-enhanced .centralos-dashboard > header {
+                    display: grid !important;
+                    grid-template-columns: max-content minmax(0, 1fr) max-content !important;
+                    align-items: center !important;
+                    column-gap: 18px !important;
+                    row-gap: 0 !important;
+                    flex-wrap: nowrap !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-operational-filter {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    padding-left: 0 !important;
+                    padding-right: 0 !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header .centralos-period-filter {
+                    margin-bottom: 0 !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action {
+                    align-self: center !important;
+                    margin: 0 !important;
+                }
+            }
+
+            /* Dashboard mobile: usa a mesma faixa Novo Chamado da aba Chamados */
+            @media (max-width: 767px) {
+                body.centralos-mobile-session-active:has(.centralos-dashboard:not([style*="display: none"])) .centralos-mobile-action-strip {
+                    display: block !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header {
+                    display: block !important;
+                    margin-bottom: 14px !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action {
+                    display: none !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard > header > .aida-operational-filter {
+                    display: block !important;
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    margin-top: 16px !important;
+                    padding: 0 !important;
+                    overflow: hidden !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter {
+                    display: flex !important;
+                    width: 100% !important;
+                    grid-template-columns: none !important;
+                    gap: 8px !important;
+                    padding: 0 0 4px !important;
+                    margin: 0 !important;
+                    overflow-x: auto !important;
+                    overflow-y: hidden !important;
+                    border: 0 !important;
+                    border-radius: 0 !important;
+                    background: transparent !important;
+                    box-shadow: none !important;
+                    scroll-snap-type: x proximity;
+                    scrollbar-width: none;
+                    -webkit-overflow-scrolling: touch;
+                }
+
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter::-webkit-scrollbar {
+                    display: none;
+                }
+
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button {
+                    flex: 0 0 auto !important;
+                    width: auto !important;
+                    min-width: 0 !important;
+                    min-height: 37px !important;
+                    padding: 7px 13px !important;
+                    border: 1px solid #dfe3e8 !important;
+                    border-radius: 999px !important;
+                    background: #fff !important;
+                    color: #68717d !important;
+                    font-size: 12px !important;
+                    font-weight: 650 !important;
+                    white-space: nowrap !important;
+                    box-shadow: none !important;
+                    scroll-snap-align: start;
+                }
+
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-brand-50,
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-red-50,
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-gray-100,
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-black {
+                    background: linear-gradient(135deg, #ff6500, #ff7410) !important;
+                    border-color: #ff6500 !important;
+                    color: #fff !important;
+                    box-shadow: 0 5px 12px rgba(255,101,0,.16) !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button span:last-child {
+                    min-width: 21px !important;
+                    height: 21px !important;
+                    padding: 0 6px !important;
+                    border-radius: 999px !important;
+                    background: #f1f3f5 !important;
+                    color: #6e7681 !important;
+                    font-weight: 800 !important;
+                }
+
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-brand-50 span:last-child,
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-red-50 span:last-child,
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-gray-100 span:last-child,
+                body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-black span:last-child {
+                    background: rgba(255,255,255,.2) !important;
+                    color: #fff !important;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    };
+
     const applyUploadedLogo = () => {
         const target = 'logo.png';
 
@@ -104,6 +233,7 @@
     };
 
     const decorate = () => {
+        ensureLayoutFixStyles();
         applyUploadedLogo();
         const dashboard = getDashboard();
         if (!dashboard) return;
@@ -122,6 +252,7 @@
     };
 
     const start = () => {
+        ensureLayoutFixStyles();
         decorate();
         window.setTimeout(decorate, 100);
         window.setTimeout(decorate, 250);
