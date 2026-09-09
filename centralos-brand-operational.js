@@ -28,7 +28,20 @@
     const wanted=norm(label), b=[...r.querySelectorAll('button')].find(x=>norm(x.textContent)===wanted)||null;
     if(b) cache.set(key,b); return b;
   };
-  const remember = node => { if(node&&!origins.has(node)) origins.set(node,{parent:node.parentNode,next:node.nextSibling,form:node.tagName==='BUTTON'?node.getAttribute('form'):null}); };
+  const screenButtonByClick = (v,expression,key) => {
+    const saved=cache.get(key); if(saved?.isConnected) return saved;
+    const r=root(v); if(!r) return null;
+    const b=[...r.querySelectorAll('button')].find(x=>click(x).includes(expression))||null;
+    if(b) cache.set(key,b); return b;
+  };
+  const remember = node => {
+    if(node&&!origins.has(node)) origins.set(node,{
+      parent:node.parentNode,
+      next:node.nextSibling,
+      form:node.tagName==='BUTTON'?node.getAttribute('form'):null,
+      html:node.tagName==='BUTTON'?node.innerHTML:null
+    });
+  };
   const keepForm = b => {
     if(!b||b.tagName!=='BUTTON'||norm(b.getAttribute('type')||'submit')!=='submit') return;
     const f=b.closest('form'); if(!f) return;
@@ -39,7 +52,13 @@
     const o=origins.get(node); if(!node||!o?.parent?.isConnected) return;
     o.next&&o.next.parentNode===o.parent ? o.parent.insertBefore(node,o.next) : o.parent.appendChild(node);
     node.classList.remove('centralos-mobile-action-button','centralos-mobile-action-primary','centralos-mobile-action-secondary','centralos-mobile-home-split');
-    if(node.tagName==='BUTTON') o.form===null?node.removeAttribute('form'):node.setAttribute('form',o.form);
+    if(node.tagName==='BUTTON') {
+      if(node.dataset.centralosMobileRelabel==='true' && o.html!==null) {
+        node.innerHTML=o.html;
+        delete node.dataset.centralosMobileRelabel;
+      }
+      o.form===null?node.removeAttribute('form'):node.setAttribute('form',o.form);
+    }
   };
   const zone = () => document.querySelector('.centralos-mobile-view-action-zone');
   const removeZone = () => zone()?.remove();
@@ -69,10 +88,13 @@
     const v=view();
     if(v==='dashboard'){const p=prepHome(); return p?{key:'dashboard',v,layout:'single',items:[[p.a,'home']]}:null;}
     if(v==='customers'){const b=screenButton(v,'Novo cliente','customers'); return b?{key:'customers',v,layout:'single',items:[[b,'primary']]}:null;}
-    if(v==='management_settings'){const b=screenButton(v,'Salvar alterações','management'); return b?{key:'management',v,layout:'single',items:[[b,'primary']]}:null;}
+    if(v==='management_settings'){const b=screenButtonByClick(v,'saveTrackerConfig()','management'); return b?{key:'management',v,layout:'single',items:[[b,'primary']]}:null;}
     if(v==='tracker_settings'){
-      const r=screenButton(v,'Redefinir Tudo','tracker-reset'), s=screenButton(v,'Salvar alterações','tracker-save'), items=[];
-      if(r)items.push([r,'secondary']); if(s)items.push([s,'primary']);
+      const r=screenButtonByClick(v,'resetTrackerConfig()','tracker-reset');
+      const s=screenButtonByClick(v,'saveTrackerConfig()','tracker-save');
+      const items=[];
+      if(r)items.push([r,'secondary','Redefinir']);
+      if(s)items.push([s,'primary']);
       return items.length?{key:'tracker',v,layout:items.length===2?'pair':'single',items}:null;
     }
     return null;
@@ -102,10 +124,15 @@
     }
     if(active.length) restoreActive();
     const fresh=ensureZone(); if(!fresh) return;
-    d.items.forEach(([node,role])=>{
+    d.items.forEach(([node,role,mobileLabel])=>{
       remember(node);
       if(node.tagName==='BUTTON'){
-        keepForm(node); node.classList.add('centralos-mobile-action-button',role==='secondary'?'centralos-mobile-action-secondary':'centralos-mobile-action-primary');
+        keepForm(node);
+        if(mobileLabel) {
+          node.innerHTML=node.innerHTML.replace(/Redefinir Tudo/gi,mobileLabel);
+          node.dataset.centralosMobileRelabel='true';
+        }
+        node.classList.add('centralos-mobile-action-button',role==='secondary'?'centralos-mobile-action-secondary':'centralos-mobile-action-primary');
       } else node.classList.add('centralos-mobile-home-split');
       fresh.appendChild(node);
     });
