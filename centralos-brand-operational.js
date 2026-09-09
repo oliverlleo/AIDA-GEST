@@ -71,7 +71,7 @@
     if(v==='customers'){const b=screenButton(v,'Novo cliente','customers'); return b?{key:'customers',v,layout:'single',items:[[b,'primary']]}:null;}
     if(v==='management_settings'){const b=screenButton(v,'Salvar alterações','management'); return b?{key:'management',v,layout:'single',items:[[b,'primary']]}:null;}
     if(v==='tracker_settings'){
-      const r=screenButton(v,'Redefinir','tracker-reset'), s=screenButton(v,'Salvar alterações','tracker-save'), items=[];
+      const r=screenButton(v,'Redefinir Tudo','tracker-reset'), s=screenButton(v,'Salvar alterações','tracker-save'), items=[];
       if(r)items.push([r,'secondary']); if(s)items.push([s,'primary']);
       return items.length?{key:'tracker',v,layout:items.length===2?'pair':'single',items}:null;
     }
@@ -126,11 +126,14 @@
  .centralos-mobile-view-action-zone .centralos-dashboard-open-more[style*="display: none"]{display:none!important}
  .centralos-mobile-view-action-zone .centralos-dashboard-open-more>i{transform:rotate(-90deg)!important}
  .centralos-mobile-view-action-zone .centralos-dashboard-open-menu{right:0!important;top:calc(100% + 8px)!important;z-index:100!important}
+ .centralos-mobile-view-action-zone>.centralos-dashboard-open-action:has(>.centralos-dashboard-open-more[style*="display: none"]){grid-template-columns:1fr!important}
+ .centralos-mobile-view-action-zone>.centralos-dashboard-open-action:has(>.centralos-dashboard-open-more[style*="display: none"])>.centralos-dashboard-open-primary{border-radius:12px!important}
  body.centralos-enhanced .centralos-dashboard>header{display:flex!important;flex-direction:column!important;align-items:stretch!important;width:100%!important;margin-bottom:14px!important}
  body.centralos-enhanced .centralos-dashboard>header>.centralos-dashboard-filter-shell{display:block!important;width:100%!important;margin-top:14px!important;padding:0!important;overflow:hidden!important}
  body.centralos-enhanced .centralos-dashboard .centralos-period-filter{display:flex!important;width:100%!important;gap:8px!important;padding:0 0 4px!important;margin:0!important;overflow-x:auto!important;background:transparent!important;border:0!important;scrollbar-width:none}
  body.centralos-enhanced .centralos-dashboard .centralos-period-filter::-webkit-scrollbar{display:none}
  body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button{flex:0 0 auto!important;width:auto!important;min-height:37px!important;padding:7px 13px!important;border:1px solid #dfe3e8!important;border-radius:999px!important;background:#fff!important;color:#68717d!important;font-size:12px!important;font-weight:650!important;white-space:nowrap!important}
+ body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-brand-50,body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-red-50,body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-gray-100,body.centralos-enhanced .centralos-dashboard .centralos-period-filter .centralos-period-button.bg-black{background:linear-gradient(135deg,#ff6500,#ff7410)!important;border-color:#ff6500!important;color:#fff!important}
 }
 @media(min-width:768px){body.centralos-enhanced .centralos-dashboard>header{display:grid!important;grid-template-columns:max-content minmax(0,1fr) max-content!important;align-items:center!important;column-gap:18px!important}.centralos-dashboard-open-more>i{transform:none!important}}
 body.centralos-auth-actions-hidden .centralos-mobile-view-action-zone,body.centralos-auth-actions-hidden .centralos-mobile-action-strip,body.centralos-auth-actions-hidden .centralos-home-mobile-action-zone{display:none!important;visibility:hidden!important;pointer-events:none!important}`;
@@ -139,8 +142,12 @@ body.centralos-auth-actions-hidden .centralos-mobile-view-action-zone,body.centr
     if(document.getElementById('centralos-layout-fixes-v11')) return;
     const s=document.createElement('style'); s.id='centralos-layout-fixes-v11'; s.textContent=css; document.head.appendChild(s);
   };
+  const applyLogo = () => {
+    const n=document.querySelector('nav img[alt="CentralOS"]'); if(n&&!n.src.endsWith('/logo.png')) n.src='logo.png';
+    const l=document.querySelector('img[src="logologin.png"],img[src*="/logologin.png"]'); if(l){if(!l.src.endsWith('/logo.png'))l.src='logo.png';l.alt='CentralOS';}
+  };
   const decorate = () => {
-    ensureStyle();
+    ensureStyle(); applyLogo();
     document.body.classList.toggle('centralos-auth-actions-hidden',!logged());
     const d=dashboard();
     if(d){
