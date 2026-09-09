@@ -55,7 +55,7 @@ window.formatLogDetails = function(text) {
 function app() {
     return {
         // State
-        loading: false,
+        loading: true,
         error: null,
         session: null,
         employeeSession: null,
