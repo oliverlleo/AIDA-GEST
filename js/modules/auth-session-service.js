@@ -279,3 +279,13 @@ window.AIDAAuthSessionService = {
     }
 };
 
+// Mobile-only presentation layer for the approved CentralOS login reference.
+// Authentication methods above are intentionally untouched.
+(function loadCentralOSMobileLoginReference() {
+    if (document.querySelector('script[data-centralos-mobile-login]')) return;
+    const script = document.createElement('script');
+    script.src = 'centralos-mobile-login-reference.js?v=1';
+    script.async = false;
+    script.dataset.centralosMobileLogin = 'true';
+    document.head.appendChild(script);
+})();
