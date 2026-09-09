@@ -56,7 +56,6 @@ function app() {
     return {
         // State
         loading: true,
-        authResolved: false,
         error: null,
         session: null,
         employeeSession: null,
@@ -1162,8 +1161,6 @@ function app() {
             } finally {
                 // Hard visual gate: the static app shell stays physically covered until
                 // the initial Supabase/employee-session check is fully resolved.
-                this.authResolved = true;
-                document.documentElement.classList.add('auth-resolved');
                 this.loading = false;
                 this.initInFlight = false;
             }

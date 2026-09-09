@@ -38,34 +38,6 @@
 
     <style>
         [x-cloak] { display: none !important; }
-        #auth-boot-shield {
-            position: fixed;
-            inset: 0;
-            z-index: 2147483647;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #fff;
-        }
-        #auth-boot-shield .auth-boot-inner {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 16px;
-            color: #6b7280;
-            font: 600 13px/1.2 Inter, sans-serif;
-        }
-        #auth-boot-shield img { width: 190px; height: auto; }
-        #auth-boot-shield .auth-boot-spinner {
-            width: 30px;
-            height: 30px;
-            border: 3px solid #e5e7eb;
-            border-top-color: #ff6b00;
-            border-radius: 999px;
-            animation: authBootSpin .8s linear infinite;
-        }
-        @keyframes authBootSpin { to { transform: rotate(360deg); } }
-        html.auth-resolved #auth-boot-shield { display: none !important; }
         body { font-family: 'Inter', sans-serif; }
         /* Custom Scrollbar for Kanban */
         .kanban-col::-webkit-scrollbar { width: 4px; }
@@ -74,14 +46,6 @@
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
-
-    <div id="auth-boot-shield" aria-hidden="true">
-        <div class="auth-boot-inner">
-            <img src="logologin.png" alt="CentralOS">
-            <div class="auth-boot-spinner"></div>
-            <span>Verificando acesso...</span>
-        </div>
-    </div>
 
     <!-- Loading Overlay -->
     <div x-show="loading" class="fixed inset-0 bg-white z-[99] flex items-center justify-center bg-opacity-90 transition-opacity" x-transition.opacity>
@@ -5210,7 +5174,7 @@
                 </div>
 
                 <!-- VIEW: LOGIN/REGISTER (If not logged in) -->
-                <div x-show="authResolved && !session && !employeeSession && !registrationSuccess && view !== 'setup_required'" class="fixed inset-0 bg-white z-[10000] overflow-y-auto" x-cloak>
+                <div x-show="!session && !employeeSession && !registrationSuccess && view !== 'setup_required'" class="fixed inset-0 bg-white z-[10000] overflow-y-auto">
                     <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4">
                         <div class="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
                             <div class="text-center mb-8">
