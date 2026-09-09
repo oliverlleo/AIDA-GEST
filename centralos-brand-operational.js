@@ -29,13 +29,24 @@
     const directChildren = (element, selector) => [...element.children].filter((child) => child.matches(selector));
 
     const applyUploadedLogo = () => {
+        const target = 'logo.png';
+
         const navLogo = document.querySelector('nav img[alt="CentralOS"]');
-        if (!navLogo) return;
-        const target = 'centralos-logo-nav.jpg?v=1';
-        if (!navLogo.src.includes('centralos-logo-nav.jpg')) {
-            navLogo.src = target;
+        if (navLogo) {
+            if (!navLogo.src.endsWith('/logo.png')) {
+                navLogo.src = target;
+            }
+            navLogo.dataset.centralosBrandLogo = 'logo.png';
         }
-        navLogo.dataset.centralosBrandLogo = 'uploaded';
+
+        const loginLogo = document.querySelector('img[src="logologin.png"], img[src*="/logologin.png"]');
+        if (loginLogo) {
+            if (!loginLogo.src.endsWith('/logo.png')) {
+                loginLogo.src = target;
+            }
+            loginLogo.alt = 'CentralOS';
+            loginLogo.dataset.centralosBrandLogo = 'logo.png';
+        }
     };
 
     const decorateSectionHeadings = (dashboard) => {
