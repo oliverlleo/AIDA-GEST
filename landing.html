@@ -221,6 +221,159 @@ footer{background:#080a0d;padding:45px 0;color:#747e89}.foot{display:flex;justif
   }
 }
 
+
+/* hero system-only parallax */
+.hero{
+  isolation:isolate;
+  --hero-mx:0;
+  --hero-my:0;
+  --hero-sy:0px;
+}
+.hero-bg{
+  will-change:transform;
+  transform:
+    translate3d(
+      calc(var(--hero-mx) * -16px),
+      calc(var(--hero-my) * -10px + var(--hero-sy) * .24),
+      0
+    )
+    scale(1.095);
+}
+.hero-system-parallax{
+  position:absolute;
+  inset:-7% -4%;
+  z-index:-1;
+  pointer-events:none;
+  overflow:hidden;
+  opacity:.92;
+}
+.hero-system-parallax .hsp-grid{
+  position:absolute;
+  inset:-10%;
+  opacity:.30;
+  background:
+    linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);
+  background-size:72px 72px;
+  -webkit-mask-image:
+    radial-gradient(circle at 72% 46%,#000 0%,rgba(0,0,0,.88) 34%,transparent 73%);
+  mask-image:
+    radial-gradient(circle at 72% 46%,#000 0%,rgba(0,0,0,.88) 34%,transparent 73%);
+  transform:
+    translate3d(
+      calc(var(--hero-mx) * 12px),
+      calc(var(--hero-my) * 7px + var(--hero-sy) * -.34),
+      0
+    );
+  will-change:transform;
+}
+.hero-system-parallax .hsp-flow{
+  position:absolute;
+  width:min(780px,58vw);
+  height:min(780px,58vw);
+  right:-8vw;
+  top:5%;
+  border-radius:50%;
+  opacity:.56;
+  background:
+    repeating-radial-gradient(circle at center,rgba(255,255,255,.045) 0 1px,transparent 1px 52px),
+    conic-gradient(from 120deg,transparent 0 16%,rgba(255,91,0,.15) 21%,transparent 27% 52%,rgba(255,91,0,.08) 58%,transparent 66% 100%);
+  -webkit-mask-image:radial-gradient(circle,#000 0%,rgba(0,0,0,.7) 48%,transparent 75%);
+  mask-image:radial-gradient(circle,#000 0%,rgba(0,0,0,.7) 48%,transparent 75%);
+  transform:
+    translate3d(
+      calc(var(--hero-mx) * -22px),
+      calc(var(--hero-my) * -12px + var(--hero-sy) * .46),
+      0
+    )
+    rotate(-8deg);
+  will-change:transform;
+}
+.hero-system-parallax .hsp-line{
+  position:absolute;
+  height:1px;
+  right:-5%;
+  left:44%;
+  opacity:.34;
+  background:linear-gradient(90deg,transparent,rgba(255,91,0,.34),rgba(255,91,0,.08),transparent);
+  transform-origin:right center;
+}
+.hero-system-parallax .hsp-line.l1{top:28%;transform:rotate(-8deg)}
+.hero-system-parallax .hsp-line.l2,{top:52%;transform:rotate(5deg)}
+.hero-system-parallax .hsp-line.l3{top:72%;transform:rotate(-3deg)}
+.hero-system-parallax .hsp-node{
+  position:absolute;
+  min-width:152px;
+  padding:13px 15px;
+  border:1px solid rgba(255,255,255,.085);
+  border-radius:14px;
+  background:rgba(10,13,17,.36);
+  box-shadow:0 16px 44px rgba(0,0,0,.18);
+  backdrop-filter:blur(7px);
+  color:#c6ccd3;
+  opacity:.24;
+  will-change:transform;
+}
+.hero-system-parallax .hsp-node:before{
+  content:"";
+  display:inline-block;
+  width:6px;height:6px;
+  margin-right:8px;
+  border-radius:50%;
+  background:var(--o);
+  box-shadow:0 0 13px rgba(255,91,0,.65);
+  vertical-align:1px;
+}
+.hero-system-parallax .hsp-node b{
+  font-size:10px;
+  letter-spacing:.06em;
+}
+.hero-system-parallax .hsp-node small{
+  display:block;
+  margin-top:5px;
+  color:#7f8994;
+  font-size:9px;
+}
+.hero-system-parallax .n1{
+  right:34%;
+ top:15%;
+  transform:translate3d(calc(var(--hero-mx)*18px),calc(var(--hero-my)*10px + var(--hero-sy)*-.20),0) rotate(-2deg)
+}
+.hero-system-parallax .n2{
+  right:6%;
+  top:25%;
+  transform:translate3d(calc(var(--hero-mx)*-24px),calc(var(--hero-my)*-12px + var(--hero-sy)*.35),0) rotate(2deg)
+}
+.hero-system-parallax .n3{
+  right:39%;
+  bottom:15%;
+  transform:translate3d(calc(var(--hero-mx)*14px),calc(var(--hero-my)*-8px + var(--hero-sy)*.18),0) rotate(1deg)
+}
+.hero-system-parallax .n4{
+  right:4%;
+  bottom:11%;
+  transform:translate3d(calc(var(--hero-mx)*-18px),calc(var(--hero-my)*12px + var(--hero-sy)*-.28),0) rotate(-2deg)
+}
+.hero-system-parallax .hsp-glow{
+  position:absolute;
+  width:420px;height:420px;
+  right:16%;
+ top:20%;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(255,91,0,.12),rgba(255,91,0,.035) 40%,transparent 72%);
+  filter:blur(10px);
+  transform:translate3d(calc(var(--hero-mx)*-10px),calc(var(--hero-my)*-8px + var(--hero-sy)*.16),0);
+}
+@media(max-width:900px){
+  .hero-system-parallax .hsp-node{opacity:.12}
+  .hero-system-parallax .hsp-flow{width:92vw;height:92vw;right:-48vw;opacity:.34}
+  .hero-system-parallax .hsp-grid{opacity:.18;background-size:54px 54px}
+}
+@media(prefers-reduced-motion:reduce){
+  .hero{--hero-mx:0!important;--hero-my:0!important;--hero-sy:0px!important}
+  .hero-bg,.hero-system-parallax *{transform:none!important}
+}
+
 </style>
 </head>
 <body>
@@ -389,6 +542,64 @@ gsap.from('.map-node:not(.mn5)',{x:(i,el)=>{const r=el.getBoundingClientRect();r
   },{rootMargin:'15% 0px 15% 0px',threshold:.01});
 
   io.observe(section);
+})();
+</script>
+
+
+<script>
+/* hero system-only parallax */
+(()=>{
+  const hero=document.querySelector('.hero');
+  if(!hero || hero.querySelector('.hero-system-parallax')) return;
+
+  const layer=document.createElement('div');
+  layer.className='hero-system-parallax';
+  layer.setAttribute('aria-hidden','true');
+  layer.innerHTML=`
+    <div class="hsp-grid"></div>
+    <div class="hsp-flow"></div>
+    <div class="hsp-line l1"></div>
+    <div class="hsp-line l2"></div>
+    <div class="hsp-line l3"></div>
+    <div class="hsp-glow"></div>
+    <div class="hsp-node n1"><b>CLIENTE</b><small>contexto conectado</small></div>
+    <div class="hsp-node n2"><b>PRAZO</b><small>próximo passo visível</small></div>
+    <div class="hsp-node n3"><b>PEÇAS</b><small>vínculo com o reparo</small></div>
+    <div class="hsp-node n4"><b>ENTREGA</b><small>histórico preservado</small></div>`;
+  hero.prepend(layer);
+
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  let raf=0, mx=0, my=0, sy=0;
+  const paint=()=>{
+    hero.style.setProperty('--hero-mx',mx.toFixed(3));
+    hero.style.setProperty('--hero-my',my.toFixed(3));
+    hero.style.setProperty('--hero-sy',`${sy.toFixed(2)}px`);
+    raf=0;
+  };
+  const queue=()=>{if(!raf)raf=requestAnimationFrame(paint)};
+
+  hero.addEventListener('pointermove',e=>{
+    if(innerWidth<800)return;
+    const r=hero.getBoundingClientRect();
+    mx=((e.clientX-r.left)/r.width-.5)*2;
+    my=((e.clientY-r.top)/r.height-.5)*2;
+    queue();
+  },{passive:true});
+
+  hero.addEventListener('pointerleave',()=>{
+    mx=0;my=0;queue();
+  },{passive:true});
+
+  const onScroll=()=>{
+    const r=hero.getBoundingClientRect();
+    const progress=Math.max(-1,Math.min(1,-r.top/(r.height||1)));
+    sy=progress*72;
+    queue();
+  };
+  addEventListener('scroll',onScroll,{passive:true});
+  addEventListener('resize',onScroll,{passive:true});
+  onScroll();
 })();
 </script>
 
