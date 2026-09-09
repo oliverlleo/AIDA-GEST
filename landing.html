@@ -374,6 +374,146 @@ footer{background:#080a0d;padding:45px 0;color:#747e89}.foot{display:flex;justif
   .hero-bg,.hero-system-parallax *{transform:none!important}
 }
 
+
+/* advanced hero system parallax — layered operational network */
+.hero{isolation:isolate;perspective:1400px;--hap-px:0;--hap-py:0;--hap-scroll:0}
+.hero>.wrap{position:relative;z-index:6}
+.hero>.hero-bg{z-index:-7!important}
+.hero-system-parallax{display:none!important}
+.hero-advanced-parallax{
+  position:absolute;
+  inset:-8% -4% -12%;
+  z-index:-1;
+  overflow:hidden;
+  pointer-events:none;
+  transform-style:preserve-3d;
+  perspective:1400px;
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 9%,#000 91%,transparent 100%);
+  mask-image:linear-gradient(180deg,transparent 0,#000 9%,#000 91%,transparent 100%);
+}
+.hap-layer{position:absolute;inset:-8%;transform-style:preserve-3d;will-change:transform}
+.hap-vignette{
+  position:absolute;inset:0;z-index:5;
+  background:
+    radial-gradient(ellipse at 66% 48%,transparent 0 16%,rgba(8,10,13,.16) 47%,rgba(8,10,13,.78) 100%),
+    linear-gradient(90deg,rgba(8,10,13,.93) 0%,rgba(8,10,13,.70) 34%,rgba(8,10,13,.17) 68%,rgba(8,10,13,.62) 100%);
+}
+.hap-back{
+  opacity:.72;
+  background:
+    radial-gradient(circle at 77% 31%,rgba(255,91,0,.12),transparent 20%),
+    radial-gradient(circle at 58% 72%,rgba(255,91,0,.065),transparent 24%);
+}
+.hap-back:before{
+  content:"";position:absolute;inset:0;opacity:.44;
+  background-image:
+    linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:68px 68px;
+  -webkit-mask-image:linear-gradient(90deg,transparent 5%,rgba(0,0,0,.35) 28%,#000 55%,rgba(0,0,0,.72) 100%);
+  mask-image:linear-gradient(90deg,transparent 5%,rgba(0,0,0,.35) 28%,#000 55%,rgba(0,0,0,.72) 100%);
+}
+.hap-floor{
+  position:absolute;left:24%;right:-18%;bottom:-36%;height:72%;opacity:.52;
+  background-image:
+    linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);
+  background-size:64px 64px;
+  transform:rotateX(68deg) rotateZ(-4deg);
+  transform-origin:50% 0;
+  -webkit-mask-image:linear-gradient(180deg,#000,transparent 82%);
+  mask-image:linear-gradient(180deg,#000,transparent 82%);
+}
+.hap-floor:after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 18%,rgba(255,91,0,.13) 52%,transparent 75%);
+  animation:hapFloorSweep 6.8s ease-in-out infinite alternate;
+}
+@keyframes hapFloorSweep{from{transform:translateX(-24%)}to{transform:translateX(28%)}}
+.hap-network{position:absolute;inset:4% -2% 2% 30%;opacity:.78;filter:drop-shadow(0 0 12px rgba(255,91,0,.08))}
+.hap-network svg{width:100%;height:100%;overflow:visible}
+.hap-network .wire{fill:none;stroke:rgba(255,255,255,.085);stroke-width:1;vector-effect:non-scaling-stroke}
+.hap-network .wire.hot{stroke:rgba(255,91,0,.25);stroke-dasharray:7 16;animation:hapWire 8s linear infinite}
+.hap-network .wire.hot.alt{animation-duration:11s;animation-direction:reverse}
+@keyframes hapWire{to{stroke-dashoffset:-92}}
+.hap-network .pulse{fill:#ff5b00;filter:drop-shadow(0 0 7px #ff5b00);animation:hapPulse 2.7s ease-in-out infinite}
+.hap-network .pulse.p2{animation-delay:-.9s}.hap-network .pulse.p3{animation-delay:-1.8s}
+@keyframes hapPulse{0%,100%{opacity:.22;r:2.4px}50%{opacity:1;r:4.2px}}
+.hap-rings{
+  position:absolute;width:min(760px,58vw);aspect-ratio:1;right:-8vw;top:1%;border-radius:50%;opacity:.42;
+  background:
+    repeating-radial-gradient(circle,transparent 0 50px,rgba(255,255,255,.048) 51px,transparent 52px 83px),
+    conic-gradient(from 160deg,transparent 0 13%,rgba(255,91,0,.17) 17%,transparent 23% 54%,rgba(255,91,0,.09) 60%,transparent 66%);
+  -webkit-mask-image:radial-gradient(circle,#000 0 48%,rgba(0,0,0,.5) 68%,transparent 78%);
+  mask-image:radial-gradient(circle,#000 0 48%,rgba(0,0,0,.5) 68%,transparent 78%);
+  animation:hapRingSpin 34s linear infinite;
+}
+@keyframes hapRingSpin{to{rotate:360deg}}
+.hap-card{
+  position:absolute;width:176px;min-height:78px;padding:14px 15px;
+  border:1px solid rgba(255,255,255,.10);border-radius:16px;
+  background:linear-gradient(145deg,rgba(18,23,29,.62),rgba(8,11,14,.28));
+  box-shadow:0 22px 55px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.025);
+  backdrop-filter:blur(11px);opacity:.42;transform-style:preserve-3d;
+}
+.hap-card:before{
+  content:"";display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:#ff5b00;box-shadow:0 0 15px rgba(255,91,0,.8);margin-right:8px;
+}
+.hap-card b{font-size:11px;color:#e9edf1;letter-spacing:.025em}
+.hap-card small{display:block;margin:8px 0 0 15px;color:#77818c;font-size:9px;line-height:1.45}
+.hap-card:after{
+  content:"";position:absolute;left:15px;right:15px;bottom:10px;height:1px;
+  background:linear-gradient(90deg,rgba(255,91,0,.5),transparent);
+  transform:scaleX(.35);transform-origin:left;opacity:.5;
+  animation:hapCardLine 3.5s ease-in-out infinite alternate;
+}
+@keyframes hapCardLine{to{transform:scaleX(1);opacity:.8}}
+.hap-c1{left:4%;top:6%;transform:rotate(-5deg)}
+.hap-c2{left:42%;top:2%;transform:rotate(3deg)}
+.hap-c3{right:2%;top:17%;transform:rotate(6deg)}
+.hap-c4{left:34%;bottom:5%;transform:rotate(-3deg)}
+.hap-c5{right:4%;bottom:2%;transform:rotate(4deg)}
+.hap-c6{left:7%;bottom:15%;transform:rotate(5deg)}
+.hap-c2,.hap-c4{opacity:.30}.hap-c1,.hap-c6{opacity:.22}
+.hap-beam{
+  position:absolute;top:-10%;bottom:-10%;width:2px;right:24%;
+  background:linear-gradient(180deg,transparent,rgba(255,91,0,.12) 20%,rgba(255,91,0,.72) 49%,rgba(255,91,0,.12) 78%,transparent);
+  box-shadow:0 0 16px rgba(255,91,0,.26);opacity:.44;
+  animation:hapBeam 5.4s ease-in-out infinite alternate;
+}
+@keyframes hapBeam{from{transform:translateX(-80px);opacity:.18}to{transform:translateX(95px);opacity:.5}}
+.hap-scan{
+  position:absolute;left:28%;right:-2%;height:1px;top:24%;opacity:.42;
+  background:linear-gradient(90deg,transparent,rgba(255,91,0,.18),rgba(255,91,0,.72),rgba(255,91,0,.10),transparent);
+  box-shadow:0 0 16px rgba(255,91,0,.22);animation:hapScan 7.3s ease-in-out infinite;
+}
+@keyframes hapScan{0%,100%{transform:translateY(-22vh);opacity:.1}50%{transform:translateY(48vh);opacity:.5}}
+.hap-dust{position:absolute;inset:0}
+.hap-dot{
+  position:absolute;width:3px;height:3px;border-radius:50%;background:#ff6a14;
+  box-shadow:0 0 10px rgba(255,91,0,.7);opacity:.45;animation:hapDot 4.2s ease-in-out infinite;
+}
+.hap-dot:nth-child(2n){animation-duration:5.6s}.hap-dot:nth-child(3n){animation-delay:-2.4s}
+@keyframes hapDot{0%,100%{transform:scale(.65);opacity:.12}50%{transform:scale(1.5);opacity:.78}}
+.hero .command{transform-style:preserve-3d;will-change:transform}
+.hero .os-window{transition:box-shadow .5s ease}
+.hero:hover .os-window{box-shadow:0 52px 120px rgba(0,0,0,.62),0 0 46px rgba(255,91,0,.055)}
+@media(max-width:900px){
+  .hero-advanced-parallax{inset:-3% -18% -8%}
+  .hap-network{left:19%;opacity:.52}
+  .hap-floor{left:0;right:-45%;bottom:-29%;opacity:.34}
+  .hap-rings{width:96vw;right:-50vw;opacity:.24}
+  .hap-card{width:142px;min-height:64px;padding:11px 12px;opacity:.16}
+  .hap-card small{display:none}
+  .hap-c1,.hap-c2,.hap-c6{display:none}
+  .hap-c3{right:2%;top:10%}.hap-c4{left:auto;right:37%;bottom:6%}.hap-c5{right:1%;bottom:1%}
+  .hap-vignette{background:linear-gradient(180deg,rgba(8,10,13,.32),rgba(8,10,13,.68))}
+}
+@media(prefers-reduced-motion:reduce){
+  .hap-floor:after,.hap-network .wire.hot,.hap-network .pulse,.hap-rings,.hap-card:after,.hap-beam,.hap-scan,.hap-dot{animation:none!important}
+}
+
 </style>
 </head>
 <body>
@@ -600,6 +740,109 @@ gsap.from('.map-node:not(.mn5)',{x:(i,el)=>{const r=el.getBoundingClientRect();r
   addEventListener('scroll',onScroll,{passive:true});
   addEventListener('resize',onScroll,{passive:true});
   onScroll();
+})();
+</script>
+
+
+<script>
+/* advanced parallax only for the hero: layered system network + mouse + scroll + ambient drift */
+(()=>{
+  const hero=document.querySelector('.hero');
+  if(!hero || hero.querySelector('.hero-advanced-parallax')) return;
+  const legacy=hero.querySelector('.hero-system-parallax');
+  if(legacy) legacy.remove();
+
+  const parallax=document.createElement('div');
+  parallax.className='hero-advanced-parallax';
+  parallax.setAttribute('aria-hidden','true');
+  parallax.innerHTML=`
+    <div class="hap-layer hap-back" data-depth=".10"></div>
+    <div class="hap-layer" data-depth=".18"><div class="hap-floor"></div></div>
+    <div class="hap-layer" data-depth=".25">
+      <div class="hap-rings"></div>
+      <div class="hap-network">
+        <svg viewBox="0 0 1000 720" preserveAspectRatio="none">
+          <path class="wire" d="M40 135 C190 70 300 210 425 160 S675 90 930 185"/>
+          <path class="wire hot" d="M40 135 C190 70 300 210 425 160 S675 90 930 185"/>
+          <path class="wire" d="M90 510 C265 390 330 570 520 455 S770 400 950 530"/>
+          <path class="wire hot alt" d="M90 510 C265 390 330 570 520 455 S770 400 950 530"/>
+          <path class="wire" d="M230 90 C305 235 245 340 430 410 S690 450 815 630"/>
+          <path class="wire hot" d="M230 90 C305 235 245 340 430 410 S690 450 815 630"/>
+          <path class="wire" d="M750 40 C625 185 675 290 530 340 S260 350 120 640"/>
+          <circle class="pulse" cx="425" cy="160" r="3"/>
+          <circle class="pulse p2" cx="520" cy="455" r="3"/>
+          <circle class="pulse p3" cx="430" cy="410" r="3"/>
+        </svg>
+      </div>
+    </div>
+    <div class="hap-layer" data-depth=".38">
+      <div class="hap-card hap-c1"><b>Cliente</b><small>Histórico conectado à OS</small></div>
+      <div class="hap-card hap-c2"><b>Diagnóstico</b><small>Análise, técnico e decisão</small></div>
+      <div class="hap-card hap-c3"><b>Prazo</b><small>Próximo passo visível</small></div>
+      <div class="hap-card hap-c4"><b>Peças</b><small>Compra vinculada ao reparo</small></div>
+      <div class="hap-card hap-c5"><b>Entrega</b><small>Conclusão sem perder contexto</small></div>
+      <div class="hap-card hap-c6"><b>Garantia</b><small>Retorno ligado ao atendimento</small></div>
+      <div class="hap-beam"></div>
+      <div class="hap-scan"></div>
+    </div>
+    <div class="hap-layer" data-depth=".52">
+      <div class="hap-dust">
+        <i class="hap-dot" style="left:33%;top:18%"></i><i class="hap-dot" style="left:47%;top:35%"></i>
+        <i class="hap-dot" style="left:61%;top:11%"></i><i class="hap-dot" style="left:73%;top:42%"></i>
+        <i class="hap-dot" style="left:84%;top:24%"></i><i class="hap-dot" style="left:91%;top:63%"></i>
+        <i class="hap-dot" style="left:55%;top:72%"></i><i class="hap-dot" style="left:38%;top:61%"></i>
+        <i class="hap-dot" style="left:69%;top:84%"></i>
+      </div>
+    </div>
+    <div class="hap-vignette"></div>`;
+  hero.prepend(parallax);
+
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const layers=[...parallax.querySelectorAll('.hap-layer')];
+  const command=hero.querySelector('.command');
+  const bg=hero.querySelector('.hero-bg');
+  let tx=0,ty=0,mx=0,my=0,scroll=0,targetScroll=0,last=performance.now();
+
+  const updateScroll=()=>{
+    const r=hero.getBoundingClientRect();
+    const vh=innerHeight||1;
+    targetScroll=Math.max(-1.2,Math.min(1.2,(vh*.48-r.top)/vh));
+  };
+  updateScroll();
+
+  hero.addEventListener('pointermove',e=>{
+    const r=hero.getBoundingClientRect();
+    tx=((e.clientX-r.left)/r.width-.5)*2;
+    ty=((e.clientY-r.top)/r.height-.5)*2;
+  },{passive:true});
+  hero.addEventListener('pointerleave',()=>{tx=0;ty=0},{passive:true});
+  addEventListener('scroll',updateScroll,{passive:true});
+  addEventListener('resize',updateScroll,{passive:true});
+
+  const frame=(now)=>{
+    const dt=Math.min(40,now-last);last=now;
+    const ease=1-Math.pow(.001,dt/1000);
+    mx+=(tx-mx)*ease;my+=(ty-my)*ease;scroll+=(targetScroll-scroll)*ease;
+
+    layers.forEach((layer,i)=>{
+      const d=Number(layer.dataset.depth||.2);
+      const driftX=Math.sin(now*.00027+i*1.7)*5*d;
+      const driftY=Math.cos(now*.00022+i*1.3)*4*d;
+      const x=mx*44*d+driftX;
+      const y=my*26*d-scroll*96*d+driftY;
+      const rz=mx*(i-1.8)*.28;
+      layer.style.transform=`translate3d(${x}px,${y}px,${d*90}px) rotateZ(${rz}deg)`;
+    });
+
+    if(bg) bg.style.transform=`translate3d(${mx*-10}px,${my*-6-scroll*14}px,0) scale(1.085)`;
+    if(command){
+      const cx=mx*16,cy=my*10-scroll*24;
+      const ry=-10+mx*2.8,rx=5-my*2.2;
+      command.style.transform=`translate3d(${cx}px,${cy}px,40px) rotateY(${ry*.12}deg) rotateX(${rx*.10}deg)`;
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 })();
 </script>
 
