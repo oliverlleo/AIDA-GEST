@@ -15,6 +15,8 @@
         { match: 'pendências com fornecedor', icon: 'fa-truck-fast' }
     ];
 
+    const mobileQuery = window.matchMedia('(max-width: 767px)');
+
     const normalize = (value) => String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -43,14 +45,14 @@
     const directChildren = (element, selector) => [...element.children].filter((child) => child.matches(selector));
 
     const ensureLayoutFixStyles = () => {
-        document.getElementById('centralos-layout-fixes-v2')?.remove();
-        document.getElementById('centralos-layout-fixes-v3')?.remove();
-        if (document.getElementById('centralos-layout-fixes-v4')) return;
+        ['centralos-layout-fixes-v2', 'centralos-layout-fixes-v3', 'centralos-layout-fixes-v4'].forEach((id) => {
+            document.getElementById(id)?.remove();
+        });
+        if (document.getElementById('centralos-layout-fixes-v5')) return;
 
         const style = document.createElement('style');
-        style.id = 'centralos-layout-fixes-v4';
+        style.id = 'centralos-layout-fixes-v5';
         style.textContent = `
-            /* Desktop: título, filtros e ação na mesma linha e alinhados. */
             @media (min-width: 768px) {
                 body.centralos-enhanced .centralos-dashboard > header {
                     display: grid !important;
@@ -78,36 +80,102 @@
                 }
             }
 
-            /* Mobile da Início: usa SOMENTE o Abrir Chamado original.
-               Ele fica dentro da Início, acima dos filtros, com o mesmo padrão da aba Chamados. */
             @media (max-width: 767px) {
+                /* Na Início a faixa já existente de Chamados é reutilizada. Nunca mostra os botões clonados dela. */
                 body.centralos-dashboard-active .centralos-mobile-action-strip {
+                    display: block !important;
+                }
+
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-mobile-action-inner:not(.centralos-dashboard-open-action),
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-mobile-new-ticket-menu {
                     display: none !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header {
+                /* O próprio Abrir Chamado original ocupa exatamente a faixa do Novo Chamado. */
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-dashboard-open-action {
+                    display: grid !important;
+                    grid-template-columns: minmax(0, 1fr) 50px !important;
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    margin: 0 !important;
+                    overflow: visible !important;
+                    border-radius: 12px !important;
+                    box-shadow: 0 10px 24px rgba(255,101,0,.18) !important;
+                }
+
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-dashboard-open-action > button:first-of-type {
+                    grid-column: 1 !important;
+                    width: 100% !important;
+                    min-width: 0 !important;
+                    max-width: none !important;
+                    height: 50px !important;
+                    min-height: 50px !important;
+                    margin: 0 !important;
+                    padding: 0 18px !important;
                     display: flex !important;
-                    flex-direction: column !important;
-                    align-items: stretch !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 14px !important;
+                    border: 0 !important;
+                    border-radius: 12px 0 0 12px !important;
+                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
+                    color: #fff !important;
+                    font-size: 17px !important;
+                    font-weight: 800 !important;
+                    letter-spacing: -.01em !important;
+                    box-shadow: none !important;
+                }
+
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-dashboard-open-action > button:first-of-type i {
+                    margin-right: 0 !important;
+                    font-size: 19px !important;
+                }
+
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-dashboard-open-action > button:nth-of-type(2) {
+                    grid-column: 2 !important;
+                    width: 50px !important;
+                    min-width: 50px !important;
+                    max-width: 50px !important;
+                    height: 50px !important;
+                    min-height: 50px !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    border: 0 !important;
+                    border-left: 1px solid rgba(255,255,255,.26) !important;
+                    border-radius: 0 12px 12px 0 !important;
+                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
+                    color: #fff !important;
+                    font-size: 15px !important;
+                    box-shadow: none !important;
+                }
+
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-dashboard-open-action:has(> button:nth-of-type(2)[style*="display: none"]) {
+                    grid-template-columns: 1fr !important;
+                }
+
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-dashboard-open-action:has(> button:nth-of-type(2)[style*="display: none"]) > button:first-of-type {
+                    border-radius: 12px !important;
+                }
+
+                body.centralos-dashboard-active .centralos-mobile-action-strip > .centralos-dashboard-open-action > div[x-show*="newTicketMenuOpen"] {
+                    right: 0 !important;
+                    top: calc(100% + 8px) !important;
+                    z-index: 100 !important;
+                }
+
+                /* Sem o botão dentro do header, a Início começa no título e depois mostra os filtros. */
+                body.centralos-enhanced .centralos-dashboard > header {
+                    display: block !important;
                     margin-bottom: 14px !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > div:first-child {
-                    order: 1 !important;
-                }
-
-                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action {
-                    order: 2 !important;
-                    width: 100% !important;
-                    margin: 14px 0 0 !important;
-                }
-
                 body.centralos-enhanced .centralos-dashboard > header > .aida-operational-filter {
-                    order: 3 !important;
                     display: block !important;
                     width: 100% !important;
                     min-width: 0 !important;
-                    margin-top: 14px !important;
+                    margin-top: 16px !important;
                     padding: 0 !important;
                     overflow: hidden !important;
                 }
@@ -200,28 +268,51 @@
         }
     };
 
+    const getDashboardAction = (header) =>
+        header?.querySelector(':scope > .aida-split-action')
+        || document.querySelector('.centralos-mobile-action-strip > .centralos-dashboard-open-action')
+        || null;
+
+    const ensureActionAnchor = (header, action) => {
+        let anchor = header.querySelector(':scope > .centralos-dashboard-action-anchor');
+        if (anchor) return anchor;
+
+        anchor = document.createElement('span');
+        anchor.className = 'centralos-dashboard-action-anchor';
+        anchor.hidden = true;
+        header.insertBefore(anchor, action);
+        return anchor;
+    };
+
     const configureDashboardAction = (dashboard) => {
         const header = dashboard?.querySelector(':scope > header');
         if (!header) return;
 
-        /* Limpa a implementação errada anterior, caso ainda exista no DOM atual. */
+        /* Remove a faixa extra criada nas tentativas anteriores, caso exista numa sessão já aberta. */
         const legacyStrip = document.querySelector('.centralos-dashboard-mobile-action-strip');
-        const legacyAction = legacyStrip?.querySelector(':scope > .aida-split-action');
-        if (legacyAction && legacyAction.parentElement !== header) {
-            header.appendChild(legacyAction);
-        }
+        const legacyAction = legacyStrip?.querySelector('.aida-split-action');
+        if (legacyAction && !header.querySelector(':scope > .aida-split-action')) header.appendChild(legacyAction);
         legacyStrip?.remove();
-        header.querySelectorAll(':scope > .centralos-dashboard-action-anchor').forEach((el) => el.remove());
 
-        const action = header.querySelector(':scope > .aida-split-action');
+        const action = getDashboardAction(header);
         if (!action) return;
 
-        /* Reutiliza exatamente o botão original; só aplica as classes visuais do Chamados mobile. */
-        action.classList.add('centralos-mobile-action-inner');
-        action.querySelector(':scope > button:first-of-type')?.classList.add('centralos-mobile-new-ticket');
-        action.querySelector(':scope > button:nth-of-type(2)')?.classList.add('centralos-mobile-new-ticket-more');
+        const anchor = ensureActionAnchor(header, action);
+        const strip = document.querySelector('.centralos-mobile-action-strip');
+        const dashboardActive = isDashboardActive(dashboard);
+        const useMobileStrip = mobileQuery.matches && dashboardActive && !!strip;
 
-        document.body.classList.toggle('centralos-dashboard-active', isDashboardActive(dashboard));
+        action.classList.add('centralos-dashboard-open-action');
+        document.body.classList.toggle('centralos-dashboard-active', dashboardActive);
+
+        if (useMobileStrip) {
+            if (action.parentElement !== strip) strip.appendChild(action);
+        } else if (action.parentElement !== header) {
+            anchor.insertAdjacentElement('afterend', action);
+        }
+
+        /* Se a aba Chamados remover data-visible, o CSS da Início ainda mantém esta mesma faixa visível. */
+        if (useMobileStrip) strip.setAttribute('data-visible', '');
     };
 
     const decorateSectionHeadings = (dashboard) => {
@@ -308,7 +399,8 @@
         window.setTimeout(decorate, 250);
         window.setTimeout(decorate, 900);
         document.addEventListener('click', () => window.setTimeout(decorate, 0), { passive: true });
-        new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+        mobileQuery.addEventListener?.('change', decorate);
+        new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'data-visible'] });
     };
 
     if (document.readyState === 'loading') {
