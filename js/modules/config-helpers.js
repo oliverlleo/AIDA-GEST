@@ -130,11 +130,42 @@ window.AIDAConfigHelpers = {
             document.head.appendChild(completeLink);
         }
 
+        if (!document.querySelector('link[data-centralos-brand-operational]')) {
+            const operationalLink = document.createElement('link');
+            operationalLink.rel = 'stylesheet';
+            operationalLink.href = 'centralos-brand-operational.css?v=1';
+            operationalLink.dataset.centralosBrandOperational = 'true';
+            document.head.appendChild(operationalLink);
+        }
+
         if (!document.querySelector('script[data-centralos-brand-complete]')) {
             const completeScript = document.createElement('script');
             completeScript.src = 'centralos-brand-complete.js?v=2';
             completeScript.dataset.centralosBrandComplete = 'true';
             document.head.appendChild(completeScript);
+        }
+
+        if (!document.querySelector('script[data-centralos-brand-operational]')) {
+            const operationalScript = document.createElement('script');
+            operationalScript.src = 'centralos-brand-operational.js?v=1';
+            operationalScript.dataset.centralosBrandOperational = 'true';
+            document.head.appendChild(operationalScript);
+        }
+
+        // Camada mobile isolada: só atua até 767px e reaproveita as ações existentes.
+        if (!document.querySelector('link[data-centralos-mobile-kanban]')) {
+            const mobileLink = document.createElement('link');
+            mobileLink.rel = 'stylesheet';
+            mobileLink.href = 'centralos-mobile-kanban.css?v=1';
+            mobileLink.dataset.centralosMobileKanban = 'true';
+            document.head.appendChild(mobileLink);
+        }
+
+        if (!document.querySelector('script[data-centralos-mobile-kanban]')) {
+            const mobileScript = document.createElement('script');
+            mobileScript.src = 'centralos-mobile-kanban.js?v=1';
+            mobileScript.dataset.centralosMobileKanban = 'true';
+            document.head.appendChild(mobileScript);
         }
 
         // Wordmark vetorial aplicado apenas à imagem visual do topo.
