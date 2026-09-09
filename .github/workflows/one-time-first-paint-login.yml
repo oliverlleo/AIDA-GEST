@@ -1,0 +1,26 @@
+name: One-time first-paint login fix
+on:
+  push:
+    branches:
+      - fix/github-pages-landing-entry
+    paths:
+      - .github/workflows/one-time-first-paint-login.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/github-pages-landing-entry
+          fetch-depth: 0
+      - name: Apply first-paint login fix
+        run: python scripts/fix_first_paint_login.py
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: render real login on first paint without blank auth screen"
+          git push origin HEAD:fix/github-pages-landing-entry
