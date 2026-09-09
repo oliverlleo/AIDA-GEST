@@ -15,6 +15,8 @@
         { match: 'pendências com fornecedor', icon: 'fa-truck-fast' }
     ];
 
+    const mobileQuery = window.matchMedia('(max-width: 767px)');
+
     const normalize = (value) => String(value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -26,15 +28,39 @@
         return expr.includes("view === 'dashboard'");
     }) || null;
 
+    const getSessionNav = () => [...document.querySelectorAll('nav[x-show]')].find((el) => {
+        const expr = el.getAttribute('x-show') || '';
+        return expr.includes('session');
+    }) || null;
+
+    const getCurrentView = () => {
+        try {
+            return window.Alpine?.$data?.(document.body)?.view || '';
+        } catch (_) {
+            return '';
+        }
+    };
+
+    const isDashboardActive = (dashboard) => {
+        const view = getCurrentView();
+        if (view) return view === 'dashboard';
+        return !!dashboard && window.getComputedStyle(dashboard).display !== 'none';
+    };
+
     const directChildren = (element, selector) => [...element.children].filter((child) => child.matches(selector));
 
     const ensureLayoutFixStyles = () => {
-        if (document.getElementById('centralos-layout-fixes-v2')) return;
+        document.getElementById('centralos-layout-fixes-v2')?.remove();
+        if (document.getElementById('centralos-layout-fixes-v3')) return;
 
         const style = document.createElement('style');
-        style.id = 'centralos-layout-fixes-v2';
+        style.id = 'centralos-layout-fixes-v3';
         style.textContent = `
-            /* Dashboard: filtros e ação alinhados no desktop */
+            .centralos-dashboard-mobile-action-strip {
+                display: none;
+            }
+
+            /* Desktop: mantém título, filtros e ação na mesma linha */
             @media (min-width: 768px) {
                 body.centralos-enhanced .centralos-dashboard > header {
                     display: grid !important;
@@ -62,92 +88,32 @@
                 }
             }
 
-            /* Dashboard mobile: reutiliza o Abrir Chamado que já existe */
+            /* Mobile: faixa no mesmo lugar do Novo Chamado da aba Chamados */
             @media (max-width: 767px) {
+                .centralos-dashboard-mobile-action-strip[data-visible] {
+                    display: block !important;
+                    position: relative;
+                    width: 100%;
+                    padding: 0 14px 12px;
+                    background: #0b0e12;
+                    z-index: 55;
+                }
+
+                .centralos-dashboard-mobile-action-strip > .aida-split-action {
+                    width: 100% !important;
+                    margin: 0 !important;
+                }
+
                 body.centralos-enhanced .centralos-dashboard > header {
-                    display: flex !important;
-                    flex-direction: column !important;
-                    align-items: stretch !important;
+                    display: block !important;
                     margin-bottom: 14px !important;
                 }
 
-                body.centralos-enhanced .centralos-dashboard > header > div:first-child {
-                    order: 1 !important;
-                }
-
-                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action {
-                    order: 2 !important;
-                    display: grid !important;
-                    grid-template-columns: minmax(0, 1fr) 50px !important;
-                    width: 100% !important;
-                    margin: 14px 0 0 !important;
-                    border-radius: 12px !important;
-                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
-                    box-shadow: 0 10px 24px rgba(255,101,0,.18) !important;
-                }
-
-                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > button:first-of-type {
-                    width: 100% !important;
-                    height: 50px !important;
-                    min-height: 50px !important;
-                    padding: 0 18px !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    gap: 14px !important;
-                    border: 0 !important;
-                    border-radius: 12px 0 0 12px !important;
-                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
-                    color: #fff !important;
-                    font-size: 17px !important;
-                    font-weight: 800 !important;
-                    letter-spacing: -.01em !important;
-                    box-shadow: none !important;
-                }
-
-                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > button:first-of-type i {
-                    margin-right: 0 !important;
-                    font-size: 19px !important;
-                }
-
-                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > button:nth-of-type(2) {
-                    width: 50px !important;
-                    min-width: 50px !important;
-                    height: 50px !important;
-                    min-height: 50px !important;
-                    padding: 0 !important;
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    border: 0 !important;
-                    border-left: 1px solid rgba(255,255,255,.26) !important;
-                    border-radius: 0 12px 12px 0 !important;
-                    background: linear-gradient(90deg, #ff6500 0%, #ff5a00 100%) !important;
-                    color: #fff !important;
-                    font-size: 15px !important;
-                    box-shadow: none !important;
-                }
-
-                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action:has(> button:nth-of-type(2)[style*="display: none"]) {
-                    grid-template-columns: 1fr !important;
-                }
-
-                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action:has(> button:nth-of-type(2)[style*="display: none"]) > button:first-of-type {
-                    border-radius: 12px !important;
-                }
-
-                body.centralos-enhanced .centralos-dashboard > header > .aida-split-action > div[x-show*="newTicketMenuOpen"] {
-                    right: 0 !important;
-                    top: calc(100% + 8px) !important;
-                    z-index: 90 !important;
-                }
-
                 body.centralos-enhanced .centralos-dashboard > header > .aida-operational-filter {
-                    order: 3 !important;
                     display: block !important;
                     width: 100% !important;
                     min-width: 0 !important;
-                    margin-top: 14px !important;
+                    margin-top: 16px !important;
                     padding: 0 !important;
                     overflow: hidden !important;
                 }
@@ -228,19 +194,66 @@
 
         const navLogo = document.querySelector('nav img[alt="CentralOS"]');
         if (navLogo) {
-            if (!navLogo.src.endsWith('/logo.png')) {
-                navLogo.src = target;
-            }
+            if (!navLogo.src.endsWith('/logo.png')) navLogo.src = target;
             navLogo.dataset.centralosBrandLogo = 'logo.png';
         }
 
         const loginLogo = document.querySelector('img[src="logologin.png"], img[src*="/logologin.png"]');
         if (loginLogo) {
-            if (!loginLogo.src.endsWith('/logo.png')) {
-                loginLogo.src = target;
-            }
+            if (!loginLogo.src.endsWith('/logo.png')) loginLogo.src = target;
             loginLogo.alt = 'CentralOS';
             loginLogo.dataset.centralosBrandLogo = 'logo.png';
+        }
+    };
+
+    const ensureDashboardMobileActionStrip = () => {
+        let strip = document.querySelector('.centralos-dashboard-mobile-action-strip');
+        if (strip) return strip;
+
+        const nav = getSessionNav();
+        if (!nav) return null;
+
+        strip = document.createElement('div');
+        strip.className = 'centralos-dashboard-mobile-action-strip';
+        strip.setAttribute('aria-label', 'Abrir chamado');
+        nav.insertAdjacentElement('afterend', strip);
+        return strip;
+    };
+
+    const syncDashboardMobileAction = (dashboard) => {
+        const header = dashboard?.querySelector(':scope > header');
+        if (!header) return;
+
+        let action = header.querySelector(':scope > .aida-split-action')
+            || document.querySelector('.centralos-dashboard-mobile-action-strip > .aida-split-action');
+        if (!action) return;
+
+        let anchor = header.querySelector(':scope > .centralos-dashboard-action-anchor');
+        if (!anchor) {
+            anchor = document.createElement('span');
+            anchor.className = 'centralos-dashboard-action-anchor';
+            anchor.hidden = true;
+            if (action.parentElement === header) header.insertBefore(anchor, action);
+            else header.appendChild(anchor);
+        }
+
+        const strip = ensureDashboardMobileActionStrip();
+        if (!strip) return;
+
+        const mainButton = action.querySelector(':scope > button:first-of-type');
+        const moreButton = action.querySelector(':scope > button:nth-of-type(2)');
+        action.classList.add('centralos-mobile-action-inner');
+        mainButton?.classList.add('centralos-mobile-new-ticket');
+        moreButton?.classList.add('centralos-mobile-new-ticket-more');
+
+        const shouldUseTopStrip = mobileQuery.matches && isDashboardActive(dashboard);
+
+        if (shouldUseTopStrip) {
+            if (action.parentElement !== strip) strip.appendChild(action);
+            strip.setAttribute('data-visible', '');
+        } else {
+            if (action.parentElement === strip) anchor.insertAdjacentElement('afterend', action);
+            strip.removeAttribute('data-visible');
         }
     };
 
@@ -303,6 +316,7 @@
         applyUploadedLogo();
         const dashboard = getDashboard();
         if (!dashboard) return;
+        syncDashboardMobileAction(dashboard);
         decorateSectionHeadings(dashboard);
         decorateOperationalCards(dashboard);
     };
@@ -323,6 +337,8 @@
         window.setTimeout(decorate, 100);
         window.setTimeout(decorate, 250);
         window.setTimeout(decorate, 900);
+        document.addEventListener('click', () => window.setTimeout(decorate, 0), { passive: true });
+        mobileQuery.addEventListener?.('change', decorate);
         new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
     };
 
