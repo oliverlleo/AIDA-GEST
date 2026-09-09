@@ -1,4 +1,4 @@
-/* Mobile login contrast fix: keep hero copy/icons readable over dark background. */
+/* CentralOS login visual corrections. Mobile keeps the approved dark hero; desktop follows the split-panel reference. */
 @media (max-width: 767px) {
   .centralos-login-hero,
   .centralos-login-title,
@@ -18,5 +18,481 @@
 
   .centralos-login-metric:first-child i {
     color: #ff5a00 !important;
+  }
+}
+
+@media (min-width: 768px) {
+  /* Outer frame */
+  .centralos-login-ref {
+    inset: 0 !important;
+    padding: 18px !important;
+    background: #111315 !important;
+    overflow: auto !important;
+  }
+
+  .centralos-login-ref > div {
+    width: min(1280px, calc(100vw - 36px)) !important;
+    height: calc(100vh - 36px) !important;
+    min-height: 650px !important;
+    max-height: 820px !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 55%) minmax(420px, 45%) !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    gap: 0 !important;
+    border: 1px solid rgba(255,255,255,.18) !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    background: #07090b !important;
+    box-shadow: 0 24px 70px rgba(0,0,0,.42) !important;
+  }
+
+  /* Left brand panel: reuses the already injected hero, so no auth markup is changed. */
+  body .centralos-login-ref .centralos-login-hero {
+    display: flex !important;
+    position: relative !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 52px 62px 40px !important;
+    flex-direction: column !important;
+    align-self: stretch !important;
+    overflow: hidden !important;
+    isolation: isolate !important;
+    color: #fff !important;
+    background:
+      linear-gradient(90deg, rgba(5,7,9,.96) 0%, rgba(5,7,9,.82) 43%, rgba(5,7,9,.28) 100%),
+      linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.42)),
+      url('backgorundlogin.png?v=1') center center / cover no-repeat !important;
+  }
+
+  body .centralos-login-ref .centralos-login-hero::before {
+    content: '' !important;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: -1 !important;
+    background:
+      linear-gradient(118deg, transparent 0 61%, rgba(255,90,0,.16) 61.2% 61.8%, transparent 62%),
+      radial-gradient(circle at 85% 27%, rgba(255,90,0,.15), transparent 34%) !important;
+    opacity: 1 !important;
+    pointer-events: none !important;
+  }
+
+  .centralos-login-ref .centralos-login-logo {
+    position: relative !important;
+    z-index: 2 !important;
+    width: min(330px, 72%) !important;
+    height: 86px !important;
+    margin: 0 !important;
+    object-fit: contain !important;
+    object-position: left center !important;
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,.38)) !important;
+  }
+
+  .centralos-login-ref .centralos-login-title {
+    position: relative !important;
+    z-index: 2 !important;
+    width: min(500px, 88%) !important;
+    max-width: none !important;
+    margin: 36px 0 0 !important;
+    color: #fff !important;
+  }
+
+  .centralos-login-ref .centralos-login-title h1 {
+    margin: 0 !important;
+    color: #fff !important;
+    font-size: 0 !important;
+    line-height: 1.05 !important;
+    letter-spacing: -.045em !important;
+    font-weight: 850 !important;
+    white-space: pre-line !important;
+  }
+
+  .centralos-login-ref .centralos-login-title h1::before {
+    content: 'Sua assistência\A técnica ' !important;
+    color: #fff !important;
+    font-size: clamp(38px, 3.55vw, 58px) !important;
+  }
+
+  .centralos-login-ref .centralos-login-title h1::after {
+    content: 'em ordem.' !important;
+    color: #ff5a00 !important;
+    font-size: clamp(38px, 3.55vw, 58px) !important;
+  }
+
+  .centralos-login-ref .centralos-login-title p {
+    margin: 20px 0 0 !important;
+    width: min(400px, 92%) !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    line-height: 1.55 !important;
+  }
+
+  .centralos-login-ref .centralos-login-title p::before {
+    content: 'Mais controle, mais produtividade e mais resultados para o seu negócio.' !important;
+    color: #d5d8dc !important;
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+  }
+
+  .centralos-login-ref .centralos-login-side {
+    position: relative !important;
+    z-index: 2 !important;
+    top: auto !important;
+    right: auto !important;
+    width: auto !important;
+    margin-top: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 22px !important;
+    transform: none !important;
+    color: #f4f5f6 !important;
+    font-size: 0 !important;
+    line-height: 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    font-weight: 750 !important;
+  }
+
+  .centralos-login-ref .centralos-login-side::before {
+    content: '' !important;
+    width: 76px !important;
+    height: 5px !important;
+    flex: 0 0 76px !important;
+    border-radius: 999px !important;
+    background: #ff5a00 !important;
+    box-shadow: 0 0 16px rgba(255,90,0,.35) !important;
+  }
+
+  .centralos-login-ref .centralos-login-side::after {
+    content: 'Tudo encontra seu lugar.' !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    background: none !important;
+    color: #f4f5f6 !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+  }
+
+  .centralos-login-ref .centralos-login-metrics {
+    position: relative !important;
+    z-index: 2 !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: min(430px, 88%) !important;
+    margin: 30px 0 30px !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 13px !important;
+  }
+
+  .centralos-login-ref .centralos-login-metric {
+    min-height: 50px !important;
+    padding: 0 !important;
+    display: grid !important;
+    grid-template-columns: 50px 1fr !important;
+    align-items: center !important;
+    gap: 15px !important;
+    border: 0 !important;
+    color: #fff !important;
+  }
+
+  .centralos-login-ref .centralos-login-metric i {
+    width: 48px !important;
+    height: 48px !important;
+    display: grid !important;
+    place-items: center !important;
+    border: 1px solid rgba(255,255,255,.15) !important;
+    border-radius: 10px !important;
+    background: rgba(8,10,12,.58) !important;
+    color: #ff5a00 !important;
+    font-size: 20px !important;
+    text-align: center !important;
+  }
+
+  .centralos-login-ref .centralos-login-metric span {
+    color: #fff !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    font-weight: 750 !important;
+  }
+
+  .centralos-login-ref .centralos-login-metric span::after {
+    display: block !important;
+    margin-top: 4px !important;
+    color: #bdc2c8 !important;
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+    font-weight: 450 !important;
+  }
+
+  .centralos-login-ref .centralos-login-metric:nth-child(1) span::after {
+    content: 'Processos claros e eficientes' !important;
+  }
+
+  .centralos-login-ref .centralos-login-metric:nth-child(2) span::after {
+    content: 'Ganhe tempo no dia a dia' !important;
+  }
+
+  .centralos-login-ref .centralos-login-metric:nth-child(3) span::after {
+    content: 'Sua assistência em outro nível' !important;
+  }
+
+  /* Right login panel */
+  .centralos-login-ref .centralos-login-card {
+    position: relative !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 72px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #151922 !important;
+  }
+
+  .centralos-login-ref .centralos-login-card::before {
+    content: 'Sistema CentralOS\A Seguro, rápido. Sempre com você.' !important;
+    position: absolute !important;
+    top: 28px !important;
+    right: 30px !important;
+    width: 220px !important;
+    min-height: 56px !important;
+    padding: 10px 14px 9px 56px !important;
+    display: flex !important;
+    align-items: center !important;
+    white-space: pre-line !important;
+    border: 1px solid #e1e5ea !important;
+    border-radius: 13px !important;
+    background: #f8f9fb url('favicon.svg') 13px center / 34px 34px no-repeat !important;
+    color: #20262e !important;
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+    font-weight: 750 !important;
+    box-shadow: 0 5px 16px rgba(22,29,37,.04) !important;
+  }
+
+  .centralos-login-ref .centralos-login-card::after {
+    content: 'v1.0.0' !important;
+    position: absolute !important;
+    right: 24px !important;
+    bottom: 18px !important;
+    color: #c4c8ce !important;
+    font-size: 10px !important;
+    font-weight: 650 !important;
+    letter-spacing: .04em !important;
+  }
+
+  .centralos-login-ref .centralos-login-card > .text-center.mb-8,
+  .centralos-login-ref .centralos-login-oldhead {
+    margin: 0 0 22px !important;
+    text-align: left !important;
+  }
+
+  .centralos-login-ref .centralos-login-card > .text-center.mb-8 img,
+  .centralos-login-ref .centralos-login-oldhead img {
+    display: none !important;
+  }
+
+  .centralos-login-ref .centralos-login-card > .text-center.mb-8 h2,
+  .centralos-login-ref .centralos-login-oldhead h2 {
+    margin: 0 !important;
+    color: #11151a !important;
+    font-size: 0 !important;
+    line-height: 1.05 !important;
+    letter-spacing: -.035em !important;
+    font-weight: 850 !important;
+  }
+
+  .centralos-login-ref .centralos-login-card > .text-center.mb-8 h2::before,
+  .centralos-login-ref .centralos-login-oldhead h2::before {
+    content: 'Bem-vindo de volta' !important;
+    color: #11151a !important;
+    font-size: clamp(28px, 2.2vw, 36px) !important;
+  }
+
+  .centralos-login-ref .centralos-login-card > .text-center.mb-8::after,
+  .centralos-login-ref .centralos-login-oldhead::after {
+    content: 'Entre para continuar no CentralOS' !important;
+    display: block !important;
+    margin-top: 7px !important;
+    color: #6f7782 !important;
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+    font-weight: 450 !important;
+  }
+
+  /* Preserve Employee/Admin access, but make it a discreet segmented control. */
+  .centralos-login-ref .centralos-login-card > .flex.mb-6 {
+    width: fit-content !important;
+    margin: 0 0 18px !important;
+    padding: 4px !important;
+    gap: 4px !important;
+    border: 1px solid #e1e5ea !important;
+    border-radius: 11px !important;
+    background: #f3f5f7 !important;
+  }
+
+  .centralos-login-ref .centralos-login-card > .flex.mb-6 button {
+    min-width: 108px !important;
+    min-height: 34px !important;
+    padding: 0 14px !important;
+    border-radius: 8px !important;
+    font-size: 11px !important;
+    font-weight: 750 !important;
+  }
+
+  .centralos-login-ref form.space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 12px !important;
+  }
+
+  .centralos-login-ref form > input,
+  .centralos-login-ref form > div > input {
+    width: 100% !important;
+    min-height: 54px !important;
+    padding: 0 16px 0 48px !important;
+    border: 1px solid #d8dee6 !important;
+    border-radius: 12px !important;
+    background-color: #f8fafc !important;
+    background-repeat: no-repeat !important;
+    background-position: 16px center !important;
+    background-size: 20px !important;
+    color: #161b22 !important;
+    font-size: 14px !important;
+    font-weight: 520 !important;
+    outline: none !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9) !important;
+  }
+
+  .centralos-login-ref form input::placeholder {
+    color: #7d8794 !important;
+  }
+
+  .centralos-login-ref form input:focus {
+    border-color: #ff6a16 !important;
+    background-color: #fff !important;
+    box-shadow: 0 0 0 3px rgba(255,90,0,.10) !important;
+  }
+
+  .centralos-login-ref form[x-show="authMode === 'employee'"] > input:nth-of-type(1) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6975' stroke-width='1.8'%3E%3Crect x='4' y='3' width='16' height='18' rx='2'/%3E%3Cpath d='M8 8h8M8 12h8M8 16h5'/%3E%3C/svg%3E") !important;
+  }
+
+  .centralos-login-ref form[x-show="authMode === 'employee'"] > input:nth-of-type(2),
+  .centralos-login-ref form[x-show="authMode === 'admin_login'"] > input:nth-of-type(1) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6975' stroke-width='1.8'%3E%3Cpath d='M4 6.5l8 6 8-6'/%3E%3Crect x='3' y='5' width='18' height='14' rx='2'/%3E%3C/svg%3E") !important;
+  }
+
+  .centralos-login-ref form input[type='password'] {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6975' stroke-width='1.8'%3E%3Crect x='5' y='10' width='14' height='11' rx='2'/%3E%3Cpath d='M8 10V7a4 4 0 018 0v3'/%3E%3C/svg%3E") !important;
+  }
+
+  body .centralos-login-ref .centralos-login-remember {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    margin-top: 13px !important;
+    color: #242a32 !important;
+    font-size: 11px !important;
+  }
+
+  .centralos-login-ref .centralos-login-remember label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    font-weight: 650 !important;
+  }
+
+  .centralos-login-ref .centralos-login-remember input {
+    width: 20px !important;
+    height: 20px !important;
+    accent-color: #ff6500 !important;
+  }
+
+  .centralos-login-ref .centralos-login-forgot {
+    border: 0 !important;
+    background: transparent !important;
+    color: #1d232b !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-decoration: underline !important;
+    text-underline-offset: 2px !important;
+  }
+
+  .centralos-login-ref form > button[type='submit'] {
+    width: 100% !important;
+    min-height: 54px !important;
+    margin-top: 16px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: linear-gradient(90deg, #ff6200 0%, #ff7618 100%) !important;
+    color: #fff !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    box-shadow: 0 10px 22px rgba(255,98,0,.20) !important;
+  }
+
+  .centralos-login-ref form > button[type='submit']::after {
+    content: '  →' !important;
+    font-size: 18px !important;
+    font-weight: 500 !important;
+  }
+
+  .centralos-login-ref form > p {
+    color: #68717d !important;
+    font-size: 11px !important;
+  }
+
+  /* Mobile helper cards do not belong to the desktop reference. */
+  body .centralos-login-ref .centralos-login-extras {
+    display: block !important;
+    margin: 24px 0 0 !important;
+    text-align: center !important;
+  }
+
+  .centralos-login-ref .centralos-login-extras > * {
+    display: none !important;
+  }
+
+  .centralos-login-ref .centralos-login-extras::after {
+    content: 'Não tem uma conta? Falar com o administrador' !important;
+    display: block !important;
+    color: #858d98 !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+
+  @media (max-width: 1020px) {
+    .centralos-login-ref > div {
+      grid-template-columns: minmax(0, 50%) minmax(400px, 50%) !important;
+    }
+
+    body .centralos-login-ref .centralos-login-hero {
+      padding: 44px 42px 38px !important;
+    }
+
+    .centralos-login-ref .centralos-login-title h1::before,
+    .centralos-login-ref .centralos-login-title h1::after {
+      font-size: 40px !important;
+    }
+
+    .centralos-login-ref .centralos-login-card {
+      padding-inline: 46px !important;
+    }
   }
 }
