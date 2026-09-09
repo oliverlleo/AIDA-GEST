@@ -169,6 +169,14 @@ window.AIDAConfigHelpers = {
             document.head.appendChild(mobileLink);
         }
 
+        if (!document.querySelector('link[data-centralos-mobile-bench]')) {
+            const mobileBenchLink = document.createElement('link');
+            mobileBenchLink.rel = 'stylesheet';
+            mobileBenchLink.href = 'centralos-mobile-bench.css?v=1';
+            mobileBenchLink.dataset.centralosMobileBench = 'true';
+            document.head.appendChild(mobileBenchLink);
+        }
+
         if (!document.querySelector('script[data-centralos-mobile-kanban]')) {
             const mobileScript = document.createElement('script');
             mobileScript.src = 'centralos-mobile-kanban.js?v=1';
