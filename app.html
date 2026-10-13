@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CentralOS - Gestão Inteligente</title>
     <link rel="icon" type="image/png" href="favicon.svg">
+    <style>
+        [x-cloak] { display: none !important; }
+        #login-screen { position: fixed; inset: 0; z-index: 10000; overflow-y: auto; background: #111315; }
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom Scrollbar for Kanban */
+        .kanban-col::-webkit-scrollbar { width: 4px; }
+        .kanban-col::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 4px; }
+        .kanban-col:hover::-webkit-scrollbar-thumb { background: #A0AEC0; }
+    </style>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script>
@@ -36,15 +45,11 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="centralos-mobile-login-firstpaint.css?v=4">
-
-    <style>
-        [x-cloak] { display: none !important; }
-        body { font-family: 'Inter', sans-serif; }
-        /* Custom Scrollbar for Kanban */
-        .kanban-col::-webkit-scrollbar { width: 4px; }
-        .kanban-col::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 4px; }
-        .kanban-col:hover::-webkit-scrollbar-thumb { background: #A0AEC0; }
-    </style>
+    <!-- Load the final visual layer before the first paint, including desktop login. -->
+    <link rel="stylesheet" href="centralos-brand.css?v=1" data-centralos-brand="true">
+    <link rel="stylesheet" href="centralos-brand-complete.css?v=3" data-centralos-brand-complete="true">
+    <link rel="stylesheet" href="centralos-brand-operational.css?v=1" data-centralos-brand-operational="true">
+    <link rel="stylesheet" href="centralos-mobile-login-contrast.css?v=3" data-centralos-mobile-login-contrast="true">
 </head>
 <body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
 
@@ -67,9 +72,9 @@
                                 <h2 class="text-2xl font-bold text-gray-900">Acesso ao Sistema</h2>
                             </div>
 
-                            <p x-show="pendingInvitationId" class="mb-4 text-sm text-gray-600">Entre ou crie sua conta com o e-mail que recebeu o convite.</p>
-                            <p x-show="authNotice" x-text="authNotice" class="mb-4 rounded-lg bg-emerald-50 text-emerald-800 p-3 text-sm" role="status"></p>
-                            <p x-show="authError" x-text="authError" class="mb-4 rounded-lg bg-red-50 text-red-700 p-3 text-sm" role="alert"></p>
+                            <p x-cloak x-show="pendingInvitationId" class="mb-4 text-sm text-gray-600">Entre ou crie sua conta com o e-mail que recebeu o convite.</p>
+                            <p x-cloak x-show="authNotice" x-text="authNotice" class="mb-4 rounded-lg bg-emerald-50 text-emerald-800 p-3 text-sm" role="status"></p>
+                            <p x-cloak x-show="authError" x-text="authError" class="mb-4 rounded-lg bg-red-50 text-red-700 p-3 text-sm" role="alert"></p>
                             <form x-show="authMode === 'login'" @submit.prevent="login" class="space-y-4">
                                 <label class="block"><span class="text-xs font-bold text-gray-500">E-mail</span><input type="email" x-model="authForm.email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Seu e-mail" class="w-full px-4 py-3 mt-1 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 outline-none" required></label>
                                 <label class="block"><span class="text-xs font-bold text-gray-500">Senha</span><input type="password" x-model="authForm.password" autocomplete="current-password" placeholder="Sua senha" class="w-full px-4 py-3 mt-1 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 outline-none" required></label>
@@ -8751,7 +8756,7 @@
     <!-- JS MODULES (Infraestrutura inicial) -->
     <script src="js/supabase-config.js"></script>
     <script src="js/modules/feature-config.js?v=4"></script>
-    <script src="js/modules/config-helpers.js?v=4"></script>
+    <script src="js/modules/config-helpers.js?v=5"></script>
     <script src="js/modules/ticket-context.js?v=2"></script>
     <script src="js/modules/workflow-rules.js"></script>
     <script src="js/modules/ticket-mutations.js"></script>

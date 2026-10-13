@@ -104,10 +104,15 @@
             if (text.includes('pendencias com tecnico')) {
                 if (!heading.dataset.centralosSectionHeading) {
                     heading.classList.add('centralos-section-heading');
-                    const icon = document.createElement('i');
-                    icon.className = 'fa-solid fa-user-gear centralos-section-icon';
+                    let icon = heading.querySelector(':scope > i');
+                    if (!icon) {
+                        icon = document.createElement('i');
+                        icon.className = 'fa-solid fa-user-gear';
+                        heading.prepend(icon);
+                    }
+                    icon.classList.add('centralos-section-icon');
+                    icon.classList.remove('mr-2');
                     icon.setAttribute('aria-hidden', 'true');
-                    heading.prepend(icon);
                     heading.dataset.centralosSectionHeading = 'true';
                 }
                 return;
