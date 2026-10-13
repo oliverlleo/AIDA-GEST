@@ -117,6 +117,18 @@ test('CORS does not authorize another origin and preflight sends nothing',async(
   assert.equal((await handler(new Request('https://edge.test',{method:'OPTIONS',headers:{origin}}))).status,204);
   assert.equal(calls.length,0);
 });
+
+test('Cloudflare and GitHub app origins have explicit CORS and invitations point to Cloudflare',async()=>{
+  const {calls,fetcher}=setup();const handler=createInvitationHandler(env,fetcher);
+  for(const appOrigin of ['https://techassist.pages.dev',origin]) {
+    const response=await handler(new Request('https://edge.test',{method:'OPTIONS',headers:{origin:appOrigin}}));
+    assert.equal(response.status,204);assert.equal(response.headers.get('Access-Control-Allow-Origin'),appOrigin);
+  }
+  assert.equal(calls.length,0);
+  assert.equal((await handler(invitationRequest({origin:'https://techassist.pages.dev'}))).status,200);
+  const mail=calls.find(call=>call.url==='smtp-test://delivery').body;
+  assert.ok(mail.text.includes(`https://techassist.pages.dev/app.html?invitation=${INVITE}`));
+});
 test('request limit is enforced even without content-length',async()=>{
   const {calls,fetcher}=setup();
   const response=await createInvitationHandler(env,fetcher)(invitationRequest({}, {invitation_id:INVITE,workspace_id:WS,extra:'x'.repeat(5000)}));

@@ -9,9 +9,9 @@ novas contas e a recuperação de senha ainda dependem de um envio de Auth funci
 não desligar a confirmação para contornar essa dependência. O PostgreSQL local
 não reproduz os serviços gerenciados do Supabase.
 
-Projeto existente: `cpydazjwlmssbzzsurxu`. Fonte atual do GitHub Pages:
-`fix/github-pages-landing-entry`. Aplicativo:
-`https://oliverlleo.github.io/AIDA-GEST/app.html`.
+Projeto existente: `cpydazjwlmssbzzsurxu`. Fonte de produção Cloudflare: `main`. Entrada principal `index.html`;
+`app.html` é um alias com o mesmo aplicativo. Aplicativo:
+`https://techassist.pages.dev/app.html`.
 
 ## SMTP do domínio e configurações de Auth
 
@@ -36,8 +36,8 @@ Projeto existente: `cpydazjwlmssbzzsurxu`. Fonte atual do GitHub Pages:
    Os corpos completos preparados estão em `supabase/auth-templates/confirmation.html`
    e `supabase/auth-templates/recovery.html`; aplicar apenas junto com o frontend
    que reconhece esses callbacks. A lista de retorno deve permitir exatamente
-   `https://oliverlleo.github.io/AIDA-GEST/app.html` e
-   `https://oliverlleo.github.io/AIDA-GEST/app.html?**` para os parâmetros de callback
+   `https://techassist.pages.dev/app.html` e
+   `https://techassist.pages.dev/app.html?**` para os parâmetros de callback
    e convite, sem abrir outros caminhos ou domínios.
 5. Secrets das Edge Functions:
    - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`: transporte autenticado.
