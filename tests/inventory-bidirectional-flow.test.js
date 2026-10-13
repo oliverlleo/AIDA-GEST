@@ -8,7 +8,7 @@ const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const sql = read('inventory_bidirectional_flow.sql');
 const rollback = read('rollback_inventory_bidirectional_flow.sql');
 const main = read('js/main.js');
-const html = read('index.html');
+const html = read('app.html');
 
 test('enabled inventory adapts legacy ticket parts and opens structured purchase or receipt', () => {
     assert.match(main, /openInventoryPartRequest\(ticket, 'direct_repair', true, 'openInventoryPurchaseAfterAdapt'/);

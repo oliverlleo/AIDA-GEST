@@ -3,7 +3,7 @@ import os
 
 def verify_feature(page: Page):
   # In this environment static html files should be loaded via file:// protocol
-  file_path = f"file://{os.path.abspath('index.html')}"
+  file_path = f"file://{os.path.abspath('app.html')}"
   print(f"Loading {file_path}")
   page.goto(file_path)
 

@@ -1,94 +1,16 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+const test=require('node:test'),assert=require('node:assert/strict');global.window=global;require('../js/modules/employee-service.js');const s=global.AIDAEmployeeService;
+test('sessão Auth de técnico não concede administração',()=>{assert.equal(s.isAdmin({session:{access_token:'jwt'},user:{roles:['tecnico']}}),false);assert.equal(s.isAdmin({user:{roles:['admin']}}),true);});
+test('atendente recebe diretório seguro sem credenciais',async()=>{const state={user:{workspace_id:'ws',roles:['atendente']}};let endpoint;await s.fetchEmployees({state,supabaseFetch:async ep=>{endpoint=ep;return[{name:'Ana'}];}});assert.match(endpoint,/^employees\?/);assert.match(endpoint,/legacy_auth_disabled=eq.false/);assert.ok(!/password|auth_user_id/.test(endpoint));assert.equal(state.employees[0].name,'Ana');});
+test('gestor lista funcionários e convites na empresa ativa',async()=>{const state={user:{workspace_id:'ws',roles:['admin']}},calls=[];await s.fetchEmployees({state,supabaseFetch:async(ep,_m,p)=>{calls.push({ep,p});return ep.includes('staff')?[{name:'Ana',access_status:'blocked'}]:[];}});assert.equal(calls[0].ep,'rpc/list_workspace_staff');assert.equal(calls[1].ep,'rpc/get_my_workspace_invitations');assert.deepEqual(calls[0].p,{p_workspace_id:'ws'});assert.equal(state.employees[0].manual_blocked,true);});
+test('convite inválido é barrado antes do servidor',async()=>{let called=false,notice;await s.createEmployee({state:{user:{workspace_id:'ws',roles:['admin']},employeeForm:{name:'Ana',email:'invalid',roles:['tecnico']}},supabaseFetch:async()=>{called=true;},notify:m=>notice=m});assert.equal(called,false);assert.match(notice,/e-mail válido/);});
+test('gestor não possui API para alterar senha de outra conta',()=>{assert.equal(s.resetEmployeePassword,undefined);assert.equal(s.changeOwnPassword,undefined);});
+test('sem SMTP é exibido link e pendência de configuração',()=>{let notice,type;s.notifyDelivery({sent:false,status:'pending_configuration'},(m,t)=>{notice=m;type=t;});assert.match(notice,/Copie o link/);assert.notEqual(type,'error');});
 
-global.window = global;
-require('../js/modules/employee-service.js');
-
-test('atendente carrega o diretorio seguro sem chamar RPC administrativa', async () => {
-    const state = {
-        user: { workspace_id: 'workspace-id', roles: ['atendente'] },
-        employeeSession: { token: 'employee-token' },
-        employees: []
-    };
-    let capturedEndpoint;
-
-    await global.AIDAEmployeeService.fetchEmployees({
-        state,
-        supabaseFetch: async (endpoint) => {
-            capturedEndpoint = endpoint;
-            return [{ id: 'tech-id', name: 'Tecnico', roles: ['tecnico'] }];
-        }
-    });
-
-    assert.match(capturedEndpoint, /^employees\?select=/);
-    assert.match(capturedEndpoint, /workspace_id=eq\.workspace-id/);
-    assert.doesNotMatch(capturedEndpoint, /password_hash/);
-    assert.equal(state.employees[0].name, 'Tecnico');
-    assert.equal(state.employees[0].active_sessions, 0);
-});
-
-test('administrador recebe somente o resumo seguro das contas', async () => {
-    const state = {
-        session: { access_token: 'admin-token' },
-        user: { workspace_id: 'workspace-id', roles: ['admin'] },
-        employees: []
-    };
-    const calls = [];
-
-    await global.AIDAEmployeeService.fetchEmployees({
-        state,
-        supabaseFetch: async (endpoint, method, payload) => {
-            calls.push({ endpoint, method, payload });
-            if (endpoint.startsWith('employees?')) {
-                return [{ id: 'employee-id', name: 'Ana', roles: ['tecnico'] }];
-            }
-            return [{
-                employee_id: 'employee-id',
-                manual_blocked: true,
-                active_sessions: 2,
-                failed_attempts: 4
-            }];
-        }
-    });
-
-    assert.equal(calls[1].endpoint, 'rpc/get_employee_security_status');
-    assert.deepEqual(calls[1].payload, { p_workspace_id: 'workspace-id' });
-    assert.equal(state.employees[0].manual_blocked, true);
-    assert.equal(state.employees[0].active_sessions, 2);
-    assert.equal(state.employees[0].password_hash, undefined);
-});
-
-test('politica de senha exige tamanho, letra e numero', () => {
-    const service = global.AIDAEmployeeService;
-    assert.match(service.getPasswordPolicyError('abc123'), /8 caracteres/);
-    assert.match(service.getPasswordPolicyError('abcdefgh'), /letra e um número/);
-    assert.match(service.getPasswordPolicyError('12345678'), /letra e um número/);
-    assert.equal(service.getPasswordPolicyError('Senha123'), '');
-    assert.match(service.getPasswordPolicyError('á'.repeat(40) + '1A'), /72 bytes/);
-});
-
-test('senha temporaria aceita formato simples e exige somente seis caracteres', () => {
-    const service = global.AIDAEmployeeService;
-    assert.match(service.getTemporaryPasswordPolicyError('12345'), /6 caracteres/);
-    assert.equal(service.getTemporaryPasswordPolicyError('123456'), '');
-    assert.equal(service.getTemporaryPasswordPolicyError('abcdef'), '');
-});
-
-test('criacao invalida e barrada antes da chamada ao banco', async () => {
-    let called = false;
-    let notification = '';
-    await global.AIDAEmployeeService.createEmployee({
-        state: {
-            user: { workspace_id: 'workspace-id' },
-            employeeForm: { name: 'Ana', username: 'ana', password: 'fraca', roles: ['tecnico'] }
-        },
-        supabaseFetch: async () => { called = true; },
-        notify: message => { notification = message; },
-        setLoading: () => {},
-        fetchEmployees: async () => {},
-        closeModal: () => {}
-    });
-
-    assert.equal(called, false);
-    assert.match(notification, /6 caracteres/);
+test('funcionário removido não reaparece no diretório nem na atribuição de técnicos',async()=>{
+ const state={user:{workspace_id:'ws',roles:['admin']}};
+ await s.fetchEmployees({state,supabaseFetch:async endpoint=>endpoint.includes('staff')?[
+  {id:'removed',name:'Antigo',roles:['tecnico'],access_status:'removed'},
+  {id:'active',name:'Atual',roles:['tecnico'],access_status:'active'}
+ ]:[]});
+ assert.deepEqual(state.employees.map(employee=>employee.id),['active']);
 });

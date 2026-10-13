@@ -7,7 +7,7 @@ const root = path.join(__dirname, '..');
 const migration = fs.readFileSync(path.join(root, 'optimize_schedule_management_queries.sql'), 'utf8');
 const rollback = fs.readFileSync(path.join(root, 'rollback_schedule_management_queries.sql'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'js', 'main.js'), 'utf8');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'app.html'), 'utf8');
 
 test('schedule queue RPC derives the tenant, requires admin and keeps RLS active', () => {
     assert.match(migration, /security invoker/i);

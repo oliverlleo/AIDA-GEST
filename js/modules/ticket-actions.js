@@ -536,9 +536,7 @@ window.AIDATicketActions = {
 
         setLoading(true);
         try {
-            await supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
-                deleted_at: null
-            });
+            await supabaseFetch('rpc/set_employee_removed', 'POST', { p_employee_id: id, p_removed: false });
             notify("Item restaurado!");
 
             await fetchDeletedItems();

@@ -3,7 +3,7 @@
 // Parte da infraestrutura de módulos
 
 window.AIDARecycleBinService = {
-    SAFE_EMPLOYEE_FIELDS: 'id,workspace_id,name,username,roles,created_at,deleted_at,must_change_password',
+    SAFE_EMPLOYEE_FIELDS: 'id,workspace_id,name,username,roles,created_at,deleted_at',
 
     async fetchDeletedItems(deps) {
         const { state, supabaseFetch, hasRole, setLoading, notify } = deps;
@@ -17,7 +17,7 @@ window.AIDARecycleBinService = {
             state.deletedTickets = tickets || [];
 
             const emps = await supabaseFetch(
-                `employees?select=${this.SAFE_EMPLOYEE_FIELDS}&workspace_id=eq.${state.user.workspace_id}&deleted_at=not.is.null&order=deleted_at.desc`
+                `employees?select=${this.SAFE_EMPLOYEE_FIELDS}&workspace_id=eq.${state.user.workspace_id}&legacy_auth_disabled=eq.false&deleted_at=not.is.null&order=deleted_at.desc`
             );
             state.deletedEmployees = emps || [];
 
