@@ -643,7 +643,7 @@ BEGIN
             'avgPickupNotify', COALESCE((SELECT avg_pickup_notify_sec FROM stats) * 1000, 0),
             'analysisCount', (SELECT analysis_count FROM stats),
             'repairCount', (SELECT repair_count FROM stats),
-            
+
 'ticketsPerDay', CASE
   WHEN (SELECT total_tickets FROM stats) = 0 THEN 0
   ELSE (
@@ -1417,10 +1417,10 @@ DECLARE
   v_appointments jsonb[];
   v_booked integer;
   v_status text;
-  
+
   v_block_id uuid;
   v_block_notes text;
-  
+
   v_eb jsonb;
   v_eb_is_active boolean;
   v_eb_start_time time;
@@ -1432,13 +1432,13 @@ DECLARE
   v_eb_specific_date date;
   v_eb_matches_day boolean;
   v_slot_in_extra_break boolean;
-  
+
   v_now_ts timestamp with time zone;
 BEGIN
   SELECT ctx.workspace_id INTO v_workspace_id FROM public.get_current_actor_context() ctx;
 
   SELECT settings INTO v_settings FROM technician_schedule_settings WHERE technician_id = p_technician_id;
-  
+
   IF v_settings IS NULL THEN
       v_workdays := '[{"active": false, "start": "09:00", "end": "18:00"}, {"active": true, "start": "09:00", "end": "18:00"}, {"active": true, "start": "09:00", "end": "18:00"}, {"active": true, "start": "09:00", "end": "18:00"}, {"active": true, "start": "09:00", "end": "18:00"}, {"active": true, "start": "09:00", "end": "18:00"}, {"active": false, "start": "09:00", "end": "12:00"}]'::jsonb;
       v_has_break := true;
@@ -1459,13 +1459,13 @@ BEGIN
 
   v_current_date := p_reference_date;
   v_end_date := p_reference_date + p_days - 1;
-  
+
   v_now_ts := NOW();
 
   WHILE v_current_date <= v_end_date LOOP
       v_dow := EXTRACT(DOW FROM v_current_date);
       v_day_config := v_workdays->v_dow;
-      
+
       v_is_active := (v_day_config->>'active')::boolean;
       v_slots := ARRAY[]::jsonb[];
 
@@ -1475,7 +1475,7 @@ BEGIN
 
           v_day_start_ts := (v_current_date + v_start_time) AT TIME ZONE 'America/Sao_Paulo';
           v_day_end_ts := (v_current_date + v_end_time) AT TIME ZONE 'America/Sao_Paulo';
-          
+
           IF v_has_break THEN
               v_break_start_ts := (v_current_date + v_break_start) AT TIME ZONE 'America/Sao_Paulo';
               v_break_end_ts := (v_current_date + v_break_end) AT TIME ZONE 'America/Sao_Paulo';
@@ -1485,7 +1485,7 @@ BEGIN
           END IF;
 
           v_start_ts := v_day_start_ts;
-          
+
           WHILE v_start_ts < v_day_end_ts LOOP
               v_slot_end_ts := v_start_ts + (v_slot_duration || ' minutes')::interval;
 
@@ -1494,7 +1494,7 @@ BEGIN
               END IF;
 
               v_slot_in_extra_break := false;
-              
+
               IF jsonb_typeof(v_extra_breaks) = 'array' AND jsonb_array_length(v_extra_breaks) > 0 THEN
                   FOR v_eb IN SELECT * FROM jsonb_array_elements(v_extra_breaks) LOOP
                       v_eb_is_active := (v_eb->>'active')::boolean;
@@ -1503,12 +1503,12 @@ BEGIN
                           v_eb_end_time := (v_eb->>'end')::time;
                           v_eb_recurrence_type := v_eb->>'recurrence_type';
                           v_eb_recurrence_days := v_eb->'recurrence_days';
-                          
+
                           v_eb_start_ts := (v_current_date + v_eb_start_time) AT TIME ZONE 'America/Sao_Paulo';
                           v_eb_end_ts := (v_current_date + v_eb_end_time) AT TIME ZONE 'America/Sao_Paulo';
-                          
+
                           v_eb_matches_day := false;
-                          
+
                           IF v_eb_recurrence_type = 'daily' THEN
                               v_eb_matches_day := true;
                           ELSIF v_eb_recurrence_type = 'weekdays' THEN
@@ -1539,7 +1539,7 @@ BEGIN
               END IF;
 
               IF NOT (v_start_ts >= v_break_start_ts AND v_slot_end_ts <= v_break_end_ts) AND NOT v_slot_in_extra_break THEN
-                  
+
                   v_block_id := NULL;
                   v_block_notes := NULL;
 
@@ -1549,7 +1549,7 @@ BEGIN
                       v_block_notes := 'Horário no passado';
                   ELSE
                       SELECT id, reason INTO v_block_id, v_block_notes
-                      FROM technician_schedule_blocks 
+                      FROM technician_schedule_blocks
                       WHERE technician_id = p_technician_id
                       AND (
                           (block_type = 'full_day' AND DATE(start_at AT TIME ZONE 'America/Sao_Paulo') = v_current_date)
@@ -1570,7 +1570,7 @@ BEGIN
                             AND scheduled_end > v_start_ts
                             AND status NOT IN ('completed', 'cancelled')
                             AND deleted_at IS NULL;
-                            
+
                           IF v_booked >= v_max_concurrent THEN
                               v_status := 'lotado';
                           ELSIF v_booked > 0 THEN
@@ -1884,4 +1884,3 @@ GRANT EXECUTE ON FUNCTION public.get_invitation_delivery_details(uuid,uuid), pub
 GRANT EXECUTE ON FUNCTION public.get_client_ticket_details_public(uuid,uuid), public.get_client_ticket_details_public_configurable(uuid,uuid) TO anon, authenticated;
 
 COMMIT;
-
