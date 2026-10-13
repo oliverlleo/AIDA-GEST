@@ -8,7 +8,7 @@ const migration = fs.readFileSync(path.join(root, 'optimize_test_bench_queries.s
 const rollback = fs.readFileSync(path.join(root, 'rollback_test_bench_queries.sql'), 'utf8');
 const queryService = fs.readFileSync(path.join(root, 'js', 'modules', 'ticket-query-service.js'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'js', 'main.js'), 'utf8');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'app.html'), 'utf8');
 
 test('test bench derives the tenant and preserves ticket RLS', () => {
     assert.match(migration, /security invoker/i);

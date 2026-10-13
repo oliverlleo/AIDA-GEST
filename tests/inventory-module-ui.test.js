@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'app.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'js', 'main.js'), 'utf8');
 const featureConfig = fs.readFileSync(path.join(root, 'js', 'modules', 'feature-config.js'), 'utf8');
 const ticketActions = fs.readFileSync(path.join(root, 'js', 'modules', 'ticket-actions.js'), 'utf8');
