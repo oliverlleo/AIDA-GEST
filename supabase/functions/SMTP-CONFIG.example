@@ -1,0 +1,9 @@
+# Insert real values only in Supabase Edge Function secrets when the domain is ready.
+# Never commit a filled copy. Missing values keep invitation delivery inactive.
+APP_URL=https://techassist.pages.dev/app.html
+SMTP_HOST=
+SMTP_PORT=465
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_SENDER_EMAIL=
+SMTP_SENDER_NAME=CentralOS

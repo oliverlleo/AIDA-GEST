@@ -12,7 +12,7 @@ const rollback = fs.readFileSync(
     'utf8'
 );
 const main = fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8');
-const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const index = fs.readFileSync(path.join(__dirname, '..', 'app.html'), 'utf8');
 
 test('capacidade e serializada por tecnico dentro da transacao', () => {
     assert.match(migration, /pg_advisory_xact_lock/);

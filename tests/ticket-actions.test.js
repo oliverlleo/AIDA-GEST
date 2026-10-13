@@ -263,7 +263,7 @@ test('orcamento com telefone valida antes e abre WhatsApp depois de salvar', asy
 
 test('painel de agenda guarda contexto explicito da OS e do tecnico', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8');
-    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'app.html'), 'utf8');
 
     assert.match(source, /openSchedulePanel\(mode, technicianId = null, ticket = null, afterSave = null\)/);
     assert.match(source, /this\.schedulePanelTicket = targetTicket/);

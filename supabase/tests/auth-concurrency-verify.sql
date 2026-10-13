@@ -1,0 +1,10 @@
+DO $$ BEGIN IF inet_server_addr() IS DISTINCT FROM '127.0.0.1'::inet AND inet_server_addr() IS DISTINCT FROM '::1'::inet THEN RAISE EXCEPTION 'Local SQL tests require loopback PostgreSQL'; END IF; END $$;
+SELECT test_auth.assert((SELECT count(*)=1 AND bool_and(employee_id=(SELECT id FROM test_auth.fixture WHERE name='concurrent_employee') AND member_kind='employee' AND status='active') FROM public.workspace_memberships WHERE workspace_id='20000000-0000-4000-8000-000000000002' AND user_id='10000000-0000-4000-8000-000000000006'),'simultaneous acceptance creates one membership linked to the invited employee');
+SELECT test_auth.assert((SELECT count(*)=1 AND bool_and(id=(SELECT id FROM test_auth.fixture WHERE name='concurrent_employee')) FROM public.employees WHERE workspace_id='20000000-0000-4000-8000-000000000002' AND name='Concurrent acceptance fixture'),'simultaneous acceptance preserves exactly one employee record');
+SELECT test_auth.assert((SELECT status='accepted' AND accepted_by='10000000-0000-4000-8000-000000000006' AND employee_id=(SELECT id FROM test_auth.fixture WHERE name='concurrent_employee') FROM public.workspace_invitations WHERE id=(SELECT id FROM test_auth.fixture WHERE name='concurrent_invite')),'one invitation accepted by exact verified user');
+SET ROLE authenticated;
+SELECT test_auth.login(6,'20000000-0000-4000-8000-000000000002');
+SELECT test_auth.assert((SELECT is_technician AND NOT is_admin FROM public.get_current_actor_context()),'accepted concurrent membership is functional and restricted');
+SELECT test_auth.assert(public.accept_workspace_invitation((SELECT id FROM test_auth.fixture WHERE name='concurrent_invite'))='20000000-0000-4000-8000-000000000002','post-lock retry remains idempotent');
+RESET ROLE;
+SELECT 'PASS: real simultaneous acceptance, row-lock contention, one membership and exact accepted_by' AS result;

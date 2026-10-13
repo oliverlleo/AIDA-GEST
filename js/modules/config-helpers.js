@@ -141,7 +141,7 @@ window.AIDAConfigHelpers = {
         if (!document.querySelector('link[data-centralos-mobile-login-contrast]')) {
             const mobileLoginContrast = document.createElement('link');
             mobileLoginContrast.rel = 'stylesheet';
-            mobileLoginContrast.href = 'centralos-mobile-login-contrast.css?v=2';
+            mobileLoginContrast.href = 'centralos-mobile-login-contrast.css?v=3';
             mobileLoginContrast.dataset.centralosMobileLoginContrast = 'true';
             document.head.appendChild(mobileLoginContrast);
         }
@@ -167,6 +167,14 @@ window.AIDAConfigHelpers = {
             mobileLink.href = 'centralos-mobile-kanban.css?v=1';
             mobileLink.dataset.centralosMobileKanban = 'true';
             document.head.appendChild(mobileLink);
+        }
+
+        if (!document.querySelector('link[data-centralos-mobile-bench]')) {
+            const mobileBenchLink = document.createElement('link');
+            mobileBenchLink.rel = 'stylesheet';
+            mobileBenchLink.href = 'centralos-mobile-bench.css?v=1';
+            mobileBenchLink.dataset.centralosMobileBench = 'true';
+            document.head.appendChild(mobileBenchLink);
         }
 
         if (!document.querySelector('script[data-centralos-mobile-kanban]')) {

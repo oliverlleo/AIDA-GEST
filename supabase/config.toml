@@ -1,0 +1,11 @@
+project_id = "AIDA-GEST"
+
+# These endpoints require a verified user JWT and check the active membership again.
+[functions.send-workspace-invitation]
+verify_jwt = true
+
+[functions.upload-workspace-logo]
+verify_jwt = true
+
+[functions.quick-api]
+verify_jwt = true

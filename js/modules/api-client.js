@@ -8,10 +8,8 @@ window.AIDAApiClient = {
 
         const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
 
-        let token = SUPABASE_KEY;
-        if (state.session && state.session.access_token) {
-            token = state.session.access_token;
-        }
+        const token = state.session?.access_token;
+        if (!token) throw new Error('Entre na sua conta para continuar.');
 
         const headers = {
             'apikey': SUPABASE_KEY,
@@ -22,18 +20,8 @@ window.AIDAApiClient = {
                 : (requestOptions.returnRepresentation === false ? 'return=minimal' : 'return=representation')
         };
 
-        // Employee Token Header
-        if (state.employeeSession && state.employeeSession.token) {
-            headers['x-employee-token'] = state.employeeSession.token;
-        }
-
-        if (state.user && state.user.workspace_id) {
-            // If Employee, do NOT send x-workspace-id (Backend derives from Token)
-            // If Admin, send it (Admin context uses headers for RLS sometimes, or explicit params)
-            if (!state.employeeSession) {
-                headers['x-workspace-id'] = state.user.workspace_id;
-            }
-        }
+        // Context is only a request; the server validates this membership for every operation.
+        if (state.user?.workspace_id) headers['x-workspace-id'] = state.user.workspace_id;
 
         const options = {
             method,
@@ -45,7 +33,10 @@ window.AIDAApiClient = {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: response.statusText }));
-            throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+            const error = new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+            error.status = response.status;
+            error.code = errorData.code;
+            throw error;
         }
 
         if (response.status === 204 || requestOptions.returnRepresentation === false) return null;

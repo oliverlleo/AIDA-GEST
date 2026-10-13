@@ -26,18 +26,15 @@ window.AIDAStorageService = {
 
     getStorageHeaders(contentType, deps) {
         const { SUPABASE_KEY, state } = deps;
-        const token = state.session?.access_token || SUPABASE_KEY;
+        const token = state.session?.access_token;
+        if (!token || !state.user?.workspace_id) throw new Error('Entre em uma empresa para acessar arquivos.');
 
         const headers = {
             'apikey': SUPABASE_KEY,
             'Authorization': `Bearer ${token}`,
-            'Content-Type': contentType
+            'Content-Type': contentType,
+            'x-workspace-id': state.user.workspace_id
         };
-
-        // If Employee, send token for RLS derivation
-        if (state.employeeSession?.token) {
-            headers['x-employee-token'] = state.employeeSession.token;
-        }
 
         return headers;
     },
@@ -51,17 +48,9 @@ window.AIDAStorageService = {
             const form = new FormData();
             form.append('file', file);
 
-            const headers = {
-                apikey: SUPABASE_KEY
-            };
-
-            if (state.session?.access_token) {
-                headers['Authorization'] = `Bearer ${state.session.access_token}`;
-            }
-
-            if (state.employeeSession?.token) {
-                headers['x-employee-token'] = state.employeeSession.token;
-            }
+            const headers = this.getStorageHeaders('application/octet-stream', deps);
+            delete headers['Content-Type']; // The browser supplies the multipart boundary.
+            form.append('workspace_id', state.user.workspace_id);
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -86,7 +75,7 @@ window.AIDAStorageService = {
         const { SUPABASE_URL, state } = deps;
         try {
             // 1) Path ESTRITO: workspaceId/ticketId/...
-            const workspaceId = state.employeeSession?.workspace_id || state.user?.workspace_id;
+            const workspaceId = state.user?.workspace_id;
             if (!workspaceId) throw new Error("Workspace ID not found for upload");
 
             const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
@@ -94,7 +83,7 @@ window.AIDAStorageService = {
 
             // 2) Upload direto no Storage (sem Edge Function)
             const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
-            const headers = this.getStorageHeaders(file.type, deps); // já injeta x-employee-token quando existir
+            const headers = this.getStorageHeaders(file.type, deps);
 
             const res = await fetch(url, { method: 'POST', headers, body: file });
             if (!res.ok) {
@@ -119,7 +108,7 @@ window.AIDAStorageService = {
     // Helper to resolve view URLs
     async uploadInventoryImage(file, itemId, deps) {
         const { SUPABASE_URL } = deps;
-        const workspaceId = deps.state.employeeSession?.workspace_id || deps.state.user?.workspace_id;
+        const workspaceId = deps.state.user?.workspace_id;
         if (!workspaceId || !itemId) throw new Error('Empresa ou item não identificado.');
         if (!['image/jpeg','image/png','image/webp'].includes(file?.type)) throw new Error('Use JPG, PNG ou WebP.');
         if (file.size > 5242880) throw new Error('A imagem deve ter no máximo 5 MB.');

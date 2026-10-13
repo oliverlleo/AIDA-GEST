@@ -15,7 +15,8 @@ if (SUPABASE_URL && SUPABASE_KEY) {
             auth: {
                 persistSession: true,
                 autoRefreshToken: true,
-                detectSessionInUrl: false
+                detectSessionInUrl: false,
+                flowType: 'pkce'
             }
         });
     } catch (e) {
@@ -59,14 +60,33 @@ function app() {
         error: null,
         session: null,
         employeeSession: null,
+        authUser: null,
+        authForm: { email: '', password: '' },
+        authError: '',
+        authNotice: '',
+        authBootstrapping: true,
+        accessLoading: false,
+        accessError: '',
+        accessLoadInFlight: false,
+        accessTransitioning: false,
+        accessHubOpen: false,
+        accessWelcomeShown: false,
+        companySetupOpen: false,
+        signingOut: false,
+        recoveryMode: false,
+        recoveryForm: { password: '', confirmPassword: '' },
+        reauthWorkspaceId: null,
+        workspaces: [],
+        pendingInvitations: [],
+        pendingInvitationId: null,
+        workspaceInvitations: [],
+        lastInvitationLink: '',
         user: null,
         workspaceName: '',
         companyCode: '',
         whatsappNumber: '',
-        registrationSuccess: false,
-        newCompanyCode: '',
         view: 'dashboard',
-        authMode: 'employee',
+        authMode: 'login',
         adminDashboardFilters: {
             dateStart: '',
             dateEnd: '',
@@ -425,15 +445,8 @@ function app() {
         dailyReportError: null,
 
         // Forms
-        loginForm: { company_code: '', username: '', password: '' },
-        adminForm: { email: '', password: '' },
         registerForm: { companyName: '', email: '', password: '' },
-        employeeForm: { name: '', username: '', password: '', roles: [] },
-
-        // Password Forms
-        mustChangePassword: false,
-        changePasswordForm: { oldPassword: '', newPassword: '', confirmPassword: '' },
-        resetPasswordForm: { employeeId: '', newPassword: '', confirmPassword: '' },
+        employeeForm: { name: '', email: '', roles: [] },
 
         // Ticket Form
         ticketForm: {
@@ -667,7 +680,7 @@ function app() {
         selectedRepairAppointment: null,
         scheduleCurrentWeekStart: null,
 
-        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, forceChangePassword: false, resetPassword: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryLocationGroup: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryTicketPurchases: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReservations: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
+        modals: { newEmployee: false, editEmployee: false, ticket: false, customerForm: false, viewTicket: false, outcome: false, logs: false, calendar: false, notifications: false, recycleBin: false, logistics: false, outsourced: false, finishAnalysis: false, fornecedor: false, supplierPurchase: false, pauseRepairForParts: false, inventoryItem: false, inventoryPartRequest: false, inventoryLocation: false, inventoryLocationGroup: false, inventoryScheme: false, inventoryAdjust: false, inventoryTransfer: false, inventoryMovements: false, inventoryPurchase: false, inventoryReceipt: false, inventoryTicketPurchases: false, inventoryCancelPurchase: false, inventoryTicketParts: false, inventoryReservations: false, inventoryReturn: false, rescheduleAppointment: false, scheduleBlock: false, techScheduleSettings: false, confirmCreateTicket: false, confirmScheduleRepair: false },
         bypassAnalysisCheck: false,
         bypassRepairCheck: false,
 
@@ -902,6 +915,7 @@ function app() {
 
         // --- 1. BOOTSTRAP CENTRAL ---
         async bootstrapAuthenticatedApp(options = {}) {
+            if (!this.session || !this.user?.workspace_id) return;
             if (this.bootstrapInFlight) return;
             this.bootstrapInFlight = true;
             this.bootstrapDone = false;
@@ -1051,7 +1065,8 @@ function app() {
             }, {});
 
             console.log("App initializing...");
-            this.loading = true;
+            // Auth bootstrap is silent: the real login is already the first paint.
+            this.loading = false;
 
             const sessionNotice = sessionStorage.getItem('techassist_session_notice');
             if (sessionNotice) {
@@ -1067,109 +1082,41 @@ function app() {
             }
 
             this.startEmployeeSessionMonitor();
-
             try {
-                const { data: { session } } = await supabaseClient.auth.getSession();
-                if (session) {
-                    this.session = session;
-                    await this.loadAdminData();
-                } else {
-                    const storedEmp = localStorage.getItem('techassist_employee');
-                    if (storedEmp) {
-                        try {
-                            this.employeeSession = JSON.parse(storedEmp);
-
-                            // Validate Session Token
-                            if (this.employeeSession.token) {
-                                const freshSession = await window.AIDAAuthSessionService.validateSessionToken({
-                                    state: this,
-                                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-                                });
-
-                                if (!freshSession) {
-                                    this.logout();
-                                    return;
-                                }
-                                this.employeeSessionLastValidatedAt = Date.now();
-
-                                // FORCE UPDATE from Server Truth
-                                this.employeeSession.workspace_id = freshSession.workspace_id;
-                                this.employeeSession.employee_id = freshSession.employee_id;
-                                this.employeeSession.roles = freshSession.roles || [];
-                                if (!this.employeeSession.id) this.employeeSession.id = freshSession.employee_id;
-
-                                // Update Storage with trusted data
-                                localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
-                            } else {
-                                // Legacy session without token
-                                console.warn("Legacy session detected. Logging out.");
-                                this.logout();
-                                return;
-                            }
-
-                            this.user = this.employeeSession;
-                            if (this.employeeSession.workspace_name) this.workspaceName = this.employeeSession.workspace_name;
-                            if (this.employeeSession.company_code) this.companyCode = this.employeeSession.company_code;
-
-                            // Correção Bug 5: O Telefone da empresa salva, mas não reaparecia para funcionários ou em reload.
-                            // Hidratar whatsappNumber no front a partir da sessão armazenada, se disponível.
-                            if (this.employeeSession.whatsapp_number) this.whatsappNumber = this.employeeSession.whatsapp_number;
-
-                            // Restore Tracker Config
-                            if (this.employeeSession.tracker_config) {
-                                this.trackerConfig = window.AIDAFeatureConfig.normalize({
-                                    ...this.trackerConfig,
-                                    ...this.employeeSession.tracker_config,
-                                    colors: {
-                                        ...this.trackerConfig.colors,
-                                        ...(this.employeeSession.tracker_config.colors || {})
-                                    },
-                                    // Merge new fields if they don't exist in saved config
-                                    required_ticket_fields: {
-                                        ...this.trackerConfig.required_ticket_fields,
-                                        ...(this.employeeSession.tracker_config.required_ticket_fields || {})
-                                    }
-                                });
-                            }
-                            this.normalizeFeatureConfig();
-
-                            // CHECK MUST CHANGE PASSWORD
-                            if (this.employeeSession.must_change_password) {
-                                this.mustChangePassword = true;
-                                this.modals.forceChangePassword = true;
-                            }
-
-                            // Redirect Technician to Tech Bench on reload
-                            if (this.hasRole('tecnico') && !this.hasRole('admin') && !this.hasRole('atendente')) {
-                                this.view = 'tech_orders';
-                            }
-                        } catch (e) {
-                            console.error("Session restore error:", e);
-                            localStorage.removeItem('techassist_employee');
-                        }
-                    }
-                }
-
-                if (this.user) {
-                    // Block access if must change password
-                    if (this.mustChangePassword) return;
-
-                    await this.bootstrapAuthenticatedApp({ reason: 'init_restore' });
-                }
-            } catch (err) {
-                console.error("Init Error:", err);
+                // Retired credentials are neither restored nor converted.
+                try { localStorage.removeItem('techassist_employee'); localStorage.removeItem('centralos_remember_login'); } catch (_) {}
+                await window.AIDAAuthSessionService.handleAuthCallback(this._getAuthDeps());
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
+                if (error) throw error;
+                this.session = session;
+                this.authUser = session?.user || null;
+                if (session && !this.recoveryMode) await this.loadAccessData();
+            } catch (_) {
+                this.authError = 'Não foi possível verificar a sessão. Tente entrar novamente.';
             } finally {
+                this.authBootstrapping = false;
                 this.loading = false;
                 this.initInFlight = false;
             }
 
-            supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+            // Schedule network work outside the SDK auth callback lock.
+            supabaseClient.auth.onAuthStateChange((event, session) => {
+                const previousId = this.authUser?.id;
+                if (event === 'PASSWORD_RECOVERY') this.recoveryMode = true;
                 this.session = session;
-                if (session) {
-                    await this.loadAdminData();
-                } else if (!this.employeeSession) {
+                this.authUser = session?.user || null;
+                if (this.accessTransitioning || this.authBootstrapping || this.signingOut) return;
+                if (!session) {
                     this.user = null;
+                    this.employeeSession = null;
+                    if (previousId) window.location.replace(window.AIDAAuthSessionService.getAppUrl().href);
+                    return;
                 }
+                if (previousId && previousId !== session.user.id) {
+                    window.location.replace(window.AIDAAuthSessionService.getAppUrl().href);
+                    return;
+                }
+                if (!this.recoveryMode) setTimeout(() => this.loadAccessData(), 0);
             });
 
             setInterval(() => {
@@ -1532,6 +1479,8 @@ function app() {
         },
 
         setupRealtime() {
+            // The current project has no realtime publication. Enabling it requires audited RLS.
+            if (window.SUPABASE_CONFIG?.REALTIME_ENABLED !== true) return;
             if (!this.user?.workspace_id || !supabaseClient) return;
             if (this.session && !this.session.user) return; // Ensure session is fully ready if applicable
 
@@ -1585,34 +1534,25 @@ function app() {
                 notify: (msg, type) => this.notify(msg, type),
                 setLoading: (val) => { this.loading = val; },
                 hasRole: (r) => this.hasRole(r),
-                validateSessionToken: (opts) => window.AIDAAuthSessionService.validateSessionToken(opts),
                 bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
                 _applyContext: (ctx) => this._applyContext(ctx)
             };
         },
 
-        async loginAdmin() {
-            return await window.AIDAAuthSessionService.loginAdmin(this._getAuthDeps());
-        },
-
-        async registerAdmin() {
-            return await window.AIDAAuthSessionService.registerAdmin(this._getAuthDeps());
-        },
-
-        async completeCompanySetup() {
-            return await window.AIDAAuthSessionService.completeCompanySetup(this._getAuthDeps());
-        },
-
-        async loginEmployee() {
-            return await window.AIDAAuthSessionService.loginEmployee(this._getAuthDeps());
-        },
-
-        async logout() {
-            return await window.AIDAAuthSessionService.logout(this._getAuthDeps());
-        },
-
-        async loadAdminData() {
-            return await window.AIDAAuthSessionService.loadAdminData(this._getAuthDeps());
+        async login() { return window.AIDAAuthSessionService.login(this._getAuthDeps()); },
+        async register() { return window.AIDAAuthSessionService.register(this._getAuthDeps()); },
+        async resendConfirmation() { return window.AIDAAuthSessionService.resendConfirmation(this._getAuthDeps()); },
+        async requestPasswordReset() { return window.AIDAAuthSessionService.requestPasswordReset(this._getAuthDeps()); },
+        async finishPasswordRecovery() { return window.AIDAAuthSessionService.finishPasswordRecovery(this._getAuthDeps()); },
+        async completeCompanySetup() { return window.AIDAAuthSessionService.completeCompanySetup(this._getAuthDeps()); },
+        async logout() { return window.AIDAAuthSessionService.logout(this._getAuthDeps()); },
+        async loadAccessData() { return window.AIDAAuthSessionService.loadAccessData(this._getAuthDeps()); },
+        async selectWorkspace(id) { return window.AIDAAuthSessionService.selectWorkspace(id, this._getAuthDeps()); },
+        async acceptInvitation(id) { return window.AIDAAuthSessionService.acceptInvitation(id, this._getAuthDeps()); },
+        async openAccessHub() {
+            this.accessHubOpen = true;
+            this.companySetupOpen = false;
+            await this.loadAccessData();
         },
 
         startEmployeeSessionMonitor() {
@@ -1630,39 +1570,29 @@ function app() {
         },
 
         async revalidateEmployeeSession() {
-            if (!this.employeeSession?.token || this.session || this.employeeSessionValidationInFlight) return true;
-
-            // Foco e visibilitychange podem ocorrer juntos; uma validação recente já basta.
+            if (!this.session || !this.user?.workspace_id || this.employeeSessionValidationInFlight) return true;
             if (Date.now() - this.employeeSessionLastValidatedAt < 60 * 1000) return true;
-
             this.employeeSessionValidationInFlight = true;
             try {
-                const freshSession = await window.AIDAAuthSessionService.validateSessionToken({
-                    state: this,
-                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
-                    throwOnError: true
-                });
-
-                if (!freshSession) {
-                    sessionStorage.setItem('techassist_session_notice', 'Sua sessão expirou ou foi encerrada. Entre novamente.');
-                    await this.logout();
-                    return false;
-                }
-
-                this.employeeSession.workspace_id = freshSession.workspace_id;
-                this.employeeSession.employee_id = freshSession.employee_id;
-                this.employeeSession.roles = freshSession.roles || [];
-                this.user = this.employeeSession;
-                this.employeeSessionLastValidatedAt = Date.now();
-                localStorage.setItem('techassist_employee', JSON.stringify(this.employeeSession));
+                const context = await this.supabaseFetch('rpc/get_my_access_context', 'POST', { p_workspace_id: this.user.workspace_id });
+                await window.AIDAAuthSessionService.applyAccessContext(context, this._getAuthDeps());
                 return true;
             } catch (error) {
-                // Uma falha de conexão não é tratada como sessão inválida.
-                console.warn('Employee session revalidation unavailable:', error);
+                if (error.status >= 400 && error.status < 500) {
+                    this.user = null;
+                    this.employeeSession = null;
+                    this.accessHubOpen = true;
+                    this.view = 'access_hub';
+                    await supabaseClient.removeAllChannels();
+                    this._applyContext(window.AIDATicketContext.clearContext());
+                    this.selectedTicket = null;
+                    this.modals = Object.fromEntries(Object.keys(this.modals).map(key => [key, false]));
+                    window.AIDAStorageService.clearLocalPhotoPreviews();
+                    await this.loadAccessData();
+                    return false;
+                }
                 return true;
-            } finally {
-                this.employeeSessionValidationInFlight = false;
-            }
+            } finally { this.employeeSessionValidationInFlight = false; }
         },
 
         async fetchEmployees() {
@@ -5332,8 +5262,10 @@ function app() {
 
         // --- SHARE TICKET ---
         getTrackingLink(ticket) {
-            const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '') + 'acompanhar.html';
-            return `${baseUrl}?id=${ticket.id}&token=${ticket.public_token}`;
+            const url = new URL('acompanhar.html', window.location.href);
+            url.searchParams.set('id', ticket.id);
+            url.searchParams.set('token', ticket.public_token);
+            return url.href;
         },
 
         openShareModal() {
@@ -7234,67 +7166,28 @@ function app() {
         },
 
         openModal(name) {
-            this.employeeForm = { name: '', username: '', password: '', roles: [] };
+            this.employeeForm = { name: '', email: '', roles: [] };
             this.modals[name] = true;
         },
 
-        async createEmployee() {
-            return await window.AIDAEmployeeService.createEmployee({
-                state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
-                notify: (msg, type) => this.notify(msg, type),
-                setLoading: (val) => { this.loading = val; },
-                fetchEmployees: () => this.fetchEmployees(),
-                closeModal: (name) => { this.modals[name] = false; }
-            });
-        },
+        async createEmployee() { return window.AIDAEmployeeService.createEmployee(this._getEmployeeDeps()); },
 
         openEditEmployee(emp) {
-            this.employeeForm = {
-                id: emp.id,
-                name: emp.name,
-                username: emp.username,
-                password: '', // Password is never loaded
-                roles: emp.roles || [],
-                failed_attempts: emp.failed_attempts || 0,
-                lock_until: emp.lock_until || null,
-                reset_required: Boolean(emp.reset_required),
-                manual_blocked: Boolean(emp.manual_blocked),
-                manual_block_reason: emp.manual_block_reason || '',
-                active_sessions: Number(emp.active_sessions || 0),
-                last_seen_at: emp.last_seen_at || null
-            };
+            this.employeeForm = { ...emp, roles: [...(emp.roles || [])] };
             this.modals.editEmployee = true;
         },
-
-        openResetPassword(emp) {
-            this.resetPasswordForm = { employeeId: emp.id, newPassword: '', confirmPassword: '' };
-            this.modals.resetPassword = true;
-        },
-
-        async resetEmployeePassword() {
-            return await window.AIDAEmployeeService.resetEmployeePassword({
-                state: this,
+        _getEmployeeDeps() {
+            return {
+                state: this, SUPABASE_URL, SUPABASE_KEY,
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
-                notify: (msg, type) => this.notify(msg, type),
-                setLoading: (val) => { this.loading = val; },
-                closeModal: (name) => { this.modals[name] = false; },
-                fetchEmployees: () => this.fetchEmployees()
-            });
+                notify: (msg, type) => this.notify(msg, type), setLoading: val => { this.loading = val; },
+                fetchEmployees: () => this.fetchEmployees(), closeModal: name => { this.modals[name] = false; }
+            };
         },
-
-        async changeOwnPassword() {
-            return await window.AIDAEmployeeService.changeOwnPassword({
-                state: this,
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
-                notify: (msg, type) => this.notify(msg, type),
-                setLoading: (val) => { this.loading = val; },
-                validateSessionToken: (opts) => window.AIDAAuthSessionService.validateSessionToken(opts),
-                bootstrapAuthenticatedApp: (opts) => this.bootstrapAuthenticatedApp(opts),
-                processEmployeeLoginResponse: (result, companyCode, deps) => window.AIDAAuthSessionService.processEmployeeLoginResponse(result, companyCode, deps),
-                closeModal: (name) => { this.modals[name] = false; }
-            });
-        },
+        async reissueInvitation(invitation) { return window.AIDAEmployeeService.reissueInvitation(invitation, this._getEmployeeDeps()); },
+        async resendInvitation(invitation) { return window.AIDAEmployeeService.resendInvitation(invitation, this._getEmployeeDeps()); },
+        async cancelInvitation(invitation) { return window.AIDAEmployeeService.cancelInvitation(invitation, this._getEmployeeDeps()); },
+        async copyInvitationLink(invitation) { return window.AIDAEmployeeService.copyInvitationLink(invitation, this._getEmployeeDeps()); },
 
         async updateEmployee() {
             return await window.AIDAEmployeeService.updateEmployee({
@@ -7330,6 +7223,7 @@ function app() {
 
         async deleteEmployee(id) {
             return await window.AIDAEmployeeService.deleteEmployee(id, {
+                state: this,
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                 notify: (msg, type) => this.notify(msg, type),
                 fetchEmployees: () => this.fetchEmployees()
@@ -7382,8 +7276,7 @@ function app() {
         },
 
         hasRole(role) {
-            if (this.session && role === 'admin') return true;
-            if (!this.user) return false;
+            if (!this.session || !this.user?.workspace_id) return false;
             const roles = this.user.roles || [];
             if (roles.includes('admin')) return true;
             return roles.includes(role);
