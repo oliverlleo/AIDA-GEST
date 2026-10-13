@@ -270,6 +270,11 @@ body.centralos-enhanced .centralos-period-filter {
     overflow: hidden;
 }
 
+/* Header spacing belongs to the header, so filters and the open action share a center line. */
+body.centralos-enhanced .centralos-dashboard > header .centralos-period-filter {
+    margin-bottom: 0 !important;
+}
+
 body.centralos-enhanced .centralos-period-filter .centralos-period-button {
     width: 100%;
     min-height: 39px !important;

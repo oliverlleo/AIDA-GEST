@@ -125,7 +125,7 @@ window.AIDAConfigHelpers = {
         if (!document.querySelector('link[data-centralos-brand-complete]')) {
             const completeLink = document.createElement('link');
             completeLink.rel = 'stylesheet';
-            completeLink.href = 'centralos-brand-complete.css?v=2';
+            completeLink.href = 'centralos-brand-complete.css?v=3';
             completeLink.dataset.centralosBrandComplete = 'true';
             document.head.appendChild(completeLink);
         }
@@ -148,7 +148,7 @@ window.AIDAConfigHelpers = {
 
         if (!document.querySelector('script[data-centralos-brand-complete]')) {
             const completeScript = document.createElement('script');
-            completeScript.src = 'centralos-brand-complete.js?v=2';
+            completeScript.src = 'centralos-brand-complete.js?v=3';
             completeScript.dataset.centralosBrandComplete = 'true';
             document.head.appendChild(completeScript);
         }
