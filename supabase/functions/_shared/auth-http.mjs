@@ -2,7 +2,7 @@ export class HttpError extends Error {
   constructor(status, code) { super(code); this.status = status; this.code = code; }
 }
 
-export const APP_URL = 'https://oliverlleo.github.io/AIDA-GEST/app.html';
+export const APP_URL = 'https://techassist.pages.dev/app.html';
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function configuration(env) {
@@ -11,6 +11,7 @@ export function configuration(env) {
   return {
     url: env('SUPABASE_URL'), anonKey: env('SUPABASE_ANON_KEY'),
     serviceKey: env('SUPABASE_SERVICE_ROLE_KEY'), appUrl: app.href, origin: app.origin,
+    allowedOrigins: [app.origin, 'https://oliverlleo.github.io'],
     smtpHost: env('SMTP_HOST'), smtpPort: Number(env('SMTP_PORT') || 465),
     smtpUser: env('SMTP_USER'), smtpPassword: env('SMTP_PASSWORD'),
     senderEmail: env('SMTP_SENDER_EMAIL'), senderName: env('SMTP_SENDER_NAME') || 'CentralOS',
@@ -19,9 +20,9 @@ export function configuration(env) {
 
 export function cors(request, config) {
   const origin = request.headers.get('origin');
-  if (origin && origin !== config.origin) throw new HttpError(403, 'origin_not_allowed');
+  if (origin && !config.allowedOrigins.includes(origin)) throw new HttpError(403, 'origin_not_allowed');
   return {
-    'Access-Control-Allow-Origin': config.origin,
+    'Access-Control-Allow-Origin': origin || config.origin,
     'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-workspace-id',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '600', 'Vary': 'Origin',
