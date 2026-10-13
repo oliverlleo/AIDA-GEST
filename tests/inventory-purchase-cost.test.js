@@ -47,7 +47,7 @@ test('frontend asks for cost, reuses history and loads detailed budget costs on 
     const service = read('js/modules/inventory-management-service.js');
     const query = read('js/modules/inventory-query-service.js');
     const main = read('js/main.js');
-    const html = read('index.html');
+    const html = read('app.html');
 
     assert.match(service, /unit_cost: number\(item\.unit_cost\)/);
     assert.match(service, /Informe o custo unitário de cada peça selecionada/);

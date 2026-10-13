@@ -1,2 +1,5 @@
 node_modules/
+supabase/.temp/
+.env
+.env.*
 js/supabase-config.js

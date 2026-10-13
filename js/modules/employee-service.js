@@ -1,279 +1,142 @@
-// Employee Service
-// Responsável pelas rotinas de gestão e listagem de funcionários
-// Parte da infraestrutura de módulos
-
+// Staff administration changes workspace access, never another person's Auth account.
 window.AIDAEmployeeService = {
-    SAFE_EMPLOYEE_FIELDS: 'id,workspace_id,name,username,roles,created_at,deleted_at,must_change_password',
-
-    getPasswordPolicyError(password) {
-        if (typeof password !== 'string' || password.length < 8) {
-            return 'A senha deve ter pelo menos 8 caracteres.';
-        }
-
-        const byteLength = typeof TextEncoder !== 'undefined'
-            ? new TextEncoder().encode(password).length
-            : unescape(encodeURIComponent(password)).length;
-
-        if (byteLength > 72) return 'A senha deve ter no máximo 72 bytes.';
-        if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(password) || !/[0-9]/.test(password)) {
-            return 'A senha deve incluir pelo menos uma letra e um número.';
-        }
-        return '';
-    },
-
-    getTemporaryPasswordPolicyError(password) {
-        if (typeof password !== 'string' || password.trim().length < 6) {
-            return 'A senha temporária deve ter pelo menos 6 caracteres.';
-        }
-
-        const byteLength = typeof TextEncoder !== 'undefined'
-            ? new TextEncoder().encode(password).length
-            : unescape(encodeURIComponent(password)).length;
-
-        if (byteLength > 72) return 'A senha temporária deve ter no máximo 72 bytes.';
-        return '';
-    },
-
-    isAdmin(state) {
-        return Boolean(state.session) || (state.user?.roles || []).includes('admin');
-    },
-
+    SAFE_EMPLOYEE_FIELDS: 'id,workspace_id,name,username,roles,created_at,deleted_at',
+    isAdmin(state) { return (state.user?.roles || []).includes('admin'); },
+    validRoles(roles) { return Array.isArray(roles) && roles.length > 0 && roles.every(role => ['admin', 'atendente', 'tecnico', 'tester'].includes(role)); },
     async fetchEmployees(deps) {
         const { state, supabaseFetch } = deps;
         if (!state.user?.workspace_id) return;
         try {
-            // A leitura direta usa somente as colunas liberadas pela etapa 1;
-            // o password_hash continua sem SELECT e a RLS limita a empresa.
-            // Assim atendentes tambem recebem a lista necessaria para atribuir
-            // o tecnico e criar agendamentos de analise ou reparo.
-            const data = await supabaseFetch(`employees?select=${this.SAFE_EMPLOYEE_FIELDS}&workspace_id=eq.${state.user.workspace_id}&deleted_at=is.null&order=created_at.desc`);
-            if (!data) return;
-
-            let securityByEmployee = new Map();
-            if (this.isAdmin(state)) {
-                try {
-                    const security = await supabaseFetch('rpc/get_employee_security_status', 'POST', {
-                        p_workspace_id: state.user.workspace_id
-                    });
-                    securityByEmployee = new Map((security || []).map(item => [item.employee_id, item]));
-                } catch (securityError) {
-                    // A lista da equipe continua útil mesmo se o resumo de segurança falhar.
-                    console.warn('Employee security status unavailable:', securityError);
-                }
-            }
-
-            state.employees = data.map(employee => ({
-                ...employee,
-                failed_attempts: 0,
-                lock_until: null,
-                reset_required: false,
-                manual_blocked: false,
-                manual_blocked_at: null,
-                manual_block_reason: null,
-                active_sessions: 0,
-                last_seen_at: null,
-                ...(securityByEmployee.get(employee.id) || {})
-            }));
-        } catch (e) {
-             console.error("Fetch Employees Error:", e);
-        }
+            const data = this.isAdmin(state)
+                ? await supabaseFetch('rpc/list_workspace_staff', 'POST', { p_workspace_id: state.user.workspace_id })
+                : await supabaseFetch(`employees?select=${this.SAFE_EMPLOYEE_FIELDS}&workspace_id=eq.${state.user.workspace_id}&legacy_auth_disabled=eq.false&deleted_at=is.null&order=created_at.desc`);
+            // Removed staff belongs in the recycle bin, not in technician/appointment pickers.
+            state.employees = (data || []).filter(employee => employee.access_status !== 'removed')
+                .map(employee => ({ ...employee, manual_blocked: employee.access_status === 'blocked' }));
+            if (this.isAdmin(state)) await this.fetchWorkspaceInvitations(deps);
+        } catch (_) { if (deps.notify) deps.notify('Não foi possível carregar a equipe.', 'error'); }
     },
-
+    async fetchWorkspaceInvitations(deps) {
+        const { state, supabaseFetch } = deps;
+        if (!this.isAdmin(state)) return;
+        state.workspaceInvitations = await supabaseFetch('rpc/get_my_workspace_invitations', 'POST', { p_workspace_id: state.user.workspace_id }) || [];
+    },
+    async sendInvitation(invitationId, deps) {
+        const { state, SUPABASE_URL, SUPABASE_KEY } = deps;
+        if (!this.isAdmin(state) || !state.session?.access_token) throw new Error('Acesso administrativo necessário.');
+        try {
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/send-workspace-invitation`, {
+                method: 'POST', headers: {
+                    apikey: SUPABASE_KEY, Authorization: `Bearer ${state.session.access_token}`,
+                    'Content-Type': 'application/json', 'x-workspace-id': state.user.workspace_id
+                }, body: JSON.stringify({ invitation_id: invitationId, workspace_id: state.user.workspace_id })
+            });
+            const result = await response.json().catch(() => ({}));
+            return response.ok && result.sent === true ? { sent: true, status: result.status }
+                : { sent: false, status: result.error_code === 'email_configuration_missing' ? 'pending_configuration' : 'failed' };
+        } catch (_) { return { sent: false, status: 'failed' }; }
+    },
+    notifyDelivery(result, notify) {
+        if (result.status === 'pending_configuration') {
+            notify('Convite salvo. Copie o link para enviar ao funcionário; o e-mail será ativado quando o SMTP estiver configurado.');
+            return;
+        }
+        notify(result.sent
+            ? 'Convite salvo. O envio do e-mail foi aceito pelo provedor.'
+            : 'Convite salvo. O e-mail não pôde ser enviado; copie o link ou tente reenviar.', result.sent ? 'success' : 'error');
+    },
     async createEmployee(deps) {
         const { state, supabaseFetch, notify, setLoading, fetchEmployees, closeModal } = deps;
-        if (!state.user?.workspace_id) return notify('Erro workspace', 'error');
-        if (!state.employeeForm.name || !state.employeeForm.username || !state.employeeForm.password) return notify('Preencha campos', 'error');
-        const passwordError = this.getTemporaryPasswordPolicyError(state.employeeForm.password);
-        if (passwordError) return notify(passwordError, 'error');
-
+        if (!this.isAdmin(state)) return notify('Somente administradores podem convidar.', 'error');
+        const form = state.employeeForm, email = String(form.email || '').trim().toLowerCase(), name = String(form.name || '').trim();
+        if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !this.validRoles(form.roles)) return notify('Informe nome, e-mail válido e pelo menos uma permissão.', 'error');
         setLoading(true);
         try {
-            await supabaseFetch('rpc/create_employee', 'POST', {
-                p_workspace_id: state.user.workspace_id,
-                p_name: state.employeeForm.name,
-                p_username: state.employeeForm.username,
-                p_password: state.employeeForm.password,
-                p_roles: state.employeeForm.roles
+            const id = await supabaseFetch('rpc/create_workspace_invitation', 'POST', {
+                p_workspace_id: state.user.workspace_id, p_name: name, p_email: email, p_roles: form.roles, p_employee_id: form.id || null
             });
-
-            notify('Criado!');
-            closeModal('newEmployee');
-            await fetchEmployees();
-        } catch(e) {
-            console.error(e);
-            notify('Erro: ' + e.message, 'error');
-        } finally {
-            setLoading(false);
-        }
+            this.notifyDelivery(await this.sendInvitation(id, deps), notify);
+            closeModal('newEmployee'); await fetchEmployees();
+        } catch (error) { notify('Não foi possível criar o convite: ' + error.message, 'error'); }
+        finally { setLoading(false); }
     },
-
     async updateEmployee(deps) {
         const { state, supabaseFetch, notify, setLoading, fetchEmployees, closeModal } = deps;
-        if (!state.employeeForm.id) return;
-        if (!state.employeeForm.name || !state.employeeForm.username) return notify('Preencha campos obrigatórios', 'error');
-        if (state.employeeForm.password) {
-            const passwordError = this.getTemporaryPasswordPolicyError(state.employeeForm.password);
-            if (passwordError) return notify(passwordError, 'error');
-        }
-
+        if (!this.isAdmin(state)) return notify('Somente administradores podem alterar permissões.', 'error');
+        const form = state.employeeForm;
+        if (!form.id || !String(form.name || '').trim() || !this.validRoles(form.roles)) return notify('Informe nome e permissões.', 'error');
         setLoading(true);
         try {
-            await supabaseFetch('rpc/update_employee', 'POST', {
-                p_id: state.employeeForm.id,
-                p_name: state.employeeForm.name,
-                p_username: state.employeeForm.username,
-                p_password: state.employeeForm.password,
-                p_roles: state.employeeForm.roles
-            });
-
-            notify('Atualizado!');
-            closeModal('editEmployee');
-            await fetchEmployees();
-        } catch(e) {
-            console.error(e);
-            notify('Erro: ' + e.message, 'error');
-        } finally {
-            setLoading(false);
-        }
+            await supabaseFetch('rpc/update_employee_access', 'POST', { p_employee_id: form.id, p_name: form.name.trim(), p_roles: form.roles });
+            notify('Permissões atualizadas nesta empresa.'); closeModal('editEmployee'); await fetchEmployees();
+        } catch (error) { notify('Não foi possível atualizar: ' + error.message, 'error'); }
+        finally { setLoading(false); }
     },
-
     async deleteEmployee(id, deps) {
-        const { supabaseFetch, notify, fetchEmployees } = deps;
-        if (!confirm('Tem certeza que deseja mover este funcionário para a Lixeira?')) return;
+        const { state, supabaseFetch, notify, fetchEmployees } = deps;
+        if (!this.isAdmin(state)) return;
+        if (!confirm('Remover o acesso deste funcionário nesta empresa e movê-lo para a Lixeira?')) return;
         try {
-            await supabaseFetch(`employees?id=eq.${id}`, 'PATCH', {
-                deleted_at: new Date().toISOString()
-            });
-            notify('Funcionário movido para a Lixeira.');
-            await fetchEmployees();
-        } catch(e) {
-            notify('Erro ao excluir: ' + e.message, 'error');
-        }
+            await supabaseFetch('rpc/set_employee_removed', 'POST', { p_employee_id: id, p_removed: true });
+            notify('Acesso removido nesta empresa.'); await fetchEmployees();
+        } catch (error) { notify('Não foi possível remover: ' + error.message, 'error'); }
     },
-
-    async resetEmployeePassword(deps) {
-        const { state, supabaseFetch, notify, setLoading, closeModal } = deps;
-        const { employeeId, newPassword, confirmPassword } = state.resetPasswordForm;
-        if (!newPassword || !confirmPassword) return notify("Preencha as senhas.", "error");
-        if (newPassword !== confirmPassword) return notify("Senhas não conferem.", "error");
-        const passwordError = this.getTemporaryPasswordPolicyError(newPassword);
-        if (passwordError) return notify(passwordError, 'error');
-
-        setLoading(true);
-        try {
-            await supabaseFetch('rpc/reset_employee_password', 'POST', {
-                p_employee_id: employeeId,
-                p_new_password: newPassword
-            });
-            notify("Senha resetada! O funcionário deverá trocar no próximo login.");
-            closeModal('resetPassword');
-            closeModal('editEmployee');
-            if (deps.fetchEmployees) await deps.fetchEmployees();
-        } catch (e) {
-            notify("Erro ao resetar: " + e.message, "error");
-        } finally {
-            setLoading(false);
-        }
-    },
-
-    async changeOwnPassword(deps) {
-        const { state, supabaseFetch, notify, setLoading, processEmployeeLoginResponse, closeModal } = deps;
-        const { oldPassword, newPassword, confirmPassword } = state.changePasswordForm;
-        if (!oldPassword || !newPassword || !confirmPassword) return notify("Preencha todos os campos.", "error");
-        if (newPassword !== confirmPassword) return notify("Nova senha não confere.", "error");
-        const passwordError = this.getPasswordPolicyError(newPassword);
-        if (passwordError) return notify(passwordError, 'error');
-
-        setLoading(true);
-        try {
-            const token = state.employeeSession ? state.employeeSession.token : null;
-            if (!token) throw new Error("Sessão inválida.");
-
-            // 1. Altera a senha
-            await supabaseFetch('rpc/employee_change_password', 'POST', {
-                p_token: token,
-                p_old_password: oldPassword,
-                p_new_password: newPassword
-            });
-
-            // 2. Re-autentica forçadamente com a nova senha para obter um NOVO TOKEN do servidor,
-            // garantindo que não caia no erro de "Workspace não identificado ou token inválido".
-            const username = state.user.username || state.employeeSession.username || state.loginForm.username;
-            const company_code = state.companyCode || state.loginForm.company_code;
-
-            const reauthData = await supabaseFetch('rpc/employee_login', 'POST', {
-                p_company_code: company_code,
-                p_username: username,
-                p_password: newPassword
-            });
-
-            if (reauthData && reauthData.length > 0) {
-                // Remove modals before jumping into the response processor
-                closeModal('forceChangePassword');
-
-                // 3. O Helper processará o novo login e invocará o Bootstrap centralmente.
-                deps.isReauth = true;
-                await processEmployeeLoginResponse(reauthData[0], company_code, deps);
-            } else {
-                throw new Error("Falha na reautenticação após a troca de senha.");
-            }
-
-        } catch (e) {
-            notify("Erro ao alterar senha: " + e.message, "error");
-        } finally {
-            setLoading(false);
-        }
-    },
-
     async setEmployeeAccountBlocked(employee, blocked, deps) {
         const { state, supabaseFetch, notify, setLoading, fetchEmployees, closeModal } = deps;
-        if (!this.isAdmin(state)) return notify('Somente administradores podem alterar o bloqueio.', 'error');
-        if (!employee?.id) return;
-
-        const action = blocked ? 'bloquear' : 'desbloquear';
-        if (!confirm(`Deseja ${action} o acesso de ${employee.name}?`)) return;
-
-        let reason = null;
-        if (blocked) {
-            reason = prompt('Motivo do bloqueio (opcional):', '');
-            if (reason === null) return;
-        }
-
+        if (!this.isAdmin(state) || !employee?.id) return;
+        if (!confirm(`${blocked ? 'Bloquear' : 'Liberar'} o acesso de ${employee.name} somente nesta empresa?`)) return;
+        const reason = blocked ? prompt('Motivo do bloqueio (opcional):', '') : null;
+        if (blocked && reason === null) return;
         setLoading(true);
         try {
-            await supabaseFetch('rpc/set_employee_account_blocked', 'POST', {
-                p_employee_id: employee.id,
-                p_blocked: blocked,
-                p_reason: reason || null
-            });
-            notify(blocked ? 'Acesso bloqueado e sessões encerradas.' : 'Acesso desbloqueado.');
-            if (closeModal) closeModal('editEmployee');
-            await fetchEmployees();
-        } catch (e) {
-            notify(`Erro ao ${action}: ${e.message}`, 'error');
-        } finally {
-            setLoading(false);
-        }
+            await supabaseFetch('rpc/set_employee_account_blocked', 'POST', { p_employee_id: employee.id, p_blocked: blocked, p_reason: reason || null });
+            notify(blocked ? 'Acesso bloqueado nesta empresa.' : 'Acesso liberado nesta empresa.');
+            if (closeModal) closeModal('editEmployee'); await fetchEmployees();
+        } catch (error) { notify('Não foi possível alterar o acesso: ' + error.message, 'error'); }
+        finally { setLoading(false); }
     },
-
     async revokeEmployeeSessions(employee, deps) {
         const { state, supabaseFetch, notify, setLoading, fetchEmployees } = deps;
-        if (!this.isAdmin(state)) return notify('Somente administradores podem encerrar sessões.', 'error');
-        if (!employee?.id) return;
-        if (!confirm(`Encerrar todas as sessões ativas de ${employee.name}?`)) return;
-
+        if (!this.isAdmin(state) || !employee?.id) return;
+        if (!confirm(`Exigir que ${employee.name} entre novamente para acessar esta empresa?`)) return;
         setLoading(true);
         try {
-            const result = await supabaseFetch('rpc/revoke_employee_sessions', 'POST', {
-                p_employee_id: employee.id
-            });
-            const count = Number(Array.isArray(result) ? result[0] : result) || 0;
-            notify(count === 1 ? '1 sessão encerrada.' : `${count} sessões encerradas.`);
-            await fetchEmployees();
-        } catch (e) {
-            notify('Erro ao encerrar sessões: ' + e.message, 'error');
-        } finally {
-            setLoading(false);
-        }
+            await supabaseFetch('rpc/revoke_employee_sessions', 'POST', { p_employee_id: employee.id });
+            notify('Uma nova entrada será exigida nesta empresa.'); await fetchEmployees();
+        } catch (error) { notify('Não foi possível exigir uma nova entrada: ' + error.message, 'error'); }
+        finally { setLoading(false); }
+    },
+    async reissueInvitation(invitation, deps) {
+        const { state, supabaseFetch, notify, setLoading, fetchEmployees } = deps;
+        if (!this.isAdmin(state)) return;
+        setLoading(true);
+        try {
+            const id = await supabaseFetch('rpc/reissue_workspace_invitation', 'POST', { p_invitation_id: invitation.invitation_id });
+            this.notifyDelivery(await this.sendInvitation(id, deps), notify); await fetchEmployees();
+        } catch (error) { notify('Não foi possível renovar o convite: ' + error.message, 'error'); }
+        finally { setLoading(false); }
+    },
+    async resendInvitation(invitation, deps) {
+        if (!this.isAdmin(deps.state)) return;
+        deps.setLoading(true);
+        try { this.notifyDelivery(await this.sendInvitation(invitation.invitation_id, deps), deps.notify); await deps.fetchEmployees(); }
+        finally { deps.setLoading(false); }
+    },
+    async cancelInvitation(invitation, deps) {
+        if (!this.isAdmin(deps.state) || !confirm('Cancelar este convite?')) return;
+        deps.setLoading(true);
+        try {
+            await deps.supabaseFetch('rpc/cancel_workspace_invitation', 'POST', { p_invitation_id: invitation.invitation_id });
+            deps.notify('Convite cancelado.'); await deps.fetchEmployees();
+        } catch (error) { deps.notify('Não foi possível cancelar: ' + error.message, 'error'); }
+        finally { deps.setLoading(false); }
+    },
+    async copyInvitationLink(invitation, deps) {
+        const id = invitation.invitation_id;
+        if (!window.AIDAAuthSessionService.UUID_PATTERN.test(id || '')) return;
+        const url = window.AIDAAuthSessionService.getAppUrl(); url.searchParams.set('invitation', id);
+        deps.state.lastInvitationLink = url.href;
+        try { await navigator.clipboard.writeText(url.href); deps.notify('Link copiado. Só o e-mail convidado pode aceitá-lo.'); }
+        catch (_) { deps.notify('Copie o link exibido na lista de convites.'); }
     }
 };

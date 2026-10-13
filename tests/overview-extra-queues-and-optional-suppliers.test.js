@@ -41,7 +41,7 @@ test('manual supplier purchase remains workspace-checked and employee-compatible
 
 test('home screen requests the dedicated queues and presents both controlled cards', () => {
     const main = read('js/main.js');
-    const html = read('index.html');
+    const html = read('app.html');
 
     assert.match(main, /pendingTests: 0, unscheduledTickets: 0/);
     assert.match(main, /rpc\/get_overview_extra_queues/);
@@ -56,7 +56,7 @@ test('home screen requests the dedicated queues and presents both controlled car
 });
 
 test('purchase forms replace the registry with a named supplier only when it is disabled', () => {
-    const html = read('index.html');
+    const html = read('app.html');
     const inventory = read('js/modules/inventory-management-service.js');
     const actions = read('js/modules/ticket-actions.js');
 

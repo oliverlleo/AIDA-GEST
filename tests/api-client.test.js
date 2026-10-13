@@ -8,6 +8,7 @@ const deps = {
     SUPABASE_URL: 'https://example.supabase.co',
     SUPABASE_KEY: 'public-key',
     state: {
+        session: { access_token: 'auth-user-token' },
         user: { workspace_id: 'workspace-id' },
         employeeSession: { token: 'employee-token' }
     }
@@ -33,5 +34,7 @@ test('grava historico sem exigir leitura da linha devolvida', async (t) => {
 
     assert.equal(result, null);
     assert.equal(capturedOptions.headers.Prefer, 'return=minimal');
-    assert.equal(capturedOptions.headers['x-employee-token'], 'employee-token');
+    assert.equal(capturedOptions.headers.Authorization, 'Bearer auth-user-token');
+    assert.equal(capturedOptions.headers['x-workspace-id'], 'workspace-id');
+    assert.equal(capturedOptions.headers['x-employee-token'], undefined);
 });

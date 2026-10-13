@@ -7,7 +7,7 @@ const root = path.join(__dirname, '..');
 const migration = fs.readFileSync(path.join(root, 'optimize_ticket_card_queries.sql'), 'utf8');
 const rollback = fs.readFileSync(path.join(root, 'rollback_ticket_card_queries.sql'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'js', 'main.js'), 'utf8');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'app.html'), 'utf8');
 
 test('card RPC derives the tenant from the actor and keeps ticket RLS active', () => {
     assert.match(migration, /security invoker/i);
