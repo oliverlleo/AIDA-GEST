@@ -16,7 +16,8 @@ if (SUPABASE_URL && SUPABASE_KEY) {
                 persistSession: true,
                 autoRefreshToken: true,
                 detectSessionInUrl: false,
-                flowType: 'pkce'
+                flowType: 'pkce',
+                ...(window.AIDAAuthFirstPaint?.storageKey ? { storageKey: window.AIDAAuthFirstPaint.storageKey } : {})
             }
         });
     } catch (e) {
@@ -1065,14 +1066,15 @@ function app() {
             }, {});
 
             console.log("App initializing...");
-            // Keep the neutral startup view until session and workspace restoration finish.
+            // Restore the session in the background; the first-paint hint prevents a login flash.
             this.loading = false;
 
-            const sessionNotice = sessionStorage.getItem('techassist_session_notice');
-            if (sessionNotice) {
-                sessionStorage.removeItem('techassist_session_notice');
-                this.notify(sessionNotice, 'error');
-            }
+            let sessionNotice;
+            try {
+                sessionNotice = sessionStorage.getItem('techassist_session_notice');
+                if (sessionNotice) sessionStorage.removeItem('techassist_session_notice');
+            } catch (_) { /* Browser storage availability must not block session restoration. */ }
+            if (sessionNotice) this.notify(sessionNotice, 'error');
 
             if (!supabaseClient) {
                 this.error = "Erro de Configuração: As credenciais do Supabase não foram encontradas. Certifique-se de configurar o arquivo js/supabase-config.js corretamente.";
@@ -1080,6 +1082,7 @@ function app() {
                 this.loading = false;
                 this.authBootstrapping = false;
                 this.initInFlight = false;
+                window.AIDAAuthFirstPaint?.release();
                 return;
             }
 
@@ -1099,6 +1102,7 @@ function app() {
                 this.authBootstrapping = false;
                 this.loading = false;
                 this.initInFlight = false;
+                window.AIDAAuthFirstPaint?.release();
             }
 
             // Schedule network work outside the SDK auth callback lock.

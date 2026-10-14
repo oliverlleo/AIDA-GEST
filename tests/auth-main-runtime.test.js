@@ -12,6 +12,7 @@ const EMPLOYEE = '44444444-4444-4444-8444-444444444444';
 
 function runtime(roles = ['tecnico']) {
     const storage = new Map([
+        ['sb-example-auth-token', 'opaque-session-not-read-by-presentation'],
         [`centralos_workspace:${USER}`, STAFF_WORKSPACE],
         ['techassist_employee', '{"token":"retired-credential","roles":["admin"]}']
     ]);
@@ -22,21 +23,25 @@ function runtime(roles = ['tecnico']) {
         auth: { getSession: async () => ({ data: { session } }), onAuthStateChange: callback => { listener = callback; } },
         removeAllChannels: async () => events.push('channels_removed')
     };
+    const firstpaintAttributes = new Map();
     const sandbox = {
         console: { log() {}, warn() {}, error() {} }, Date, URL, TextEncoder,
         SUPABASE_CONFIG: { URL: 'https://example.supabase.co', KEY: 'publishable-key' },
-        supabase: { createClient: (_url, _key, options) => { assert.equal(options.auth.flowType, 'pkce'); return client; } },
-        document: { visibilityState: 'visible', addEventListener() {}, querySelector: () => ({}) },
+        supabase: { createClient: (_url, _key, options) => { assert.equal(options.auth.flowType, 'pkce'); assert.equal(options.auth.storageKey, 'sb-example-auth-token'); return client; } },
+        document: { visibilityState: 'visible', addEventListener() {}, querySelector: () => ({}), documentElement: {
+            setAttribute: (key, value) => firstpaintAttributes.set(key, value),
+            removeAttribute: key => firstpaintAttributes.delete(key)
+        } },
         location: { href: 'https://oliverlleo.github.io/AIDA-GEST/app.html', reload: () => events.push('reload'), replace: () => events.push('replace') },
         history: { replaceState() {} }, addEventListener() {},
-        localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+        localStorage: { get length() { return storage.size; }, key: index => [...storage.keys()][index], getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
         sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
         setInterval: () => 1, clearTimeout() {}, setTimeout: callback => { timeouts.push(callback); return timeouts.length; },
         AIDAStorageService: { clearLocalPhotoPreviews: () => events.push('previews_cleared') }
     };
     sandbox.window = sandbox;
     const context = vm.createContext(sandbox);
-    for (const file of ['js/modules/feature-config.js', 'js/modules/config-helpers.js', 'js/modules/ticket-context.js', 'js/modules/customer-service.js', 'js/modules/inventory-catalog-service.js', 'js/modules/auth-session-service.js', 'js/main.js']) {
+    for (const file of ['js/auth-firstpaint.js', 'js/modules/feature-config.js', 'js/modules/config-helpers.js', 'js/modules/ticket-context.js', 'js/modules/customer-service.js', 'js/modules/inventory-catalog-service.js', 'js/modules/auth-session-service.js', 'js/main.js']) {
         vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, { filename: file });
     }
     const state = vm.runInContext('app()', context);
@@ -59,11 +64,11 @@ function runtime(roles = ['tecnico']) {
         state[name] = async () => events.push(name);
     }
     state.fetchTickets = async () => events.push(`tickets:${state.view}`);
-    return { state, context, storage, events, requests, session, client, listener: () => listener, timeouts };
+    return { state, context, storage, events, requests, session, client, firstpaintAttributes, listener: () => listener, timeouts };
 }
 
 test('bootstrap permanece ativo durante a restauração da sessão e da empresa', async () => {
-    const { state, client, session } = runtime();
+    const { state, client, session, firstpaintAttributes } = runtime();
     let releaseSession, sessionStarted, releaseWorkspace, workspaceStarted;
     const sessionEntered = new Promise(resolve => { sessionStarted = resolve; });
     const workspaceEntered = new Promise(resolve => { workspaceStarted = resolve; });
@@ -84,20 +89,23 @@ test('bootstrap permanece ativo durante a restauração da sessão e da empresa'
     await sessionEntered;
     assert.equal(state.authBootstrapping, true);
     assert.equal(state.session, null);
+    assert.equal(firstpaintAttributes.has('data-auth-pending'), true);
     releaseSession({ data: { session } });
     await workspaceEntered;
     assert.equal(state.authBootstrapping, true);
     assert.equal(state.session.user.id, USER);
     assert.equal(state.user, null);
+    assert.equal(firstpaintAttributes.has('data-auth-pending'), true);
     releaseWorkspace();
     await initialization;
     assert.equal(state.authBootstrapping, false);
     assert.equal(state.user.workspace_id, STAFF_WORKSPACE);
+    assert.equal(firstpaintAttributes.has('data-auth-pending'), false);
 });
 
 test('sem sessão ou com falha de leitura, a verificação libera o login', async () => {
     for (const fail of [false, true]) {
-        const { state, client } = runtime();
+        const { state, client, firstpaintAttributes } = runtime();
         client.auth.getSession = async () => {
             if (fail) throw new Error('Session unavailable');
             return { data: { session: null } };
@@ -107,16 +115,31 @@ test('sem sessão ou com falha de leitura, a verificação libera o login', asyn
         assert.equal(state.session, null);
         assert.equal(state.initInFlight, false);
         assert.equal(Boolean(state.authError), fail);
+        assert.equal(firstpaintAttributes.has('data-auth-pending'), false);
     }
 });
 
 test('configuração inválida libera o carregamento e apresenta erro em vez de travar', async () => {
-    const { state, context } = runtime();
+    const { state, context, firstpaintAttributes } = runtime();
     vm.runInContext('supabaseClient = null', context);
     await state.init();
     assert.equal(state.authBootstrapping, false);
     assert.equal(state.initInFlight, false);
     assert.match(state.error, /Erro de Configuração/);
+    assert.equal(firstpaintAttributes.has('data-auth-pending'), false);
+});
+
+test('armazenamento bloqueado não trava a restauração nem mantém o login oculto', async () => {
+    const { state, client, context, firstpaintAttributes } = runtime();
+    const denyStorage = () => { throw new Error('SecurityError'); };
+    context.sessionStorage = { getItem: denyStorage, setItem: denyStorage, removeItem: denyStorage };
+    context.localStorage = { get length() { return denyStorage(); }, key: denyStorage, getItem: denyStorage, setItem: denyStorage, removeItem: denyStorage };
+    client.auth.getSession = async () => ({ data: { session: null } });
+    await state.init();
+    assert.equal(state.authBootstrapping, false);
+    assert.equal(state.initInFlight, false);
+    assert.equal(state.session, null);
+    assert.equal(firstpaintAttributes.has('data-auth-pending'), false);
 });
 
 test('init de dono de A e técnico de B carrega somente o contexto escolhido, sem herdar admin', async () => {
