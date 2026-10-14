@@ -5,9 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CentralOS - Gestão Inteligente</title>
     <link rel="icon" type="image/png" href="favicon.svg">
+    <link rel="preload" as="image" href="logo.png">
     <style>
         [x-cloak] { display: none !important; }
         #login-screen { position: fixed; inset: 0; z-index: 10000; overflow-y: auto; background: #111315; }
+        #auth-startup-screen { position: fixed; inset: 0; z-index: 10020; display: grid; place-items: center; background: #111315; color: #d5d8dc; text-align: center; }
+        #auth-startup-screen img { display: block; width: 240px; height: 80px; object-fit: contain; margin: 0 auto 20px; }
+        #auth-startup-screen p { margin: 0; font-size: 14px; }
         body { font-family: 'Inter', sans-serif; }
         /* Custom Scrollbar for Kanban */
         .kanban-col::-webkit-scrollbar { width: 4px; }
@@ -44,7 +48,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="centralos-mobile-login-firstpaint.css?v=4">
+    <link rel="stylesheet" href="centralos-mobile-login-firstpaint.css?v=4" data-centralos-login-firstpaint="true">
     <!-- Load the final visual layer before the first paint, including desktop login. -->
     <link rel="stylesheet" href="centralos-brand.css?v=1" data-centralos-brand="true">
     <link rel="stylesheet" href="centralos-brand-complete.css?v=3" data-centralos-brand-complete="true">
@@ -53,11 +57,15 @@
 </head>
 <body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
 
+    <div id="auth-startup-screen" x-show="authBootstrapping" role="status" aria-live="polite" aria-label="Carregando o sistema">
+        <div><img src="logo.png" alt="CentralOS"><p>Carregando...</p><noscript>Ative o JavaScript para acessar o sistema.</noscript></div>
+    </div>
+
     <!-- VIEW: LOGIN/REGISTER (If not logged in) -->
-                <div id="login-screen" x-show="!session" class="centralos-login-ref fixed inset-0 bg-white z-[10000] overflow-y-auto">
+                <div id="login-screen" x-cloak x-show="!authBootstrapping && !session && !error" class="centralos-login-ref fixed inset-0 bg-white z-[10000] overflow-y-auto">
                     <div class="min-h-screen flex items-center justify-center bg-gray-50 px-4">
                         <section class="centralos-login-hero" aria-hidden="true">
-                            <img class="centralos-login-logo" src="logologin.png" alt="">
+                            <img class="centralos-login-logo" src="logo.png" alt="">
                             <div class="centralos-login-title"><h1>Bem-vindo de volta</h1><p>Acesse sua central de assistência técnica.</p></div>
                             <div class="centralos-login-side">Tudo encontra<br>seu lugar.</div>
                             <div class="centralos-login-metrics">
@@ -68,7 +76,7 @@
                         </section>
                         <div class="centralos-login-card max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
                             <div class="centralos-login-oldhead text-center mb-8">
-                                <img src="logologin.png" alt="TechAssist" class="h-[72px] mx-auto mb-4">
+                                <img src="logo.png" alt="CentralOS" class="h-[72px] mx-auto mb-4">
                                 <h2 class="text-2xl font-bold text-gray-900">Acesso ao Sistema</h2>
                             </div>
 
@@ -96,7 +104,7 @@
 
 
     <!-- Identity and workspace access are separate steps. -->
-    <section id="access-hub" x-cloak x-show="session && (recoveryMode || accessHubOpen || !user?.workspace_id)" class="fixed inset-0 z-[10010] bg-gray-50 overflow-y-auto px-4 py-8" aria-label="Conta e empresas">
+    <section id="access-hub" x-cloak x-show="!authBootstrapping && session && (recoveryMode || accessHubOpen || !user?.workspace_id)" class="fixed inset-0 z-[10010] bg-gray-50 overflow-y-auto px-4 py-8" aria-label="Conta e empresas">
         <div class="max-w-2xl mx-auto rounded-2xl bg-white p-6 sm:p-8 border shadow-lg">
             <div class="flex items-start justify-between gap-3 mb-6"><div><h1 class="text-2xl font-bold text-gray-900" x-text="recoveryMode ? 'Defina sua nova senha' : 'Sua conta e suas empresas'"></h1><p class="text-sm text-gray-500 mt-1" x-text="session?.user?.email"></p></div><button @click="logout()" :disabled="loading" class="text-sm text-gray-500 underline">Sair</button></div>
             <p x-show="authError" x-text="authError" class="p-3 rounded-lg bg-red-50 text-red-700 mb-4 text-sm" role="alert"></p>
@@ -153,7 +161,7 @@
     </div>
 
     <!-- MAIN LAYOUT -->
-    <div id="app-shell" x-cloak x-show="user?.workspace_id && !recoveryMode" class="min-h-screen flex flex-col">
+    <div id="app-shell" x-cloak x-show="!authBootstrapping && user?.workspace_id && !recoveryMode" class="min-h-screen flex flex-col">
 
         <!-- Top Navbar -->
         <nav x-show="user?.workspace_id" class="bg-black text-white h-16 px-6 flex justify-between items-center shadow-md z-30" x-cloak>
@@ -8756,7 +8764,7 @@
     <!-- JS MODULES (Infraestrutura inicial) -->
     <script src="js/supabase-config.js"></script>
     <script src="js/modules/feature-config.js?v=4"></script>
-    <script src="js/modules/config-helpers.js?v=5"></script>
+    <script src="js/modules/config-helpers.js?v=6"></script>
     <script src="js/modules/ticket-context.js?v=2"></script>
     <script src="js/modules/workflow-rules.js"></script>
     <script src="js/modules/ticket-mutations.js"></script>
@@ -8770,7 +8778,7 @@
     <script src="js/modules/logs-notifications-service.js?v=3"></script>
     <script src="js/modules/notes-service.js"></script>
     <script src="js/modules/dashboard-service.js"></script>
-    <script src="js/modules/auth-session-service.js?v=4"></script>
+    <script src="js/modules/auth-session-service.js?v=5"></script>
     <script src="js/modules/employee-service.js?v=4"></script>
     <script src="js/modules/recycle-bin-service.js"></script>
     <script src="js/modules/customer-service.js?v=2"></script>
@@ -8781,7 +8789,7 @@
     <script src="js/modules/inventory-management-service.js?v=5"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=43"></script>
+    <script src="js/main.js?v=44"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"

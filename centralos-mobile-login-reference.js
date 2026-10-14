@@ -2,7 +2,7 @@
   'use strict';
   const ROOT='centralos-login-ref', STYLE='centralos-login-ref-style';
   function css(){
-    if(document.getElementById(STYLE)) return;
+    if(document.getElementById(STYLE)||document.querySelector('link[data-centralos-login-firstpaint]')) return;
     const s=document.createElement('style'); s.id=STYLE; s.textContent=`
 .centralos-login-hero,.centralos-login-extras,.centralos-login-remember{display:none!important}
 @media(max-width:767px){
@@ -30,7 +30,7 @@
 @media(max-width:390px){.centralos-login-side{display:none}.centralos-login-title{max-width:84%}.centralos-login-title h1{font-size:29px}.centralos-login-metric span{font-size:7px}.centralos-login-card{padding-left:18px!important;padding-right:18px!important}.centralos-login-support span{display:none}}
 }`; document.head.appendChild(s);
   }
-  function hero(){const e=document.createElement('section');e.className='centralos-login-hero';e.setAttribute('aria-hidden','true');e.innerHTML=`<img class="centralos-login-logo" src="logologin.png" alt=""><div class="centralos-login-title"><h1>Bem-vindo de volta</h1><p>Acesse sua central de assistência técnica.</p></div><div class="centralos-login-side">Tudo encontra<br>seu lugar.</div><div class="centralos-login-metrics"><div class="centralos-login-metric"><i class="fa-solid fa-chart-simple"></i><span>Mais<br>organização</span></div><div class="centralos-login-metric"><i class="fa-regular fa-clock"></i><span>Mais<br>produtividade</span></div><div class="centralos-login-metric"><i class="fa-solid fa-user-group"></i><span>Mais<br>resultados</span></div></div>`;return e}
+  function hero(){const e=document.createElement('section');e.className='centralos-login-hero';e.setAttribute('aria-hidden','true');e.innerHTML=`<img class="centralos-login-logo" src="logo.png" alt=""><div class="centralos-login-title"><h1>Bem-vindo de volta</h1><p>Acesse sua central de assistência técnica.</p></div><div class="centralos-login-side">Tudo encontra<br>seu lugar.</div><div class="centralos-login-metrics"><div class="centralos-login-metric"><i class="fa-solid fa-chart-simple"></i><span>Mais<br>organização</span></div><div class="centralos-login-metric"><i class="fa-regular fa-clock"></i><span>Mais<br>produtividade</span></div><div class="centralos-login-metric"><i class="fa-solid fa-user-group"></i><span>Mais<br>resultados</span></div></div>`;return e}
   function decorate(){
     const root=document.getElementById('login-screen');if(!root)return false;
     const shell=root.firstElementChild,card=shell?.querySelector('.centralos-login-card')||shell?.lastElementChild;if(!shell||!card)return false;

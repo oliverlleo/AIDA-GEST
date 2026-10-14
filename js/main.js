@@ -1065,7 +1065,7 @@ function app() {
             }, {});
 
             console.log("App initializing...");
-            // Auth bootstrap is silent: the real login is already the first paint.
+            // Keep the neutral startup view until session and workspace restoration finish.
             this.loading = false;
 
             const sessionNotice = sessionStorage.getItem('techassist_session_notice');
@@ -1078,6 +1078,8 @@ function app() {
                 this.error = "Erro de Configuração: As credenciais do Supabase não foram encontradas. Certifique-se de configurar o arquivo js/supabase-config.js corretamente.";
                 this.notify("Erro crítico: Supabase não configurado.", "error");
                 this.loading = false;
+                this.authBootstrapping = false;
+                this.initInFlight = false;
                 return;
             }
 
