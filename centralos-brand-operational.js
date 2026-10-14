@@ -169,12 +169,8 @@ body.centralos-auth-actions-hidden .centralos-mobile-view-action-zone,body.centr
     if(document.getElementById('centralos-layout-fixes-v11')) return;
     const s=document.createElement('style'); s.id='centralos-layout-fixes-v11'; s.textContent=css; document.head.appendChild(s);
   };
-  const applyLogo = () => {
-    const n=document.querySelector('nav img[alt="CentralOS"]'); if(n&&!n.src.endsWith('/logo.png')) n.src='logo.png';
-    const l=document.querySelector('img[src="logologin.png"],img[src*="/logologin.png"]'); if(l){if(!l.src.endsWith('/logo.png'))l.src='logo.png';l.alt='CentralOS';}
-  };
   const decorate = () => {
-    ensureStyle(); applyLogo();
+    ensureStyle();
     document.body.classList.toggle('centralos-auth-actions-hidden',!logged());
     const d=dashboard();
     if(d){

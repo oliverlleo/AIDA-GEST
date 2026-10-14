@@ -59,8 +59,65 @@ function runtime(roles = ['tecnico']) {
         state[name] = async () => events.push(name);
     }
     state.fetchTickets = async () => events.push(`tickets:${state.view}`);
-    return { state, context, storage, events, requests, session, listener: () => listener, timeouts };
+    return { state, context, storage, events, requests, session, client, listener: () => listener, timeouts };
 }
+
+test('bootstrap permanece ativo durante a restauração da sessão e da empresa', async () => {
+    const { state, client, session } = runtime();
+    let releaseSession, sessionStarted, releaseWorkspace, workspaceStarted;
+    const sessionEntered = new Promise(resolve => { sessionStarted = resolve; });
+    const workspaceEntered = new Promise(resolve => { workspaceStarted = resolve; });
+    const workspaceReady = new Promise(resolve => { releaseWorkspace = resolve; });
+    client.auth.getSession = () => {
+        sessionStarted();
+        return new Promise(resolve => { releaseSession = resolve; });
+    };
+    const originalFetch = state.supabaseFetch;
+    state.supabaseFetch = async (...args) => {
+        if (args[0] === 'rpc/get_my_access_context') {
+            workspaceStarted();
+            await workspaceReady;
+        }
+        return originalFetch(...args);
+    };
+    const initialization = state.init();
+    await sessionEntered;
+    assert.equal(state.authBootstrapping, true);
+    assert.equal(state.session, null);
+    releaseSession({ data: { session } });
+    await workspaceEntered;
+    assert.equal(state.authBootstrapping, true);
+    assert.equal(state.session.user.id, USER);
+    assert.equal(state.user, null);
+    releaseWorkspace();
+    await initialization;
+    assert.equal(state.authBootstrapping, false);
+    assert.equal(state.user.workspace_id, STAFF_WORKSPACE);
+});
+
+test('sem sessão ou com falha de leitura, a verificação libera o login', async () => {
+    for (const fail of [false, true]) {
+        const { state, client } = runtime();
+        client.auth.getSession = async () => {
+            if (fail) throw new Error('Session unavailable');
+            return { data: { session: null } };
+        };
+        await state.init();
+        assert.equal(state.authBootstrapping, false);
+        assert.equal(state.session, null);
+        assert.equal(state.initInFlight, false);
+        assert.equal(Boolean(state.authError), fail);
+    }
+});
+
+test('configuração inválida libera o carregamento e apresenta erro em vez de travar', async () => {
+    const { state, context } = runtime();
+    vm.runInContext('supabaseClient = null', context);
+    await state.init();
+    assert.equal(state.authBootstrapping, false);
+    assert.equal(state.initInFlight, false);
+    assert.match(state.error, /Erro de Configuração/);
+});
 
 test('init de dono de A e técnico de B carrega somente o contexto escolhido, sem herdar admin', async () => {
     const { state, storage, events, requests } = runtime();

@@ -264,6 +264,6 @@ window.AIDAAuthSessionService = {
 (function loadCentralOSMobileLoginReference() {
     if (typeof document === 'undefined' || document.querySelector('script[data-centralos-mobile-login]')) return;
     const script = document.createElement('script');
-    script.src = 'centralos-mobile-login-reference.js?v=3'; script.async = false; script.dataset.centralosMobileLogin = 'true';
+    script.src = 'centralos-mobile-login-reference.js?v=4'; script.async = false; script.dataset.centralosMobileLogin = 'true';
     document.head.appendChild(script);
 })();
