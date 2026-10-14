@@ -10,6 +10,11 @@
         [x-cloak] { display: none !important; }
         #login-screen { position: fixed; inset: 0; z-index: 10000; overflow-y: auto; background: #111315; }
         html[data-auth-pending] #login-screen { display: none !important; }
+        html[data-auth-pending], html[data-auth-pending] body { background: #111315 !important; }
+        #auth-startup-screen { display: none; position: fixed; inset: 0; z-index: 10020; place-items: center; background: #111315; color: #d5d8dc; text-align: center; }
+        html[data-auth-pending] #auth-startup-screen { display: grid; }
+        #auth-startup-screen img { display: block; width: 240px; height: 80px; object-fit: contain; margin: 0 auto 20px; }
+        #auth-startup-screen p { margin: 0; font-size: 14px; }
         body { font-family: 'Inter', sans-serif; }
         /* Custom Scrollbar for Kanban */
         .kanban-col::-webkit-scrollbar { width: 4px; }
@@ -56,6 +61,10 @@
     <link rel="stylesheet" href="centralos-mobile-login-contrast.css?v=3" data-centralos-mobile-login-contrast="true">
 </head>
 <body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
+
+    <div id="auth-startup-screen" role="status" aria-live="polite" aria-label="Restaurando o acesso">
+        <div><img src="logo.png" alt="CentralOS"><p>Carregando...</p></div>
+    </div>
 
     <!-- VIEW: LOGIN/REGISTER (If not logged in) -->
                 <div id="login-screen" x-show="!session && !error" class="centralos-login-ref fixed inset-0 bg-white z-[10000] overflow-y-auto">
