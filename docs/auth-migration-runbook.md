@@ -3,6 +3,8 @@
 ## Estado de implantação
 
 Este código requer a migração SQL incluída na branch e as três Edge Functions.
+
+A correção `20261014214111_current_role_operational_guards.sql` exige o papel atual de técnico, além da atribuição na OS/agenda, para iniciar reparo e iniciar/concluir agendamentos. Administradores e atendentes mantêm o acesso previsto. Seu rollback específico é `supabase/rollback_current_role_operational_guards.sql` e altera somente essas três funções; para retornar à estrutura anterior à migração Auth, execute esse rollback antes da reversa Auth.
 O convite pode ser criado e compartilhado por link sem serviço de e-mail. O envio
 por SMTP será configurado quando o titular tiver seu domínio. A confirmação de
 novas contas e a recuperação de senha ainda dependem de um envio de Auth funcional;

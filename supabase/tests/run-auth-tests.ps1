@@ -65,10 +65,14 @@ try {
         @{Name='baseline'; File=(Join-Path $RecoveryDirectory 'baseline.sql')},
         @{Name='fixtures'; File=(Join-Path $PSScriptRoot 'auth-fixtures.sql')},
         @{Name='migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261013141221_supabase_auth_workspace_memberships.sql')},
+        @{Name='current_role_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261014214111_current_role_operational_guards.sql')},
         @{Name='security'; File=(Join-Path $PSScriptRoot 'auth-security.sql')},
         @{Name='delivery'; File=(Join-Path $PSScriptRoot 'auth-invitation-delivery.sql')},
         @{Name='operations'; File=(Join-Path $PSScriptRoot 'auth-operations.sql')},
+        @{Name='current_role'; File=(Join-Path $PSScriptRoot 'auth-current-role.sql')},
+        @{Name='privilege_escalation'; File=(Join-Path $PSScriptRoot 'auth-privilege-escalation.sql')},
         @{Name='concurrency'; File=$null},
+        @{Name='current_role_rollback'; File=(Join-Path $taskRepo 'supabase\rollback_current_role_operational_guards.sql')},
         @{Name='rollback'; File=(Join-Path $taskRepo 'supabase\rollback_auth_workspace_memberships.sql')},
         @{Name='equivalence'; File=(Join-Path $PSScriptRoot 'auth-rollback.sql')}
     )
