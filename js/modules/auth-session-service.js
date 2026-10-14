@@ -60,6 +60,7 @@ window.AIDAAuthSessionService = {
     },
     async login(deps) {
         const { state, supabaseClient, notify, setLoading } = deps;
+        if (state.authBootstrapping || state.loading || state.accessTransitioning) return;
         state.authError = ''; state.accessTransitioning = true; setLoading(true);
         try {
             const { data, error } = await supabaseClient.auth.signInWithPassword({ email: String(state.authForm.email || '').trim(), password: state.authForm.password });
@@ -79,6 +80,7 @@ window.AIDAAuthSessionService = {
     },
     async register(deps) {
         const { state, supabaseClient, notify, setLoading } = deps;
+        if (state.authBootstrapping || state.loading || state.accessTransitioning) return;
         const policyError = this.getAdminPasswordPolicyError(state.registerForm.password);
         if (policyError) return notify(policyError, 'error');
         state.authError = ''; state.accessTransitioning = true; setLoading(true);
@@ -103,6 +105,7 @@ window.AIDAAuthSessionService = {
     },
     async resendConfirmation(deps) {
         const { state, supabaseClient, notify, setLoading } = deps;
+        if (state.authBootstrapping || state.loading || state.accessTransitioning) return;
         const email = String(state.authForm.email || state.registerForm.email || '').trim();
         if (!email) return notify('Informe seu e-mail.', 'error');
         setLoading(true);
@@ -116,6 +119,7 @@ window.AIDAAuthSessionService = {
     },
     async requestPasswordReset(deps) {
         const { state, supabaseClient, notify, setLoading } = deps;
+        if (state.authBootstrapping || state.loading || state.accessTransitioning) return;
         const email = String(state.authForm.email || '').trim();
         if (!email) return notify('Informe seu e-mail para recuperar a senha.', 'error');
         setLoading(true);

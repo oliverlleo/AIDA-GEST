@@ -16,6 +16,17 @@ test('Cloudflare root entry resolves the invitation and confirmation to app.html
  assert.equal(s.getAppUrl().href,'https://techassist.pages.dev/app.html');
  assert.equal(s.getEmailRedirectUrl(d.state),'https://techassist.pages.dev/app.html?auth=confirm&invitation='+I);
 });
+test('ações de autenticação não disputam a restauração nem outra ação em andamento',async()=>{
+ for(const flag of ['authBootstrapping','loading','accessTransitioning']) {
+  for(const action of ['login','register','requestPasswordReset','resendConfirmation']) {
+   const {d,events,calls}=setup({[flag]:true});let externalCalls=0;
+   d.supabaseClient.auth=new Proxy({}, {get(){return async()=>{externalCalls++;throw Error('must not run');};}});
+   d.setLoading=()=>{externalCalls++;};
+   await s[action](d);
+   assert.equal(externalCalls,0);assert.equal(events.length,0);assert.equal(calls.length,0);
+  }
+ }
+});
 test('senha fraca é barrada antes de Auth',async()=>{const{d,events}=setup({registerForm:{email:'person@example.test',password:'12345678'}});d.supabaseClient.auth.signUp=async()=>{throw Error('must not run');};await s.register(d);assert.match(events[0][1],/letra e um número/);});
 test('cadastro cria apenas identidade e pede confirmação',async()=>{const{d,calls}=setup({pendingInvitationId:I});let input;d.supabaseClient.auth.signUp=async x=>{input=x;return{data:{user:{id:U},session:null}};};await s.register(d);assert.equal(input.password,'Valid123');assert.ok(input.options.emailRedirectTo.includes(I));assert.equal(calls.length,0);assert.equal(d.state.user,undefined);assert.match(d.state.authNotice,/confirmar/);});
 test('erro de login é genérico sem expor detalhes da conta',async()=>{const{d,events,calls}=setup();d.supabaseClient.auth.signInWithPassword=async()=>({error:{message:'internal secret account blocked'}});await s.login(d);assert.match(d.state.authError,/Não foi possível entrar/);assert.ok(!events.flat().join(' ').includes('internal secret'));assert.equal(calls.length,0);});
