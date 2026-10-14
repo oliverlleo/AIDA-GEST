@@ -19,7 +19,11 @@ Coverage:
 - Two real concurrent PostgreSQL processes accept the same invitation under the same verified identity. The first holds its transaction for one second; the runner observes the second connection waiting on a lock, verifies both return the same workspace, and asserts exactly one membership/employee and the correct accepted user.
 - Authenticated technician photo upload/read/update, role restrictions, schedule creator XOR identity and inventory RPC isolation.
 - Per-company blocking and session invalidation; refreshing the same session cannot bypass revocation, and access to another company remains independent.
+- Direct self-promotion through employee roles, profiles, workspace ownership, memberships, invitations, administrative RPCs, catalogs and Storage is rejected even with forged admin metadata. The tests verify records remain unchanged.
+- Retained ticket/appointment assignments do not preserve technician powers after a role downgrade. The same session is rejected for appointment start/completion and repair start; assigned technicians, attendants and owners retain their legitimate operations.
 - Public tracker with a valid token, server-only delivery reservation/cooldown, outdated worker claims and safe failed configuration. No email is sent.
 - Rollback after new employee records, tickets, notes, photos, appointments and inventory were created. Eleven metadata groups are compared exactly: tables, columns, constraints, indexes, triggers, functions, policies, table privileges, column privileges, function privileges and schema privileges. Legacy hashes/deletion flags and operational employee IDs must remain unchanged.
 
 Deployment still requires verified Auth confirmation/recovery URLs and an end-to-end controlled account test. Invitation acceptance works through the application and copied links while outbound mail is unconfigured.
+
+The current-role correction has its own rollback, `supabase/rollback_current_role_operational_guards.sql`. It restores only three function definitions. For a complete reversal to the pre-Auth baseline, run this correction's rollback before `supabase/rollback_auth_workspace_memberships.sql`; the runner checks both reversals and exact baseline equivalence.
