@@ -67,7 +67,7 @@ try {
         @{Name='migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261013141221_supabase_auth_workspace_memberships.sql')},
         @{Name='current_role_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261014214111_current_role_operational_guards.sql')},
         @{Name='full_audit_baseline'; File=(Join-Path $PSScriptRoot 'auth-full-audit-baseline.sql')},
-        @{Name='full_audit_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261014224252_full_authorization_audit.sql')},
+        @{Name='full_audit_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261015194150_full_authorization_audit.sql')},
         @{Name='security'; File=(Join-Path $PSScriptRoot 'auth-security.sql')},
         @{Name='delivery'; File=(Join-Path $PSScriptRoot 'auth-invitation-delivery.sql')},
         @{Name='operations'; File=(Join-Path $PSScriptRoot 'auth-operations.sql')},
