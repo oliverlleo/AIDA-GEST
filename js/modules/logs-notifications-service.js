@@ -75,7 +75,7 @@ window.AIDALogsNotificationsService = {
             const n = state.notificationsList.find(x => x.id === id);
             if (n) n.is_read = true;
 
-            await supabaseFetch(`notifications?id=eq.${id}`, 'PATCH', { is_read: true, read_at: new Date().toISOString() });
+            await supabaseFetch(`notifications?id=eq.${id}`, 'PATCH', { is_read: true });
         } catch(e) { console.error(e); }
     },
 
@@ -85,6 +85,6 @@ window.AIDALogsNotificationsService = {
         if (unreadIds.length === 0) return;
 
         state.notificationsList.forEach(n => n.is_read = true);
-        await supabaseFetch(`notifications?id=in.(${unreadIds.join(',')})`, 'PATCH', { is_read: true, read_at: new Date().toISOString() });
+        await supabaseFetch(`notifications?id=in.(${unreadIds.join(',')})`, 'PATCH', { is_read: true });
     }
 };

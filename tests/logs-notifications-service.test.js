@@ -42,3 +42,19 @@ test('main encaminha a opcao returnRepresentation ao cliente da API', () => {
         /supabaseFetch:\s*\(ep,\s*method,\s*payload,\s*requestOptions\)\s*=>\s*this\.supabaseFetch\(ep,\s*method,\s*payload,\s*requestOptions\)/
     );
 });
+
+test('marcar notificação só atualiza a coluna permitida pelo servidor', async () => {
+    const requests = [], state = { notificationsList: [{ id: 'own', is_read: false }] };
+    await global.AIDALogsNotificationsService.markNotificationRead('own', {
+        state, supabaseFetch: async (...args) => requests.push(args)
+    });
+    assert.deepEqual(requests, [['notifications?id=eq.own', 'PATCH', { is_read: true }]]);
+});
+
+test('marcar todas limita IDs recebidos e não envia campos de conteúdo ou destino', async () => {
+    const requests = [], state = { notificationsList: [{ id: 'own', is_read: false }, { id: 'read', is_read: true }] };
+    await global.AIDALogsNotificationsService.markAllRead({
+        state, supabaseFetch: async (...args) => requests.push(args)
+    });
+    assert.deepEqual(requests, [['notifications?id=in.(own)', 'PATCH', { is_read: true }]]);
+});

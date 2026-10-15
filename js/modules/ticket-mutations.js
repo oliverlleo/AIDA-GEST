@@ -32,13 +32,17 @@ window.AIDATicketMutations = {
             };
 
             // 3. Send to backend
-            await deps.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', finalUpdates);
+            if (opts.rpcEndpoint) {
+                await deps.supabaseFetch(opts.rpcEndpoint, 'POST', opts.rpcPayload);
+            } else {
+                await deps.supabaseFetch(`tickets?id=eq.${ticket.id}`, 'PATCH', finalUpdates);
+            }
 
             // 4. Update selectedTicket directly to avoid flashing/stale data in UI
             deps.updateSelectedTicket(ticket.id, finalUpdates);
 
             // 5. Log Action
-            if (actionLog) {
+            if (actionLog && !opts.skipClientLog) {
                  await deps.logTicketAction(ticket.id, actionLog.action, actionLog.details);
             }
 
@@ -71,13 +75,25 @@ window.AIDATicketMutations = {
      * Standardized wrapper for simply updating status and triggering a log.
      */
     async updateStatus(ticket, newStatus, additionalUpdates = {}, actionLog = null, deps) {
-        const updates = { status: newStatus, ...additionalUpdates };
+        const concludesTest = ticket?.status === 'Teste Final'
+            && ['Retirada Cliente', 'Andamento Reparo', 'Terceirizado'].includes(newStatus);
+        const options = { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true };
+        let updates = { status: newStatus, ...additionalUpdates };
+        if (concludesTest) {
+            // Leaving the tester's SELECT scope needs the server-authorized operation.
+            // The server validates every field and derives the audit event itself.
+            const { status: _status, updated_at: _updatedAt, ...testUpdates } = additionalUpdates;
+            options.rpcEndpoint = 'rpc/conclude_ticket_test';
+            options.rpcPayload = { p_ticket_id: ticket.id, p_status: newStatus, p_updates: testUpdates };
+            options.skipClientLog = true;
+            updates = { ...testUpdates, status: newStatus };
+        }
         return await this.mutateTicket(
             ticket,
-            'updateStatus',
+            concludesTest ? 'concludeTest' : 'updateStatus',
             updates,
             actionLog,
-            { showNotify: true, notifyMessage: "Status atualizado", closeViewModal: true, fetchTickets: true },
+            options,
             deps
         );
     }

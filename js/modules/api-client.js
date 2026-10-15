@@ -11,13 +11,16 @@ window.AIDAApiClient = {
         const token = state.session?.access_token;
         if (!token) throw new Error('Entre na sua conta para continuar.');
 
+        const returnPreference = requestOptions.returnRepresentation === false ? 'return=minimal' : 'return=representation';
         const headers = {
             'apikey': SUPABASE_KEY,
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
             'Prefer': method === 'GET'
                 ? undefined
-                : (requestOptions.returnRepresentation === false ? 'return=minimal' : 'return=representation')
+                : (method === 'POST' && requestOptions.upsert === true
+                    ? `resolution=merge-duplicates,${returnPreference}`
+                    : returnPreference)
         };
 
         // Context is only a request; the server validates this membership for every operation.
