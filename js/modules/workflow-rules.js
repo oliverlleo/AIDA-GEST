@@ -79,6 +79,7 @@ window.AIDAWorkflowRules = {
             case 'restoreItem':
                 return isAdmin;
             case 'saveTicketChanges':
+                return isAdmin || isTech || isAttendant || (isTester && testFlowMode === 'tester' && status === 'Teste Final');
             case 'saveDeadlines':
                 return isAdmin || isTech || isAttendant;
             case 'submitPurchase':

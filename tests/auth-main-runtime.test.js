@@ -103,6 +103,44 @@ test('bootstrap permanece ativo durante a restauração da sessão e da empresa'
     assert.equal(firstpaintAttributes.has('data-auth-pending'), false);
 });
 
+test('agenda consulta somente settings da empresa e preserva defaults sem linha ou com settings parciais', async () => {
+    const { state } = runtime(['admin']);
+    state.user = { workspace_id: STAFF_WORKSPACE };
+    state.scheduleManagement.techConfig.technician_id = EMPLOYEE;
+    const workDays = JSON.stringify(state.scheduleManagement.techConfig.workDays);
+    const requests = [];
+    state.supabaseFetch = async (endpoint) => { requests.push(endpoint); return []; };
+    await state.loadTechConfig();
+    assert.equal(JSON.stringify(state.scheduleManagement.techConfig.workDays), workDays);
+    assert.equal(state.scheduleManagement.techConfig.technician_id, EMPLOYEE);
+    assert.equal(state.loading, false);
+    assert.equal(requests[0], `technician_schedule_settings?select=settings&workspace_id=eq.${STAFF_WORKSPACE}&technician_id=eq.${EMPLOYEE}&limit=1`);
+    state.supabaseFetch = async () => [{ settings: { slotDuration: 45, hasBreak: false } }];
+    await state.loadTechConfig();
+    assert.equal(state.scheduleManagement.techConfig.slotDuration, 45);
+    assert.equal(state.scheduleManagement.techConfig.hasBreak, false);
+    assert.equal(JSON.stringify(state.scheduleManagement.techConfig.workDays), workDays);
+});
+
+test('agenda salva por REST com conflito tecnico e nao espera linha no upsert', async () => {
+    const { state } = runtime(['admin']);
+    state.user = { workspace_id: STAFF_WORKSPACE };
+    state.scheduleManagement.techConfig.technician_id = EMPLOYEE;
+    state.modals.techScheduleSettings = true;
+    let request;
+    state.supabaseFetch = async (endpoint, method, body, options) => { request = { endpoint, method, body, options }; return null; };
+    await state.saveTechConfig();
+    assert.equal(request.endpoint, 'technician_schedule_settings?on_conflict=technician_id');
+    assert.equal(request.method, 'POST');
+    assert.equal(request.body.technician_id, EMPLOYEE);
+    assert.equal(request.body.workspace_id, STAFF_WORKSPACE);
+    assert.equal(request.body.settings.slotDuration, state.scheduleManagement.techConfig.slotDuration);
+    assert.equal(request.options.upsert, true);
+    assert.equal(request.options.returnRepresentation, false);
+    assert.equal(state.modals.techScheduleSettings, false);
+    assert.equal(state.loading, false);
+});
+
 test('sem sessão ou com falha de leitura, a verificação libera o login', async () => {
     for (const fail of [false, true]) {
         const { state, client, firstpaintAttributes } = runtime();

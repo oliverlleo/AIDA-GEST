@@ -6,6 +6,70 @@ const path = require('node:path');
 global.window = global;
 require('../js/modules/warranty-service.js');
 require('../js/modules/ticket-actions.js');
+require('../js/modules/workflow-rules.js');
+
+test('tester salva somente checklist final e nega fase ou OS selecionada incorreta', async () => {
+    const ticket = { id: 'test-os', status: 'Teste Final' };
+    const selected = { ...ticket, checklist_final_data: [{ item: 'Tela', ok: true }], tech_notes: 'Tentativa indevida', parts_needed: 'Tentativa indevida', photos_urls: ['arquivo-indevido'], checklist_data: [{ item: 'Entrada', ok: false }] };
+    let mutation, calls = 0;
+    const hasRole = role => role === 'tester';
+    const deps = {
+        resolveTicket: () => ticket,
+        state: { hasRole, selectedTicket: selected },
+        notify() {},
+        mutateTicket: async (_ticket, _action, updates) => { calls++; mutation = updates; return true; }
+    };
+    assert.equal(global.AIDAWorkflowRules.canExecuteAction(ticket, 'saveTicketChanges', hasRole, {}), false);
+    assert.equal(global.AIDAWorkflowRules.canExecuteAction(ticket, 'saveTicketChanges', hasRole, { test_flow: 'tester' }), true);
+    await global.AIDATicketActions.saveTicketChanges(deps);
+    assert.deepEqual(mutation, { checklist_final_data: selected.checklist_final_data });
+    assert.equal(calls, 1);
+    selected.id = 'different-os';
+    assert.equal(await global.AIDATicketActions.saveTicketChanges(deps), false);
+    assert.equal(calls, 1);
+    selected.id = ticket.id;
+    ticket.status = 'Retirada Cliente';
+    assert.equal(global.AIDAWorkflowRules.canExecuteAction(ticket, 'saveTicketChanges', hasRole, {}), false);
+    assert.equal(await global.AIDATicketActions.saveTicketChanges(deps), false);
+    assert.equal(calls, 1);
+});
+
+test('conclusao do tester persiste checklist selecionado no sucesso e na falha', async () => {
+    for (const success of [true, false]) {
+        const ticket = { id: 'test-os', status: 'Teste Final', checklist_final_data: [{ item: 'Tela', ok: false }] };
+        const selected = { ...ticket, checklist_final_data: [{ item: 'Tela', ok: true }], tech_notes: 'Nao copiar' };
+        let mutation;
+        await global.AIDATicketActions.concludeTest(success, {
+            resolveTicket: () => ticket,
+            state: { user: { name: 'Tester' }, selectedTicket: selected, testFailureData: { reason: 'Falha no teste', newDeadline: '2026-10-16T12:00', newPriority: 'Alta' } },
+            getLogContext: () => ({ client: 'Cliente', device: 'Aparelho' }),
+            closeModal() {}, notify() {}, toUTC: value => value,
+            isAppointmentTypeEnabled: () => false,
+            updateStatus: async (_ticket, status, updates) => { mutation = { status, updates }; }
+        });
+        assert.equal(mutation.status, success ? 'Retirada Cliente' : 'Andamento Reparo');
+        assert.deepEqual(mutation.updates.checklist_final_data, selected.checklist_final_data);
+        assert.equal(mutation.updates.tech_notes, undefined);
+        if (success) assert.deepEqual(Object.keys(mutation.updates), ['checklist_final_data']);
+    }
+});
+
+test('tecnico com papel tester adicional preserva os cinco campos operacionais', async () => {
+    const ticket = { id: 'technical-os', technician_id: 'current-technician', status: 'Andamento Reparo' };
+    const selected = { ...ticket, tech_notes: 'Diagnostico', parts_needed: 'Tela', checklist_data: [], checklist_final_data: [{ item: 'Tela', ok: true }], photos_urls: ['foto'], budget_value: 999, deleted_at: 'nao copiar' };
+    let updates;
+    await global.AIDATicketActions.saveTicketChanges({
+        resolveTicket: () => ticket,
+        state: { user: { id: 'current-technician' }, hasRole: role => ['tecnico', 'tester'].includes(role), selectedTicket: selected },
+        notify() {},
+        mutateTicket: async (_ticket, _action, payload) => { updates = payload; return true; }
+    });
+    assert.deepEqual(updates, {
+        tech_notes: selected.tech_notes, parts_needed: selected.parts_needed,
+        checklist_data: selected.checklist_data, checklist_final_data: selected.checklist_final_data,
+        photos_urls: selected.photos_urls
+    });
+});
 
 function makeTicket(overrides = {}) {
     return {
@@ -20,6 +84,27 @@ function makeTicket(overrides = {}) {
         ...overrides
     };
 }
+
+test('tecnico que testa OS de outro responsavel salva somente checklist final', async () => {
+    const ticket = { id: 'other-final', technician_id: 'other-technician', status: 'Teste Final' };
+    const selected = { ...ticket, tech_notes: 'Não enviar', photos_urls: ['não enviar'], checklist_final_data: [{ item: 'Tela', ok: true }] };
+    let updates;
+    await global.AIDATicketActions.saveTicketChanges({
+        resolveTicket: () => ticket,
+        state: { user: { id: 'current-technician' }, hasRole: role => ['tecnico', 'tester'].includes(role), selectedTicket: selected },
+        notify() {}, mutateTicket: async (_ticket, _action, payload) => { updates = payload; return true; }
+    });
+    assert.deepEqual(updates, { checklist_final_data: selected.checklist_final_data });
+});
+
+test('tecnico nao abre OS com aprovacao comercial antecipada', async () => {
+    let notice;
+    await global.AIDATicketActions.createTicket({
+        state: { ticketForm: { budget_approved: true }, hasRole: role => role === 'tecnico' },
+        notify: message => { notice = message; }
+    });
+    assert.match(notice, /administrador ou atendente/);
+});
 
 function makeApprovalDeps(ticket, overrides = {}) {
     return {

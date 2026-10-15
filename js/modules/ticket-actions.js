@@ -12,6 +12,9 @@ window.AIDATicketActions = {
 
     async createTicket(deps) {
         const startsWithApprovedBudget = Boolean(deps.state.ticketForm.budget_approved);
+        if (startsWithApprovedBudget && !deps.state.hasRole('admin') && !deps.state.hasRole('atendente')) {
+            return deps.notify('A entrada com orçamento aprovado exige permissão de administrador ou atendente.', 'error');
+        }
         const approvedRoute = deps.state.ticketForm.approved_route;
         const partsNeeded = String(deps.state.ticketForm.parts_needed || '').trim();
         const inventoryParts = Array.isArray(deps.state.ticketForm.inventory_parts) ? deps.state.ticketForm.inventory_parts : [];
@@ -490,13 +493,29 @@ window.AIDATicketActions = {
     async saveTicketChanges(deps) {
          const ticket = deps.resolveTicket();
          if (!ticket) return;
-         await deps.mutateTicket(ticket, 'saveTicketChanges', {
+         const hasRole = (role) => typeof deps.hasRole === 'function'
+             ? deps.hasRole(role)
+             : typeof deps.state.hasRole === 'function'
+                 ? deps.state.hasRole(role)
+                 : (deps.state.user?.roles || []).includes(role);
+         const actorId = deps.state.user?.employee_id || deps.state.user?.id;
+         const canTechnical = hasRole('tecnico') && ((actorId && ticket.technician_id === actorId)
+             || (ticket.technician_id === null && ['Analise Tecnica', 'Andamento Reparo', 'Teste Final'].includes(ticket.status)));
+         const testerOnly = hasRole('tester') && !hasRole('admin') && !canTechnical && !hasRole('atendente');
+         if (testerOnly && (ticket.status !== 'Teste Final' || deps.state.selectedTicket?.id !== ticket.id)) {
+             deps.notify('O tester pode salvar somente o checklist de saída da OS em teste.', 'error');
+             return false;
+         }
+         const updates = testerOnly ? {
+             checklist_final_data: deps.state.selectedTicket.checklist_final_data
+         } : {
              tech_notes: deps.state.selectedTicket.tech_notes,
              parts_needed: deps.state.selectedTicket.parts_needed,
              checklist_data: deps.state.selectedTicket.checklist_data,
              checklist_final_data: deps.state.selectedTicket.checklist_final_data,
              photos_urls: deps.state.selectedTicket.photos_urls
-         }, null, { showNotify: true, notifyMessage: "Alterações salvas!", fetchTickets: true });
+         };
+         return await deps.mutateTicket(ticket, 'saveTicketChanges', updates, null, { showNotify: true, notifyMessage: "Alterações salvas!", fetchTickets: true });
     },
 
     async deleteTicket(ticketOrId, deps) {
@@ -682,12 +701,16 @@ window.AIDATicketActions = {
         const ticket = deps.resolveTicket();
         if (!ticket) return;
         const ctx = deps.getLogContext(ticket);
+        const finalChecklist = deps.state.selectedTicket?.id === ticket.id
+            ? deps.state.selectedTicket.checklist_final_data
+            : ticket.checklist_final_data;
+        const checklistUpdates = Array.isArray(finalChecklist) ? { checklist_final_data: finalChecklist } : {};
 
         if (success) {
             deps.closeModal('outcome');
             // Redirect logic based on Logistics Mode
             // If standard mode, it goes to "Retirada Cliente" which matches current DB/UI logic.
-            await deps.updateStatus(ticket, 'Retirada Cliente', {}, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
+            await deps.updateStatus(ticket, 'Retirada Cliente', checklistUpdates, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
         } else {
             // FAILURE LOGIC
             if (!deps.state.testFailureData.reason) return deps.notify("Descreva o defeito apresentado", "error");
@@ -713,6 +736,7 @@ window.AIDATicketActions = {
 
                      deps.closeModal('outcome');
                      await deps.updateStatus(ticket, 'Terceirizado', {
+                          ...checklistUpdates,
                          outsourced_deadline: deps.toUTC(deps.state.testFailureData.newDeadline),
                          outsourced_return_count: count,
                          test_start_at: null,
@@ -739,6 +763,7 @@ window.AIDATicketActions = {
 
             deps.closeModal('outcome');
             await deps.updateStatus(ticket, 'Andamento Reparo', {
+                ...checklistUpdates,
                 deadline: deps.toUTC(deps.state.testFailureData.newDeadline),
                 priority: deps.state.testFailureData.newPriority,
                 repair_start_at: null,

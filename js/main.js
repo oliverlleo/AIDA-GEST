@@ -4664,17 +4664,12 @@ function app() {
 
             this.loading = true;
             try {
-                // Fetch from `technician_schedule_settings`.
-                // Use maybeSingle() to avoid 406 Not Acceptable error when the technician has no custom setting yet
-                const { data, error } = await supabaseClient
-                    .from('technician_schedule_settings')
-                    .select('*')
-                    .eq('technician_id', techId)
-                    .maybeSingle();
-
-                if (error && error.code !== 'PGRST116') {
-                    console.error("Error fetching tech config:", error);
-                }
+                // Use the same authenticated workspace headers as every REST operation.
+                // An empty array preserves defaults when no custom setting exists.
+                const rows = await this.supabaseFetch(
+                    `technician_schedule_settings?select=settings&workspace_id=eq.${encodeURIComponent(this.user.workspace_id)}&technician_id=eq.${encodeURIComponent(techId)}&limit=1`
+                );
+                const data = Array.isArray(rows) ? rows[0] : null;
 
                 if (data && data.settings) {
                     const s = data.settings;
@@ -4712,16 +4707,13 @@ function app() {
                     maxConcurrent: this.scheduleManagement.techConfig.maxConcurrent
                 };
 
-                // Upsert logic for technician_schedule_settings
-                const { error } = await supabaseClient
-                    .from('technician_schedule_settings')
-                    .upsert({
+                // Preserve the existing unique technician_id conflict target.
+                await this.supabaseFetch(
+                    'technician_schedule_settings?on_conflict=technician_id', 'POST', {
                         technician_id: techId,
                         workspace_id: this.user.workspace_id,
                         settings: payload
-                    }, { onConflict: 'technician_id' });
-
-                if (error) throw error;
+                    }, { upsert: true, returnRepresentation: false });
 
                 this.notify("Configuração de agenda salva com sucesso!");
                 this.closeTechConfigModal();

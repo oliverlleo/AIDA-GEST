@@ -6368,7 +6368,7 @@
                         </div>
 
                         <!-- Optional shortcut for services with approved budget at intake -->
-                        <div class="col-span-2" x-show="!ticketForm.is_outsourced && !ticketForm.warranty_claim && !ticketForm.warranty_source_claim_id">
+                        <div class="col-span-2" x-show="(hasRole('admin') || hasRole('atendente')) && !ticketForm.is_outsourced && !ticketForm.warranty_claim && !ticketForm.warranty_source_claim_id">
                             <div class="rounded-xl border transition-colors"
                                  :class="ticketForm.budget_approved ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200 bg-gray-50'">
                                 <label class="flex items-center gap-3 px-4 py-3 cursor-pointer">
@@ -8770,16 +8770,16 @@
     <script src="js/modules/feature-config.js?v=4"></script>
     <script src="js/modules/config-helpers.js?v=6"></script>
     <script src="js/modules/ticket-context.js?v=2"></script>
-    <script src="js/modules/workflow-rules.js"></script>
-    <script src="js/modules/ticket-mutations.js"></script>
-    <script src="js/modules/ticket-actions.js?v=8"></script>
-    <script src="js/modules/api-client.js?v=3"></script>
+    <script src="js/modules/workflow-rules.js?v=1"></script>
+    <script src="js/modules/ticket-mutations.js?v=1"></script>
+    <script src="js/modules/ticket-actions.js?v=9"></script>
+    <script src="js/modules/api-client.js?v=4"></script>
     <script src="js/modules/schedule-error-service.js?v=1"></script>
     <script src="js/modules/storage-service.js?v=5"></script>
     <script src="js/modules/workspace-config-service.js?v=2"></script>
     <script src="js/modules/catalog-service.js"></script>
     <script src="js/modules/ticket-query-service.js?v=6"></script>
-    <script src="js/modules/logs-notifications-service.js?v=3"></script>
+    <script src="js/modules/logs-notifications-service.js?v=4"></script>
     <script src="js/modules/notes-service.js"></script>
     <script src="js/modules/dashboard-service.js"></script>
     <script src="js/modules/auth-session-service.js?v=6"></script>
@@ -8793,7 +8793,7 @@
     <script src="js/modules/inventory-management-service.js?v=5"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=45"></script>
+    <script src="js/main.js?v=46"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"
