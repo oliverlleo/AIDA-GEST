@@ -34,7 +34,11 @@ INSERT INTO public.profiles(id,workspace_id,role) VALUES('10000000-0000-4000-800
 INSERT INTO public.employees(id,workspace_id,name,username,password_hash,roles,deleted_at)
 VALUES('30000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','Old active','old_active','UNCHANGED_HASH_ACTIVE',ARRAY['tecnico'],NULL),
       ('30000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','Old removed','old_removed','UNCHANGED_HASH_REMOVED',ARRAY['atendente'],'2026-01-01 00:00:00+00');
-INSERT INTO storage.buckets(id,name,public) VALUES('ticket_photos','ticket_photos',false),('inventory_images','inventory_images',false),('workspace_logos','workspace_logos',true);
+-- Match the exported production bucket configuration before abuse protection.
+INSERT INTO storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+VALUES('ticket_photos','ticket_photos',false,NULL,NULL),
+      ('inventory_images','inventory_images',false,5242880,ARRAY['image/jpeg','image/png','image/webp']),
+      ('workspace_logos','workspace_logos',true,NULL,NULL);
 
 CREATE TABLE test_auth.baseline (kind text PRIMARY KEY, value jsonb NOT NULL);
 INSERT INTO test_auth.baseline

@@ -31,6 +31,7 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="js/supabase-config.js"></script>
+    <script src="js/modules/api-client.js?v=5"></script>
 </head>
 <body class="text-gray-900 font-sans min-h-screen flex items-center justify-center p-4 transition-colors duration-500"
       x-data="tracker()"
@@ -326,7 +327,7 @@
                             body: JSON.stringify({ p_ticket_id: id, p_public_token: token })
                         });
 
-                        if (!response.ok) throw new Error("Erro ao buscar dados.");
+                        if (!response.ok) throw await window.AIDAApiClient.readApiError(response);
 
                         const data = await response.json();
 
@@ -353,8 +354,12 @@
                         }
                     } catch (e) {
                         console.error(e);
-                        this.clearInvalidTrackerToken(id);
-                        this.error = "Não foi possível carregar as informações. Tente novamente.";
+                        if (e.status === 429) {
+                            this.error = e.message;
+                        } else {
+                            this.clearInvalidTrackerToken(id);
+                            this.error = "Não foi possível carregar as informações. Tente novamente.";
+                        }
                     } finally {
                         this.loading = false;
                     }

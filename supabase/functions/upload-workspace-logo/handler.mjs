@@ -1,4 +1,4 @@
-import {HttpError, authenticate, adminContext, jsonResponse, withErrors, readLimitedBody} from '../_shared/auth-http.mjs';
+import {HttpError, authenticate, adminContext, consumeEdgeBudget, rpc, jsonResponse, withErrors, readLimitedBody, retrySeconds} from '../_shared/auth-http.mjs';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -18,6 +18,7 @@ export function createHandler(env, fetcher = fetch) {
     const identity = await authenticate(request, config, fetcher);
     const workspaceId = request.headers.get('x-workspace-id');
     await adminContext(config, identity, workspaceId, fetcher);
+    await consumeEdgeBudget(config, identity, 'logo', workspaceId, fetcher);
     const bytes = await readLimitedBody(request, MAX_FILE_SIZE + 65536);
     let form;
     try { form = await new Response(bytes, {headers:{'Content-Type':request.headers.get('content-type') || ''}}).formData(); }
@@ -28,12 +29,17 @@ export function createHandler(env, fetcher = fetch) {
     const fileBytes = new Uint8Array(await file.arrayBuffer());
     const ext = imageExtension(file, fileBytes);
     const path = `${workspaceId}/logo/logo_${crypto.randomUUID()}.${ext}`;
+    await rpc(config, 'reserve_storage_upload', {p_bucket_id: 'workspace_logos', p_path: path,
+      p_size: file.size, p_mime_type: file.type}, identity.authorization, workspaceId, fetcher);
     // Use the caller's JWT so Storage rechecks membership and permissions at write time.
     const response = await fetcher(`${config.url}/storage/v1/object/workspace_logos/${path}`, {
       method: 'POST', headers: {apikey: config.anonKey, Authorization: identity.authorization,
         'Content-Type': file.type, 'x-upsert':'false', 'x-workspace-id': workspaceId}, body: fileBytes,
     });
-    if (!response.ok) throw new HttpError(response.status === 403 ? 403 : 502, 'logo_upload_failed');
+    if (!response.ok) {
+      if (response.status === 429) throw new HttpError(429, 'rate_limited', retrySeconds(response));
+      throw new HttpError([403,413,415].includes(response.status) ? response.status : 502, 'logo_upload_failed');
+    }
     return jsonResponse({success:true, path, publicUrl:`${config.url}/storage/v1/object/public/workspace_logos/${path}`}, 200, headers);
   }, env, fetcher);
 }
