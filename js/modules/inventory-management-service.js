@@ -4,8 +4,8 @@
         return Number.isFinite(parsed) ? parsed : fallback;
     }
 
-    function request(deps, rpc, payload = {}) {
-        return deps.supabaseFetch(`rpc/${rpc}`, 'POST', payload);
+    function request(deps, rpc, payload = {}, options) {
+        return deps.supabaseFetch(`rpc/${rpc}`, 'POST', payload, options);
     }
 
     window.AIDAInventoryManagementService = {
@@ -138,7 +138,7 @@
             });
         },
 
-        async receivePurchase(deps, purchaseId, rows, confirmAllocation) {
+        async receivePurchase(deps, purchaseId, rows, confirmAllocation, revision) {
             const receipts = (rows || [])
                 .filter(row => number(row.receive_quantity) > 0)
                 .map(row => ({
@@ -159,7 +159,7 @@
                 p_purchase_id: purchaseId,
                 p_receipts: receipts,
                 p_confirm_allocation: Boolean(confirmAllocation)
-            });
+            }, { operationVersion: { resource: 'inventory_purchases', id: purchaseId, revision } });
         },
 
         async allocatePurchase(deps, purchaseId) {

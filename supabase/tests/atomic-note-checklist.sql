@@ -1,0 +1,21 @@
+DO $$ BEGIN IF inet_server_addr() IS DISTINCT FROM '127.0.0.1'::inet OR inet_server_port()<>54329 THEN RAISE EXCEPTION 'Loopback only'; END IF; END $$;
+BEGIN;
+SELECT test_auth.login(2,'20000000-0000-4000-8000-000000000002');
+SET LOCAL ROLE authenticated;
+INSERT INTO public.internal_notes(id,workspace_id,author_id,author_name,content,checklist_data)
+VALUES('6c000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000002','Synthetic owner','Atomic checklist fixture','[{"item":"A","ok":false},{"item":"B","ok":false}]');
+SELECT public.set_note_check_status('6c000000-0000-4000-8000-000000000001',0,'A',false,true);
+SELECT public.set_note_check_status('6c000000-0000-4000-8000-000000000001',1,'B',false,true);
+SELECT test_auth.assert((SELECT checklist_data='[{"item":"A","ok":true},{"item":"B","ok":true}]'::jsonb FROM public.internal_notes WHERE id='6c000000-0000-4000-8000-000000000001'),'independent item changes merge without replacing another checkbox');
+SELECT public.set_note_check_status('6c000000-0000-4000-8000-000000000001',0,'A',false,true);
+SELECT test_auth.assert((SELECT (checklist_data->0->>'ok')::boolean FROM public.internal_notes WHERE id='6c000000-0000-4000-8000-000000000001'),'retry of same desired state does not toggle twice');
+SELECT test_auth.expect_error($q$SELECT public.set_note_check_status('6c000000-0000-4000-8000-000000000001',0,'Other item',true,false)$q$,'PT409');
+SELECT test_auth.expect_error($q$SELECT public.set_note_check_status('6c000000-0000-4000-8000-000000000001',5,'Missing',false,true)$q$,'PT409');
+SELECT test_auth.expect_error($q$SELECT public.set_note_check_status('6c000000-0000-4000-8000-000000000001',-1,'A',false,true)$q$,'22023');
+SELECT test_auth.login(1,'20000000-0000-4000-8000-000000000001');
+SELECT test_auth.expect_error($q$SELECT public.set_note_check_status('6c000000-0000-4000-8000-000000000001',0,'A',true,false)$q$,'42501');
+RESET ROLE;
+SELECT test_auth.assert(NOT has_function_privilege('anon','public.set_note_check_status(uuid,integer,text,boolean,boolean)','EXECUTE'),'anonymous cannot execute note mutation');
+SELECT test_auth.assert(NOT (SELECT prosecdef FROM pg_proc WHERE oid='public.set_note_check_status(uuid,integer,text,boolean,boolean)'::regprocedure),'note operation keeps invoker RLS');
+ROLLBACK;
+SELECT 'PASS: checklist atomic desired-state update, retry, item validation, tenant and invoker RLS';

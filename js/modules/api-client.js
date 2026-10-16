@@ -51,6 +51,17 @@ window.AIDAApiClient = {
 
         const token = state.session?.access_token;
         if (!token) throw new Error('Entre na sua conta para continuar.');
+        const identity = state.session?.user?.id || token;
+        const workspace = state.user?.workspace_id;
+        const assertCurrentContext = () => {
+            if ((state.session?.user?.id || state.session?.access_token) !== identity
+                || state.user?.workspace_id !== workspace) {
+                const error = new Error('O contexto da conta ou empresa mudou durante a solicitação.');
+                error.name = 'AbortError';
+                error.contextChanged = true;
+                throw error;
+            }
+        };
 
         const returnPreference = requestOptions.returnRepresentation === false ? 'return=minimal' : 'return=representation';
         const headers = {
@@ -67,20 +78,62 @@ window.AIDAApiClient = {
         // Context is only a request; the server validates this membership for every operation.
         if (state.user?.workspace_id) headers['x-workspace-id'] = state.user.workspace_id;
 
+        if (requestOptions.ticketVersion) {
+            const { id, revision } = requestOptions.ticketVersion;
+            const normalizedRevision = typeof revision === 'string' && /^[1-9][0-9]*$/.test(revision)
+                ? Number(revision) : revision;
+            if (typeof id !== 'string' || !id || !Number.isSafeInteger(normalizedRevision) || normalizedRevision < 1) {
+                throw new Error('Reabra a OS para carregar sua versão atual antes de salvar.');
+            }
+            headers['x-aida-ticket-version'] = JSON.stringify({ id, revision: normalizedRevision });
+        }
+        if (requestOptions.operationVersion) {
+            const { resource, id, revision } = requestOptions.operationVersion;
+            const normalizedRevision = typeof revision === 'string' && /^[1-9][0-9]*$/.test(revision)
+                ? Number(revision) : revision;
+            if (!['inventory_purchases', 'ticket_appointments'].includes(resource)
+                || typeof id !== 'string' || !id || !Number.isSafeInteger(normalizedRevision) || normalizedRevision < 1) {
+                throw new Error('Reabra esta operação para revisar sua versão atual antes de salvar.');
+            }
+            headers['x-aida-operation-version'] = JSON.stringify({ resource, id, revision: normalizedRevision });
+        }
+
         const options = {
             method,
             headers,
             body: body ? JSON.stringify(body) : undefined
         };
 
-        const response = await fetch(url, options);
+        const controller = new AbortController();
+        options.signal = controller.signal;
+        const deadline = setTimeout(() => controller.abort(), 30000);
+        try {
+            const response = await fetch(url, options);
+            assertCurrentContext();
 
-        if (!response.ok) {
-            throw await this.readApiError(response);
+            if (!response.ok) {
+                const error = await this.readApiError(response);
+                assertCurrentContext();
+                throw error;
+            }
+
+            if (response.status === 204 || requestOptions.returnRepresentation === false) return null;
+
+            const result = await response.json();
+            assertCurrentContext();
+            return result;
+        } catch (error) {
+            if (controller.signal.aborted) {
+                const timeoutError = new Error(method === 'GET' || method === 'HEAD'
+                    ? 'A consulta demorou demais. Tente atualizar novamente.'
+                    : 'O servidor demorou para responder. Consulte o estado atual antes de repetir a operação.');
+                timeoutError.code = 'AIDA_TIMEOUT';
+                timeoutError.unknownCommit = method !== 'GET' && method !== 'HEAD';
+                throw timeoutError;
+            }
+            throw error;
+        } finally {
+            clearTimeout(deadline);
         }
-
-        if (response.status === 204 || requestOptions.returnRepresentation === false) return null;
-
-        return await response.json();
     }
 };

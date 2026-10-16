@@ -3,6 +3,84 @@
 // Parte da infraestrutura de módulos
 
 window.AIDATicketQueryService = {
+    // Rebuild cursors from the first page after an invalidation. Reusing the
+    // old last-page cursor would miss records moved by another operator.
+    async collectLoadedWindow(fetchPage, targetCount, pageSize = 20) {
+        const target = Math.max(pageSize, Number(targetCount) || 0);
+        if (target > pageSize * 100) throw new Error('A janela aberta é grande demais para atualizar automaticamente.');
+        const items = [], ids = new Set(), cursors = new Set();
+        let cursor = null, response = {}, first = {};
+        for (let page = 0; page < 100; page++) {
+            response = await fetchPage(cursor, page);
+            if (page === 0) first = response || {};
+            for (const item of response?.items || []) {
+                if (!ids.has(item.id)) { ids.add(item.id); items.push(item); }
+            }
+            const next = response?.next_cursor || null;
+            if (!response?.has_more || !next || items.length >= target) break;
+            const key = JSON.stringify(next);
+            if (cursors.has(key)) throw new Error('Cursor de paginação repetido.');
+            cursors.add(key);
+            cursor = next;
+        }
+        return { ...first, items, has_more: Boolean(response?.has_more), next_cursor: response?.next_cursor || null };
+    },
+
+    async fetchLoadedTicketsData(deps) {
+        const original = deps.state;
+        // Filters and cursor inputs must remain those of this request while
+        // the user continues navigating. The caller also checks its context.
+        const state = Object.assign(Object.create(original), {
+            user: { ...original.user },
+            adminDashboardFilters: { ...original.adminDashboardFilters },
+            kanbanOperationalFilters: { ...original.kanbanOperationalFilters },
+            ticketPagination: { ...original.ticketPagination },
+            testerBenchPagination: { ...original.testerBenchPagination }
+        });
+        const snapshotDeps = { ...deps, state };
+        if ((state.view === 'kanban' && !state.isKanbanOperationalFilterActive()) || state.view === 'tech_orders') {
+            const columns = {};
+            await Promise.all(this.getTicketCardStatuses(state).map(async status => {
+                const target = original.tickets.filter(ticket => ticket.status === status).length;
+                const response = await this.collectLoadedWindow(
+                    cursor => deps.supabaseFetch('rpc/get_ticket_cards_page', 'POST', this.buildTicketCardPayload(state, status, cursor)),
+                    target, state.ticketCardPageSize
+                );
+                columns[status] = {
+                    items: response.items,
+                    total: Number(response.total || 0), hasMore: Boolean(response.has_more), nextCursor: response.next_cursor || null
+                };
+            }));
+            const hydrated = await this.hydrateTickets(snapshotDeps, Object.values(columns).flatMap(column => column.items));
+            const byId = new Map(hydrated.map(ticket => [ticket.id, ticket]));
+            Object.values(columns).forEach(column => { column.items = column.items.map(ticket => byId.get(ticket.id) || ticket); });
+            return { mode: 'ticket_card_pages', columns };
+        }
+        if (state.view === 'tester_bench' || (state.view === 'kanban' && state.isKanbanOperationalFilterActive())) {
+            let firstResult;
+            const response = await this.collectLoadedWindow(async (cursor, page) => {
+                state.ticketPagination.nextCursor = cursor;
+                state.testerBenchPagination.nextCursor = cursor;
+                const result = await this.fetchTicketsData(snapshotDeps, page > 0);
+                if (!page) firstResult = result;
+                return { items: result.data, total: result.total, has_more: result.hasMore, next_cursor: result.nextCursor };
+            }, original.tickets.length, state.ticketCardPageSize);
+            return { ...firstResult, data: response.items, hasMore: response.has_more, nextCursor: response.next_cursor };
+        }
+        const items = [], limit = state.ticketPagination.limit;
+        const pages = Math.max(1, Math.ceil(original.tickets.length / limit));
+        if (pages > 100) throw new Error('A janela aberta é grande demais para atualizar automaticamente.');
+        let last = {}, page = 0;
+        for (; page < pages; page++) {
+            state.ticketPagination.page = page;
+            last = await this.fetchTicketsData(snapshotDeps, false);
+            if (last.mode !== 'standard') return last;
+            items.push(...(last.data || []));
+            if ((last.data || []).length < limit) break;
+        }
+        return { ...last, data: items, loadedPage: Math.min(page, pages - 1), hasMore: (last.data || []).length === limit };
+    },
+
     async hydrateTickets(deps, tickets) {
         const warrantyHydrated = await window.AIDAWarrantyService.hydrateTickets(deps, tickets);
         return await window.AIDAInventoryQueryService.hydrateTickets(deps, warrantyHydrated);

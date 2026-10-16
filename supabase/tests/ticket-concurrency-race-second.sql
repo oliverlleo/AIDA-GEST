@@ -1,0 +1,10 @@
+DO $$ BEGIN IF inet_server_addr() IS DISTINCT FROM '127.0.0.1'::inet THEN RAISE EXCEPTION 'Loopback test only';END IF;END $$;
+SET application_name='aida_ticket_revision_second';
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT test_auth.login(2,'20000000-0000-4000-8000-000000000002');
+SELECT set_config('request.method','PATCH',true),set_config('request.path','/tickets',true);
+SELECT set_config('request.headers','{"x-workspace-id":"20000000-0000-4000-8000-000000000002","x-aida-ticket-version":"{\"id\":\"6f000000-0000-4000-8000-000000000002\",\"revision\":\"1\"}"}',true);
+SELECT test_auth.expect_error($q$UPDATE public.tickets SET tech_notes='second user stale overwrite' WHERE id='6f000000-0000-4000-8000-000000000002'$q$,'PT409');
+SELECT 'STALE_WRITE_REJECTED';
+COMMIT;

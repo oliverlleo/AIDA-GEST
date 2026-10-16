@@ -12,7 +12,7 @@
     }
 
     window.AIDAInventoryActions = {
-        async requestTicketParts(deps, ticketId, items, stage, allocateNow = false) {
+        async requestTicketParts(deps, ticketId, items, stage, allocateNow = false, revision) {
             const normalized = normalizeRequestedItems(items);
             if (!ticketId) throw new Error('OS não identificada.');
             if (!normalized.length) throw new Error('Adicione ao menos uma peça.');
@@ -22,7 +22,7 @@
                 p_items: normalized,
                 p_stage: stage,
                 p_allocate_now: Boolean(allocateNow)
-            });
+            }, { ticketVersion: { id: ticketId, revision } });
         },
 
         async approveTicket(deps, ticketId) {

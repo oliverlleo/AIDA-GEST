@@ -3,6 +3,7 @@
 // Parte da infraestrutura de módulos
 
 window.AIDANotesService = {
+    pendingChecks: new Set(),
     async fetchInternalNotes(ticketId, deps) {
         const { state, supabaseFetch } = deps;
         if (!state.user?.workspace_id) return;
@@ -95,17 +96,23 @@ window.AIDANotesService = {
     },
 
     async toggleNoteCheckStatus(note, itemIndex, deps) {
-        const { supabaseFetch } = deps;
-        note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
-
+        const { supabaseFetch, notify } = deps;
+        const item = note.checklist_data?.[itemIndex];
+        if (!item || this.pendingChecks.has(note.id)) return;
+        const expected = Boolean(item.ok), next = !expected;
+        this.pendingChecks.add(note.id);
+        item.ok = next;
         try {
-            await supabaseFetch(`internal_notes?id=eq.${note.id}`, 'PATCH', {
-                checklist_data: note.checklist_data
+            const saved = await supabaseFetch('rpc/set_note_check_status', 'POST', {
+                p_note_id: note.id, p_item_index: itemIndex, p_item_text: item.item,
+                p_expected_ok: expected, p_new_ok: next
             });
+            if (saved?.id === note.id) note.checklist_data = saved.checklist_data;
         } catch (e) {
             console.error("Error toggling checklist:", e);
-            note.checklist_data[itemIndex].ok = !note.checklist_data[itemIndex].ok;
-        }
+            item.ok = expected;
+            if (!e.contextChanged) notify?.('Não foi possível marcar o item: ' + e.message, 'error');
+        } finally { this.pendingChecks.delete(note.id); }
     },
 
     async resolveNote(note, deps) {
