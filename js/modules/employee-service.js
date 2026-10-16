@@ -32,11 +32,19 @@ window.AIDAEmployeeService = {
                 }, body: JSON.stringify({ invitation_id: invitationId, workspace_id: state.user.workspace_id })
             });
             const result = await response.json().catch(() => ({}));
+            if (response.status === 429) {
+                const error = window.AIDAApiClient.createApiError(response, result);
+                return { sent: false, status: 'rate_limited', retryAfter: error.retryAfter };
+            }
             return response.ok && result.sent === true ? { sent: true, status: result.status }
                 : { sent: false, status: result.error_code === 'email_configuration_missing' ? 'pending_configuration' : 'failed' };
         } catch (_) { return { sent: false, status: 'failed' }; }
     },
     notifyDelivery(result, notify) {
+        if (result.status === 'rate_limited') {
+            notify(`Convite salvo. Aguarde ${result.retryAfter || 60} segundos para reenviar o e-mail; você já pode copiar o link para o funcionário.`);
+            return;
+        }
         if (result.status === 'pending_configuration') {
             notify('Convite salvo. Copie o link para enviar ao funcionário; o e-mail será ativado quando o SMTP estiver configurado.');
             return;

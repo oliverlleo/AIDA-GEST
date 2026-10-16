@@ -1,4 +1,4 @@
-import {HttpError, UUID, authenticate, adminContext, rpc, jsonResponse, escapeHtml, withErrors, readLimitedBody} from '../_shared/auth-http.mjs';
+import {HttpError, UUID, authenticate, adminContext, consumeEdgeBudget, rpc, jsonResponse, escapeHtml, withErrors, readLimitedBody} from '../_shared/auth-http.mjs';
 
 /**
  * @param {(name: string) => string | undefined} env
@@ -14,6 +14,7 @@ export function createHandler(env, fetcher = fetch, sendMail = null) {
     if (!UUID.test(body?.invitation_id || '')) throw new HttpError(400, 'invitation_required');
     const workspaceId = body.workspace_id || request.headers.get('x-workspace-id');
     await adminContext(config, identity, workspaceId, fetcher);
+    await consumeEdgeBudget(config, identity, 'invitation', workspaceId, fetcher);
     const params = {p_invitation_id: body.invitation_id, p_requester_user_id: identity.user.id};
     const invitation = await rpc(config, 'get_invitation_delivery_details', params, null, null, fetcher);
     if (!invitation || invitation.workspace_id !== workspaceId) throw new HttpError(403, 'access_denied');

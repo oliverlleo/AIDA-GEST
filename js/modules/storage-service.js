@@ -5,6 +5,36 @@
 window.AIDAStorageService = {
     localPhotoPreviews: new Map(),
 
+    validateImage(file, maxBytes, allowedTypes = null) {
+        if (!file || !Number.isSafeInteger(file.size) || file.size < 1) throw new Error('Selecione uma imagem válida.');
+        if (file.size > maxBytes) throw new Error(`A imagem deve ter no máximo ${maxBytes / 1048576} MB.`);
+        let type = String(file.type || '').trim().toLowerCase();
+        if (!type) {
+            const extension = String(file.name || '').toLowerCase().split('.').pop();
+            const imageTypes = {
+                jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+                gif: 'image/gif', heic: 'image/heic', heif: 'image/heif',
+                avif: 'image/avif', bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff'
+            };
+            type = imageTypes[extension] || '';
+        }
+        if (!/^image\/[a-z0-9.+-]+$/.test(type) || (allowedTypes && !allowedTypes.includes(type))) {
+            throw new Error(allowedTypes ? 'Use uma imagem no formato permitido.' : 'Selecione um arquivo de imagem.');
+        }
+        return type;
+    },
+
+    async reserveStorageUpload(bucket, path, file, mimeType, deps) {
+        const payload = { p_bucket_id: bucket, p_path: path, p_size: file.size, p_mime_type: mimeType };
+        const reservation = deps.supabaseFetch
+            ? await deps.supabaseFetch('rpc/reserve_storage_upload', 'POST', payload)
+            : await window.AIDAApiClient.supabaseFetch('rpc/reserve_storage_upload', 'POST', payload, deps);
+        if (reservation?.reserved === false || reservation?.success === false) {
+            throw new Error('Não foi possível autorizar o envio. Tente novamente.');
+        }
+        return reservation;
+    },
+
     rememberLocalPhotoPreview(path, file) {
         if (!path || !file || typeof URL?.createObjectURL !== 'function') return;
         this.forgetLocalPhotoPreview(path);
@@ -43,10 +73,11 @@ window.AIDAStorageService = {
         const { SUPABASE_URL, SUPABASE_KEY, state } = deps;
 
         try {
+            const mimeType = this.validateImage(file, 5242880, ['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
             const url = `${SUPABASE_URL}/functions/v1/upload-workspace-logo`;
 
             const form = new FormData();
-            form.append('file', file);
+            form.append('file', file.type === mimeType ? file : file.slice(0, file.size, mimeType), file.name || 'logo');
 
             const headers = this.getStorageHeaders('application/octet-stream', deps);
             delete headers['Content-Type']; // The browser supplies the multipart boundary.
@@ -59,8 +90,7 @@ window.AIDAStorageService = {
             });
 
             if (!response.ok) {
-                const txt = await response.text().catch(() => '');
-                throw new Error(`Falha no upload (${response.status}): ${txt}`);
+                throw await window.AIDAApiClient.readApiError(response);
             }
 
             const data = await response.json();
@@ -74,21 +104,22 @@ window.AIDAStorageService = {
     async uploadTicketPhoto(file, ticketId, deps) {
         const { SUPABASE_URL, state } = deps;
         try {
+            const mimeType = this.validateImage(file, 20971520);
             // 1) Path ESTRITO: workspaceId/ticketId/...
             const workspaceId = state.user?.workspace_id;
             if (!workspaceId) throw new Error("Workspace ID not found for upload");
 
-            const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+            const safeName = String(file.name || 'imagem').replace(/[^a-zA-Z0-9.\-_]/g, '_');
             const path = `${workspaceId}/${ticketId}/${Date.now()}_${safeName}`;
 
             // 2) Upload direto no Storage (sem Edge Function)
             const url = `${SUPABASE_URL}/storage/v1/object/ticket_photos/${path}`;
-            const headers = this.getStorageHeaders(file.type, deps);
+            const headers = this.getStorageHeaders(mimeType, deps);
 
+            await this.reserveStorageUpload('ticket_photos', path, file, mimeType, deps);
             const res = await fetch(url, { method: 'POST', headers, body: file });
             if (!res.ok) {
-                const txt = await res.text().catch(() => '');
-                throw new Error(`Falha no upload (${res.status}): ${txt}`);
+                throw await window.AIDAApiClient.readApiError(res);
             }
 
             // A nova OS ainda nao existe no banco neste momento. Guardar uma
@@ -110,17 +141,17 @@ window.AIDAStorageService = {
         const { SUPABASE_URL } = deps;
         const workspaceId = deps.state.user?.workspace_id;
         if (!workspaceId || !itemId) throw new Error('Empresa ou item não identificado.');
-        if (!['image/jpeg','image/png','image/webp'].includes(file?.type)) throw new Error('Use JPG, PNG ou WebP.');
-        if (file.size > 5242880) throw new Error('A imagem deve ter no máximo 5 MB.');
-        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const mimeType = this.validateImage(file, 5242880, ['image/jpeg','image/png','image/webp']);
+        const safeName = String(file.name || 'imagem').replace(/[^a-zA-Z0-9.\-_]/g, '_');
         const path = `${workspaceId}/inventory/${itemId}/${Date.now()}_${safeName}`;
         const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+        const headers = this.getStorageHeaders(mimeType, deps);
+        await this.reserveStorageUpload('inventory_images', path, file, mimeType, deps);
         const res = await fetch(`${SUPABASE_URL}/storage/v1/object/inventory_images/${encodedPath}`, {
-            method: 'POST', headers: this.getStorageHeaders(file.type, deps), body: file
+            method: 'POST', headers, body: file
         });
         if (!res.ok) {
-            const txt = await res.text().catch(() => '');
-            throw new Error(`Falha no upload (${res.status}): ${txt}`);
+            throw await window.AIDAApiClient.readApiError(res);
         }
         return path;
     },
@@ -150,8 +181,7 @@ window.AIDAStorageService = {
             method: 'DELETE', headers: this.getStorageHeaders('application/json', deps)
         });
         if (!res.ok && res.status !== 404) {
-            const txt = await res.text().catch(() => '');
-            throw new Error(`Falha ao remover imagem (${res.status}): ${txt}`);
+            throw await window.AIDAApiClient.readApiError(res);
         }
     },
 

@@ -231,3 +231,32 @@ test('revogação local fecha OS/modais e pede nova entrada em B, mantendo vínc
     assert.ok(events.includes('channels_removed'));
     assert.ok(events.includes('previews_cleared'));
 });
+
+test('limite no lote de fotos interrompe os próximos envios e conserva as fotos já anexadas', async () => {
+    for (const target of ['new', 'existing']) {
+        const { state, context } = runtime();
+        const notices = [], calls = [];
+        const photos = ['previous-photo'];
+        state.ticketForm = { id: 'draft-ticket', photos, client_name: 'Cliente do cadastro' };
+        state.selectedTicket = { id: 'saved-ticket', photos_urls: photos, client_name: 'Cliente salvo' };
+        context.AIDATicketContext.setModalContext('saved-ticket', 'viewTicket');
+        state.notify = (message, type) => notices.push({ message, type });
+        context.AIDAStorageService.uploadTicketPhoto = async (file, ticketId) => {
+            calls.push({ name: file.name, ticketId });
+            if (file.name === 'limited') throw Object.assign(new Error('Aguarde 25 segundos e tente novamente.'), { status: 429 });
+            return file.name;
+        };
+        const event = { target: { value: 'selected-files', files: [{ name: 'added-photo' }, { name: 'limited' }, { name: 'must-not-upload' }] } };
+        await state.handlePhotoUpload(event, target);
+        assert.deepEqual(calls.map(call => call.name), ['added-photo', 'limited']);
+        assert.ok(calls.every(call => call.ticketId === (target === 'new' ? 'draft-ticket' : 'saved-ticket')));
+        assert.deepEqual(photos, ['previous-photo', 'added-photo']);
+        assert.equal(notices.length, 1);
+        assert.match(notices[0].message, /Aguarde 25 segundos/);
+        assert.equal(notices[0].type, 'error');
+        assert.equal(event.target.value, '');
+        assert.equal(state.ticketForm.client_name, 'Cliente do cadastro');
+        assert.equal(state.selectedTicket.client_name, 'Cliente salvo');
+        assert.equal(state.loading, false);
+    }
+});

@@ -5196,6 +5196,7 @@ function app() {
                     state: this
                 });
             } catch (e) {
+                if (e.status === 429) throw e;
                 this.notify("Erro upload: " + e.message, "error");
                 return null;
             } finally {
@@ -5236,14 +5237,18 @@ function app() {
                 targetArray = this.selectedTicket.photos_urls;
             }
 
-            for (let i = 0; i < files.length; i++) {
-                const url = await this.uploadTicketPhoto(files[i], ticketId);
-                if (url) {
-                    targetArray.push(url);
+            try {
+                for (let i = 0; i < files.length; i++) {
+                    const url = await this.uploadTicketPhoto(files[i], ticketId);
+                    if (url) {
+                        targetArray.push(url);
+                    }
                 }
+            } catch (error) {
+                this.notify(error.message, 'error');
+            } finally {
+                event.target.value = '';
             }
-
-            event.target.value = '';
         },
 
         removePhoto(index, targetList = 'new') {

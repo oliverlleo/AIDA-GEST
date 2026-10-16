@@ -27,6 +27,8 @@ function setup(overrides={}) {
     calls.push({url,options,body});
     if (url.endsWith('/auth/v1/user')) return overrides.user || json({id:USER});
     if (url.endsWith('/get_my_access_context')) return overrides.context || json({workspace_id:WS,roles:['admin']});
+    if (url.endsWith('/consume_edge_request_budget')) return overrides.budget || json({allowed:true});
+    if (url.endsWith('/reserve_storage_upload')) return overrides.reservation || json({reserved:true});
     if (url.endsWith('/get_invitation_delivery_details')) return overrides.details || json({
       workspace_id:WS, name:'Pessoa <script>', workspace_name:'Oficina & Cia',
       email:'staff@example.test',delivery_attempt_id:ATTEMPT,
@@ -75,22 +77,24 @@ test('owner in another company does not bypass the selected membership',async()=
 test('invitation must belong to the company validated using the caller JWT',async()=>{
   const {calls,fetcher}=setup({details:json({workspace_id:OTHER,email:'other@example.test'})});
   assert.equal((await createInvitationHandler(env,fetcher)(invitationRequest())).status,403);
-  assert.equal(calls.length,3);
+  assert.equal(calls.length,4);
   assert.equal(calls[1].options.headers.Authorization,'Bearer caller-jwt');
   assert.equal(calls[1].options.headers['x-workspace-id'],WS);
-  assert.equal(calls[2].options.headers.Authorization,'Bearer server-test-key');
-  assert.equal(calls[2].body.p_requester_user_id,USER);
+  assert.equal(calls[2].options.headers.Authorization,'Bearer caller-jwt');
+  assert.equal(calls[2].body.p_action,'invitation');
+  assert.equal(calls[3].options.headers.Authorization,'Bearer server-test-key');
+  assert.equal(calls[3].body.p_requester_user_id,USER);
 });
 test('cancelled/expired/blocked invitation does not reach the provider',async()=>{
   const {calls,fetcher}=setup({details:json({message:'test sensitive body'},403)});
   const response=await createInvitationHandler(env,fetcher)(invitationRequest());
-  assert.equal(response.status,403);assert.equal(calls.length,3);
+  assert.equal(response.status,403);assert.equal(calls.length,4);
   assert.ok(!(await response.text()).includes('sensitive'));
 });
 test('missing email configuration preserves failed invitation status',async()=>{
   const {calls,fetcher}=setup();
   const response=await createInvitationHandler(name=>name==='SMTP_PASSWORD'?null:env(name),fetcher)(invitationRequest());
-  assert.equal(response.status,503);assert.equal(calls.length,4);
+  assert.equal(response.status,503);assert.equal(calls.length,5);
   assert.equal(calls.at(-1).body.p_error_code,'email_configuration_missing');
   assert.equal(calls.at(-1).body.p_delivery_attempt_id,ATTEMPT);
 });
@@ -147,11 +151,49 @@ test('HTML/SVG content cannot be uploaded as a public logo',async()=>{
   for(const type of ['image/svg+xml','image/png']) {
     const {calls,fetcher}=setup();
     const response=await createLogoHandler(env,fetcher)(logoRequest(type,new TextEncoder().encode('<script>alert(1)</script>')));
-    assert.equal(response.status,400);assert.equal(calls.length,2);
+    assert.equal(response.status,400);assert.equal(calls.length,3);
   }
 });
 test('blocked/revoked membership cannot upload after Auth verifies identity',async()=>{
   const {calls,fetcher}=setup({context:json({message:'blocked'},403)});
   assert.equal((await createLogoHandler(env,fetcher)(logoRequest())).status,403);
   assert.equal(calls.length,2);
+});
+
+test('Edge budgets stop both operations before storage or email and expose safe Retry-After',async()=>{
+  for(const [build,request,action] of [[createInvitationHandler,invitationRequest(),'invitation'],[createLogoHandler,logoRequest(),'logo']]) {
+    const budget=new Response(JSON.stringify({message:'private/provider/details'}),{status:429,headers:{'Retry-After':'17'}});
+    const {calls,fetcher}=setup({budget});
+    const response=await build(env,fetcher)(request);
+    assert.equal(response.status,429);
+    assert.equal(response.headers.get('Retry-After'),'17');
+    assert.equal(response.headers.get('Access-Control-Expose-Headers'),'Retry-After');
+    assert.deepEqual(await response.json(),{error_code:'rate_limited'});
+    assert.equal(calls.length,3);
+    assert.equal(calls[2].body.p_action,action);
+    assert.equal(calls[2].body.p_workspace_id,WS);
+    assert.equal(calls[2].options.headers.Authorization,'Bearer caller-jwt');
+  }
+});
+
+test('logo reserves the exact validated path using the caller identity before upload',async()=>{
+  const {calls,fetcher}=setup();
+  const response=await createLogoHandler(env,fetcher)(logoRequest());
+  const result=await response.json();
+  const reservation=calls.find(call=>call.url.endsWith('/reserve_storage_upload'));
+  assert.equal(reservation.options.headers.Authorization,'Bearer caller-jwt');
+  assert.equal(reservation.options.headers['x-workspace-id'],WS);
+  assert.deepEqual(reservation.body,{p_bucket_id:'workspace_logos',p_path:result.path,p_size:8,p_mime_type:'image/png'});
+  assert.ok(calls.indexOf(reservation)<calls.findIndex(call=>call.url.includes('/storage/v1/object/')));
+});
+
+test('reservation and upstream Auth rate limits preserve 429 without retrying work',async()=>{
+  for(const stage of ['reservation','user']) {
+    const {calls,fetcher}=setup({[stage]:new Response('{}',{status:429,headers:{'Retry-After':'9'}})});
+    const response=await createLogoHandler(env,fetcher)(logoRequest());
+    assert.equal(response.status,429);
+    assert.equal(response.headers.get('Retry-After'),'9');
+    assert.equal(calls.some(call=>call.url.includes('/storage/v1/object/')),false);
+    assert.equal(calls.length,stage==='user'?1:4);
+  }
 });

@@ -1,5 +1,15 @@
 export class HttpError extends Error {
-  constructor(status, code) { super(code); this.status = status; this.code = code; }
+  constructor(status, code, retryAfter = null) {
+    super(code); this.status = status; this.code = code;
+    this.retryAfter = retryAfter;
+  }
+}
+
+export function retrySeconds(response) {
+  const value = response.headers.get('Retry-After');
+  const seconds = value !== null && /^\d+$/.test(value) ? Number(value)
+    : value ? Math.ceil((Date.parse(value) - Date.now()) / 1000) : 60;
+  return Number.isFinite(seconds) ? Math.min(3600, Math.max(1, seconds)) : 60;
 }
 
 export const APP_URL = 'https://techassist.pages.dev/app.html';
@@ -26,6 +36,7 @@ export function cors(request, config) {
     'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-workspace-id',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '600', 'Vary': 'Origin',
+    'Access-Control-Expose-Headers': 'Retry-After',
     'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
   };
 }
@@ -41,6 +52,7 @@ export async function authenticate(request, config, fetcher = fetch) {
   const response = await fetcher(`${config.url}/auth/v1/user`, {
     headers: {apikey: config.anonKey, Authorization: authorization},
   });
+  if (response.status === 429) throw new HttpError(429, 'rate_limited', retrySeconds(response));
   if (!response.ok) throw new HttpError(401, 'invalid_session');
   const user = await response.json();
   if (!UUID.test(user.id || '')) throw new HttpError(401, 'invalid_session');
@@ -57,7 +69,8 @@ export async function rpc(config, name, body, authorization, workspaceId, fetche
   if (!response.ok) {
     // Never return database/provider bodies: they can contain addresses or credentials.
     const status = response.status === 429 ? 429 : response.status === 409 ? 409 : 403;
-    throw new HttpError(status, status === 429 || status === 409 ? 'delivery_retry_later' : 'access_denied');
+    throw new HttpError(status, status === 429 ? 'rate_limited' : status === 409 ? 'delivery_retry_later' : 'access_denied',
+      status === 429 ? retrySeconds(response) : null);
   }
   const text = await response.text();
   return text ? JSON.parse(text) : null;
@@ -68,6 +81,11 @@ export async function adminContext(config, identity, workspaceId, fetcher = fetc
   const context = await rpc(config, 'get_my_access_context', {p_workspace_id: workspaceId}, identity.authorization, workspaceId, fetcher);
   if (!context || context.workspace_id !== workspaceId || !(context.roles || []).includes('admin')) throw new HttpError(403, 'admin_required');
   return context;
+}
+
+export async function consumeEdgeBudget(config, identity, action, workspaceId, fetcher = fetch) {
+  await rpc(config, 'consume_edge_request_budget', {p_action: action, p_workspace_id: workspaceId},
+    identity.authorization, workspaceId, fetcher);
 }
 
 export function escapeHtml(value) {
@@ -106,6 +124,7 @@ export function withErrors(handler, env, fetcher = fetch) {
       return await handler(request, config, headers, fetcher);
     } catch (error) {
       const safe = error instanceof HttpError ? error : new HttpError(500, 'request_failed');
+      if (safe.status === 429) headers['Retry-After'] = String(safe.retryAfter || 60);
       return jsonResponse({error_code: safe.code}, safe.status, headers);
     }
   };
