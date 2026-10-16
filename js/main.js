@@ -317,6 +317,7 @@ function app() {
         // Supplier Purchase Flow State
         purchaseFlow: {
             ticketId: null,
+            ticketSnapshot: null,
             supplierId: '',
             items: [{ name: '', quantity: 1 }]
         },
@@ -420,6 +421,18 @@ function app() {
         bootstrapDone: false,
         baseDataLoaded: false,
         realtimeReady: false,
+        syncStatus: 'stopped',
+        syncLastUpdatedAt: 0,
+        homeQueueRequestId: 0,
+        kanbanCountsRequestId: 0,
+        overviewQueueRequestId: 0,
+        ticketModalSnapshot: null,
+        ticketModalDirty: false,
+        ticketModalExternalChange: false,
+        ticketModalUnavailable: false,
+        appointmentDraftRequestId: 0,
+        scheduleAvailabilityRequestId: 0,
+        scheduleGridRequestId: 0,
 
         // --- IN-FLIGHT GUARDS ---
         globalLogsInFlight: false,
@@ -536,6 +549,7 @@ function app() {
             transferForm: { item_id: '', from_location_id: '', to_location_id: '', quantity: 1, reason: '' },
             purchaseForm: { supplier_id: '', urgent: false, notes: '', items: [] },
             receiptForm: { purchaseId: '', supplierName: '', items: [], confirmAllocation: true },
+            receiptVersion: null,
             ticketPartsDetail: { ticketId: '', items: [], loading: false },
             reservationViewer: { item: null, items: [], total: 0, hasMore: false, nextCursor: null, loading: false, requestId: 0 },
             budgetCosts: { ticketId: '', items: [], total: 0, missingCostCount: 0, loading: false },
@@ -886,10 +900,13 @@ function app() {
         },
 
         resolveTicket(ticketOrId) {
+            const openTicketContext = this.schedulePanelOpen || ['viewTicket', 'outcome', 'logistics', 'outsourced',
+                'finishAnalysis', 'supplierPurchase', 'pauseRepairForParts', 'inventoryPartRequest', 'inventoryTicketParts']
+                .some(name => this.modals[name]);
             return window.AIDATicketContext.resolveTicket(
                 ticketOrId,
                 this.tickets,
-                this.selectedTicket
+                openTicketContext ? this.selectedTicket : null
             );
         },
 
@@ -1113,16 +1130,21 @@ function app() {
                 this.authUser = session?.user || null;
                 if (this.accessTransitioning || this.authBootstrapping || this.signingOut) return;
                 if (!session) {
+                    this.stopWorkspaceSync();
                     this.user = null;
                     this.employeeSession = null;
                     if (previousId) window.location.replace(window.AIDAAuthSessionService.getAppUrl().href);
                     return;
                 }
                 if (previousId && previousId !== session.user.id) {
+                    this.stopWorkspaceSync();
                     window.location.replace(window.AIDAAuthSessionService.getAppUrl().href);
                     return;
                 }
-                if (!this.recoveryMode) setTimeout(() => this.loadAccessData(), 0);
+                if (!this.recoveryMode) setTimeout(() => {
+                    this.setupRealtime();
+                    this.loadAccessData();
+                }, 0);
             });
 
             setInterval(() => {
@@ -1485,48 +1507,220 @@ function app() {
         },
 
         setupRealtime() {
-            // The current project has no realtime publication. Enabling it requires audited RLS.
-            if (window.SUPABASE_CONFIG?.REALTIME_ENABLED !== true) return;
-            if (!this.user?.workspace_id || !supabaseClient) return;
-            if (this.session && !this.session.user) return; // Ensure session is fully ready if applicable
-
-            const channels = [
-                {
-                    topic: 'tickets_channel',
-                    setup: (c) => c.on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, (payload) => this.handleRealtimeUpdate(payload))
-                },
-                {
-                    topic: 'notifications_channel',
-                    setup: (c) => c.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => this.fetchNotifications())
-                },
-                {
-                    topic: 'ticket_logs_channel',
-                    setup: (c) => c.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_logs' }, () => this.fetchGlobalLogs())
-                }
-            ];
-
-            channels.forEach(({ topic, setup }) => {
-                const existing = supabaseClient.getChannels().find(c => c.topic === topic);
-
-                if (existing) {
-                    if (['joined', 'joining', 'subscribed'].includes(existing.state)) {
-                        console.log(`[RT] channel reused (${topic}) state=${existing.state}`);
-                        return;
-                    } else {
-                        console.log(`[RT] channel recreating (${topic}) was=${existing.state}`);
-                        supabaseClient.removeChannel(existing);
-                    }
-                }
-
-                const channel = supabaseClient.channel(topic);
-                setup(channel).subscribe((status) => {
-                    if (status === 'SUBSCRIBED') {
-                        console.log(`[RT] subscribed (${topic})`);
-                    } else if (status === 'CHANNEL_ERROR') {
-                        if (!isUnloading) console.error(`[RT] error (${topic})`);
-                    }
-                });
+            window.AIDAWorkspaceSyncService?.start(this, {
+                client: supabaseClient,
+                isReady: () => this.bootstrapDone && !this.bootstrapInFlight,
+                refresh: (scopes, isCurrent) => this.refreshWorkspaceState(scopes, isCurrent)
             });
+        },
+
+        stopWorkspaceSync() {
+            window.AIDAWorkspaceSyncService?.stop(this);
+            this.realtimeReady = false;
+            this.ticketFetchRequestId++;
+            this.ticketModalRefreshRequestId++;
+            this.homeQueueRequestId++;
+            this.kanbanCountsRequestId++;
+            this.overviewQueueRequestId++;
+            if (this.inventory) this.inventory.requestId++;
+            if (this.customerManagement) {
+                this.customerManagement.requestId++;
+                this.customerManagement.ticketRequestId++;
+            }
+            this.tickets = [];
+            this.techTickets = [];
+            this.notificationsList = [];
+            this.internalNotes = [];
+            this.generalNotes = [];
+            this.ticketModalSnapshot = null;
+            this.ticketModalDirty = false;
+            this.ticketModalExternalChange = false;
+            this.ticketModalUnavailable = false;
+            this.appointmentDraftRequestId++;
+        },
+
+        syncContextKey() {
+            return JSON.stringify([
+                this.session?.user?.id, this.user?.workspace_id, this.view,
+                this.searchQuery, this.adminDashboardFilters, this.kanbanOperationalFilters,
+                this.homeOperationalFilters, this.showFinalized,
+                this.inventory?.search, this.inventory?.category, this.inventory?.stockFilter,
+                this.customerManagement?.search, this.customerManagement?.selected?.id,
+                this.customerManagement?.ticketSearch,
+                this.scheduleManagement?.referenceDate, this.scheduleManagement?.gridTechnicianId,
+                this.scheduleManagement?.selectedTechnicianId, this.scheduleManagement?.viewMode,
+                this.scheduleManagement?.typeFilter, this.scheduleCurrentWeekStart,
+                this.schedulePanelTechnicianId, this.schedulePanelMode
+            ]);
+        },
+
+        async refreshWorkspaceState(scopes, isCurrent = () => true) {
+            if (!this.user?.workspace_id || !this.session) return;
+            if (scopes.includes('access')) {
+                if (!await this.revalidateEmployeeSession(true) || !isCurrent()) return;
+                // Lookup lists may change in another PC. None of these methods
+                // replace the currently edited forms.
+                await this.fetchEmployees();
+                await this.fetchTemplates();
+                await this.fetchDeviceModels();
+                await this.fetchDefectOptions();
+                await this.fetchOutsourcedCompanies();
+                if (this.isModuleEnabled('suppliers')) await this.fetchFornecedores();
+            }
+            const context = this.syncContextKey();
+            const check = () => isCurrent() && context === this.syncContextKey();
+            const requireCurrent = () => {
+                if (!check()) throw Object.assign(new Error('Contexto alterado.'), { name: 'AbortError' });
+            };
+            const relevantTickets = scopes.some(scope => ['tickets', 'inventory', 'access', 'agenda'].includes(scope));
+            if (relevantTickets) {
+                requireCurrent();
+                if (['dashboard', 'home'].includes(this.view)) {
+                    await this.fetchHomeOperationalQueue({ background: true });
+                    if (this.overviewQueueModal.open) await this.refreshOverviewQueueWindow();
+                } else if (['kanban', 'tech_orders', 'tester_bench', 'admin_dashboard'].includes(this.view)) {
+                    await this.fetchTickets(false, { preserveWindow: true });
+                } else if (this.view === 'inventory' && scopes.some(scope => ['inventory', 'access'].includes(scope))) {
+                    await this.refreshInventoryWindow();
+                } else if (this.view === 'customers') {
+                    await this.refreshCustomerWindows();
+                }
+                requireCurrent();
+                if (this.modals.viewTicket && this.selectedTicket?.id) await this.refreshOpenTicketModal(this.selectedTicket.id);
+                requireCurrent();
+                if (['dashboard', 'home', 'admin_dashboard'].includes(this.view)) {
+                    this.invalidateDashboardCache('workspace_sync');
+                    await this.requestDashboardMetrics({ reason: 'realtime' });
+                    await this.fetchGlobalLogs();
+                } else if (this.view === 'kanban') {
+                    await this.fetchOperationalAlerts();
+                    await this.fetchKanbanOperationalCounts();
+                }
+                if (this.view === 'schedule_management' && this.isModuleEnabled('agenda')) await this.loadScheduleManagement();
+                if (this.schedulePanelOpen) await this.fetchScheduleAvailability();
+            }
+            requireCurrent();
+            if (scopes.includes('notifications') || scopes.includes('access')) await this.fetchNotifications();
+            requireCurrent();
+            if (scopes.includes('notes') || scopes.includes('access')) {
+                if (this.showNotesSidebar) await this.fetchGeneralNotes();
+                if (this.modals.viewTicket && this.selectedTicket?.id) await this.fetchInternalNotes(this.selectedTicket.id);
+            }
+        },
+
+        markTicketDraftDirty() {
+            this.ticketModalDirty = Boolean(window.AIDAWorkspaceSyncService?.dirtyFields(this).length);
+        },
+        markTicketConflict(ticket) {
+            if (this.selectedTicket?.id === ticket?.id) this.ticketModalExternalChange = true;
+            window.AIDAWorkspaceSyncService?.invalidate(this, ['tickets']);
+        },
+        async reloadOpenTicketAfterChange() {
+            if (!this.selectedTicket?.id) return;
+            if (window.AIDAWorkspaceSyncService?.hasDraft(this)
+                && !confirm('Atualizar esta OS e descartar as alterações que ainda não foram salvas?')) return;
+            const id = this.selectedTicket.id;
+            const ticket = await window.AIDATicketQueryService.fetchTicketDetails({
+                state: this, supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+            }, id);
+            if (ticket && this.modals.viewTicket && this.selectedTicket?.id === id) await this.viewTicketDetails(ticket);
+            else if (!ticket) this.notify('A OS não está mais disponível para este acesso.', 'error');
+        },
+
+        async refreshInventoryWindow() {
+            if (!this.isInventoryEnabled() || !(this.hasRole('admin') || this.hasRole('atendente'))) return;
+            if (this.inventory.loading) throw Object.assign(new Error('Estoque sendo carregado.'), { retryAfter: 2 });
+            const inventory = this.inventory, context = this.syncContextKey(), requestId = ++inventory.requestId;
+            const filters = { search: inventory.search, category: inventory.category, stockFilter: inventory.stockFilter };
+            inventory.loading = true;
+            try {
+                const deps = { supabaseFetch: (ep, method, payload) => {
+                    if (context !== this.syncContextKey()) throw Object.assign(new Error('Contexto alterado.'), { name: 'AbortError' });
+                    return this.supabaseFetch(ep, method, payload);
+                } };
+                const dashboard = await window.AIDAInventoryQueryService.fetchDashboard(deps);
+                const page = await window.AIDATicketQueryService.collectLoadedWindow(
+                    cursor => window.AIDAInventoryQueryService.fetchItems(deps, { ...filters, limit: 25, cursor }),
+                    inventory.items.length, 25
+                );
+                if (requestId !== inventory.requestId || context !== this.syncContextKey()) return;
+                inventory.dashboard = dashboard;
+                inventory.items = page.items;
+                inventory.hasMore = Boolean(page.has_more);
+                inventory.nextCursor = page.next_cursor || null;
+                await this.loadInventoryWorkspaceData();
+            } finally { if (requestId === inventory.requestId) inventory.loading = false; }
+        },
+
+        async refreshCustomerWindows() {
+            if (!this.isModuleEnabled('customers') || !(this.hasRole('admin') || this.hasRole('atendente'))) return;
+            const management = this.customerManagement;
+            if (management.loading || management.ticketsLoading) throw Object.assign(new Error('Clientes sendo carregados.'), { retryAfter: 2 });
+            const context = this.syncContextKey(), requestId = ++management.requestId;
+            const customerId = management.selected?.id, search = String(management.search || '').trim() || null;
+            const ticketSearch = String(management.ticketSearch || '').trim() || null;
+            management.loading = true;
+            try {
+                const fetchPage = (ep, payload) => {
+                    if (context !== this.syncContextKey()) throw Object.assign(new Error('Contexto alterado.'), { name: 'AbortError' });
+                    return this.supabaseFetch(ep, 'POST', payload);
+                };
+                const page = await window.AIDATicketQueryService.collectLoadedWindow(
+                    cursor => fetchPage('rpc/get_customer_page', { p_search: search, p_limit: 20, p_cursor: cursor, p_include_total: !cursor }),
+                    management.items.length, 20
+                );
+                if (requestId !== management.requestId || context !== this.syncContextKey()) return;
+                management.items = page.items;
+                management.total = Number(page.total || 0);
+                management.hasMore = Boolean(page.has_more);
+                management.nextCursor = page.next_cursor || null;
+                if (customerId) {
+                    const ticketRequestId = ++management.ticketRequestId;
+                    const tickets = await window.AIDATicketQueryService.collectLoadedWindow(
+                        cursor => fetchPage('rpc/get_customer_ticket_page', { p_customer_id: customerId, p_search: ticketSearch, p_limit: 20, p_cursor: cursor, p_include_total: !cursor }),
+                        management.tickets.length, 20
+                    );
+                    if (ticketRequestId !== management.ticketRequestId || context !== this.syncContextKey()) return;
+                    const hydrated = await window.AIDATicketQueryService.hydrateTickets({
+                        state: this, supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                    }, tickets.items);
+                    if (ticketRequestId !== management.ticketRequestId || context !== this.syncContextKey()) return;
+                    management.tickets = hydrated;
+                    management.ticketsTotal = Number(tickets.total || 0);
+                    management.ticketsHasMore = Boolean(tickets.has_more);
+                    management.ticketsNextCursor = tickets.next_cursor || null;
+                }
+            } finally { if (requestId === management.requestId) management.loading = false; }
+        },
+
+        async refreshOverviewQueueWindow() {
+            const modal = this.overviewQueueModal;
+            if (!modal.open) return;
+            if (modal.loading) throw Object.assign(new Error('Fila sendo carregada.'), { retryAfter: 2 });
+            const requestId = ++this.overviewQueueRequestId, context = this.syncContextKey();
+            const key = modal.key, f = { ...this.homeOperationalFilters };
+            modal.loading = true;
+            try {
+                const page = await window.AIDATicketQueryService.collectLoadedWindow(cursor => {
+                    if (context !== this.syncContextKey()) throw Object.assign(new Error('Contexto alterado.'), { name: 'AbortError' });
+                    return this.supabaseFetch(['pendingTests', 'unscheduledTickets'].includes(key)
+                        ? 'rpc/get_overview_extra_queue_page' : 'rpc/get_overview_queue_page', 'POST', {
+                        p_queue_key: key, p_window: f.window, p_basis: this.getEffectiveOperationalBasis(f.basis),
+                        p_status: f.status !== 'all' ? f.status : null,
+                        p_technician_id: f.technician !== 'all' ? f.technician : null,
+                        p_search: String(f.search || '').trim() || null, p_limit: 20, p_cursor: cursor
+                    });
+                }, modal.items.length, 20);
+                const items = key === 'pendingBudgets'
+                    ? await window.AIDATicketQueryService.hydrateTickets({ state: this, supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload) }, page.items)
+                    : page.items;
+                if (requestId !== this.overviewQueueRequestId || context !== this.syncContextKey()
+                    || this.overviewQueueModal !== modal || !modal.open || modal.key !== key) return;
+                modal.items = items;
+                modal.total = Number(page.total || 0);
+                modal.hasMore = Boolean(page.has_more);
+                modal.nextCursor = page.next_cursor || null;
+            } finally { modal.loading = false; }
         },
 
         // --- AUTH & SESSION ---
@@ -1535,6 +1729,7 @@ function app() {
         _getAuthDeps() {
             return {
                 state: this,
+                stopWorkspaceSync: () => this.stopWorkspaceSync(),
                 supabaseClient: supabaseClient,
                 supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
                 notify: (msg, type) => this.notify(msg, type),
@@ -1575,16 +1770,18 @@ function app() {
             window.addEventListener('focus', validateWhenActive);
         },
 
-        async revalidateEmployeeSession() {
+        async revalidateEmployeeSession(force = false) {
             if (!this.session || !this.user?.workspace_id || this.employeeSessionValidationInFlight) return true;
-            if (Date.now() - this.employeeSessionLastValidatedAt < 60 * 1000) return true;
+            if (!force && Date.now() - this.employeeSessionLastValidatedAt < 60 * 1000) return true;
             this.employeeSessionValidationInFlight = true;
             try {
                 const context = await this.supabaseFetch('rpc/get_my_access_context', 'POST', { p_workspace_id: this.user.workspace_id });
                 await window.AIDAAuthSessionService.applyAccessContext(context, this._getAuthDeps());
                 return true;
             } catch (error) {
-                if (error.status >= 400 && error.status < 500) {
+                // A temporary rate limit or network fault is not a revoked membership.
+                if ([400, 401, 403].includes(error.status)) {
+                    this.stopWorkspaceSync();
                     this.user = null;
                     this.employeeSession = null;
                     this.accessHubOpen = true;
@@ -1597,6 +1794,7 @@ function app() {
                     await this.loadAccessData();
                     return false;
                 }
+                if (force) throw error;
                 return true;
             } finally { this.employeeSessionValidationInFlight = false; }
         },
@@ -1826,101 +2024,7 @@ function app() {
 
         // --- 5. POLÍTICA DE REFRESH VIA REALTIME ---
 
-        isRelevantUpdate(payload) {
-            if (!payload) return false;
-            const { eventType, new: newRec, old: oldRec } = payload;
-
-            // 1. Workspace Security Check
-            if (newRec && newRec.workspace_id && this.user && this.user.workspace_id) {
-                if (newRec.workspace_id !== this.user.workspace_id) {
-                    // console.log('[Dashboard][Realtime] ignored (wrong workspace)');
-                    return false;
-                }
-            }
-
-            // 2. Event Type Check
-            if (eventType === 'INSERT' || eventType === 'DELETE') {
-                return true;
-            }
-
-            // 3. Update Relevance Check
-            if (eventType === 'UPDATE') {
-                const fields = [
-                    'status',
-                    'delivered_at',
-                    'repair_start_at',
-                    'repair_end_at',
-                    'budget_sent_at',
-                    'pickup_available_at',
-                    'technician_id',
-                    'defect_reported', // Maps to 'defect' concept
-                    'device_model',
-                    'created_at',
-                    'deleted_at'
-                ];
-
-                // Check value changes strictly
-                for (const f of fields) {
-                    const oldVal = oldRec ? oldRec[f] : undefined;
-                    const newVal = newRec ? newRec[f] : undefined;
-                    if (newVal != oldVal) return true;
-                }
-            }
-
-            console.log('[Dashboard][Realtime] ignored (not relevant)');
-            return false;
-        },
-
-        handleRealtimeUpdate(payload) {
-            console.log('[RT] event', payload);
-
-            // 1. Immediate update for focused ticket
-            if (this.selectedTicket && payload.new && payload.new.id === this.selectedTicket.id) {
-                this.selectedTicket = { ...this.selectedTicket, ...payload.new };
-            }
-            if (payload.new && payload.new.id === this.activeTicketId) {
-                // Ensure state array stays fresh too
-                const idx = this.tickets.findIndex(t => t.id === payload.new.id);
-                if (idx > -1) {
-                     this.tickets[idx] = { ...this.tickets[idx], ...payload.new };
-                }
-            }
-
-            // 2. Optimized Dashboard Refresh (Throttle + Relevance Check)
-            if (this.view === 'dashboard') {
-                if (this.isRelevantUpdate(payload)) {
-                    console.log('[Dashboard][Realtime] relevant event -> scheduling refresh');
-                    this.invalidateDashboardCache('realtime_event');
-                    this.requestDashboardMetrics({ reason: 'realtime' });
-                }
-            }
-
-            // 3. In-Memory List Refresh Strategy (Avoid expensive fetchTickets calls)
-            if (payload.eventType === 'INSERT' && payload.new) {
-                // Prevent duplicates
-                if (!this.tickets.some(t => t.id === payload.new.id)) {
-                    // Only add to the beginning if we are on the first page or Kanban (no pagination limit visually yet)
-                    if (this.ticketPagination.page === 0 || this.view === 'kanban') {
-                        this.tickets.unshift(payload.new);
-                    } else {
-                        this.notify("Novos chamados disponíveis.", "info");
-                    }
-                }
-            } else if (payload.eventType === 'UPDATE' && payload.new) {
-                const idx = this.tickets.findIndex(t => t.id === payload.new.id);
-                if (idx > -1) {
-                    if (payload.new.deleted_at) {
-                        this.tickets.splice(idx, 1); // Remove if logically deleted
-                    } else {
-                        this.tickets[idx] = { ...this.tickets[idx], ...payload.new }; // Update local state directly
-                    }
-                } else if (!payload.new.deleted_at && (this.ticketPagination.page === 0 || this.view === 'kanban')) {
-                    // If it was updated but we didn't have it locally (e.g. moved into our filter view scope)
-                    // we push it to ensure it appears. For perfect sorting, a fetch is ideal, but unshift is safe for RT.
-                    this.tickets.unshift(payload.new);
-                }
-            }
-        },
+        // Private Broadcast invalidations are handled by AIDAWorkspaceSyncService.
 
         handleSearchInput() {
             if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
@@ -1973,12 +2077,12 @@ function app() {
         },
 
         isLoadingTicketColumn(status) {
-            return Boolean(this.ticketColumnPagination?.[status]?.loading);
+            return Boolean(this.ticketPagination.isLoading || this.ticketColumnPagination?.[status]?.loading);
         },
 
         async loadMoreTicketColumn(status) {
             const column = this.ticketColumnPagination?.[status];
-            if (!column?.hasMore || column.loading) return;
+            if (!column?.hasMore || column.loading || this.ticketPagination.isLoading) return;
 
             const requestId = this.ticketFetchRequestId;
             column.loading = true;
@@ -2652,6 +2756,7 @@ function app() {
                 const detail = await window.AIDAInventoryManagementService.loadPurchase({
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 }, purchase.id);
+                this.inventory.receiptVersion = detail.purchase?.revision ?? detail.revision ?? null;
                 this.inventory.receiptForm = {
                     purchaseId: purchase.id,
                     supplierName: purchase.supplier_name,
@@ -2695,8 +2800,8 @@ function app() {
             try {
                 const form = this.inventory.receiptForm;
                 const result = await window.AIDAInventoryManagementService.receivePurchase({
-                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-                }, form.purchaseId, form.items, form.confirmAllocation);
+                    supabaseFetch: (ep, method, payload, options) => this.supabaseFetch(ep, method, payload, options)
+                }, form.purchaseId, form.items, form.confirmAllocation, this.inventory.receiptVersion);
                 this.modals.inventoryReceipt = false;
                 await this.loadInventory(true);
                 await this.refreshPostMutation(true);
@@ -2942,6 +3047,7 @@ function app() {
             if (!ticket) return;
             this.inventory.partRequest = {
                 ticketId: ticket.id,
+                ticketSnapshot: JSON.parse(JSON.stringify(ticket)),
                 stage,
                 allocateNow,
                 afterSubmit,
@@ -3017,16 +3123,25 @@ function app() {
             }
             this.loading = true;
             try {
+                const ticketSnapshot = request.ticketSnapshot && JSON.parse(JSON.stringify(request.ticketSnapshot));
+                if (!ticketSnapshot?.revision) throw new Error('Reabra a OS antes de registrar as peças.');
                 const result = await window.AIDAInventoryActions.requestTicketParts({
-                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-                }, request.ticketId, request.items, request.stage, request.allocateNow);
+                    supabaseFetch: (ep, method, payload, options) => this.supabaseFetch(ep, method, payload, options)
+                }, request.ticketId, request.items, request.stage, request.allocateNow, ticketSnapshot.revision);
+                const confirmedTicket = window.AIDAWorkspaceSyncService.applyCommandReceipt(this, ticketSnapshot, result);
+                request.ticketSnapshot = JSON.parse(JSON.stringify(confirmedTicket));
                 this.modals.inventoryPartRequest = false;
                 this.notify(window.AIDAInventoryActions.routeMessage(result));
+                // Continue with this transaction's receipt, never a newer list
+                // snapshot that could hide another operator's intervening edit.
+                const continuationDeps = { ...this._getActionDeps(), resolveTicket: () => confirmedTicket };
                 if (request.afterSubmit === 'finishAnalysis') {
-                    await this.finishAnalysis(request.ticketId);
+                    const advanced = await window.AIDATicketActions.finishAnalysis(confirmedTicket, continuationDeps);
+                    if (!advanced) this.modals.finishAnalysis = true;
                 } else if (request.afterSubmit === 'finishWarrantyAnalysis') {
                     this.analysisForm.partsList = request.items.map(item => `${item.quantity} x ${item.name}`).join(', ');
-                    await this.finishWarrantyAnalysis(request.ticketId);
+                    const advanced = await window.AIDATicketActions.finishWarrantyAnalysis(confirmedTicket, continuationDeps);
+                    if (!advanced) this.modals.finishAnalysis = true;
                 } else if (request.afterSubmit === 'openInventoryPurchaseAfterAdapt') {
                     await this.refreshPostMutation(true);
                     await this.fetchGlobalLogs();
@@ -3040,7 +3155,11 @@ function app() {
                 }
                 return result;
             } catch (error) {
-                this.notify('Erro ao registrar peças: ' + error.message, 'error');
+                if (error.unknownCommit) {
+                    this.modals.inventoryPartRequest = false;
+                    if (['finishAnalysis', 'finishWarrantyAnalysis'].includes(request.afterSubmit)) this.modals.finishAnalysis = true;
+                    this.notify(error.message, 'error');
+                } else this.notify('Erro ao registrar peças: ' + error.message, 'error');
                 return null;
             } finally {
                 this.loading = false;
@@ -3126,8 +3245,12 @@ function app() {
             return visibleTickets;
         },
 
-        async fetchTickets(loadMore = false) {
+        async fetchTickets(loadMore = false, options = {}) {
             if (!this.user?.workspace_id) return;
+            if (options.preserveWindow && (this.ticketPagination.isLoading || this.isLoadingFinalized
+                || Object.values(this.ticketColumnPagination).some(column => column.loading))) {
+                throw Object.assign(new Error('Uma página de OS está sendo carregada.'), { retryAfter: 2 });
+            }
 
             // Paginação depende do resultado atual e não pode concorrer com outra
             // página. Recarregamentos normais podem substituir uma busca antiga.
@@ -3137,11 +3260,12 @@ function app() {
             }
 
             const requestId = ++this.ticketFetchRequestId;
+            const context = this.syncContextKey();
             this.ticketPagination.isLoading = true;
 
             if (loadMore) {
                 this.ticketPagination.page++;
-            } else {
+            } else if (!options.preserveWindow) {
                 this.ticketPagination.page = 0;
                 this.ticketPagination.hasMore = true;
                 this.ticketPagination.nextCursor = null;
@@ -3149,15 +3273,21 @@ function app() {
             }
 
             try {
-                const result = await window.AIDATicketQueryService.fetchTicketsData({
+                const deps = {
                     state: this,
-                    supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                    supabaseFetch: (ep, method, payload) => {
+                        if (context !== this.syncContextKey()) throw Object.assign(new Error('Contexto alterado.'), { name: 'AbortError' });
+                        return this.supabaseFetch(ep, method, payload);
+                    },
                     hasRole: (r) => this.hasRole(r)
-                }, loadMore);
+                };
+                const result = options.preserveWindow
+                    ? await window.AIDATicketQueryService.fetchLoadedTicketsData(deps)
+                    : await window.AIDATicketQueryService.fetchTicketsData(deps, loadMore);
 
                 // Uma resposta de tela, filtro ou texto anterior nunca pode
                 // substituir a lista correspondente ao contexto atual.
-                if (requestId !== this.ticketFetchRequestId) return;
+                if (requestId !== this.ticketFetchRequestId || context !== this.syncContextKey()) return;
 
                 if (result.mode === 'test_bench_page') {
                     if (loadMore) {
@@ -3247,7 +3377,10 @@ function app() {
                         this.tickets = data;
                     }
 
-                    if (data.length < this.ticketPagination.limit) {
+                    if (options.preserveWindow) {
+                        this.ticketPagination.page = result.loadedPage ?? this.ticketPagination.page;
+                        this.ticketPagination.hasMore = Boolean(result.hasMore);
+                    } else if (data.length < this.ticketPagination.limit) {
                         this.ticketPagination.hasMore = false;
                     }
 
@@ -3273,6 +3406,8 @@ function app() {
                 }
             } catch (err) {
                  if (requestId !== this.ticketFetchRequestId) return;
+                 if (err.name === 'AbortError') return;
+                 if (options.preserveWindow) throw err;
                  console.warn("Fetch exception:", err);
                  this.notify("Erro ao buscar chamados.", "error");
             } finally {
@@ -4027,7 +4162,7 @@ function app() {
                 return this.notify("O chamado precisa estar alocado a um técnico para agendar usando este atalho de calendário lateral. Tente alterar o técnico ou agendar via painel 'Gerenciamento de Agenda'.", "error");
             }
             this.schedulePanelMode = mode;
-            this.schedulePanelTicket = targetTicket;
+            this.schedulePanelTicket = targetTicket ? JSON.parse(JSON.stringify(targetTicket)) : null;
             this.schedulePanelTechnicianId = targetTechId;
             this.schedulePanelAfterSave = afterSave;
             this.scheduleCurrentWeekStart = new Date(); // Start with current week
@@ -4051,6 +4186,7 @@ function app() {
         async fetchScheduleAvailability(targetTechId = null) {
             const techId = targetTechId || this.schedulePanelTechnicianId || this.schedulePanelTicket?.technician_id || this.ticketForm.technician_id;
             if (!techId || techId === 'all') return;
+            const requestId = ++this.scheduleAvailabilityRequestId, context = this.syncContextKey();
 
             this.scheduleAvailabilityLoading = true;
             this.scheduleAvailabilityData = [];
@@ -4066,6 +4202,7 @@ function app() {
                     p_reference_date: refDate,
                     p_days: 7
                 });
+                if (requestId !== this.scheduleAvailabilityRequestId || context !== this.syncContextKey()) return;
 
                 if (response && response.days) {
                     this.scheduleAvailabilityData = response.days;
@@ -4074,10 +4211,11 @@ function app() {
                     this.scheduleAvailabilityData = response;
                 }
             } catch (error) {
+                if (requestId !== this.scheduleAvailabilityRequestId || context !== this.syncContextKey() || error.name === 'AbortError') return;
                 console.error("Error fetching schedule:", error);
                 this.notify("Erro ao buscar disponibilidade.", "error");
             } finally {
-                this.scheduleAvailabilityLoading = false;
+                if (requestId === this.scheduleAvailabilityRequestId) this.scheduleAvailabilityLoading = false;
             }
         },
 
@@ -4133,7 +4271,8 @@ function app() {
         async selectScheduleSlot(dateStr, slot) {
             if (this.loading) return;
 
-            const targetTicket = this.schedulePanelTicket || (this.modals.viewTicket ? this.selectedTicket : null);
+            const panelTicket = this.schedulePanelTicket || (this.modals.viewTicket ? this.selectedTicket : null);
+            const targetTicket = panelTicket ? JSON.parse(JSON.stringify(panelTicket)) : null;
             const techId = this.schedulePanelTechnicianId || targetTicket?.technician_id || this.ticketForm.technician_id;
             const afterSave = this.schedulePanelAfterSave;
 
@@ -4153,26 +4292,26 @@ function app() {
                     const startStr = this.toUTC(`${dateStr}T${appointmentData.start}`);
                     const endStr = this.toUTC(`${dateStr}T${appointmentData.end}`);
 
-                    await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
+                    const receipt = await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
                         p_ticket_id: targetTicket.id,
                         p_technician_id: techId,
                         p_appointment_type: this.schedulePanelMode,
                         p_scheduled_start: startStr,
                         p_scheduled_end: endStr,
                         p_notes: 'Agendado pelo painel lateral'
-                    });
+                    }, { ticketVersion: { id: targetTicket.id, revision: targetTicket.revision } });
+                    window.AIDAWorkspaceSyncService.applyCommandReceipt(this, targetTicket, receipt);
+                    this.schedulePanelTicket = JSON.parse(JSON.stringify(targetTicket));
 
-                    targetTicket[`${this.schedulePanelMode}_scheduled`] = true;
-                    targetTicket[`${this.schedulePanelMode}_scheduled_at`] = startStr;
                     if (this.selectedTicket?.id === targetTicket.id) {
-                        this.selectedTicket = { ...this.selectedTicket, ...targetTicket };
                         this.fetchTicketAppointments(targetTicket.id);
                     }
+                    const continuationDeps = { ...this._getActionDeps(), resolveTicket: () => targetTicket };
 
                     if (afterSave === 'approveRepair') {
                         const advanced = await window.AIDATicketActions.completeBudgetApproval(
                             targetTicket,
-                            this._getActionDeps()
+                            continuationDeps
                         );
                         if (!advanced) {
                             this.notify("O reparo foi agendado, mas não foi possível avançar a etapa. Tente aprovar novamente.", "error");
@@ -4183,7 +4322,7 @@ function app() {
                     } else if (afterSave === 'finishWarrantyAnalysis') {
                         const advanced = await window.AIDATicketActions.finishWarrantyAnalysis(
                             targetTicket,
-                            this._getActionDeps()
+                            continuationDeps
                         );
                         if (!advanced) {
                             this.notify('O reparo foi agendado, mas a decisão da garantia não foi concluída. Abra a OS e tente finalizar a análise novamente.', 'error');
@@ -4207,6 +4346,12 @@ function app() {
                         this.fetchTickets();
                     }
                 } catch (e) {
+                    if (e.unknownCommit) {
+                        this.closeSchedulePanel();
+                        if (afterSave === 'finishWarrantyAnalysis') this.modals.finishAnalysis = true;
+                        this.notify(e.message, 'error');
+                        return;
+                    }
                     console.error("Erro ao salvar agendamento:", e);
                     this.notify(
                         window.AIDAScheduleErrorService.getUserMessage(
@@ -4279,6 +4424,7 @@ function app() {
         },
 
         async fetchManagerSchedule() {
+            const requestId = ++this.scheduleGridRequestId, context = this.syncContextKey();
             try {
                 const refDate = new Date(this.scheduleManagement.referenceDate);
                 const tzOffset = refDate.getTimezoneOffset() * 60000;
@@ -4289,6 +4435,7 @@ function app() {
                     p_view: this.scheduleManagement.viewMode,
                     p_reference_date: localDateStr
                 });
+                if (requestId !== this.scheduleGridRequestId || context !== this.syncContextKey()) return;
 
                 if (response && response.schedule) {
                     // A nova RPC retorna obj schedule contendo os appointments agrupados
@@ -4303,6 +4450,7 @@ function app() {
                         p_reference_date: localDateStr,
                         p_days: this.scheduleManagement.viewMode === 'day' ? 1 : 7
                     });
+                    if (requestId !== this.scheduleGridRequestId || context !== this.syncContextKey()) return;
 
                     if (availResponse && availResponse.days) {
                         // Mesclar os appointments do backend (response.schedule.appointments) nos dias
@@ -4321,6 +4469,7 @@ function app() {
                                             if (this.scheduleManagement.typeFilter === 'all' || app.appointment_type === this.scheduleManagement.typeFilter) {
                                                 slot.appointments.push({
                                                     id: app.id,
+                                                    revision: app.revision,
                                                     ticket_id: app.ticket_id,
                                                     technician_id: this.scheduleManagement.gridTechnicianId,
                                                     type: app.appointment_type,
@@ -4357,6 +4506,7 @@ function app() {
                     this.scheduleManagement.data = [];
                 }
             } catch (error) {
+                if (requestId !== this.scheduleGridRequestId || context !== this.syncContextKey() || error.name === 'AbortError') return;
                 console.error("Error fetching manager schedule:", error);
                 this.notify("Erro ao carregar a agenda.", "error");
             }
@@ -4481,12 +4631,23 @@ function app() {
         },
 
 
-        openAppointmentActionMenu(appointment, dateStr, slot) {
+        async getAppointmentSnapshot(appointment) {
+            if (appointment?.revision != null) return JSON.parse(JSON.stringify(appointment));
+            if (!appointment?.id) return null;
+            const rows = await this.supabaseFetch(`ticket_appointments?select=*&id=eq.${encodeURIComponent(appointment.id)}&limit=1`);
+            return rows?.[0] ? { ...JSON.parse(JSON.stringify(appointment)), ...rows[0] } : null;
+        },
+
+        async openAppointmentActionMenu(appointment, dateStr, slot) {
+            const requestId = ++this.appointmentDraftRequestId;
+            try { appointment = await this.getAppointmentSnapshot(appointment); }
+            catch (error) { this.notify('Não foi possível abrir o agendamento: ' + error.message, 'error'); return; }
+            if (!appointment || requestId !== this.appointmentDraftRequestId) return;
             // Use the correct editingAppointment shape
             this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
 
             const ea = this.scheduleManagement.editingAppointment;
-            ea.original = appointment;
+            ea.original = JSON.parse(JSON.stringify(appointment));
             ea.ticket_id = appointment.ticket_id;
             ea.type = appointment.type;
             ea.new_date = dateStr;
@@ -4543,7 +4704,13 @@ function app() {
             }
         },
 
-        openRescheduleModal(ticketId, type, appointmentObj, prefillSlot = null) {
+        async openRescheduleModal(ticketId, type, appointmentObj, prefillSlot = null) {
+            const requestId = ++this.appointmentDraftRequestId;
+            if (appointmentObj) {
+                try { appointmentObj = await this.getAppointmentSnapshot(appointmentObj); }
+                catch (error) { this.notify('Não foi possível abrir o agendamento: ' + error.message, 'error'); return; }
+                if (!appointmentObj || requestId !== this.appointmentDraftRequestId) return;
+            }
             // Find ticket context from unscheduled lists if available to populate headers nicely during creation
             let ctx = null;
             if (ticketId && !appointmentObj) {
@@ -4573,8 +4740,8 @@ function app() {
 
             ea.ticket_id = ticketId;
             ea.type = type;
-            ea.original = appointmentObj;
-            ea.ticketContext = ctx;
+            ea.original = appointmentObj ? JSON.parse(JSON.stringify(appointmentObj)) : null;
+            ea.ticketContext = ctx ? JSON.parse(JSON.stringify(ctx)) : null;
             ea.new_date = prefillSlot ? prefillSlot.date : (appointmentObj ? appointmentObj.date : '');
             ea.new_start = prefillSlot ? prefillSlot.start : (appointmentObj ? appointmentObj.start : '');
             ea.new_end = prefillSlot ? prefillSlot.end : (appointmentObj ? appointmentObj.end : '');
@@ -4590,6 +4757,7 @@ function app() {
         },
 
         closeRescheduleModal() {
+            this.appointmentDraftRequestId++;
             this.modals.rescheduleAppointment = false;
             this.scheduleManagement.editingAppointment = this.getDefaultScheduleEditingAppointment();
         },
@@ -4829,7 +4997,7 @@ function app() {
                         p_scheduled_start: startStr,
                         p_scheduled_end: endStr,
                         p_notes: 'Remarcado via Gestão'
-                    });
+                    }, { operationVersion: { resource: 'ticket_appointments', id: ea.original.id, revision: ea.original.revision } });
                     this.notify("Agendamento remarcado com sucesso!");
                 } else {
                     await this.supabaseFetch('rpc/create_ticket_appointment', 'POST', {
@@ -5099,8 +5267,12 @@ function app() {
 
                 if (requestId !== this.ticketModalRefreshRequestId
                     || !this.modals.viewTicket
-                    || this.selectedTicket?.id !== ticketId
-                    || !refreshedTicket) {
+                    || this.selectedTicket?.id !== ticketId) {
+                    return null;
+                }
+                if (!refreshedTicket || refreshedTicket.deleted_at) {
+                    this.ticketModalExternalChange = true;
+                    this.ticketModalUnavailable = true;
                     return null;
                 }
 
@@ -5111,7 +5283,9 @@ function app() {
                 if (!Array.isArray(hydratedTicket.checklist_final_data)) hydratedTicket.checklist_final_data = [];
                 if (!Array.isArray(hydratedTicket.photos_urls)) hydratedTicket.photos_urls = [];
 
-                this.selectedTicket = hydratedTicket;
+                if (window.AIDAWorkspaceSyncService) {
+                    this.selectedTicket = window.AIDAWorkspaceSyncService.mergeRefreshedTicket(this, hydratedTicket);
+                } else this.selectedTicket = hydratedTicket;
 
                 const ticketIndex = this.tickets.findIndex(ticket => ticket.id === ticketId);
                 if (ticketIndex >= 0) {
@@ -5153,6 +5327,7 @@ function app() {
             if (!Array.isArray(this.selectedTicket.checklist_data)) this.selectedTicket.checklist_data = [];
             if (!Array.isArray(this.selectedTicket.checklist_final_data)) this.selectedTicket.checklist_final_data = [];
             if (!Array.isArray(this.selectedTicket.photos_urls)) this.selectedTicket.photos_urls = [];
+            window.AIDAWorkspaceSyncService?.captureTicket(this, this.selectedTicket);
             this.analysisForm = window.AIDAWarrantyService.emptyAnalysisForm(completeTicket);
             this.editingDeadlines = false;
             this.editDeadlineForm = { deadline: '', analysis_deadline: '' };
@@ -5464,6 +5639,7 @@ function app() {
 
         // --- 1. WORKFLOW RULES ENGINE ---
         canExecuteAction(ticket, action) {
+            if (this.ticketModalUnavailable && ticket?.id === this.selectedTicket?.id) return false;
             return window.AIDAWorkflowRules.canExecuteAction(
                 ticket,
                 action,
@@ -5479,9 +5655,12 @@ function app() {
             return {
                 canExecuteAction: (t, a) => this.canExecuteAction(t, a),
                 setLoading: (val) => { this.loading = val; },
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
-                updateSelectedTicket: (id, updates) => {
-                    if (this.selectedTicket && this.selectedTicket.id === id) {
+                supabaseFetch: (ep, method, payload, options) => this.supabaseFetch(ep, method, payload, options),
+                onConflict: (ticket, error) => this.markTicketConflict(ticket, error),
+                updateSelectedTicket: (id, updates, submitted) => {
+                    if (window.AIDAWorkspaceSyncService) {
+                        window.AIDAWorkspaceSyncService.applyCommittedTicket(this, id, updates, submitted);
+                    } else if (this.selectedTicket && this.selectedTicket.id === id) {
                         this.selectedTicket = { ...this.selectedTicket, ...updates };
                     }
                 },
@@ -5540,7 +5719,9 @@ function app() {
             return {
                 state: this, // Pass the whole Alpine component as state (read-only where possible, mutable for specific deep bindings)
                 notify: (msg, type) => this.notify(msg, type),
-                supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload),
+                supabaseFetch: (ep, method, payload, options) => this.supabaseFetch(ep, method, payload, options),
+                onConflict: (ticket, error) => this.markTicketConflict(ticket, error),
+                applyCommandReceipt: (ticket, receipt) => window.AIDAWorkspaceSyncService.applyCommandReceipt(this, ticket, receipt),
                 resolveTicket: (t) => this.resolveTicket(t),
                 mutateTicket: (t, act, upd, log, opts) => this.mutateTicket(t, act, upd, log, opts),
                 updateStatus: (t, st, upd, log) => this.updateStatus(t, st, upd, log),
@@ -5738,6 +5919,7 @@ function app() {
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'finishAnalysis');
             this._applyContext(newContext);
             this.selectedTicket = ticket;
+            window.AIDAWorkspaceSyncService?.captureTicket(this, ticket);
             this.analysisForm = window.AIDAWarrantyService.emptyAnalysisForm(ticket);
             this.modals.finishAnalysis = true;
         },
@@ -5778,8 +5960,7 @@ function app() {
             if (this.isPartsControlEnabled() && this.analysisForm.needsParts && !this.analysisForm.partsList) {
                 return this.notify("Liste as peças necessárias.", "error");
             }
-            this.modals.finishAnalysis = false;
-            await this.finishAnalysis(ticket);
+            if (await this.finishAnalysis(ticket)) this.modals.finishAnalysis = false;
         },
 
         openWhatsApp(phone) {
@@ -5833,6 +6014,7 @@ function app() {
             this._applyContext(newContext);
             this.purchaseFlow = {
                 ticketId: ticket.id,
+                ticketSnapshot: JSON.parse(JSON.stringify(ticket)),
                 supplierId: '',
                 supplierName: '',
                 items: [{ name: ticket.parts_needed || '', quantity: 1 }]
@@ -5916,6 +6098,7 @@ function app() {
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'outcome');
             this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
+            window.AIDAWorkspaceSyncService?.captureTicket(this, ticket);
             this.outcomeMode = mode;
             this.showTestFailureForm = false;
             this.inventory.repairUsage = { loading: false, items: [], hasStructuredParts: false };
@@ -6004,6 +6187,7 @@ function app() {
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'outsourced');
             this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
+            window.AIDAWorkspaceSyncService?.captureTicket(this, ticket);
             this.outsourcedForm = { company_id: ticket.outsourced_company_id, deadline: '', price: '' };
             this.modals.outsourced = true;
         },
@@ -6015,6 +6199,7 @@ function app() {
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'logistics');
             this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
+            window.AIDAWorkspaceSyncService?.captureTicket(this, ticket);
             this.logisticsMode = 'initial';
             this.logisticsForm = { carrier: '', tracking: '' };
             this.modals.logistics = true;
@@ -6026,6 +6211,7 @@ function app() {
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'logistics');
             this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
+            window.AIDAWorkspaceSyncService?.captureTicket(this, ticket);
             this.logisticsMode = 'add_tracking';
             this.logisticsForm = { carrier: ticket.carrier_name || '', tracking: '' };
             this.modals.logistics = true;
@@ -6693,12 +6879,13 @@ function app() {
         async fetchOperationalAlerts() {
             if (this.opsInFlight) return;
             this.opsInFlight = true;
+            const context = this.syncContextKey();
             try {
                 const data = await window.AIDADashboardService.fetchOperationalAlerts({
                     state: this,
                     supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
                 });
-                if (data) {
+                if (data && context === this.syncContextKey()) {
                     this.ops = data;
                 }
             } finally {
@@ -6922,11 +7109,12 @@ function app() {
             this.viewTicketDetails(ticket);
         },
 
-        async fetchHomeOperationalQueue() {
+        async fetchHomeOperationalQueue(options = {}) {
             if (!this.user?.workspace_id) return;
+            const requestId = ++this.homeQueueRequestId, context = this.syncContextKey();
             try {
                 this.homeOperationalLoading = true;
-                const f = this.homeOperationalFilters;
+                const f = { ...this.homeOperationalFilters };
                 const search = String(f.search || '').trim();
                 const [response, extraQueues] = await Promise.all([
                     this.supabaseFetch('rpc/get_operational_queue', 'POST', {
@@ -6947,30 +7135,36 @@ function app() {
                     })
                 ]);
 
+                if (requestId !== this.homeQueueRequestId || context !== this.syncContextKey()) return;
                 if (response) {
+                    const pendingBudgets = response.queues?.pendingBudgets?.items || [];
+                    if (pendingBudgets.length) {
+                        response.queues.pendingBudgets.items = await window.AIDATicketQueryService.hydrateTickets({
+                            state: this,
+                            supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                        }, pendingBudgets);
+                    }
+                    if (requestId !== this.homeQueueRequestId || context !== this.syncContextKey()) return;
                     if (response.counts) this.homeOperationalCounts = response.counts;
                     if (response.status_counts) this.homeStatusCounts = response.status_counts;
                     this.syncHomeOverviewQueues(response.queues || {});
-                    if (this.homeOps.pendingBudgets.length) {
-                        this.homeOps.pendingBudgets = await window.AIDATicketQueryService.hydrateTickets({
-                            state: this,
-                            supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
-                        }, this.homeOps.pendingBudgets);
-                    }
                     this.syncHomeExtraOverviewQueues(extraQueues || {});
                 }
             } catch (error) {
+                if (requestId !== this.homeQueueRequestId || context !== this.syncContextKey() || error.name === 'AbortError') return;
+                if (options.background) throw error;
                 console.error('Failed to load home operational queue', error);
                 this.notify('Erro ao carregar a Visão Geral.', 'error');
             } finally {
-                this.homeOperationalLoading = false;
+                if (requestId === this.homeQueueRequestId) this.homeOperationalLoading = false;
             }
         },
 
         async fetchKanbanOperationalCounts() {
             if (!this.user?.workspace_id) return;
+            const requestId = ++this.kanbanCountsRequestId, context = this.syncContextKey();
             try {
-                const f = this.kanbanOperationalFilters;
+                const f = { ...this.kanbanOperationalFilters };
                 const search = String(f.search || '').trim();
 
                 const payload = {
@@ -6984,6 +7178,7 @@ function app() {
                     p_include_counts: true
                 };
                 const response = await this.supabaseFetch('rpc/get_operational_ticket_page', 'POST', payload);
+                if (requestId !== this.kanbanCountsRequestId || context !== this.syncContextKey()) return;
                 if (response && response.counts) {
                     this.kanbanOperationalCounts = response.counts;
                 }

@@ -222,6 +222,7 @@ window.AIDAAuthSessionService = {
         try {
             await supabaseFetch('rpc/get_my_access_context', 'POST', { p_workspace_id: workspaceId });
             this.rememberWorkspace(state.session.user.id, workspaceId);
+            deps.stopWorkspaceSync?.();
             window.AIDAStorageService?.clearLocalPhotoPreviews(); await deps.supabaseClient.removeAllChannels(); window.location.reload();
         } catch (_) { notify('O acesso a esta empresa não está mais disponível. Atualize a lista e tente novamente.', 'error'); }
         finally { setLoading(false); }
@@ -256,6 +257,7 @@ window.AIDAAuthSessionService = {
         try {
             const { error } = await supabaseClient.auth.signOut({ scope: 'local' });
             if (error) throw error;
+            deps.stopWorkspaceSync?.();
             await supabaseClient.removeAllChannels(); window.AIDAStorageService?.clearLocalPhotoPreviews();
             state.user = null; state.employeeSession = null; state.session = null;
             try { localStorage.removeItem('techassist_employee'); localStorage.removeItem('centralos_remember_login'); } catch (_) {}

@@ -239,6 +239,7 @@ test('limite no lote de fotos interrompe os próximos envios e conserva as fotos
         const photos = ['previous-photo'];
         state.ticketForm = { id: 'draft-ticket', photos, client_name: 'Cliente do cadastro' };
         state.selectedTicket = { id: 'saved-ticket', photos_urls: photos, client_name: 'Cliente salvo' };
+        state.modals.viewTicket = target === 'existing';
         context.AIDATicketContext.setModalContext('saved-ticket', 'viewTicket');
         state.notify = (message, type) => notices.push({ message, type });
         context.AIDAStorageService.uploadTicketPhoto = async (file, ticketId) => {
@@ -259,4 +260,194 @@ test('limite no lote de fotos interrompe os próximos envios e conserva as fotos
         assert.equal(state.selectedTicket.client_name, 'Cliente salvo');
         assert.equal(state.loading, false);
     }
+});
+
+
+test('rate limit na revalidação mantém vínculo, OS e rascunho', async () => {
+    const { state, events } = runtime();
+    await state.init();
+    state.selectedTicket = { id: 'os-draft', revision: 3, tech_notes: 'rascunho' };
+    state.modals.viewTicket = true;
+    state.employeeSessionLastValidatedAt = 0;
+    state.supabaseFetch = async () => { throw Object.assign(new Error('Aguarde'), { status: 429, retryAfter: 20 }); };
+    assert.equal(await state.revalidateEmployeeSession(), true);
+    assert.equal(state.user.workspace_id, STAFF_WORKSPACE);
+    assert.equal(state.selectedTicket.tech_notes, 'rascunho');
+    assert.equal(state.modals.viewTicket, true);
+    assert.equal(events.includes('channels_removed'), false);
+    await assert.rejects(state.revalidateEmployeeSession(true), error => error.status === 429);
+    assert.equal(state.user.workspace_id, STAFF_WORKSPACE);
+});
+
+test('resposta de fila e contagens antigas não sobrescreve filtros novos', async () => {
+    const { state } = runtime(['admin']);
+    state.user = { workspace_id: STAFF_WORKSPACE };
+    const pending = [];
+    state.notify = () => {};
+    state.supabaseFetch = async () => new Promise(resolve => pending.push(resolve));
+    const queue = state.fetchHomeOperationalQueue();
+    state.homeOperationalFilters.search = 'novo filtro';
+    pending.splice(0).forEach(resolve => resolve({ counts: { all: 999 }, queues: {} }));
+    await queue;
+    assert.notEqual(state.homeOperationalCounts.all, 999);
+    const counts = state.fetchKanbanOperationalCounts();
+    state.kanbanOperationalFilters.status = 'Aprovacao';
+    pending.splice(0).forEach(resolve => resolve({ counts: { all: 999 } }));
+    await counts;
+    assert.notEqual(state.kanbanOperationalCounts.all, 999);
+});
+
+
+test('fila em segundo plano propaga 429 para o backoff sem expulsar usuário', async () => {
+    const { state } = runtime(['admin']);
+    state.user = { workspace_id: STAFF_WORKSPACE };
+    state.supabaseFetch = async () => { throw Object.assign(new Error('limited'), { status: 429, retryAfter: 30 }); };
+    await assert.rejects(state.fetchHomeOperationalQueue({ background: true }), error => error.status === 429);
+    assert.equal(state.user.workspace_id, STAFF_WORKSPACE);
+    assert.equal(state.homeOperationalLoading, false);
+});
+
+test('conflito mantém formulário de análise aberto e sucesso o fecha', async () => {
+    const { state } = runtime(['tecnico']);
+    state.resolveTicket = () => ({ id: 'os-analysis', status: 'Analise Tecnica' });
+    state.isInventoryEnabled = () => false;
+    state.isPartsControlEnabled = () => false;
+    state.modals.finishAnalysis = true;
+    state.finishAnalysis = async () => false;
+    await state.confirmFinishAnalysisKanban();
+    assert.equal(state.modals.finishAnalysis, true);
+    state.finishAnalysis = async () => true;
+    await state.confirmFinishAnalysisKanban();
+    assert.equal(state.modals.finishAnalysis, false);
+});
+
+test('agenda obtém revisão ausente na abertura e congela o snapshot do formulário', async () => {
+    const { state } = runtime(['admin']);
+    state.user = { workspace_id: STAFF_WORKSPACE };
+    const appointment = { id: 'appointment-a', ticket_id: 'os-a', type: 'analysis' };
+    const calls = [];
+    state.supabaseFetch = async endpoint => { calls.push(endpoint); return [{ ...appointment, revision: 7 }]; };
+    await state.openAppointmentActionMenu(appointment, '2026-10-16', { start_time: '2026-10-16T08:00:00', end_time: '2026-10-16T09:00:00' });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0], /^ticket_appointments\?select=\*/);
+    assert.equal(state.scheduleManagement.editingAppointment.original.revision, 7);
+    appointment.revision = 99;
+    assert.equal(state.scheduleManagement.editingAppointment.original.revision, 7);
+    assert.equal(state.modals.rescheduleAppointment, true);
+});
+
+test('recebimento guarda revisão da compra na abertura e preserva formulário no conflito', async () => {
+    const { state, context } = runtime(['admin']);
+    state.notify = () => {};
+    let savedArguments;
+    context.AIDAInventoryManagementService = {
+        loadPurchase: async () => ({ purchase: { revision: 9 }, items: [] }),
+        receivePurchase: async (...args) => { savedArguments = args; throw Object.assign(new Error('conflito'), { status: 409 }); }
+    };
+    await state.openInventoryReceipt({ id: 'purchase-a', supplier_name: 'Fornecedor teste' });
+    assert.equal(state.inventory.receiptVersion, 9);
+    await state.submitInventoryReceipt();
+    assert.equal(savedArguments[4], 9);
+    assert.equal(state.modals.inventoryReceipt, true);
+});
+
+
+function loadSyncForCommands(context) {
+    vm.runInContext(fs.readFileSync(path.join(root, 'js/modules/workspace-sync-service.js'), 'utf8'), context);
+}
+
+test('agendamento continua aprovação com revisão do próprio recibo e preserva laudo digitado', async () => {
+    const { state, context } = runtime(['admin']);
+    loadSyncForCommands(context);
+    state.user = { workspace_id: STAFF_WORKSPACE };
+    state.selectedTicket = { id: 'os-command', revision: 4, tech_notes: 'base', status: 'Aprovacao' };
+    context.AIDAWorkspaceSyncService.captureTicket(state, state.selectedTicket);
+    state.selectedTicket.tech_notes = 'rascunho técnico';
+    state.schedulePanelTicket = JSON.parse(JSON.stringify(state.selectedTicket));
+    state.schedulePanelTechnicianId = EMPLOYEE;
+    state.schedulePanelMode = 'repair';
+    state.schedulePanelAfterSave = 'approveRepair';
+    state.schedulePanelOpen = true;
+    state.fetchTicketAppointments = async () => {};
+    state.notify = () => {};
+    let continued = 0, capturedOptions;
+    context.AIDATicketActions = { completeBudgetApproval: async (ticket, deps) => {
+        continued++;
+        assert.equal(ticket.revision, 6);
+        assert.equal(deps.resolveTicket('os-command').revision, 6);
+        assert.equal(state.selectedTicket.tech_notes, 'rascunho técnico');
+        return true;
+    } };
+    state.supabaseFetch = async (endpoint, method, payload, options) => {
+        capturedOptions = options;
+        assert.equal(endpoint, 'rpc/create_ticket_appointment');
+        state.tickets = [{ id: 'os-command', revision: 99 }];
+        return { ticket_id: 'os-command', ticket_revision: 6, ticket_updates: { repair_scheduled: true, repair_scheduled_at: 'confirmed', technician_id: EMPLOYEE } };
+    };
+    await state.selectScheduleSlot('2026-10-16', { start: '08:00', end: '09:00' });
+    assert.equal(capturedOptions.ticketVersion.revision, 4);
+    assert.equal(continued, 1);
+    assert.equal(state.selectedTicket.revision, 6);
+    assert.equal(state.ticketModalSnapshot.revision, 6);
+    assert.equal(state.schedulePanelOpen, false);
+});
+
+test('solicitação de peças usa snapshot original e continua análise com recibo confirmado', async () => {
+    const { state, context } = runtime(['admin']);
+    loadSyncForCommands(context);
+    state.user = { workspace_id: STAFF_WORKSPACE };
+    state.selectedTicket = { id: 'os-command', revision: 4, tech_notes: 'base', parts_needed: null };
+    context.AIDAWorkspaceSyncService.captureTicket(state, state.selectedTicket);
+    state.selectedTicket.tech_notes = 'laudo ainda digitado';
+    state.inventory.partRequest = { ticketId: 'os-command', ticketSnapshot: JSON.parse(JSON.stringify(state.selectedTicket)), stage: 'analysis', allocateNow: false, afterSubmit: 'finishAnalysis', items: [{ item_id: 'item-a', name: 'Tela', quantity: 1 }] };
+    state.modals.inventoryPartRequest = true;
+    state.notify = () => {};
+    let continued = 0, originalRevision;
+    vm.runInContext(fs.readFileSync(path.join(root, 'js/modules/inventory-actions.js'), 'utf8'), context);
+    state.supabaseFetch = async (endpoint, method, payload, options) => {
+        assert.equal(endpoint, 'rpc/request_ticket_inventory_parts');
+        originalRevision = options.ticketVersion.revision;
+        state.tickets = [{ id: 'os-command', revision: 99 }];
+        return { ticket_id: 'os-command', ticket_revision: 6, ticket_updates: { parts_needed: '1 x Tela', parts_status: 'Pendente' } };
+    };
+    context.AIDATicketActions = { finishAnalysis: async (ticket, deps) => {
+        continued++;
+        assert.equal(ticket.revision, 6);
+        assert.equal(deps.resolveTicket('os-command').revision, 6);
+        assert.equal(state.selectedTicket.tech_notes, 'laudo ainda digitado');
+        return true;
+    } };
+    await state.submitInventoryPartRequest();
+    assert.equal(originalRevision, 4);
+    assert.equal(continued, 1);
+    assert.equal(state.selectedTicket.revision, 6);
+    assert.equal(state.ticketModalSnapshot.revision, 6);
+    assert.equal(state.modals.inventoryPartRequest, false);
+});
+
+test('conflito antes de registrar peças não executa continuação nem apaga formulário', async () => {
+    const { state, context } = runtime(['admin']);
+    loadSyncForCommands(context);
+    state.selectedTicket = { id: 'os-command', revision: 4, tech_notes: 'rascunho' };
+    state.inventory.partRequest = { ticketId: 'os-command', ticketSnapshot: { ...state.selectedTicket }, afterSubmit: 'finishAnalysis', items: [] };
+    state.modals.inventoryPartRequest = true; state.notify = () => {};
+    let continued = 0;
+    context.AIDAInventoryActions = { requestTicketParts: async () => { throw Object.assign(new Error('conflito'), { status: 409 }); } };
+    context.AIDATicketActions = { finishAnalysis: async () => { continued++; } };
+    await state.submitInventoryPartRequest();
+    assert.equal(continued, 0);
+    assert.equal(state.modals.inventoryPartRequest, true);
+    assert.equal(state.selectedTicket.tech_notes, 'rascunho');
+    assert.equal(state.selectedTicket.revision, 4);
+});
+
+test('fechar a OS permite usar a revisão atual do card sem reaproveitar modal antigo', () => {
+    const { state } = runtime(['admin']);
+    state.selectedTicket = { id: 'os-command', revision: 4 };
+    const card = { id: 'os-command', revision: 8 };
+    state.tickets = [card];
+    state.modals.viewTicket = false;
+    assert.equal(state.resolveTicket('os-command'), card);
+    state.modals.outcome = true;
+    assert.equal(state.resolveTicket('os-command'), state.selectedTicket);
 });

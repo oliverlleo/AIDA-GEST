@@ -6814,7 +6814,7 @@
     </div>
 
     <!-- 2. VIEW/EDIT TICKET MODAL -->
-    <div x-show="modals.viewTicket" class="fixed inset-0 z-[70] overflow-y-auto" x-cloak>
+    <div x-show="modals.viewTicket" @input="markTicketDraftDirty()" @change="markTicketDraftDirty()" class="fixed inset-0 z-[70] overflow-y-auto" x-cloak>
          <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.viewTicket = false"></div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
@@ -6823,6 +6823,11 @@
 
                 <template x-if="selectedTicket">
                 <div x-data="{ tab: 'details' }">
+                    <div x-show="ticketModalExternalChange" class="px-6 py-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-900" role="status">
+                        <p class="font-bold" x-text="ticketModalUnavailable ? 'Esta OS não está mais disponível para este acesso.' : 'Esta OS foi alterada em outro computador.'"></p>
+                        <p class="mt-1">Suas alterações em edição foram mantidas. Atualize a OS para revisar a versão atual antes de salvar.</p>
+                        <button type="button" @click="reloadOpenTicketAfterChange()" :disabled="loading" class="mt-2 underline font-bold disabled:opacity-50">Revisar versão atual</button>
+                    </div>
                      <!-- Header with Status Actions -->
                     <div class="bg-white px-6 py-4 flex justify-between items-start">
                         <div>
@@ -8771,29 +8776,31 @@
     <script src="js/modules/config-helpers.js?v=6"></script>
     <script src="js/modules/ticket-context.js?v=2"></script>
     <script src="js/modules/workflow-rules.js?v=1"></script>
-    <script src="js/modules/ticket-mutations.js?v=1"></script>
-    <script src="js/modules/ticket-actions.js?v=9"></script>
-    <script src="js/modules/api-client.js?v=5"></script>
+    <script src="js/modules/ticket-mutations.js?v=2"></script>
+    <script src="js/modules/ticket-actions.js?v=10"></script>
+    <script src="js/modules/api-client.js?v=6"></script>
     <script src="js/modules/schedule-error-service.js?v=1"></script>
     <script src="js/modules/storage-service.js?v=6"></script>
     <script src="js/modules/workspace-config-service.js?v=2"></script>
     <script src="js/modules/catalog-service.js"></script>
-    <script src="js/modules/ticket-query-service.js?v=6"></script>
+    <script src="js/modules/ticket-query-service.js?v=7"></script>
     <script src="js/modules/logs-notifications-service.js?v=4"></script>
-    <script src="js/modules/notes-service.js"></script>
+    <script src="js/modules/notes-service.js?v=2"></script>
     <script src="js/modules/dashboard-service.js"></script>
-    <script src="js/modules/auth-session-service.js?v=6"></script>
+    <script src="js/modules/auth-session-service.js?v=7"></script>
     <script src="js/modules/employee-service.js?v=5"></script>
     <script src="js/modules/recycle-bin-service.js"></script>
     <script src="js/modules/customer-service.js?v=2"></script>
     <script src="js/modules/warranty-service.js?v=1"></script>
     <script src="js/modules/inventory-query-service.js?v=2"></script>
     <script src="js/modules/inventory-catalog-service.js?v=2"></script>
-    <script src="js/modules/inventory-actions.js?v=1"></script>
-    <script src="js/modules/inventory-management-service.js?v=5"></script>
+    <script src="js/modules/inventory-actions.js?v=2"></script>
+    <script src="js/modules/inventory-management-service.js?v=6"></script>
+
+    <script src="js/modules/workspace-sync-service.js?v=1"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=47"></script>
+    <script src="js/main.js?v=48"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"

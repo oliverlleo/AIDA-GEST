@@ -125,8 +125,9 @@ window.AIDATicketActions = {
             let inventoryRoute = null;
             if (usesDirectInventory) {
                 inventoryRoute = await window.AIDAInventoryActions.requestTicketParts({
-                    supabaseFetch: (ep, method, payload) => deps.supabaseFetch(ep, method, payload)
-                }, createdTicket.id, inventoryParts, 'direct_repair', true);
+                    supabaseFetch: (ep, method, payload, options) => deps.supabaseFetch(ep, method, payload, options)
+                }, createdTicket.id, inventoryParts, 'direct_repair', true, createdTicket.revision);
+                deps.applyCommandReceipt(createdTicket, inventoryRoute);
             }
             // Ensure we have the public_token (if backend generated it and frontend didn't get it back fully populated)
             if (!createdTicket.public_token) {
@@ -237,9 +238,11 @@ window.AIDATicketActions = {
             analysisUpdates.parts_status = deps.isPartsControlEnabled() && deps.state.analysisForm.partsList ? 'Pendente' : 'N/A';
         }
 
-        await deps.updateStatus(ticket, 'Aprovacao', analysisUpdates, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
+        const saved = await deps.updateStatus(ticket, 'Aprovacao', analysisUpdates, { action: 'Finalizou Análise', details: `${ctx.device} de ${ctx.client} enviado para fase de aprovação do cliente.` });
+        if (!saved) return false;
 
         await deps.supabaseFetch('rpc/complete_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
+        return true;
     },
 
     async finishWarrantyAnalysis(ticketOrId, deps) {
@@ -268,7 +271,7 @@ window.AIDATicketActions = {
                     p_ticket_id: ticket.id,
                     p_report: report,
                     p_tech_notes: techNotes
-                })
+                }, { ticketVersion: { id: ticket.id, revision: ticket.revision } })
                 : await deps.supabaseFetch('rpc/complete_warranty_analysis', 'POST', {
                     p_ticket_id: ticket.id,
                     p_covered: covered,
@@ -278,7 +281,7 @@ window.AIDATicketActions = {
                         ? String(form.partsList || '').trim()
                         : null,
                     p_tech_notes: techNotes
-                });
+                }, { ticketVersion: { id: ticket.id, revision: ticket.revision } });
 
             const ctx = deps.getLogContext(ticket);
             const decision = covered ? '**coberto pela garantia**' : '**não coberto pela garantia**';
@@ -308,6 +311,7 @@ window.AIDATicketActions = {
             await deps.fetchGlobalLogs();
             return true;
         } catch (error) {
+            if (error.status === 409) await deps.onConflict?.(ticket, error);
             deps.notify('Erro ao concluir a garantia: ' + error.message, 'error');
             return false;
         } finally {
@@ -329,7 +333,8 @@ window.AIDATicketActions = {
             try {
                 const inventoryResult = await deps.supabaseFetch('rpc/approve_ticket_with_inventory', 'POST', {
                     p_ticket_id: ticket.id
-                });
+                }, { ticketVersion: { id: ticket.id, revision: ticket.revision } });
+                deps.applyCommandReceipt(ticket, inventoryResult);
                 if (inventoryResult?.route !== 'no_inventory_parts') {
                     if (inventoryResult?.route === 'schedule_repair') {
                         deps.state.openSchedulePanel('repair', ticket.technician_id, ticket, 'approveRepair');
@@ -413,10 +418,11 @@ window.AIDATicketActions = {
          const ctx = deps.getLogContext(ticket);
          const rawPart = ticket.parts_needed || 'peça';
          const part = `"${rawPart}"`;
-         await deps.updateStatus(ticket, 'Andamento Reparo', {
+         const saved = await deps.updateStatus(ticket, 'Andamento Reparo', {
              parts_status: 'Recebido',
              parts_received_at: new Date().toISOString()
          }, { action: 'Recebeu Peças', details: `Peça **${part}** recebida para o **${ctx.device}** de **${ctx.client}**. Reparo liberado.` });
+         if (!saved) return false;
 
          // Se não há agendamento de reparo ativo, sugere criar
          if (deps.isAppointmentTypeEnabled('repair') && !ticket.repair_scheduled) {
@@ -574,10 +580,11 @@ window.AIDATicketActions = {
 
     async startAnalysis(ticket, deps) {
         const ctx = deps.getLogContext(ticket);
-        await deps.updateStatus(ticket, 'Analise Tecnica', {}, {
+        const saved = await deps.updateStatus(ticket, 'Analise Tecnica', {}, {
             action: 'Iniciou Atendimento',
             details: `${ctx.device} de ${ctx.client} enviado para análise do técnico.`
         });
+        if (!saved) return false;
         await deps.supabaseFetch('rpc/start_ticket_appointment', 'POST', { p_ticket_id: ticket.id, p_type: 'analysis' });
     },
 
@@ -707,10 +714,11 @@ window.AIDATicketActions = {
         const checklistUpdates = Array.isArray(finalChecklist) ? { checklist_final_data: finalChecklist } : {};
 
         if (success) {
-            deps.closeModal('outcome');
             // Redirect logic based on Logistics Mode
             // If standard mode, it goes to "Retirada Cliente" which matches current DB/UI logic.
-            await deps.updateStatus(ticket, 'Retirada Cliente', checklistUpdates, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
+            const saved = await deps.updateStatus(ticket, 'Retirada Cliente', checklistUpdates, { action: 'Concluiu Testes', details: `O ${ctx.device} de ${ctx.client} foi aprovado.` });
+            if (!saved) return false;
+            deps.closeModal('outcome');
         } else {
             // FAILURE LOGIC
             if (!deps.state.testFailureData.reason) return deps.notify("Descreva o defeito apresentado", "error");
@@ -734,8 +742,7 @@ window.AIDATicketActions = {
                      };
                      const updatedNotes = [...(ticket.outsourced_notes || []), newNote];
 
-                     deps.closeModal('outcome');
-                     await deps.updateStatus(ticket, 'Terceirizado', {
+                     const saved = await deps.updateStatus(ticket, 'Terceirizado', {
                           ...checklistUpdates,
                          outsourced_deadline: deps.toUTC(deps.state.testFailureData.newDeadline),
                          outsourced_return_count: count,
@@ -745,7 +752,9 @@ window.AIDATicketActions = {
                          action: 'Devolveu para Terceiro',
                          details: `${ctx.device} retornado para ${companyName} (${count}ª vez). Motivo: ${deps.state.testFailureData.reason}`
                      });
-                     return;
+                     if (!saved) return false;
+                     deps.closeModal('outcome');
+                     return true;
                  }
             }
 
@@ -761,8 +770,7 @@ window.AIDATicketActions = {
             const existingNotes = Array.isArray(ticket.test_notes) ? ticket.test_notes : [];
             const updatedNotes = [...existingNotes, newNote];
 
-            deps.closeModal('outcome');
-            await deps.updateStatus(ticket, 'Andamento Reparo', {
+            const saved = await deps.updateStatus(ticket, 'Andamento Reparo', {
                 ...checklistUpdates,
                 deadline: deps.toUTC(deps.state.testFailureData.newDeadline),
                 priority: deps.state.testFailureData.newPriority,
@@ -771,6 +779,8 @@ window.AIDATicketActions = {
                 status: 'Andamento Reparo',
                 test_notes: updatedNotes
             }, { action: 'Reprovou Testes', details: 'Retornado para Reparo. Defeito: ' + deps.state.testFailureData.reason });
+            if (!saved) return false;
+            deps.closeModal('outcome');
 
             deps.notify("Retornado para reparo com urgência!");
             // Aciona fluxo visual de Agendamento do Novo Reparo (Cenario de Retrabalho)
@@ -778,6 +788,7 @@ window.AIDATicketActions = {
                 deps.state.openSchedulePanel('repair', ticket.technician_id, ticket);
             }
         }
+        return true;
     },
 
     async requestPriority(ticketOrId, deps) {
@@ -815,7 +826,7 @@ window.AIDATicketActions = {
             const ctx = deps.getLogContext(tempTicketContext);
             const companyName = deps.getOutsourcedCompany(companyId);
 
-            await deps.updateStatus(ticket, 'Terceirizado', {
+            const saved = await deps.updateStatus(ticket, 'Terceirizado', {
                 outsourced_deadline: deps.toUTC(deps.state.outsourcedForm.deadline),
                 outsourced_company_id: companyId,
                 is_outsourced: true,
@@ -826,13 +837,13 @@ window.AIDATicketActions = {
                 action: 'Enviou Terceirizado',
                 details: `${ctx.device} de ${ctx.client} enviado para ${companyName}. Prazo: ${new Date(deps.state.outsourcedForm.deadline).toLocaleDateString('pt-BR')}.`
             });
+            if (!saved) return false;
 
             deps.closeModal('outsourced');
             deps.closeModal('viewTicket');
         } catch(e) {
             deps.notify("Erro: " + e.message, "error");
-            deps.setLoading(false);
-        }
+        } finally { deps.setLoading(false); }
     },
 
     async receiveFromOutsourced(ticketOrId, deps) {
@@ -895,7 +906,9 @@ window.AIDATicketActions = {
             return;
         }
 
-        const ticket = deps.state.tickets.find(t => t.id === deps.state.purchaseFlow.ticketId);
+        const ticket = deps.state.purchaseFlow.ticketSnapshot
+            || deps.state.tickets.find(t => t.id === deps.state.purchaseFlow.ticketId);
+        if (!ticket) return deps.notify('Reabra a OS antes de confirmar a compra.', 'error');
         const supplier = supplierRegistryEnabled
             ? deps.state.fornecedores.find(f => f.id === deps.state.purchaseFlow.supplierId)
             : null;

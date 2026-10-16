@@ -7,6 +7,76 @@ global.window = global;
 require('../js/modules/warranty-service.js');
 require('../js/modules/ticket-actions.js');
 require('../js/modules/workflow-rules.js');
+require('../js/modules/workspace-sync-service.js');
+
+test('conflito na mudança de fase não inicia nem encerra o agendamento', async () => {
+    const ticket = { id: 'ticket-conflict', revision: 4, tech_notes: 'rascunho' };
+    for (const action of ['startAnalysis', 'finishAnalysis']) {
+        let rpcCalls = 0;
+        const result = await global.AIDATicketActions[action](ticket, {
+            resolveTicket: () => ticket,
+            state: { selectedTicket: ticket, analysisForm: {} },
+            isPartsControlEnabled: () => false,
+            getLogContext: () => ({ device: 'Aparelho', client: 'Cliente' }),
+            updateStatus: async () => false,
+            supabaseFetch: async () => { rpcCalls++; }
+        });
+        assert.equal(result, false);
+        assert.equal(rpcCalls, 0);
+        assert.equal(ticket.tech_notes, 'rascunho');
+    }
+});
+
+test('conflito nos testes finais mantém formulário aberto e não anuncia sucesso ou agenda reparo', async () => {
+    const ticket = { id: 'test-conflict', status: 'Teste Final', revision: 2 };
+    for (const success of [true, false]) {
+        const events = [];
+        const result = await global.AIDATicketActions.concludeTest(success, {
+            resolveTicket: () => ticket,
+            state: { user: { name: 'Tester' }, selectedTicket: ticket,
+                testFailureData: { reason: 'Defeito', newDeadline: '2026-10-20T12:00', newPriority: 'Alta' },
+                openSchedulePanel: () => events.push('schedule') },
+            getLogContext: () => ({ device: 'Aparelho', client: 'Cliente' }),
+            toUTC: value => value, closeModal: () => events.push('closed'), notify: () => events.push('success'),
+            isAppointmentTypeEnabled: () => true, updateStatus: async () => false
+        });
+        assert.equal(result, false);
+        assert.deepEqual(events, []);
+    }
+});
+
+test('compra conserva o snapshot do início do formulário mesmo depois da lista sincronizar', async () => {
+    const original = { id: 'purchase-os', revision: 4, supplier_purchases: [], parts_needed: 'Tela' };
+    const fresh = { ...original, revision: 5, parts_needed: 'Bateria' };
+    let sent;
+    await global.AIDATicketActions.submitPurchase({
+        state: { tickets: [fresh], purchaseFlow: { ticketId: original.id, ticketSnapshot: original, supplierName: 'Fornecedor', items: [{ name: 'Tela', quantity: 1 }] } },
+        isModuleEnabled: () => false, getLogContext: () => ({ device: 'Aparelho', client: 'Cliente' }),
+        mutateTicket: async ticket => { sent = ticket; return false; }, closeModal: () => { throw new Error('must stay open'); }
+    });
+    assert.equal(sent.revision, 4);
+    assert.equal(sent.parts_needed, 'Tela');
+});
+
+test('aprovação com estoque agenda usando a versão confirmada pelo próprio comando', async () => {
+    const ticket = { id: 'inventory-approval', revision: 4, status: 'Aprovacao', parts_needed: 'Tela' };
+    let sentVersion, scheduledRevision;
+    const state = { selectedTicket: null, openSchedulePanel: (_mode, _tech, snapshot) => { scheduledRevision = snapshot.revision; } };
+    const result = await global.AIDATicketActions.approveRepair(ticket, {
+        state, resolveTicket: () => ticket, isInventoryEnabled: () => true, setLoading() {},
+        supabaseFetch: async (_endpoint, _method, _body, options) => {
+            sentVersion = options.ticketVersion;
+            return { route: 'schedule_repair', ticket_id: ticket.id, ticket_revision: 6,
+                ticket_updates: { parts_needed: 'Tela', parts_status: 'Reservado', budget_status: 'Aprovado' } };
+        },
+        applyCommandReceipt: (target, receipt) => global.AIDAWorkspaceSyncService.applyCommandReceipt(state, target, receipt),
+        fetchTickets: async () => {}, fetchGlobalLogs: async () => {}, notify() {}
+    });
+    assert.equal(result, true);
+    assert.deepEqual(sentVersion, { id: ticket.id, revision: 4 });
+    assert.equal(scheduledRevision, 6);
+    assert.equal(ticket.parts_status, 'Reservado');
+});
 
 test('tester salva somente checklist final e nega fase ou OS selecionada incorreta', async () => {
     const ticket = { id: 'test-os', status: 'Teste Final' };
@@ -352,7 +422,6 @@ test('painel de agenda guarda contexto explicito da OS e do tecnico', () => {
 
     assert.match(source, /openSchedulePanel\(mode, technicianId = null, ticket = null, afterSave = null\)/);
     assert.match(source, /this\.schedulePanelTicket = targetTicket/);
-    assert.match(source, /const targetTicket = this\.schedulePanelTicket/);
     assert.match(source, /completeBudgetApproval\(/);
     assert.match(html, /x-show="modals\.ticket \|\| schedulePanelOpen"/);
     assert.match(html, /getTechnicianName\(schedulePanelTechnicianId/);

@@ -56,6 +56,40 @@ function Invoke-AuthConcurrency {
     Write-Output 'PASS concurrency (two sessions, observed lock wait, same result)'
 }
 
+function Invoke-SqlRowRace([string]$Prefix,[string]$SecondApplication,[string]$SecondMarker) {
+    $taskRaceArgs = @('-h','127.0.0.1','-p',$Port,'-U',$AdminUser,'-d',$DatabaseName,'-v','ON_ERROR_STOP=1','-q','-A','-t','-f')
+    $taskRaceSetup = Join-Path $PSScriptRoot ($Prefix+'-setup.sql')
+    & $taskPsql @($taskRaceArgs + $taskRaceSetup) -o (Join-Path $taskLogs ($Prefix+'-setup.log'))
+    if ($LASTEXITCODE -ne 0) { throw "Race setup failed: $Prefix" }
+    $taskRaceFirstLog = Join-Path $taskLogs ($Prefix+'-first.log')
+    $taskRaceSecondLog = Join-Path $taskLogs ($Prefix+'-second.log')
+    $taskRaceFirstSQL = Join-Path $PSScriptRoot ($Prefix+'-first.sql')
+    $taskRaceSecondSQL = Join-Path $PSScriptRoot ($Prefix+'-second.sql')
+    $taskRaceFirst = Start-Process -FilePath $taskPsql -ArgumentList ($taskRaceArgs + ('"'+$taskRaceFirstSQL+'"')) -PassThru -WindowStyle Hidden -RedirectStandardOutput $taskRaceFirstLog -RedirectStandardError (Join-Path $taskLogs ($Prefix+'-first.err.log'))
+    $taskRaceDeadline = [DateTime]::UtcNow.AddSeconds(10)
+    $taskRaceMarkerSeen = $false
+    while ([DateTime]::UtcNow -lt $taskRaceDeadline -and -not $taskRaceFirst.HasExited) {
+        if ((Test-Path -LiteralPath $taskRaceFirstLog) -and (Get-Content -LiteralPath $taskRaceFirstLog -Raw) -match '(?m)^LOCK_HELD\r?$') { $taskRaceMarkerSeen=$true;break }
+        Start-Sleep -Milliseconds 20
+    }
+    if (-not $taskRaceMarkerSeen) { throw "First race connection did not acquire its lock: $Prefix" }
+    $taskRaceSecond = Start-Process -FilePath $taskPsql -ArgumentList ($taskRaceArgs + ('"'+$taskRaceSecondSQL+'"')) -PassThru -WindowStyle Hidden -RedirectStandardOutput $taskRaceSecondLog -RedirectStandardError (Join-Path $taskLogs ($Prefix+'-second.err.log'))
+    $taskRaceLockObserved = $false
+    while (-not $taskRaceFirst.HasExited -and [DateTime]::UtcNow -lt $taskRaceDeadline) {
+        $taskRaceProbe = & $taskPsql -h 127.0.0.1 -p $Port -U $AdminUser -d $DatabaseName -v ON_ERROR_STOP=1 -q -A -t -c "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND application_name='$SecondApplication' AND wait_event_type='Lock');"
+        if ($LASTEXITCODE -ne 0) { throw "Race observation failed: $Prefix" }
+        if (($taskRaceProbe -join '').Trim() -eq 't') { $taskRaceLockObserved=$true;break }
+        Start-Sleep -Milliseconds 20
+    }
+    if (-not $taskRaceFirst.WaitForExit(10000) -or -not $taskRaceSecond.WaitForExit(10000)) { throw "Race did not finish: $Prefix" }
+    if ($taskRaceFirst.ExitCode -ne 0 -or $taskRaceSecond.ExitCode -ne 0) { throw "Race connection failed: $Prefix" }
+    if (-not $taskRaceLockObserved) { throw "No actual lock wait observed: $Prefix" }
+    if ((Get-Content -LiteralPath $taskRaceSecondLog -Raw) -notmatch ('(?m)^'+[regex]::Escape($SecondMarker)+'\r?$')) { throw "Second race connection did not reject its stale write: $Prefix" }
+    & $taskPsql @($taskRaceArgs + (Join-Path $PSScriptRoot ($Prefix+'-verify.sql'))) -o (Join-Path $taskLogs ($Prefix+'-verify.log'))
+    if ($LASTEXITCODE -ne 0) { throw "Race invariant failed: $Prefix" }
+    Write-Output "PASS $Prefix (two sessions, observed lock wait, one effect and one conflict)"
+}
+
 try {
     $env:PGPASSWORD = [IO.File]::ReadAllText($PasswordFile).Trim()
     & $taskCreatedb -h 127.0.0.1 -p $Port -U $AdminUser $DatabaseName
@@ -85,6 +119,38 @@ try {
         @{Name='abuse_authorization_regression'; File=(Join-Path $PSScriptRoot 'auth-full-authorization.sql')},
         @{Name='abuse_multirole_regression'; File=(Join-Path $PSScriptRoot 'auth-multirole.sql')},
         @{Name='abuse_null_regression'; File=(Join-Path $PSScriptRoot 'auth-null-authorization.sql')},
+        @{Name='ticket_concurrency_baseline'; File=(Join-Path $PSScriptRoot 'ticket-concurrency-baseline.sql')},
+        @{Name='ticket_concurrency_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261016234833_ticket_concurrency.sql')},
+        @{Name='ticket_concurrency'; File=(Join-Path $PSScriptRoot 'ticket-concurrency.sql')},
+        @{Name='ticket_row_race'; File=$null},
+        @{Name='workspace_sync_baseline'; File=(Join-Path $PSScriptRoot 'workspace-sync-baseline.sql')},
+        @{Name='workspace_sync_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261016234840_workspace_sync.sql')},
+        @{Name='workspace_sync'; File=(Join-Path $PSScriptRoot 'workspace-sync.sql')},
+        @{Name='operation_concurrency_baseline'; File=(Join-Path $PSScriptRoot 'operation-concurrency-baseline.sql')},
+        @{Name='operation_concurrency_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261016234848_operation_concurrency.sql')},
+        @{Name='operation_concurrency'; File=(Join-Path $PSScriptRoot 'operation-concurrency.sql')},
+        @{Name='operation_receipt_race'; File=$null},
+        @{Name='operation_schedule_race'; File=$null},
+        @{Name='atomic_note_checklist_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261016234855_atomic_note_checklist.sql')},
+        @{Name='atomic_note_checklist'; File=(Join-Path $PSScriptRoot 'atomic-note-checklist.sql')},
+        @{Name='command_receipt_baseline'; File=(Join-Path $PSScriptRoot 'command-receipt-baseline.sql')},
+        @{Name='command_receipt_migration'; File=(Join-Path $taskRepo 'supabase\migrations\20261016234904_scheduled_ticket_revision_receipt.sql')},
+        @{Name='command_receipt'; File=(Join-Path $PSScriptRoot 'command-receipt.sql')},
+        @{Name='workspace_sync_regression'; File=(Join-Path $PSScriptRoot 'workspace-sync.sql')},
+        @{Name='ticket_concurrency_regression'; File=(Join-Path $PSScriptRoot 'ticket-concurrency.sql')},
+        @{Name='sync_role_regression'; File=(Join-Path $PSScriptRoot 'auth-current-role.sql')},
+        @{Name='sync_authorization_regression'; File=(Join-Path $PSScriptRoot 'auth-full-authorization.sql')},
+        @{Name='sync_multirole_regression'; File=(Join-Path $PSScriptRoot 'auth-multirole.sql')},
+        @{Name='sync_null_regression'; File=(Join-Path $PSScriptRoot 'auth-null-authorization.sql')},
+        @{Name='command_receipt_rollback'; File=(Join-Path $taskRepo 'supabase\rollback_scheduled_ticket_revision_receipt.sql')},
+        @{Name='command_receipt_equivalence'; File=(Join-Path $PSScriptRoot 'command-receipt-rollback.sql')},
+        @{Name='atomic_note_checklist_rollback'; File=(Join-Path $taskRepo 'supabase\rollback_atomic_note_checklist.sql')},
+        @{Name='operation_concurrency_rollback'; File=(Join-Path $taskRepo 'supabase\rollback_operation_concurrency.sql')},
+        @{Name='operation_concurrency_equivalence'; File=(Join-Path $PSScriptRoot 'operation-concurrency-rollback.sql')},
+        @{Name='workspace_sync_rollback'; File=(Join-Path $taskRepo 'supabase\rollback_workspace_sync.sql')},
+        @{Name='workspace_sync_equivalence'; File=(Join-Path $PSScriptRoot 'workspace-sync-rollback.sql')},
+        @{Name='ticket_concurrency_rollback'; File=(Join-Path $taskRepo 'supabase\rollback_ticket_concurrency.sql')},
+        @{Name='ticket_concurrency_equivalence'; File=(Join-Path $PSScriptRoot 'ticket-concurrency-rollback.sql')},
         @{Name='abuse_rollback'; File=(Join-Path $taskRepo 'supabase\rollback_advanced_abuse_protection.sql')},
         @{Name='abuse_equivalence'; File=(Join-Path $PSScriptRoot 'abuse-protection-rollback.sql')},
         @{Name='full_audit_rollback'; File=(Join-Path $taskRepo 'supabase\rollback_full_authorization_audit.sql')},
@@ -95,6 +161,9 @@ try {
     )
     foreach ($taskStage in $taskStages) {
         if ($taskStage.Name -eq 'concurrency') { Invoke-AuthConcurrency; continue }
+        if ($taskStage.Name -eq 'ticket_row_race') { Invoke-SqlRowRace 'ticket-concurrency-race' 'aida_ticket_revision_second' 'STALE_WRITE_REJECTED'; continue }
+        if ($taskStage.Name -eq 'operation_receipt_race') { Invoke-SqlRowRace 'operation-receipt-concurrency' 'aida_operation_receipt_second' 'OPERATION_CONFLICT'; continue }
+        if ($taskStage.Name -eq 'operation_schedule_race') { Invoke-SqlRowRace 'operation-schedule-concurrency' 'aida_operation_schedule_second' 'OPERATION_CONFLICT'; continue }
         $taskLog = Join-Path $taskLogs ($taskStage.Name + '.log')
         & $taskPsql -h 127.0.0.1 -p $Port -U $AdminUser -d $DatabaseName -v ON_ERROR_STOP=1 -q -f $taskStage.File -o $taskLog
         if ($LASTEXITCODE -ne 0) { throw "SQL stage $($taskStage.Name) failed. Inspect $taskLog; no remote project was contacted." }
