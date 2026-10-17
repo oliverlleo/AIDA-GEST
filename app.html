@@ -58,6 +58,7 @@
     <link rel="stylesheet" href="centralos-brand.css?v=1" data-centralos-brand="true">
     <link rel="stylesheet" href="centralos-brand-complete.css?v=3" data-centralos-brand-complete="true">
     <link rel="stylesheet" href="centralos-brand-operational.css?v=1" data-centralos-brand-operational="true">
+    <link rel="stylesheet" href="centralos-test-bench.css?v=1">
     <link rel="stylesheet" href="centralos-mobile-login-contrast.css?v=3" data-centralos-mobile-login-contrast="true">
 </head>
 <body class="bg-gray-100 text-gray-900 antialiased" x-data="app()">
@@ -2438,10 +2439,10 @@
                                                 <div class="text-xs text-gray-500" x-text="t.device_model + ' - OS: ' + t.os_number"></div>
                                                 <div x-show="canViewInventoryCosts() && t.status === 'Aprovacao' && t.inventory_cost_summary && Number(t.inventory_cost_summary.item_count) > 0"
                                                      class="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-purple-100 bg-purple-50 px-2 py-1 text-[10px] text-purple-800">
-                                                    <span class="font-bold"><i class="fa-solid fa-coins mr-1"></i>Custo das peças: <span x-text="formatCurrency(t.inventory_cost_summary.total)"></span></span>
-                                                    <span x-show="Number(t.inventory_cost_summary.missing_cost_count) > 0"
+                                                    <span class="font-bold"><i class="fa-solid fa-coins mr-1"></i>Custo das peças: <span x-text="formatCurrency(t.inventory_cost_summary?.total)"></span></span>
+                                                    <span x-show="Number(t.inventory_cost_summary?.missing_cost_count) > 0"
                                                           class="font-semibold text-amber-700"
-                                                          x-text="t.inventory_cost_summary.missing_cost_count + ' sem custo'"></span>
+                                                          x-text="t.inventory_cost_summary?.missing_cost_count + ' sem custo'"></span>
                                                 </div>
 
                                                 <!-- Dynamic sub-stage visual -->
@@ -4481,11 +4482,11 @@
                                                          class="mt-1.5 rounded-lg border border-purple-100 bg-purple-50 px-2 py-1.5 text-[10px] text-purple-800">
                                                         <div class="flex items-center justify-between gap-2">
                                                             <span class="font-bold"><i class="fa-solid fa-coins mr-1"></i>Custo das peças</span>
-                                                            <span class="font-extrabold" x-text="formatCurrency(ticket.inventory_cost_summary.total)"></span>
+                                                            <span class="font-extrabold" x-text="formatCurrency(ticket.inventory_cost_summary?.total)"></span>
                                                         </div>
-                                                        <span x-show="Number(ticket.inventory_cost_summary.missing_cost_count) > 0"
+                                                        <span x-show="Number(ticket.inventory_cost_summary?.missing_cost_count) > 0"
                                                               class="mt-0.5 block font-semibold text-amber-700"
-                                                              x-text="ticket.inventory_cost_summary.missing_cost_count + ' peça(s) sem histórico de custo'"></span>
+                                                              x-text="ticket.inventory_cost_summary?.missing_cost_count + ' peça(s) sem histórico de custo'"></span>
                                                     </div>
                                                 </div>
 
@@ -5099,24 +5100,25 @@
                 </div>
 
                 <!-- VIEW: TESTER BENCH -->
-                <div x-show="view === 'tester_bench'" class="flex-grow p-6 overflow-y-auto flex flex-col" x-cloak>
-                    <header class="mb-6 flex justify-between items-center">
-                        <div>
-                            <h1 class="text-3xl font-bold text-gray-800"><i class="fa-solid fa-vial mr-2 text-brand-500"></i> Bancada de Teste</h1>
-                            <p class="text-gray-500">Gestão de Qualidade e Testes Finais.</p>
+                <div x-show="view === 'tester_bench'" class="centralos-test-bench flex-grow overflow-y-auto" x-cloak>
+                    <header class="test-bench-heading">
+                        <div class="test-bench-title">
+                            <span class="test-bench-icon" aria-hidden="true"><i class="fa-solid fa-vial-circle-check"></i></span>
+                            <div>
+                                <h1>Bancada de Teste</h1>
+                                <p>Confira os testes finais e libere os aparelhos.</p>
+                            </div>
                         </div>
                     </header>
 
-                    <div class="flex-grow bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex flex-col max-w-2xl mx-auto w-full">
-                         <div class="p-4 border-b border-gray-200 bg-gray-200 flex justify-between items-center">
-                            <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide">Aparelhos em Teste</h3>
-                            <span class="bg-white text-gray-600 text-xs px-2 py-1 rounded-full font-bold shadow-sm" x-text="testerBenchPagination.total"></span>
+                    <section class="test-bench-board" aria-label="Ordens de serviço em teste final">
+                        <div class="test-bench-board-heading">
+                            <h2>Testes finais</h2>
+                            <span class="test-bench-count"><span x-text="testerBenchPagination.total"></span> OS</span>
                         </div>
-                        <div class="p-6 overflow-y-auto space-y-4 flex-grow">
+                        <div class="test-bench-grid">
                             <template x-for="ticket in tickets" :key="ticket.id">
-                                 <!-- Reusing Card Design but Wider -->
-                                 <div class="bg-white rounded-xl shadow border-t-4 border-purple-500 p-6 relative cursor-pointer hover:shadow-md transition-shadow duration-500"
-                                      @click="viewTicketDetails(ticket)">
+                                 <article class="test-bench-card" @click="viewTicketDetails(ticket)" @keydown.enter.self.prevent="viewTicketDetails(ticket)" tabindex="0" :aria-label="'Abrir OS ' + ticket.os_number + ' — ' + ticket.device_model">
 
                                     <template x-if="getWarrantyBadge(ticket)">
                                         <span class="mb-3 inline-flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border tracking-wide"
@@ -5125,49 +5127,61 @@
                                             <span x-text="getWarrantyBadge(ticket).label"></span>
                                         </span>
                                     </template>
-                                    <div class="flex justify-between items-start mb-4">
+                                    <div class="test-bench-card-heading">
                                         <div>
-                                            <span class="font-mono text-gray-500 text-xs" x-text="'OS #' + ticket.os_number"></span>
-                                            <h4 class="font-bold text-gray-900 text-lg leading-tight mt-1" x-text="ticket.device_model"></h4>
-                                            <p class="text-gray-600 text-sm" x-text="ticket.client_name"></p>
+                                            <span class="test-bench-os" x-text="'OS #' + ticket.os_number"></span>
+                                            <h3 x-text="ticket.device_model"></h3>
+                                            <p class="test-bench-client" x-text="ticket.client_name"></p>
                                         </div>
-                                        <span class="text-xs font-bold px-3 py-1 rounded uppercase" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
+                                        <span class="test-bench-priority" :class="getPriorityColor(ticket.priority)" x-text="ticket.priority"></span>
                                     </div>
-
-                                    <div class="grid grid-cols-2 gap-4 text-xs text-gray-600 bg-gray-50 p-3 rounded border border-gray-100">
+                                    <span class="test-bench-state" :class="ticket.test_start_at ? 'is-running' : 'is-waiting'"><i class="fa-solid" :class="ticket.test_start_at ? 'fa-flask-vial' : 'fa-clock'" aria-hidden="true"></i><span x-text="ticket.test_start_at ? 'Em teste' : 'Aguardando início'"></span></span>
+                                    <div class="test-bench-card-info">
                                         <div>
-                                            <span class="font-bold block text-gray-400 uppercase text-[10px]">Técnico</span>
+                                            <span class="test-bench-label">Técnico responsável</span>
                                             <span x-text="getEmployeeName(ticket.technician_id)"></span>
                                         </div>
                                         <div>
-                                            <span class="font-bold block text-gray-400 uppercase text-[10px]">Defeito Relatado</span>
-                                            <span class="truncate block" x-text="ticket.defect_reported"></span>
+                                            <span class="test-bench-label">Defeito relatado</span>
+                                            <span class="test-bench-defect" x-text="ticket.defect_reported || 'Não informado'"></span>
                                         </div>
                                         <div>
-                                            <span class="font-bold block text-gray-400 uppercase text-[10px]">Entrada em Teste</span>
-                                            <span x-text="ticket.test_start_at ? new Date(ticket.test_start_at).toLocaleString() : 'Aguardando Início'"></span>
+                                            <span class="test-bench-label">Início do teste</span>
+                                            <span x-text="ticket.test_start_at ? new Date(ticket.test_start_at).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Ainda não iniciado'"></span>
                                         </div>
                                         <div>
-                                            <span class="font-bold block text-gray-400 uppercase text-[10px]">Prazo Entrega</span>
-                                            <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleDateString() : '-'" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600 font-bold' : ''"></span>
+                                            <span class="test-bench-label">Prazo de entrega</span>
+                                            <span x-text="ticket.deadline ? new Date(ticket.deadline).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : 'Sem prazo'" :class="ticket.deadline && new Date(ticket.deadline) < new Date() ? 'text-red-600 font-bold' : ''"></span>
                                         </div>
                                     </div>
-                                 </div>
+                                    <div class="test-bench-card-actions" @click.stop>
+                                        <button type="button" x-show="canExecuteAction(ticket, 'startTest')" @click.stop="startTest(ticket)" :disabled="loading" class="test-bench-action test-bench-action-primary"><i class="fa-solid fa-play" aria-hidden="true"></i> Iniciar teste</button>
+                                        <template x-if="canExecuteAction(ticket, 'concludeTest')">
+                                            <div class="test-bench-decision-actions">
+                                                <button type="button" @click.stop="openOutcomeModal('test', ticket, 'approve')" :disabled="loading" class="test-bench-action test-bench-action-approve"><i class="fa-solid fa-check" aria-hidden="true"></i> Aprovar</button>
+                                                <button type="button" @click.stop="openOutcomeModal('test', ticket, 'reject')" :disabled="loading" class="test-bench-action test-bench-action-reject"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reprovar</button>
+                                            </div>
+                                        </template>
+                                        <button type="button" @click.stop="viewTicketDetails(ticket)" class="test-bench-details">Ver OS <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></button>
+                                    </div>
+                                 </article>
                             </template>
                             <button x-show="testerBenchPagination.hasMore"
                                     @click="loadMoreTesterBench()"
                                     :disabled="ticketPagination.isLoading"
-                                    class="w-full py-3 rounded-lg border border-purple-200 bg-white text-purple-700 text-xs font-bold hover:bg-purple-50 disabled:opacity-50 transition-colors">
+                                    class="test-bench-load-more">
                                 <i x-show="!ticketPagination.isLoading" class="fa-solid fa-chevron-down mr-1"></i>
                                 <i x-show="ticketPagination.isLoading" class="fa-solid fa-circle-notch fa-spin mr-1"></i>
                                 <span x-text="ticketPagination.isLoading ? 'Carregando...' : 'Carregar mais OS'"></span>
                             </button>
-                            <div x-show="tickets.length === 0 && !ticketPagination.isLoading" class="text-center py-20 text-gray-400 italic">
-                                <i class="fa-solid fa-check-circle text-4xl mb-4 text-gray-200"></i>
-                                <p>Nenhum aparelho aguardando teste.</p>
+                            <div x-show="ticketPagination.isLoading && tickets.length === 0" class="test-bench-empty" role="status"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><p>Carregando aparelhos...</p></div>
+                            <div x-show="tickets.length === 0 && !ticketPagination.isLoading" class="test-bench-empty">
+                                <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+                                <h3>Nenhum aparelho aguardando teste</h3>
+                                <p>Os aparelhos aparecem aqui ao chegar à etapa de teste final.</p>
                             </div>
                         </div>
-                    </div>
+                    </section>
                 </div>
 
                 <!-- VIEW: CONFIGURATION (Was Employees) -->
@@ -5447,10 +5461,10 @@
                                     <p class="text-xs text-gray-500 mt-1 truncate" x-text="ticket.device_model + ' · ' + getStatusLabel(ticket.status)"></p>
                                     <div x-show="canViewInventoryCosts() && overviewQueueModal.key === 'pendingBudgets' && ticket.status === 'Aprovacao' && ticket.inventory_cost_summary && Number(ticket.inventory_cost_summary.item_count) > 0"
                                          class="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-purple-100 bg-purple-50 px-2 py-1 text-[10px] text-purple-800">
-                                        <span class="font-bold"><i class="fa-solid fa-coins mr-1"></i>Custo das peças: <span x-text="formatCurrency(ticket.inventory_cost_summary.total)"></span></span>
-                                        <span x-show="Number(ticket.inventory_cost_summary.missing_cost_count) > 0"
+                                        <span class="font-bold"><i class="fa-solid fa-coins mr-1"></i>Custo das peças: <span x-text="formatCurrency(ticket.inventory_cost_summary?.total)"></span></span>
+                                        <span x-show="Number(ticket.inventory_cost_summary?.missing_cost_count) > 0"
                                               class="font-semibold text-amber-700"
-                                              x-text="ticket.inventory_cost_summary.missing_cost_count + ' sem custo'"></span>
+                                              x-text="ticket.inventory_cost_summary?.missing_cost_count + ' sem custo'"></span>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-3 mt-2 text-[10px]">
                                         <span class="inline-flex items-center gap-1 text-gray-500">
@@ -8009,8 +8023,9 @@
     <!-- 5. OUTCOME MODAL (Success/Fail Logic) -->
     <div x-show="modals.outcome" class="fixed inset-0 z-[80] flex items-center justify-center" x-cloak>
         <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75" @click="modals.outcome = false"></div>
-        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md z-10 relative">
-            <h3 class="text-lg font-bold mb-4" x-text="outcomeMode === 'repair' ? 'Finalizar Reparo' : 'Concluir Testes'"></h3>
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md z-10 relative" :class="{'test-outcome-dialog': outcomeMode === 'test'}" role="dialog" aria-modal="true" aria-labelledby="outcome-heading">
+            <h3 id="outcome-heading" class="text-lg font-bold mb-4" x-text="outcomeMode === 'repair' ? 'Finalizar Reparo' : (showTestFailureForm ? 'Reprovar testes' : 'Concluir testes')"></h3>
+            <p x-show="outcomeMode === 'test' && selectedTicket" class="test-outcome-summary"><span x-text="'OS #' + (selectedTicket?.os_number || '')"></span> · <span x-text="selectedTicket?.device_model || ''"></span></p>
 
             <!-- Repair Outcome -->
             <div x-show="outcomeMode === 'repair'" class="space-y-4">
@@ -8041,13 +8056,19 @@
 
             <!-- Test Outcome -->
             <div x-show="outcomeMode === 'test'" class="space-y-4">
-                <p class="text-gray-600">O aparelho passou nos testes?</p>
-                <div class="flex space-x-3 mb-4">
-                    <button @click="concludeTest(true)" class="flex-1 bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600">
-                        <i class="fa-solid fa-check mr-2"></i> Aprovado
+                <div x-show="selectedTicket?.checklist_final_data?.length" class="test-outcome-checklist">
+                    <div class="test-outcome-checklist-heading"><h4>Checklist de saída</h4><span x-text="getFinalTestChecklistProgress().checked + '/' + getFinalTestChecklistProgress().total + ' conferidos'"></span></div>
+                    <template x-for="(item, idx) in (selectedTicket?.checklist_final_data || [])" :key="idx">
+                        <label><input type="checkbox" x-model="item.ok" :disabled="loading"><span x-text="item.item"></span></label>
+                    </template>
+                </div>
+                <p x-show="!showTestFailureForm" class="text-sm text-gray-600">Confira os itens antes de confirmar a aprovação.</p>
+                <div x-show="!showTestFailureForm" class="flex gap-3 mb-4">
+                    <button type="button" @click="concludeTest(true)" :disabled="loading" class="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold text-sm hover:bg-green-700 disabled:opacity-50">
+                        <i class="fa-solid fa-check mr-1" aria-hidden="true"></i> Confirmar aprovação
                     </button>
-                    <button @click="showTestFailureForm = true" class="flex-1 bg-red-500 text-white py-3 rounded-lg font-bold hover:bg-red-600">
-                        <i class="fa-solid fa-bug mr-2"></i> Reprovado (Problema)
+                    <button type="button" @click="outcomeDecision = 'reject'; showTestFailureForm = true" :disabled="loading" class="px-3 py-3 rounded-lg border border-red-200 text-red-700 font-bold text-sm hover:bg-red-50 disabled:opacity-50">
+                        Reprovar
                     </button>
                 </div>
 
@@ -8086,10 +8107,11 @@
                             <label class="block text-xs font-bold text-gray-500">Defeito Apresentado</label>
                             <textarea x-model="testFailureData.reason" rows="2" class="w-full border rounded p-2 text-sm" placeholder="Descreva o problema encontrado..."></textarea>
                         </div>
-                        <button @click="concludeTest(false)" class="w-full bg-red-800 text-white py-2 rounded font-bold hover:bg-black text-sm">Confirmar</button>
+                        <button type="button" @click="concludeTest(false)" :disabled="loading" class="w-full bg-red-800 text-white py-3 rounded-lg font-bold hover:bg-black text-sm disabled:opacity-50">Confirmar reprovação</button>
                     </div>
                 </div>
             </div>
+            <button type="button" x-show="outcomeMode === 'test'" @click="modals.outcome = false" :disabled="loading" class="test-outcome-close">Cancelar</button>
         </div>
     </div>
 
@@ -8777,7 +8799,7 @@
     <script src="js/modules/ticket-context.js?v=2"></script>
     <script src="js/modules/workflow-rules.js?v=1"></script>
     <script src="js/modules/ticket-mutations.js?v=2"></script>
-    <script src="js/modules/ticket-actions.js?v=10"></script>
+    <script src="js/modules/ticket-actions.js?v=11"></script>
     <script src="js/modules/api-client.js?v=6"></script>
     <script src="js/modules/schedule-error-service.js?v=1"></script>
     <script src="js/modules/storage-service.js?v=6"></script>
@@ -8800,7 +8822,7 @@
     <script src="js/modules/workspace-sync-service.js?v=1"></script>
 
     <!-- JS MAIN -->
-    <script src="js/main.js?v=48"></script>
+    <script src="js/main.js?v=49"></script>
 <!-- Schedule Management Slot Action Popover -->
     <div x-show="scheduleManagement.slotActionPopover.open"
          @click.outside="closeSlotPopover()"

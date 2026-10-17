@@ -784,7 +784,10 @@ window.AIDATicketActions = {
 
             deps.notify("Retornado para reparo com urgência!");
             // Aciona fluxo visual de Agendamento do Novo Reparo (Cenario de Retrabalho)
-            if (deps.isAppointmentTypeEnabled('repair') && !ticket.repair_scheduled) {
+            const employeeId = deps.state.user?.employee_id || deps.state.user?.id;
+            const canScheduleRepair = deps.state.hasRole?.('admin') || deps.state.hasRole?.('atendente')
+                || (deps.state.hasRole?.('tecnico') && Boolean(employeeId) && ticket.technician_id === employeeId);
+            if (canScheduleRepair && deps.isAppointmentTypeEnabled('repair') && !ticket.repair_scheduled) {
                 deps.state.openSchedulePanel('repair', ticket.technician_id, ticket);
             }
         }
