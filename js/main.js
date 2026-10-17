@@ -560,6 +560,8 @@ function app() {
             repairUsage: { loading: false, items: [], hasStructuredParts: false }
         },
         outcomeMode: '',
+        outcomeDecision: '',
+        outcomeLoadRequestId: 0,
         showTestFailureForm: false,
         testFailureData: { newDeadline: '', newPriority: 'Normal', reason: '', action: '' }, // action: 'repair' or 'return'
         outsourcedForm: { company_id: '', deadline: '', price: '' }, // For sending to outsourced
@@ -1519,6 +1521,7 @@ function app() {
             this.realtimeReady = false;
             this.ticketFetchRequestId++;
             this.ticketModalRefreshRequestId++;
+            this.outcomeLoadRequestId++;
             this.homeQueueRequestId++;
             this.kanbanCountsRequestId++;
             this.overviewQueueRequestId++;
@@ -5906,7 +5909,32 @@ function app() {
         },
 
         async concludeTest(success) {
+            if (this.loading) return false;
+            const ticket = this.resolveTicket();
+            if (!ticket || !this.canExecuteAction(ticket, 'concludeTest')) {
+                this.notify('Esta OS não está disponível para conclusão dos testes.', 'error');
+                return false;
+            }
+            const progress = this.getFinalTestChecklistProgress(ticket);
+            if (success && this.isFieldRequired('checklist_exit') && !progress.total) {
+                this.notify('Esta OS exige um checklist final. Revise o cadastro antes de aprovar.', 'error');
+                return false;
+            }
+            if (success && progress.pending > 0) {
+                this.notify('Confira todos os itens do checklist final antes de aprovar.', 'error');
+                return false;
+            }
+            if (!success && !String(this.testFailureData.reason || '').trim()) {
+                this.notify('Descreva o defeito apresentado antes de reprovar.', 'error');
+                return false;
+            }
             return await window.AIDATicketActions.concludeTest(success, this._getActionDeps());
+        },
+
+        getFinalTestChecklistProgress(ticket = this.selectedTicket) {
+            const checklist = Array.isArray(ticket?.checklist_final_data) ? ticket.checklist_final_data : [];
+            const checked = checklist.filter(item => item?.ok === true).length;
+            return { total: checklist.length, checked, pending: checklist.length - checked };
         },
 
         async requestPriority(ticketOrId) {
@@ -6091,16 +6119,50 @@ function app() {
             }
             await this.openPurchaseModal(ticket);
         },
-        async openOutcomeModal(mode, ticketOrId) {
+        async openOutcomeModal(mode, ticketOrId, decision = '') {
+            if (mode === 'test' && (this.loading || this.modals.outcome)) return false;
             const resolvedTicket = this.resolveTicket(ticketOrId);
-            const ticket = await this.ensureCompleteTicket(resolvedTicket);
-            if (!ticket) return;
+            if (!resolvedTicket) return false;
+            const requestId = ++this.outcomeLoadRequestId, context = this.syncContextKey();
+            const preserveOpenDraft = mode === 'test' && this.modals.viewTicket
+                && this.selectedTicket?.id === resolvedTicket.id && !resolvedTicket._card_summary;
+            let ticket;
+            if (mode === 'test') {
+                this.loading = true;
+                try {
+                    // Bench cards deliberately omit checklist/report arrays. Read
+                    // the current authorized snapshot before opening only this dialog.
+                    ticket = preserveOpenDraft ? resolvedTicket
+                        : await window.AIDATicketQueryService.fetchTicketDetails({
+                            state: this, supabaseFetch: (ep, method, payload) => this.supabaseFetch(ep, method, payload)
+                        }, resolvedTicket.id);
+                    if (requestId !== this.outcomeLoadRequestId || context !== this.syncContextKey()) return false;
+                    if (!ticket || ticket.deleted_at || !this.canExecuteAction(ticket, 'concludeTest')) {
+                        this.notify('Esta OS não está disponível para conclusão dos testes. Atualize a lista.', 'error');
+                        return false;
+                    }
+                    ticket = JSON.parse(JSON.stringify(ticket));
+                    if (!Array.isArray(ticket.checklist_final_data)) ticket.checklist_final_data = [];
+                } catch (error) {
+                    if (error.name !== 'AbortError' && context === this.syncContextKey()) {
+                        this.notify('Erro ao carregar os dados do teste: ' + error.message, 'error');
+                    }
+                    return false;
+                } finally {
+                    if (requestId === this.outcomeLoadRequestId || !this.user?.workspace_id) this.loading = false;
+                }
+            } else ticket = await this.ensureCompleteTicket(resolvedTicket);
+            if (!ticket || requestId !== this.outcomeLoadRequestId || context !== this.syncContextKey()) return false;
             const newContext = window.AIDATicketContext.setModalContext(ticket.id, 'outcome');
             this._applyContext(newContext);
             this.selectedTicket = ticket; // Keep for UI bindings
-            window.AIDAWorkspaceSyncService?.captureTicket(this, ticket);
+            if (!preserveOpenDraft) window.AIDAWorkspaceSyncService?.captureTicket(this, ticket);
             this.outcomeMode = mode;
-            this.showTestFailureForm = false;
+            this.outcomeDecision = mode === 'test' && ['approve', 'reject'].includes(decision) ? decision : '';
+            this.showTestFailureForm = this.outcomeDecision === 'reject';
+            if (mode === 'test') {
+                this.testFailureData = { newDeadline: '', newPriority: ticket.priority || 'Normal', reason: '', action: '' };
+            }
             this.inventory.repairUsage = { loading: false, items: [], hasStructuredParts: false };
             this.modals.outcome = true;
 
@@ -6129,6 +6191,7 @@ function app() {
                     this.notify('Erro ao consultar as peças reservadas: ' + error.message, 'error');
                 }
             }
+            return true;
         },
 
         // == SUBFASE 3 — TERCEIRIZAÇÃO / COMPRA / LOGÍSTICA ==
